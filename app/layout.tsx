@@ -1,24 +1,11 @@
 import type { Metadata } from "next";
-import { IBM_Plex_Sans, Syne } from "next/font/google";
+import { AppProviders } from "./providers";
 import "./globals.css";
 
-const syne = Syne({
-  subsets: ["latin"],
-  variable: "--font-syne",
-  display: "swap",
-});
-
-const ibm = IBM_Plex_Sans({
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
-  variable: "--font-ibm",
-  display: "swap",
-});
-
 export const metadata: Metadata = {
-  title: "Aether Vision — Wearable IA, $VISION e $AETH",
+  title: "Aether Vision — A ponte entre hardware e inteligência artificial",
   description:
-    "Óculos Aether Vision, App Bridge e pré-venda de vouchers. Tesouraria Squads transparente. Tokens $VISION e $AETH para o app de IA.",
+    "Óculos inteligentes Aether Vision, App Bridge e pré-venda on-chain. Tesouraria Squads transparente. Tokens $VISION e $AETH para o app de IA.",
 };
 
 export default function RootLayout({
@@ -27,8 +14,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="pt-BR" className={`${syne.variable} ${ibm.variable}`}>
-      <body className="min-h-screen bg-onyx antialiased">{children}</body>
+    <html lang="pt-BR">
+      <body className="bg-onyx text-ink antialiased font-sans">
+        <AppProviders>{children}</AppProviders>
+      </body>
     </html>
   );
 }
