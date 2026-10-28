@@ -1,0 +1,92 @@
+@import "tailwindcss";
+
+@theme {
+  --color-onyx: #09090b;
+  --color-neon: #00f2fe;
+  --color-violet: #9d4edd;
+  --color-electric: #0072ff;
+  --color-surface: #121316;
+  --color-ink: #f4f7f8;
+  --color-muted: #8a9199;
+  --color-line: rgba(0, 242, 254, 0.18);
+  --font-display: var(--font-syne), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-ibm), ui-sans-serif, system-ui, sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--color-onyx);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}
+
+::selection {
+  background: #00f2fe;
+  color: #09090b;
+}
+
+.grid-aether {
+  background-image:
+    linear-gradient(rgba(0, 240, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 240, 255, 0.04) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+.glow-neon {
+  box-shadow:
+    0 0 0 1px rgba(0, 240, 255, 0.35),
+    0 0 32px rgba(0, 240, 255, 0.18);
+}
+
+@keyframes aether-led {
+  0%,
+  100% {
+    opacity: 0.45;
+    box-shadow: 0 0 4px #00f2fe;
+  }
+  50% {
+    opacity: 1;
+    box-shadow:
+      0 0 8px #00f2fe,
+      0 0 18px #22c55e;
+  }
+}
+
+@keyframes aether-live {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.45);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(34, 197, 94, 0);
+  }
+}
+
+@keyframes aether-lens {
+  0%,
+  100% {
+    background-position: 12% 20%;
+  }
+  50% {
+    background-position: 78% 70%;
+  }
+}
+
+.aether-led {
+  animation: aether-led 1.7s ease-in-out infinite;
+}
+
+.aether-live {
+  animation: aether-live 2s ease-out infinite;
+}
+
+.aether-lens {
+  background-image:
+    radial-gradient(circle at 28% 22%, rgba(255, 255, 255, 0.38), transparent 22%),
+    linear-gradient(135deg, rgba(0, 242, 254, 0.42), rgba(9, 9, 11, 0.88) 46%, rgba(0, 114, 255, 0.28));
+  background-size: 180% 180%;
+  animation: aether-lens 7s ease-in-out infinite;
+}
