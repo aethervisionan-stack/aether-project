@@ -77,10 +77,21 @@ export function translateError(
   messages: Messages,
   code: keyof Messages["errors"] | null,
   minSol?: number,
+  detail?: string | null,
 ) {
-  if (!code) return null;
+  if (!code) return detail ?? null;
   if (code === "min_sol" && minSol !== undefined) {
     return interpolate(messages.errors.min_sol, { min: String(minSol) });
   }
-  return messages.errors[code];
+  if (code === "insufficient") {
+    return (
+      detail ??
+      messages.errors.insufficient
+    );
+  }
+  const base = messages.errors[code];
+  if (detail && code !== "cancelled") {
+    return `${base} ${detail}`;
+  }
+  return base;
 }

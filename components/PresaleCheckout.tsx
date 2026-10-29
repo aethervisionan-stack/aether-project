@@ -51,6 +51,7 @@ export function PresaleCheckout() {
     loading,
     txHash,
     error,
+    errorDetail,
     status,
     tierName,
     handlePurchase,
@@ -413,7 +414,7 @@ export function PresaleCheckout() {
                 className="mt-4 text-sm text-muted"
                 role="status"
               >
-                {translateError(t, error, MIN_SOL)}
+                {translateError(t, error, MIN_SOL, errorDetail)}
               </motion.p>
             ) : null}
             {status === "error" && error ? (
@@ -423,7 +424,7 @@ export function PresaleCheckout() {
                 className="mt-4 text-sm text-red-400"
                 role="status"
               >
-                {translateError(t, error, MIN_SOL)}
+                {translateError(t, error, MIN_SOL, errorDetail)}
               </motion.p>
             ) : null}
           </AnimatePresence>

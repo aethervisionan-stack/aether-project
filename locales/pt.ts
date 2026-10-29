@@ -249,7 +249,8 @@ export const pt: Messages = {
     invalid_sol: "Quantidade de SOL inválida.",
     cancelled: "Transação cancelada na carteira.",
     insufficient:
-      "Saldo insuficiente em SOL para este aporte e a taxa da rede.",
+      "Saldo insuficiente em SOL para a transação e as taxas da rede.",
+    simulation: "A simulação da transação falhou.",
     generic: "Falha na transação.",
   },
   lang: {

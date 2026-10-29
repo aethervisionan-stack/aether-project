@@ -247,7 +247,8 @@ export const en = {
     invalid_sol: "Invalid SOL amount.",
     cancelled: "Transaction cancelled in the wallet.",
     insufficient:
-      "Insufficient SOL balance for this contribution and the network fee.",
+      "Insufficient SOL balance for transaction and network fees.",
+    simulation: "Transaction simulation failed.",
     generic: "Transaction failed.",
   },
   lang: {

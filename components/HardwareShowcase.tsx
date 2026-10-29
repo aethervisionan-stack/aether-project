@@ -19,6 +19,7 @@ export function HardwareShowcase() {
     loading,
     txHash,
     error,
+    errorDetail,
     status,
     tierName,
     handlePurchase,
@@ -139,12 +140,12 @@ export function HardwareShowcase() {
 
       {status === "cancelled" ? (
         <p className="mt-6 text-center text-sm text-muted" role="status">
-          {translateError(t, error, MIN_SOL)}
+          {translateError(t, error, MIN_SOL, errorDetail)}
         </p>
       ) : null}
       {status === "error" && error ? (
         <p className="mt-6 text-center text-sm text-red-400" role="status">
-          {translateError(t, error, MIN_SOL)}
+          {translateError(t, error, MIN_SOL, errorDetail)}
         </p>
       ) : null}
 
