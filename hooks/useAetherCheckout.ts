@@ -14,7 +14,7 @@ import {
   MIN_SOL,
   SQUADS_MULTISIG,
 } from "@/lib/presale";
-import { requestWalletSession } from "@/lib/site";
+import { requestWalletSession, type WalletBrand } from "@/lib/site";
 
 export type CheckoutStatus =
   | "idle"
@@ -99,11 +99,14 @@ export function useAetherCheckout() {
     [solUsd],
   );
 
-  const connectWallet = useCallback(() => {
-    setError(null);
-    setStatus("idle");
-    return requestWalletSession(() => setVisible(true));
-  }, [setVisible]);
+  const connectWallet = useCallback(
+    (preferred: WalletBrand = "phantom") => {
+      setError(null);
+      setStatus("idle");
+      return requestWalletSession(() => setVisible(true), preferred);
+    },
+    [setVisible],
+  );
 
   const handlePurchase = useCallback(
     async (name: string, priceInSol: number) => {
@@ -112,7 +115,7 @@ export function useAetherCheckout() {
       setTierName(name);
 
       if (!connected || !publicKey) {
-        connectWallet();
+        connectWallet("phantom");
         return null;
       }
 
@@ -122,8 +125,8 @@ export function useAetherCheckout() {
         return null;
       }
 
-      const lamports = Math.round(priceInSol * LAMPORTS_PER_SOL);
-      if (lamports <= 0) {
+      const lamports = Math.floor(priceInSol * LAMPORTS_PER_SOL);
+      if (!Number.isSafeInteger(lamports) || lamports <= 0) {
         setStatus("error");
         setError("invalid_sol");
         return null;
@@ -135,25 +138,33 @@ export function useAetherCheckout() {
       try {
         const { blockhash, lastValidBlockHeight } =
           await connection.getLatestBlockhash("confirmed");
-        const transaction = new Transaction({
-          feePayer: publicKey,
-          blockhash,
-          lastValidBlockHeight,
-        }).add(
+
+        const transaction = new Transaction().add(
           SystemProgram.transfer({
             fromPubkey: publicKey,
             toPubkey: TREASURY,
             lamports,
           }),
         );
+        transaction.feePayer = publicKey;
+        transaction.recentBlockhash = blockhash;
 
-        const signature = await sendTransaction(transaction, connection, {
-          skipPreflight: false,
-        });
-        await connection.confirmTransaction(
-          { signature, blockhash, lastValidBlockHeight },
+        const signature = await sendTransaction(transaction, connection);
+        const confirmation = await connection.confirmTransaction(
+          {
+            signature,
+            blockhash,
+            lastValidBlockHeight,
+          },
           "confirmed",
         );
+
+        if (confirmation.value.err) {
+          setStatus("error");
+          setError("generic");
+          return null;
+        }
+
         setTxHash(signature);
         setStatus("success");
         return signature;

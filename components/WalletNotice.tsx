@@ -1,11 +1,7 @@
 "use client";
 
 import { useI18n } from "@/lib/i18n";
-import {
-  BACKPACK_DOWNLOAD,
-  hasInjectedSolanaWallet,
-  requestWalletSession,
-} from "@/lib/site";
+import { hasInjectedSolanaWallet, requestWalletSession } from "@/lib/site";
 import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useState } from "react";
@@ -34,20 +30,27 @@ export function WalletNotice() {
               <button
                 type="button"
                 onClick={() =>
-                  requestWalletSession(() => setWalletModalVisible(true))
+                  requestWalletSession(
+                    () => setWalletModalVisible(true),
+                    "phantom",
+                  )
                 }
                 className="rounded-full bg-gradient-to-r from-cyan to-neon px-3 py-1.5 text-xs font-medium text-onyx"
               >
                 {t.wallet.phantom}
               </button>
-              <a
-                href={BACKPACK_DOWNLOAD}
-                target="_blank"
-                rel="noreferrer"
+              <button
+                type="button"
+                onClick={() =>
+                  requestWalletSession(
+                    () => setWalletModalVisible(true),
+                    "backpack",
+                  )
+                }
                 className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-ink transition hover:border-cyan/40 hover:text-cyan"
               >
                 {t.wallet.backpack}
-              </a>
+              </button>
               <button
                 type="button"
                 onClick={() => setVisible(false)}

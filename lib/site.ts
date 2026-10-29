@@ -13,7 +13,8 @@ export const SITE_DESCRIPTION =
 export const PHANTOM_DOWNLOAD = "https://phantom.app/download";
 export const BACKPACK_DOWNLOAD = "https://www.backpack.app/";
 
-export type WalletSessionAction = "modal" | "phantom-app" | "download";
+export type WalletBrand = "phantom" | "backpack";
+export type WalletSessionAction = "modal" | "wallet-app" | "download";
 
 export function hasInjectedSolanaWallet(): boolean {
   if (typeof window === "undefined") return false;
@@ -38,27 +39,45 @@ export function isMobileSolanaClient(): boolean {
   return /Android|iPhone|iPad|iPod/i.test(ua) || iPadOs;
 }
 
+function currentPageHref(href?: string): string {
+  return (
+    href ?? (typeof window !== "undefined" ? window.location.href : SITE_URL)
+  );
+}
+
 export function phantomUniversalBrowseUrl(href?: string): string {
-  const target =
-    href ?? (typeof window !== "undefined" ? window.location.href : SITE_URL);
-  const encoded = encodeURIComponent(target);
+  const encoded = encodeURIComponent(currentPageHref(href));
   return `https://phantom.app/ul/browse/${encoded}?ref=${encoded}`;
 }
 
-export function requestWalletSession(openModal?: () => void): WalletSessionAction {
+export function backpackUniversalBrowseUrl(href?: string): string {
+  const encoded = encodeURIComponent(currentPageHref(href));
+  return `https://backpack.app/ul/v1/browse/${encoded}?ref=${encoded}`;
+}
+
+export function requestWalletSession(
+  openModal?: () => void,
+  preferred: WalletBrand = "phantom",
+): WalletSessionAction {
   if (hasInjectedSolanaWallet()) {
     openModal?.();
     return "modal";
   }
 
   if (isMobileSolanaClient()) {
-    window.location.assign(phantomUniversalBrowseUrl());
-    return "phantom-app";
+    const deepLink =
+      preferred === "backpack"
+        ? backpackUniversalBrowseUrl()
+        : phantomUniversalBrowseUrl();
+    window.location.assign(deepLink);
+    return "wallet-app";
   }
 
-  const popup = window.open(PHANTOM_DOWNLOAD, "_blank", "noopener,noreferrer");
+  const installUrl =
+    preferred === "backpack" ? BACKPACK_DOWNLOAD : PHANTOM_DOWNLOAD;
+  const popup = window.open(installUrl, "_blank", "noopener,noreferrer");
   if (!popup) {
-    window.location.assign(PHANTOM_DOWNLOAD);
+    window.location.assign(installUrl);
     return "download";
   }
   openModal?.();
