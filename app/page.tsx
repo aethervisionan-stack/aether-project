@@ -4,8 +4,11 @@ import { CursorGlow } from "@/components/CursorGlow";
 import { Footer } from "@/components/Footer";
 import { HardwareShowcase } from "@/components/HardwareShowcase";
 import { Header } from "@/components/Header";
+import { LanguageSelector } from "@/components/LanguageSelector";
 import { PresaleCheckout } from "@/components/PresaleCheckout";
+import { WalletNotice } from "@/components/WalletNotice";
 import { HoverLift, Reveal } from "@/components/Reveal";
+import { useI18n } from "@/lib/i18n";
 import { formatUsd, VISION_PRICE_USD } from "@/lib/presale";
 import {
   Bluetooth,
@@ -19,79 +22,18 @@ import {
   Wallet,
 } from "lucide-react";
 
-const TOKENOMICS = [
-  {
-    icon: Wallet,
-    label: "Pré-venda / Soft Launch",
-    value: "10–20%",
-    detail:
-      "100M a 200M $VISION a $0,05. Arrecadação estimada de até $10M para financiar óculos e o app por anos.",
-  },
-  {
-    icon: Droplets,
-    label: "Liquidez Raydium",
-    value: "40%",
-    detail:
-      "400M $VISION no pool DEX, alocados com os fundos arrecadados após a pré-venda.",
-  },
-  {
-    icon: Users,
-    label: "Ecossistema & Recompensas",
-    value: "30%",
-    detail:
-      "300M $VISION para cashback, bônus de indicação e recompensas DePIN do app.",
-  },
-  {
-    icon: Lock,
-    label: "Time & Marketing",
-    value: "10%",
-    detail:
-      "100M $VISION travados para o time de desenvolvimento e expansão de longo prazo.",
-  },
-] as const;
-
-const PILLARS = [
-  {
-    icon: Bluetooth,
-    title: "App Bridge",
-    body: "Integração Bluetooth entre o smartphone e os óculos Aether Vision — áudio, voz e sessão do app de IA em um único fluxo.",
-  },
-  {
-    icon: Factory,
-    title: "Primeiro lote",
-    body: "Arrecadação para fabricação e lançamento do primeiro lote de óculos, com custo acessível e função no centro do produto.",
-  },
-  {
-    icon: Rocket,
-    title: "Mainnet $AETH",
-    body: "Arrecadação estratégica para o lançamento da criptomoeda $AETH com blockchain nativa, além do token $VISION na Solana.",
-  },
-] as const;
-
-const VISION_POINTS = [
-  {
-    title: "Vision 1.0 ao Vision 4.0",
-    body: "Uma linha progressiva: do smart audio essencial ao flagship Micro-OLED AR — função no centro, custo acessível no início, ápice tecnológico no topo.",
-  },
-  {
-    title: "Valorização contínua do ecossistema",
-    body: "O objetivo principal é a valorização do ecossistema AETHER e o desenvolvimento progressivo de modelos de óculos superiores.",
-  },
-  {
-    title: "Buyback & Burn automatizado",
-    body: "Com o sucesso de vendas do primeiro lote, o mecanismo compra e queima $AETH e $VISION, reduzindo oferta conforme o uso real.",
-  },
-  {
-    title: "Caixa para a próxima geração",
-    body: "A receita reabastece o caixa do projeto para desenvolver e lançar modelos ainda mais avançados.",
-  },
-] as const;
+const TOKEN_ICONS = [Wallet, Droplets, Users, Lock] as const;
+const PILLAR_ICONS = [Bluetooth, Factory, Rocket] as const;
 
 export default function HomePage() {
+  const { t, locale } = useI18n();
+
   return (
     <>
       <CursorGlow />
       <Header />
+      <WalletNotice />
+      <LanguageSelector />
 
       <main className="relative z-10">
         <section
@@ -103,32 +45,29 @@ export default function HomePage() {
             <Reveal>
               <p className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-[11px] uppercase tracking-[0.22em] text-cyan">
                 <Sparkles size={12} />
-                Solana DePIN + AI Wearable
+                {t.hero.kicker}
               </p>
               <h1 className="font-display text-[2.35rem] font-semibold leading-[1.04] tracking-[-0.04em] sm:text-6xl md:text-[4.25rem]">
-                Aether Vision
+                {t.hero.title}
                 <span className="mt-3 block bg-gradient-to-r from-cyan via-neon to-violet bg-clip-text text-transparent">
-                  A Ponte Definitiva entre Hardware e Inteligência Artificial
+                  {t.hero.headline}
                 </span>
               </h1>
               <p className="mt-6 max-w-xl text-base leading-relaxed text-muted sm:text-lg">
-                O primeiro modelo é simples, funcional e acessível. Assinaturas
-                do app de IA aceitam $VISION e $AETH. Com as vendas, buyback
-                automático queima os dois tokens e reabastece o caixa para a
-                próxima geração de hardware.
+                {t.hero.body}
               </p>
               <div className="mt-10 flex flex-wrap gap-3">
                 <a
                   href="#presale"
-                  className="glow-cta rounded-full bg-gradient-to-r from-cyan to-neon px-6 py-3 text-sm font-medium text-onyx transition duration-300 hover:brightness-110"
+                  className="cta-pulse glow-cta rounded-full bg-gradient-to-r from-cyan to-neon px-6 py-3 text-sm font-medium text-onyx transition duration-300 hover:brightness-110"
                 >
-                  Participar da pré-venda
+                  {t.hero.ctaPresale}
                 </a>
                 <a
                   href="#hardware"
                   className="rounded-full border border-white/10 px-6 py-3 text-sm text-ink transition duration-300 hover:border-cyan/40 hover:text-cyan"
                 >
-                  Ver o hardware
+                  {t.hero.ctaHardware}
                 </a>
               </div>
             </Reveal>
@@ -137,27 +76,25 @@ export default function HomePage() {
               <div className="glass overflow-hidden rounded-[1.75rem] p-6 sm:p-8">
                 <Glasses className="mb-6 text-cyan" size={36} />
                 <p className="font-display text-2xl tracking-tight">
-                  Linha Vision
+                  {t.hero.cardTitle}
                 </p>
-                <p className="mt-2 text-sm text-muted">
-                  Vision 1.0 → 4.0 · App Bridge · middleware de IA
-                </p>
+                <p className="mt-2 text-sm text-muted">{t.hero.cardSub}</p>
                 <dl className="mt-8 grid grid-cols-2 gap-5 text-sm">
                   <div>
                     <dt className="text-[11px] uppercase tracking-[0.16em] text-muted">
-                      App
+                      {t.hero.app}
                     </dt>
                     <dd className="mt-1 text-ink">$VISION + $AETH</dd>
                   </div>
                   <div>
                     <dt className="text-[11px] uppercase tracking-[0.16em] text-muted">
-                      Yield
+                      {t.hero.yield}
                     </dt>
                     <dd className="mt-1 text-cyan">Buyback & Burn</dd>
                   </div>
                   <div>
                     <dt className="text-[11px] uppercase tracking-[0.16em] text-muted">
-                      Token
+                      {t.hero.token}
                     </dt>
                     <dd className="mt-1 font-mono text-[13px] text-ink">
                       1B $VISION
@@ -165,7 +102,7 @@ export default function HomePage() {
                   </div>
                   <div>
                     <dt className="text-[11px] uppercase tracking-[0.16em] text-muted">
-                      Vault
+                      {t.hero.vault}
                     </dt>
                     <dd className="mt-1 text-ink">Squads Multisig</dd>
                   </div>
@@ -179,18 +116,17 @@ export default function HomePage() {
           <div className="mx-auto max-w-6xl px-5 py-20 md:py-28">
             <Reveal>
               <p className="text-[11px] uppercase tracking-[0.22em] text-cyan">
-                Pré-venda · Tesouraria
+                {t.presale.kicker}
               </p>
               <h2 className="mt-3 font-display text-3xl tracking-tight md:text-5xl md:tracking-[-0.03em]">
-                Kits Hardware + Tokens
+                {t.presale.title}
               </h2>
               <p className="mt-4 max-w-2xl text-muted">
-                Preço oficial:{" "}
-                <span className="text-cyan">{formatUsd(VISION_PRICE_USD)}</span>{" "}
-                por 1 $VISION. Conecte Phantom ou Backpack e envie SOL para a
-                Squads Multisig. Assinaturas mensais aceitam nativamente{" "}
-                <span className="text-ink">$AETH</span> e{" "}
-                <span className="text-ink">$VISION</span>.
+                {t.presale.leadBefore}{" "}
+                <span className="text-cyan">
+                  {formatUsd(VISION_PRICE_USD, locale)}
+                </span>{" "}
+                {t.presale.leadAfter}
               </p>
             </Reveal>
 
@@ -199,9 +135,7 @@ export default function HomePage() {
             </Reveal>
 
             <p className="mt-6 rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-muted">
-              Pagamento das assinaturas mensais do aplicativo:{" "}
-              <span className="text-ink">$AETH</span> e{" "}
-              <span className="text-ink">$VISION</span> são aceitos nativamente.
+              {t.presale.nativePay}
             </p>
           </div>
         </section>
@@ -216,18 +150,15 @@ export default function HomePage() {
           <div className="mx-auto max-w-6xl px-5 py-20 md:py-28">
             <Reveal>
               <p className="text-[11px] uppercase tracking-[0.22em] text-violet">
-                Visão do produto
+                {t.vision.kicker}
               </p>
               <h2 className="mt-3 font-display text-3xl tracking-tight md:text-5xl md:tracking-[-0.03em]">
-                Estratégia de valorização AETHER
+                {t.vision.title}
               </h2>
-              <p className="mt-4 max-w-2xl text-muted">
-                Hardware acessível agora, tesouraria transparente, e um ciclo em
-                que vendas alimentam queima de tokens e o próximo modelo.
-              </p>
+              <p className="mt-4 max-w-2xl text-muted">{t.vision.lead}</p>
             </Reveal>
             <div className="mt-12 grid gap-5 sm:grid-cols-2">
-              {VISION_POINTS.map((item, index) => (
+              {t.vision.points.map((item, index) => (
                 <Reveal key={item.title} delay={0.05 * index}>
                   <HoverLift className="h-full">
                     <article className="h-full rounded-[1.75rem] border border-white/10 bg-surface/40 p-6 backdrop-blur-xl transition duration-500 hover:border-violet/35">
@@ -249,39 +180,35 @@ export default function HomePage() {
           <div className="mx-auto max-w-6xl px-5 py-20 md:py-28">
             <Reveal>
               <p className="text-[11px] uppercase tracking-[0.22em] text-cyan">
-                Tokenomics transparente
+                {t.tokenomics.kicker}
               </p>
               <h2 className="mt-3 font-display text-3xl tracking-tight md:text-5xl md:tracking-[-0.03em]">
-                $VISION · 1.000.000.000
+                {t.tokenomics.title}
               </h2>
-              <p className="mt-4 max-w-2xl text-muted">
-                Supply fixo de 1 bilhão. Pré-venda entre 10% e 20% a $0,05.
-                Liquidez, recompensas do app e time com alocação pública.
-              </p>
+              <p className="mt-4 max-w-2xl text-muted">{t.tokenomics.lead}</p>
             </Reveal>
             <div className="mt-12 grid gap-5 sm:grid-cols-2">
-              {TOKENOMICS.map((item, index) => (
-                <Reveal key={item.label} delay={0.05 * index}>
-                  <HoverLift className="h-full">
-                    <article className="h-full rounded-[1.75rem] border border-white/10 bg-surface/40 p-6 backdrop-blur-xl transition duration-500 hover:border-cyan/30">
-                      <item.icon className="text-cyan" size={18} />
-                      <p className="mt-4 text-[11px] uppercase tracking-[0.18em] text-muted">
-                        {item.label}
-                      </p>
-                      <p className="mt-2 font-display text-3xl tracking-tight text-ink tabular">
-                        {item.value}
-                      </p>
-                      <p className="mt-2 text-sm text-muted">{item.detail}</p>
-                    </article>
-                  </HoverLift>
-                </Reveal>
-              ))}
+              {t.tokenomics.items.map((item, index) => {
+                const Icon = TOKEN_ICONS[index];
+                return (
+                  <Reveal key={item.label} delay={0.05 * index}>
+                    <HoverLift className="h-full">
+                      <article className="h-full rounded-[1.75rem] border border-white/10 bg-surface/40 p-6 backdrop-blur-xl transition duration-500 hover:border-cyan/30">
+                        <Icon className="text-cyan" size={18} />
+                        <p className="mt-4 text-[11px] uppercase tracking-[0.18em] text-muted">
+                          {item.label}
+                        </p>
+                        <p className="mt-2 font-display text-3xl tracking-tight text-ink tabular">
+                          {item.value}
+                        </p>
+                        <p className="mt-2 text-sm text-muted">{item.detail}</p>
+                      </article>
+                    </HoverLift>
+                  </Reveal>
+                );
+              })}
             </div>
-            <p className="mt-8 text-sm text-muted">
-              $AETH entra na mainnet nativa; $VISION opera o app e a liquidez na
-              Solana. Ambos entram no ciclo de Buyback & Burn após o primeiro
-              lote.
-            </p>
+            <p className="mt-8 text-sm text-muted">{t.tokenomics.note}</p>
           </div>
         </section>
 
@@ -292,14 +219,13 @@ export default function HomePage() {
           <div className="mx-auto max-w-6xl px-5 py-20 md:py-28">
             <Reveal>
               <p className="text-[11px] uppercase tracking-[0.22em] text-cyan">
-                Desenvolvimento & atualizações
+                {t.updates.kicker}
               </p>
               <h2 className="mt-3 font-display text-3xl tracking-tight md:text-5xl md:tracking-[-0.03em]">
-                Build constante, no X oficial
+                {t.updates.title}
               </h2>
               <p className="mt-4 max-w-2xl text-muted">
-                Não publicamos um roadmap estático. As atualizações de
-                desenvolvimento são contínuas e saem no canal oficial{" "}
+                {t.updates.leadBefore}{" "}
                 <a
                   href="https://x.com/VISIONAETH"
                   target="_blank"
@@ -308,28 +234,31 @@ export default function HomePage() {
                 >
                   @VISIONAETH
                 </a>
-                .
+                {t.updates.leadAfter}
               </p>
             </Reveal>
             <div className="mt-12 grid gap-5 md:grid-cols-3">
-              {PILLARS.map((item, index) => (
-                <Reveal key={item.title} delay={0.06 * index}>
-                  <HoverLift className="h-full">
-                    <article className="h-full rounded-[1.75rem] border border-white/10 bg-surface/40 p-6 backdrop-blur-xl transition duration-500 hover:border-cyan/30">
-                      <p className="text-[11px] uppercase tracking-[0.18em] text-violet">
-                        Pilar {index + 1}
-                      </p>
-                      <item.icon className="mt-4 text-cyan" size={20} />
-                      <h3 className="mt-4 font-display text-lg tracking-tight">
-                        {item.title}
-                      </h3>
-                      <p className="mt-2 text-sm leading-relaxed text-muted">
-                        {item.body}
-                      </p>
-                    </article>
-                  </HoverLift>
-                </Reveal>
-              ))}
+              {t.updates.items.map((item, index) => {
+                const Icon = PILLAR_ICONS[index];
+                return (
+                  <Reveal key={item.title} delay={0.06 * index}>
+                    <HoverLift className="h-full">
+                      <article className="h-full rounded-[1.75rem] border border-white/10 bg-surface/40 p-6 backdrop-blur-xl transition duration-500 hover:border-cyan/30">
+                        <p className="text-[11px] uppercase tracking-[0.18em] text-violet">
+                          {t.updates.pillar} {index + 1}
+                        </p>
+                        <Icon className="mt-4 text-cyan" size={20} />
+                        <h3 className="mt-4 font-display text-lg tracking-tight">
+                          {item.title}
+                        </h3>
+                        <p className="mt-2 text-sm leading-relaxed text-muted">
+                          {item.body}
+                        </p>
+                      </article>
+                    </HoverLift>
+                  </Reveal>
+                );
+              })}
             </div>
           </div>
         </section>

@@ -9,11 +9,18 @@ import {
 } from "@solana/wallet-adapter-react";
 import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
 import { clusterApiUrl } from "@solana/web3.js";
-import { useMemo, type ReactNode } from "react";
+import { I18nProvider } from "@/lib/i18n";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import "@solana/wallet-adapter-react-ui/styles.css";
 
 export function AppProviders({ children }: { children: ReactNode }) {
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    setReady(true);
+  }, []);
+
   const endpoint = useMemo(
     () =>
       process.env.NEXT_PUBLIC_SOLANA_RPC ??
@@ -22,15 +29,20 @@ export function AppProviders({ children }: { children: ReactNode }) {
   );
 
   const wallets = useMemo(
-    () => [new PhantomWalletAdapter(), new BackpackWalletAdapter()],
-    [],
+    () =>
+      ready
+        ? [new PhantomWalletAdapter(), new BackpackWalletAdapter()]
+        : [],
+    [ready],
   );
 
   return (
-    <ConnectionProvider endpoint={endpoint}>
-      <WalletProvider wallets={wallets} autoConnect>
-        <WalletModalProvider>{children}</WalletModalProvider>
-      </WalletProvider>
-    </ConnectionProvider>
+    <I18nProvider>
+      <ConnectionProvider endpoint={endpoint}>
+        <WalletProvider wallets={wallets} autoConnect={ready}>
+          <WalletModalProvider>{children}</WalletModalProvider>
+        </WalletProvider>
+      </ConnectionProvider>
+    </I18nProvider>
   );
 }

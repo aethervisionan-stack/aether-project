@@ -1,9 +1,14 @@
+"use client";
+
+import { useI18n } from "@/lib/i18n";
 import { Mail, X } from "lucide-react";
 
 const X_URL = "https://x.com/VISIONAETH";
 const SUPPORT_EMAIL = "aethervision.an@gmail.com";
 
 export function Footer() {
+  const { t } = useI18n();
+
   return (
     <footer className="relative z-10 border-t border-white/10">
       <div className="mx-auto flex max-w-6xl flex-col gap-8 px-5 py-14 md:flex-row md:items-start md:justify-between">
@@ -11,9 +16,7 @@ export function Footer() {
           <p className="font-display text-[13px] tracking-[0.34em] text-cyan">
             AETHER
           </p>
-          <p className="mt-3 max-w-sm text-sm text-muted">
-            © 2026 Aether Vision. Todos os direitos reservados.
-          </p>
+          <p className="mt-3 max-w-sm text-sm text-muted">{t.footer.rights}</p>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-6">
           <a
@@ -35,10 +38,7 @@ export function Footer() {
         </div>
       </div>
       <p className="mx-auto max-w-6xl px-5 pb-12 text-xs leading-relaxed text-muted/80">
-        A aquisição de Vouchers/Kits na pré-venda representa a compra antecipada
-        de licenças de uso do aplicativo de inteligência artificial e/ou
-        dispositivos físicos, não constituindo oferta pública de valores
-        mobiliários ou investimentos financeiros especulativos.
+        {t.footer.disclaimer}
       </p>
     </footer>
   );

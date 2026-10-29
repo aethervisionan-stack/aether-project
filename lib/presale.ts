@@ -1,5 +1,9 @@
 export const SQUADS_VAULT = "AVj6q1t8xWd7Mi7roNjTc1RvaqJy79P7n3XNpCVjQgxa";
+export const SQUADS_MULTISIG = SQUADS_VAULT;
 export const SOLSCAN_ACCOUNT = `https://solscan.io/account/${SQUADS_VAULT}`;
+export function solscanTx(signature: string) {
+  return `https://solscan.io/tx/${signature}`;
+}
 
 export const VISION_PRICE_USD = 0.05;
 export const FALLBACK_SOL_USD = 150;
@@ -22,16 +26,26 @@ export function visionFromUsd(usd: number): number {
   return usd / VISION_PRICE_USD;
 }
 
-export function formatUsd(value: number): string {
-  return new Intl.NumberFormat("pt-BR", {
+const NUMBER_LOCALE: Record<string, string> = {
+  en: "en-US",
+  pt: "pt-BR",
+  es: "es-ES",
+};
+
+export function formatUsd(value: number, locale = "pt"): string {
+  return new Intl.NumberFormat(NUMBER_LOCALE[locale] ?? "en-US", {
     style: "currency",
     currency: "USD",
     maximumFractionDigits: 2,
   }).format(value);
 }
 
-export function formatAmount(value: number, fractionDigits = 2): string {
-  return new Intl.NumberFormat("pt-BR", {
+export function formatAmount(
+  value: number,
+  fractionDigits = 2,
+  locale = "pt",
+): string {
+  return new Intl.NumberFormat(NUMBER_LOCALE[locale] ?? "en-US", {
     maximumFractionDigits: fractionDigits,
   }).format(value);
 }

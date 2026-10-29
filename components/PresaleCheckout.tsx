@@ -1,18 +1,14 @@
 "use client";
 
-import { useConnection, useWallet } from "@solana/wallet-adapter-react";
-import { useWalletModal } from "@solana/wallet-adapter-react-ui";
-import {
-  LAMPORTS_PER_SOL,
-  PublicKey,
-  SystemProgram,
-  Transaction,
-} from "@solana/web3.js";
+import { useConnection } from "@solana/wallet-adapter-react";
+import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, Copy, ExternalLink, Loader2, Shield } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { CheckoutReceipt } from "@/components/CheckoutReceipt";
+import { useAetherCheckout } from "@/hooks/useAetherCheckout";
+import { translateError, useI18n } from "@/lib/i18n";
 import {
-  FALLBACK_SOL_USD,
   HARD_CAP_SOL,
   MIN_SOL,
   PRESALE_TIERS,
@@ -27,8 +23,6 @@ import {
   visionFromUsd,
 } from "@/lib/presale";
 import { HoverLift } from "./Reveal";
-
-type TxStatus = "idle" | "pending" | "success" | "cancelled" | "error";
 
 const TREASURY = new PublicKey(SQUADS_VAULT);
 const MAX_SOL = 40;
@@ -51,18 +45,24 @@ function copyText(value: string) {
 }
 
 export function PresaleCheckout() {
+  const { t, locale } = useI18n();
   const { connection } = useConnection();
-  const { publicKey, connected, sendTransaction } = useWallet();
-  const { setVisible } = useWalletModal();
+  const {
+    loading,
+    txHash,
+    error,
+    status,
+    tierName,
+    handlePurchase,
+    reset,
+    connected,
+    solUsd,
+  } = useAetherCheckout();
 
   const [solInput, setSolInput] = useState("1");
-  const [solUsd, setSolUsd] = useState(FALLBACK_SOL_USD);
   const [priceLive, setPriceLive] = useState(false);
   const [raisedSol, setRaisedSol] = useState(0);
   const [copied, setCopied] = useState(false);
-  const [status, setStatus] = useState<TxStatus>("idle");
-  const [txHash, setTxHash] = useState<string | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [activeTier, setActiveTier] = useState<string | null>(null);
 
   useEffect(() => {
@@ -72,15 +72,11 @@ export function PresaleCheckout() {
       try {
         const response = await fetch("/api/sol-price", { cache: "no-store" });
         const data = (await response.json()) as { usd?: number; source?: string };
-        if (!cancelled && typeof data.usd === "number" && data.usd > 0) {
-          setSolUsd(data.usd);
+        if (!cancelled) {
           setPriceLive(data.source !== "fallback");
         }
       } catch {
-        if (!cancelled) {
-          setSolUsd(FALLBACK_SOL_USD);
-          setPriceLive(false);
-        }
+        if (!cancelled) setPriceLive(false);
       }
     }
 
@@ -128,8 +124,8 @@ export function PresaleCheckout() {
   }, [solInput, solUsd, activeTier]);
 
   const rateLabel = useMemo(
-    () => formatAmount(visionFromUsd(solUsd), 0),
-    [solUsd],
+    () => formatAmount(visionFromUsd(solUsd), 0, locale),
+    [solUsd, locale],
   );
 
   const sliderValue = useMemo(() => {
@@ -190,63 +186,16 @@ export function PresaleCheckout() {
   }
 
   async function contribute() {
-    setErrorMessage(null);
-    setTxHash(null);
-
-    if (!connected || !publicKey) {
-      setVisible(true);
-      return;
-    }
-
-    if (quote.solAmount < MIN_SOL) {
-      setStatus("error");
-      setErrorMessage(`Mínimo de ${MIN_SOL} SOL por transação.`);
-      return;
-    }
-
-    const lamports = Math.round(quote.solAmount * LAMPORTS_PER_SOL);
-    if (lamports <= 0) {
-      setStatus("error");
-      setErrorMessage("Quantidade de SOL inválida.");
-      return;
-    }
-
-    setStatus("pending");
+    const name =
+      PRESALE_TIERS.find((tier) => tier.id === activeTier)?.name ??
+      t.checkout.contribution;
+    const signature = await handlePurchase(name, quote.solAmount);
+    if (!signature) return;
     try {
-      const { blockhash, lastValidBlockHeight } =
-        await connection.getLatestBlockhash("confirmed");
-      const transaction = new Transaction({
-        feePayer: publicKey,
-        blockhash,
-        lastValidBlockHeight,
-      }).add(
-        SystemProgram.transfer({
-          fromPubkey: publicKey,
-          toPubkey: TREASURY,
-          lamports,
-        }),
-      );
-
-      const signature = await sendTransaction(transaction, connection, {
-        skipPreflight: false,
-      });
-      await connection.confirmTransaction(
-        { signature, blockhash, lastValidBlockHeight },
-        "confirmed",
-      );
-      setTxHash(signature);
-      setStatus("success");
       const lamportsNow = await connection.getBalance(TREASURY, "confirmed");
       setRaisedSol(lamportsNow / LAMPORTS_PER_SOL);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Falha na transação.";
-      const cancelledByUser =
-        /reject|cancel|declin|user/i.test(message) ||
-        message.includes("WalletSignTransactionError");
-      setStatus(cancelledByUser ? "cancelled" : "error");
-      setErrorMessage(
-        cancelledByUser ? "Transação cancelada na carteira." : message,
-      );
+    } catch {
+      /* progress bar updates on the next poll */
     }
   }
 
@@ -260,14 +209,13 @@ export function PresaleCheckout() {
             </span>
             <div className="min-w-0 flex-1">
               <p className="text-[11px] uppercase tracking-[0.22em] text-cyan">
-                Tesouraria on-chain · Squads
+                {t.checkout.treasuryKicker}
               </p>
               <p className="mt-3 break-all font-mono text-[13px] leading-relaxed tracking-tight text-ink">
                 {SQUADS_VAULT}
               </p>
               <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted">
-                Vault transparente para auditoria pública. SOL vai direto para
-                esta multisig. Confira o endereço na carteira antes de assinar.
+                {t.checkout.treasuryBody}
               </p>
               <div className="mt-5 flex flex-wrap gap-3">
                 <button
@@ -278,12 +226,12 @@ export function PresaleCheckout() {
                   {copied ? (
                     <span className="inline-flex items-center gap-2 text-cyan">
                       <Check size={13} />
-                      Copied!
+                      {t.checkout.copied}
                     </span>
                   ) : (
                     <span className="inline-flex items-center gap-2">
                       <Copy size={13} />
-                      Copy Address
+                      {t.checkout.copy}
                     </span>
                   )}
                 </button>
@@ -294,7 +242,7 @@ export function PresaleCheckout() {
                   className="inline-flex items-center gap-2 rounded-full border border-white/10 px-3.5 py-2 text-xs text-ink transition duration-300 hover:border-cyan/40 hover:text-cyan"
                 >
                   <ExternalLink size={13} />
-                  Auditar no Solscan
+                  {t.checkout.audit}
                 </a>
               </div>
             </div>
@@ -302,9 +250,10 @@ export function PresaleCheckout() {
 
           <div className="mt-8">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-sm">
-              <span className="text-muted">Progresso da fase</span>
+              <span className="text-muted">{t.checkout.progress}</span>
               <span className="tabular font-mono text-[13px] text-ink">
-                {formatAmount(raisedSol, 2)} / {formatAmount(HARD_CAP_SOL, 0)} SOL
+                {formatAmount(raisedSol, 2, locale)} /{" "}
+                {formatAmount(HARD_CAP_SOL, 0, locale)} SOL
               </span>
             </div>
             <div className="relative h-2 overflow-hidden rounded-full bg-white/[0.06]">
@@ -329,16 +278,20 @@ export function PresaleCheckout() {
           <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <h3 className="font-display text-xl tracking-tight">
-                Checkout da pré-venda
+                {t.checkout.checkoutTitle}
               </h3>
               <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted">
-                1 $VISION = {formatUsd(VISION_PRICE_USD)}. Taxa ao vivo:{" "}
+                1 $VISION = {formatUsd(VISION_PRICE_USD, locale)}.{" "}
+                {t.checkout.liveRate}{" "}
                 <span className="text-cyan">1 SOL ≈ {rateLabel} $VISION</span>
-                {priceLive ? " · cotação live" : " · fallback US$ 150"}.
+                {priceLive
+                  ? ` · ${t.checkout.liveQuote}`
+                  : ` · ${t.checkout.fallbackQuote}`}
+                .
               </p>
             </div>
             <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-muted">
-              Phantom · Backpack
+              {t.checkout.wallets}
             </p>
           </div>
 
@@ -366,7 +319,7 @@ export function PresaleCheckout() {
             className="mt-7 block text-[13px] text-muted"
             htmlFor="sol-amount"
           >
-            Quantidade em SOL
+            {t.checkout.amountLabel}
           </label>
           <input
             id="sol-amount"
@@ -392,21 +345,21 @@ export function PresaleCheckout() {
             }}
             className="sol-slider mt-5"
             style={{ ["--sol-pct" as string]: `${sliderPct}%` }}
-            aria-label="Slider de SOL"
+            aria-label={t.checkout.slider}
           />
 
           <div className="mt-6 grid gap-3 sm:grid-cols-3">
             <div className="rounded-2xl border border-white/10 bg-onyx/50 p-4">
               <p className="text-[10px] uppercase tracking-[0.2em] text-muted">
-                USD
+                {t.checkout.usd}
               </p>
               <p className="mt-2 font-display text-2xl tracking-tight text-violet tabular">
-                {formatUsd(quote.usd)}
+                {formatUsd(quote.usd, locale)}
               </p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-onyx/50 p-4">
               <p className="text-[10px] uppercase tracking-[0.2em] text-muted">
-                Bônus
+                {t.checkout.bonus}
               </p>
               <p className="mt-2 font-display text-2xl tracking-tight text-ink tabular">
                 {quote.bonusPct}%
@@ -414,10 +367,10 @@ export function PresaleCheckout() {
             </div>
             <div className="rounded-2xl border border-cyan/25 bg-cyan/[0.06] p-4">
               <p className="text-[10px] uppercase tracking-[0.2em] text-muted">
-                Você recebe
+                {t.checkout.youReceive}
               </p>
               <p className="mt-2 font-display text-2xl tracking-tight text-cyan tabular">
-                {formatAmount(quote.vision, 2)}
+                {formatAmount(quote.vision, 2, locale)}
               </p>
             </div>
           </div>
@@ -425,41 +378,22 @@ export function PresaleCheckout() {
           <button
             type="button"
             onClick={() => void contribute()}
-            disabled={status === "pending"}
-            className="glow-cta mt-6 inline-flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-cyan to-neon px-6 py-3.5 text-sm font-medium text-onyx transition duration-300 hover:brightness-110 disabled:opacity-55"
+            disabled={loading}
+            className="cta-pulse glow-cta mt-6 inline-flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-cyan to-neon px-6 py-3.5 text-sm font-medium text-onyx transition duration-300 hover:brightness-110 disabled:opacity-55"
           >
-            {status === "pending" ? (
+            {loading ? (
               <>
                 <Loader2 className="animate-spin" size={16} />
-                Confirmando na carteira…
+                {t.checkout.confirming}
               </>
             ) : connected ? (
-              "Buy with Solana"
+              t.checkout.buySol
             ) : (
-              "Conectar Phantom / Backpack"
+              t.checkout.connectWallet
             )}
           </button>
 
           <AnimatePresence>
-            {status === "success" && txHash ? (
-              <motion.p
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                className="mt-4 text-sm text-cyan"
-                role="status"
-              >
-                Contribuição confirmada. Recibo:{" "}
-                <a
-                  href={`https://solscan.io/tx/${txHash}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="break-all font-mono text-xs underline decoration-cyan/40 underline-offset-4"
-                >
-                  {txHash}
-                </a>
-              </motion.p>
-            ) : null}
             {status === "cancelled" ? (
               <motion.p
                 initial={{ opacity: 0, y: 8 }}
@@ -467,24 +401,22 @@ export function PresaleCheckout() {
                 className="mt-4 text-sm text-muted"
                 role="status"
               >
-                {errorMessage}
+                {translateError(t, error, MIN_SOL)}
               </motion.p>
             ) : null}
-            {status === "error" && errorMessage ? (
+            {status === "error" && error ? (
               <motion.p
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 className="mt-4 text-sm text-red-400"
                 role="status"
               >
-                {errorMessage}
+                {translateError(t, error, MIN_SOL)}
               </motion.p>
             ) : null}
           </AnimatePresence>
           <p className="mt-4 text-xs leading-relaxed text-muted">
-            Transferência nativa de SOL para a Squads Multisig. $VISION é
-            creditado conforme a taxa desta fase; não é uma oferta de valor
-            mobiliário.
+            {t.checkout.legal}
           </p>
         </article>
       </div>
@@ -493,6 +425,7 @@ export function PresaleCheckout() {
         {PRESALE_TIERS.map((tier) => {
           const tokens = visionForUsd(tier.usd, tier.bonusPct);
           const selected = activeTier === tier.id;
+          const copy = t.tiers[tier.id];
           return (
             <HoverLift key={tier.id} className="h-full">
               <article
@@ -503,19 +436,20 @@ export function PresaleCheckout() {
                 }`}
               >
                 <p className="text-[10px] uppercase tracking-[0.2em] text-muted">
-                  {tier.badge}
+                  {copy.badge}
                 </p>
                 <h3 className="mt-2 font-display text-xl tracking-tight">
                   {tier.name}
                 </h3>
                 <p className="mt-2 font-display text-3xl tracking-tight text-cyan tabular">
-                  {formatUsd(tier.usd)}
+                  {formatUsd(tier.usd, locale)}
                 </p>
                 <p className="mt-2 font-mono text-xs text-cyan/90">
-                  {formatAmount(tokens, 0)} $VISION · bônus {tier.bonusPct}%
+                  {formatAmount(tokens, 0, locale)} {t.checkout.visionBonus}{" "}
+                  {tier.bonusPct}%
                 </p>
                 <ul className="mt-5 flex-1 space-y-2 text-sm leading-relaxed text-muted">
-                  {tier.perks.map((perk) => (
+                  {[copy.perk1, copy.perk2].map((perk) => (
                     <li key={perk} className="flex gap-2">
                       <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-cyan" />
                       <span>{perk}</span>
@@ -531,13 +465,20 @@ export function PresaleCheckout() {
                       : "border border-white/10 text-ink hover:border-cyan/40 hover:text-cyan"
                   }`}
                 >
-                  Selecionar {tier.name}
+                  {t.checkout.select} {tier.name}
                 </button>
               </article>
             </HoverLift>
           );
         })}
       </div>
+
+      <CheckoutReceipt
+        open={status === "success"}
+        txHash={txHash}
+        tierName={tierName}
+        onClose={reset}
+      />
     </div>
   );
 }
