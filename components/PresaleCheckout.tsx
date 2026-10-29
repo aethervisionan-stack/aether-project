@@ -22,6 +22,7 @@ import {
   visionForUsd,
   visionFromUsd,
 } from "@/lib/presale";
+import { rpcWithFallback } from "@/lib/solana";
 import { HoverLift } from "./Reveal";
 
 const TREASURY = new PublicKey(SQUADS_VAULT);
@@ -90,7 +91,9 @@ export function PresaleCheckout() {
 
     async function loadTreasury() {
       try {
-        const lamports = await connection.getBalance(TREASURY, "confirmed");
+        const { value: lamports } = await rpcWithFallback(connection, (rpc) =>
+          rpc.getBalance(TREASURY, "confirmed"),
+        );
         if (!cancelled) setRaisedSol(lamports / LAMPORTS_PER_SOL);
       } catch {
         if (!cancelled) setRaisedSol(0);
@@ -199,7 +202,9 @@ export function PresaleCheckout() {
     const signature = await handlePurchase(name, quote.solAmount);
     if (!signature) return;
     try {
-      const lamportsNow = await connection.getBalance(TREASURY, "confirmed");
+      const { value: lamportsNow } = await rpcWithFallback(connection, (rpc) =>
+        rpc.getBalance(TREASURY, "confirmed"),
+      );
       setRaisedSol(lamportsNow / LAMPORTS_PER_SOL);
     } catch {
       /* progress bar updates on the next poll */

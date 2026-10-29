@@ -17,6 +17,7 @@ import {
   SQUADS_MULTISIG,
 } from "@/lib/presale";
 import { requestWalletSession, type WalletBrand } from "@/lib/site";
+import { rpcWithFallback } from "@/lib/solana";
 
 export type CheckoutStatus =
   | "idle"
@@ -194,7 +195,10 @@ export function useAetherCheckout() {
       setStatus("pending");
 
       try {
-        const balance = await connection.getBalance(publicKey, "confirmed");
+        const { value: balance, connection: fundedConnection } =
+          await rpcWithFallback(connection, (rpc) =>
+            rpc.getBalance(publicKey, "confirmed"),
+          );
         if (balance < lamports + FEE_BUFFER_LAMPORTS) {
           setStatus("error");
           setError("insufficient");
@@ -204,8 +208,12 @@ export function useAetherCheckout() {
           return null;
         }
 
-        const { blockhash, lastValidBlockHeight } =
-          await connection.getLatestBlockhash("confirmed");
+        const {
+          value: { blockhash, lastValidBlockHeight },
+          connection: rpc,
+        } = await rpcWithFallback(fundedConnection, (next) =>
+          next.getLatestBlockhash("confirmed"),
+        );
 
         const transaction = new Transaction().add(
           ComputeBudgetProgram.setComputeUnitLimit({
@@ -223,14 +231,20 @@ export function useAetherCheckout() {
         transaction.feePayer = publicKey;
         transaction.recentBlockhash = blockhash;
 
-        const signature = await sendTransaction(transaction, connection);
-        const confirmation = await connection.confirmTransaction(
-          {
-            signature,
-            blockhash,
-            lastValidBlockHeight,
-          },
-          "confirmed",
+        const { value: signature, connection: sending } = await rpcWithFallback(
+          rpc,
+          (next) => sendTransaction(transaction, next),
+        );
+
+        const { value: confirmation } = await rpcWithFallback(sending, (next) =>
+          next.confirmTransaction(
+            {
+              signature,
+              blockhash,
+              lastValidBlockHeight,
+            },
+            "confirmed",
+          ),
         );
 
         if (confirmation.value.err) {
@@ -249,7 +263,10 @@ export function useAetherCheckout() {
         let logs: string[] | null = null;
         if (sendError) {
           try {
-            logs = await sendError.getLogs(connection);
+            const { value } = await rpcWithFallback(connection, (rpc) =>
+              sendError.getLogs(rpc),
+            );
+            logs = value;
           } catch {
             logs = sendError.logs ?? null;
           }
