@@ -9,6 +9,7 @@ import {
 import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
 import { I18nProvider } from "@/lib/i18n";
 import {
+  getClientRpcEndpoint,
   PRIMARY_SOLANA_RPC,
   SOLANA_CONNECTION_CONFIG,
 } from "@/lib/solana";
@@ -23,7 +24,10 @@ export function AppProviders({ children }: { children: ReactNode }) {
     setReady(true);
   }, []);
 
-  const endpoint = useMemo(() => PRIMARY_SOLANA_RPC, []);
+  const endpoint = useMemo(
+    () => (ready ? getClientRpcEndpoint() : PRIMARY_SOLANA_RPC),
+    [ready],
+  );
 
   const wallets = useMemo(
     () =>
