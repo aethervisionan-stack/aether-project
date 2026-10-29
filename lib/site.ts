@@ -13,6 +13,8 @@ export const SITE_DESCRIPTION =
 export const PHANTOM_DOWNLOAD = "https://phantom.app/download";
 export const BACKPACK_DOWNLOAD = "https://www.backpack.app/";
 
+export type WalletSessionAction = "modal" | "phantom-app" | "download";
+
 export function hasInjectedSolanaWallet(): boolean {
   if (typeof window === "undefined") return false;
   const injected = window as Window & {
@@ -26,4 +28,39 @@ export function hasInjectedSolanaWallet(): boolean {
       injected.solana ||
       injected.backpack,
   );
+}
+
+export function isMobileSolanaClient(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent;
+  const iPadOs =
+    navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
+  return /Android|iPhone|iPad|iPod/i.test(ua) || iPadOs;
+}
+
+export function phantomUniversalBrowseUrl(href?: string): string {
+  const target =
+    href ?? (typeof window !== "undefined" ? window.location.href : SITE_URL);
+  const encoded = encodeURIComponent(target);
+  return `https://phantom.app/ul/browse/${encoded}?ref=${encoded}`;
+}
+
+export function requestWalletSession(openModal?: () => void): WalletSessionAction {
+  if (hasInjectedSolanaWallet()) {
+    openModal?.();
+    return "modal";
+  }
+
+  if (isMobileSolanaClient()) {
+    window.location.assign(phantomUniversalBrowseUrl());
+    return "phantom-app";
+  }
+
+  const popup = window.open(PHANTOM_DOWNLOAD, "_blank", "noopener,noreferrer");
+  if (!popup) {
+    window.location.assign(PHANTOM_DOWNLOAD);
+    return "download";
+  }
+  openModal?.();
+  return "download";
 }

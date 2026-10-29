@@ -4,13 +4,15 @@ import { useI18n } from "@/lib/i18n";
 import {
   BACKPACK_DOWNLOAD,
   hasInjectedSolanaWallet,
-  PHANTOM_DOWNLOAD,
+  requestWalletSession,
 } from "@/lib/site";
+import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useState } from "react";
 
 export function WalletNotice() {
   const { t } = useI18n();
+  const { setVisible: setWalletModalVisible } = useWalletModal();
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
@@ -29,14 +31,15 @@ export function WalletNotice() {
           <div className="mx-auto flex max-w-6xl flex-col gap-3 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm leading-relaxed text-muted">{t.wallet.body}</p>
             <div className="flex flex-wrap gap-2">
-              <a
-                href={PHANTOM_DOWNLOAD}
-                target="_blank"
-                rel="noreferrer"
+              <button
+                type="button"
+                onClick={() =>
+                  requestWalletSession(() => setWalletModalVisible(true))
+                }
                 className="rounded-full bg-gradient-to-r from-cyan to-neon px-3 py-1.5 text-xs font-medium text-onyx"
               >
                 {t.wallet.phantom}
-              </a>
+              </button>
               <a
                 href={BACKPACK_DOWNLOAD}
                 target="_blank"

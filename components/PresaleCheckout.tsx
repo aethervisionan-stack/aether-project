@@ -54,6 +54,7 @@ export function PresaleCheckout() {
     status,
     tierName,
     handlePurchase,
+    connectWallet,
     reset,
     connected,
     solUsd,
@@ -64,6 +65,12 @@ export function PresaleCheckout() {
   const [raisedSol, setRaisedSol] = useState(0);
   const [copied, setCopied] = useState(false);
   const [activeTier, setActiveTier] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!copied) return;
+    const timer = window.setTimeout(() => setCopied(false), 1800);
+    return () => window.clearTimeout(timer);
+  }, [copied]);
 
   useEffect(() => {
     let cancelled = false;
@@ -182,7 +189,6 @@ export function PresaleCheckout() {
       /* clipboard can be blocked in some browsers */
     }
     setCopied(true);
-    window.setTimeout(() => setCopied(false), 1800);
   }
 
   async function contribute() {
@@ -377,7 +383,13 @@ export function PresaleCheckout() {
 
           <button
             type="button"
-            onClick={() => void contribute()}
+            onClick={() => {
+              if (!connected) {
+                connectWallet();
+                return;
+              }
+              void contribute();
+            }}
             disabled={loading}
             className="cta-pulse glow-cta mt-6 inline-flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-cyan to-neon px-6 py-3.5 text-sm font-medium text-onyx transition duration-300 hover:brightness-110 disabled:opacity-55"
           >

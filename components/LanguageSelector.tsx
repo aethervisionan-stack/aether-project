@@ -2,7 +2,7 @@
 
 import { useI18n, type Locale } from "@/lib/i18n";
 import { Globe } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const OPTIONS: { id: Locale; label: "en" | "pt" | "es" }[] = [
   { id: "en", label: "en" },
@@ -13,9 +13,31 @@ const OPTIONS: { id: Locale; label: "en" | "pt" | "es" }[] = [
 export function LanguageSelector() {
   const { locale, setLocale, t } = useI18n();
   const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+
+    function onPointerDown(event: PointerEvent) {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+
+    window.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
 
   return (
-    <div className="fixed bottom-5 right-5 z-[60]">
+    <div ref={rootRef} className="fixed bottom-5 right-5 z-[60]">
       <div className="relative">
         {open ? (
           <div className="absolute bottom-12 right-0 mb-1 flex overflow-hidden rounded-full border border-white/10 bg-[#030305]/85 shadow-[0_12px_40px_rgba(0,0,0,0.35)] backdrop-blur-xl">

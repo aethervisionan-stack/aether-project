@@ -14,7 +14,7 @@ import {
   MIN_SOL,
   SQUADS_MULTISIG,
 } from "@/lib/presale";
-import { hasInjectedSolanaWallet } from "@/lib/site";
+import { requestWalletSession } from "@/lib/site";
 
 export type CheckoutStatus =
   | "idle"
@@ -99,6 +99,12 @@ export function useAetherCheckout() {
     [solUsd],
   );
 
+  const connectWallet = useCallback(() => {
+    setError(null);
+    setStatus("idle");
+    return requestWalletSession(() => setVisible(true));
+  }, [setVisible]);
+
   const handlePurchase = useCallback(
     async (name: string, priceInSol: number) => {
       setError(null);
@@ -106,13 +112,7 @@ export function useAetherCheckout() {
       setTierName(name);
 
       if (!connected || !publicKey) {
-        if (!hasInjectedSolanaWallet()) {
-          setStatus("error");
-          setError("wallet_missing");
-          return null;
-        }
-        setVisible(true);
-        setStatus("idle");
+        connectWallet();
         return null;
       }
 
@@ -166,7 +166,7 @@ export function useAetherCheckout() {
         setLoading(false);
       }
     },
-    [connected, connection, publicKey, sendTransaction, setVisible],
+    [connectWallet, connected, connection, publicKey, sendTransaction],
   );
 
   return {
@@ -176,6 +176,7 @@ export function useAetherCheckout() {
     status,
     tierName,
     handlePurchase,
+    connectWallet,
     reset,
     connected,
     publicKey,
