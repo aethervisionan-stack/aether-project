@@ -37,15 +37,16 @@ function classifyError(error: unknown): {
   status: "cancelled" | "error";
   code: CheckoutErrorCode;
 } {
-  const message = error instanceof Error ? error.message : "";
-  const cancelledByUser =
-    /reject|cancel|declin|user/i.test(message) ||
-    message.includes("WalletSignTransactionError");
-  if (cancelledByUser) {
-    return { status: "cancelled", code: "cancelled" };
-  }
+  const message = error instanceof Error ? error.message : String(error ?? "");
   if (/insufficient|0x1\b|custom program error: 0x1/i.test(message)) {
     return { status: "error", code: "insufficient" };
+  }
+  if (
+    /WalletSignTransactionError|user rejected|user denied|user cancelled|rejected the request|declined/i.test(
+      message,
+    )
+  ) {
+    return { status: "cancelled", code: "cancelled" };
   }
   return { status: "error", code: "generic" };
 }
@@ -149,7 +150,10 @@ export function useAetherCheckout() {
         const signature = await sendTransaction(transaction, connection, {
           skipPreflight: false,
         });
-        await connection.confirmTransaction(signature, "confirmed");
+        await connection.confirmTransaction(
+          { signature, blockhash, lastValidBlockHeight },
+          "confirmed",
+        );
         setTxHash(signature);
         setStatus("success");
         return signature;

@@ -6,9 +6,9 @@ export const SITE_URL =
 
 export const SITE_NAME = "Aether Vision";
 export const SITE_TITLE =
-  "Aether Vision — Vision 1.0 a 4.0 | Pré-venda on-chain de óculos de IA";
+  "Aether Vision — Vision 1.0 to 4.0 | On-chain AI glasses presale";
 export const SITE_DESCRIPTION =
-  "Pré-venda dos óculos inteligentes Vision 1.0 a 4.0. Aporte em SOL na tesouraria Squads Multisig, tokens $VISION e $AETH, App Bridge e IA descentralizada na Solana.";
+  "Presale of Vision 1.0 to 4.0 smart glasses. Contribute SOL to the Squads Multisig treasury, $VISION and $AETH tokens, App Bridge and decentralized AI on Solana.";
 
 export const PHANTOM_DOWNLOAD = "https://phantom.app/download";
 export const BACKPACK_DOWNLOAD = "https://www.backpack.app/";

@@ -23,16 +23,6 @@ export function detectLocale(): Locale {
   if (typeof window === "undefined") return "en";
   const stored = window.localStorage.getItem(STORAGE_KEY);
   if (stored === "en" || stored === "pt" || stored === "es") return stored;
-  const candidates = [
-    window.navigator.language,
-    ...(window.navigator.languages ?? []),
-  ];
-  for (const raw of candidates) {
-    const code = raw.toLowerCase();
-    if (code.startsWith("pt")) return "pt";
-    if (code.startsWith("es")) return "es";
-    if (code.startsWith("en")) return "en";
-  }
   return "en";
 }
 

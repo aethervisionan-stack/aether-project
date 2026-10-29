@@ -39,8 +39,8 @@ export const es: Messages = {
     treasuryKicker: "Tesorería on-chain · Squads",
     treasuryBody:
       "Vault transparente para auditoría pública. El SOL va directo a esta multisig. Verifica la dirección en la cartera antes de firmar.",
-    copy: "Copy Address",
-    copied: "Copied!",
+    copy: "Copiar dirección",
+    copied: "¡Copiado!",
     audit: "Auditar en Solscan",
     progress: "Progreso de la fase",
     checkoutTitle: "Checkout de preventa",

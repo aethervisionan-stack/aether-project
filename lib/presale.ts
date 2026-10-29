@@ -32,7 +32,7 @@ const NUMBER_LOCALE: Record<string, string> = {
   es: "es-ES",
 };
 
-export function formatUsd(value: number, locale = "pt"): string {
+export function formatUsd(value: number, locale = "en"): string {
   return new Intl.NumberFormat(NUMBER_LOCALE[locale] ?? "en-US", {
     style: "currency",
     currency: "USD",
@@ -43,7 +43,7 @@ export function formatUsd(value: number, locale = "pt"): string {
 export function formatAmount(
   value: number,
   fractionDigits = 2,
-  locale = "pt",
+  locale = "en",
 ): string {
   return new Intl.NumberFormat(NUMBER_LOCALE[locale] ?? "en-US", {
     maximumFractionDigits: fractionDigits,

@@ -25,8 +25,8 @@ export const metadata: Metadata = {
   keywords: [
     "Aether Vision",
     "Vision 1.0",
-    "óculos de IA",
-    "pré-venda Solana",
+    "AI glasses",
+    "Solana presale",
     "Squads Multisig",
     "$VISION",
     "DePIN",
@@ -37,7 +37,7 @@ export const metadata: Metadata = {
   alternates: { canonical: "/" },
   openGraph: {
     type: "website",
-    locale: "pt_BR",
+    locale: "en_US",
     url: SITE_URL,
     siteName: SITE_NAME,
     title: SITE_TITLE,
@@ -47,7 +47,7 @@ export const metadata: Metadata = {
         url: "/og.jpg",
         width: 1376,
         height: 768,
-        alt: "Aether Vision — Vision 1.0 a 4.0, pré-venda de óculos de IA",
+        alt: "Aether Vision — Vision 1.0 to 4.0, on-chain AI glasses presale",
       },
     ],
   },
@@ -84,7 +84,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="pt-BR" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <body
         className="bg-onyx text-ink antialiased font-sans"
         suppressHydrationWarning

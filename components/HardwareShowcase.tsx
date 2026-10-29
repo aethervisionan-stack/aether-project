@@ -108,6 +108,8 @@ export function HardwareShowcase() {
                     </p>
                   ) : null}
 
+                  <div className="flex-1" />
+
                   <button
                     type="button"
                     disabled={loading}
@@ -115,7 +117,7 @@ export function HardwareShowcase() {
                       if (!tier) return;
                       void buyTier(device.id, device.name, tier.usd);
                     }}
-                    className="cta-pulse glow-cta mt-6 mt-auto inline-flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-cyan to-neon px-4 py-2.5 text-sm font-medium text-onyx transition duration-300 hover:brightness-110 disabled:opacity-55"
+                    className="cta-pulse glow-cta mt-6 inline-flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-cyan to-neon px-4 py-2.5 text-sm font-medium text-onyx transition duration-300 hover:brightness-110 disabled:opacity-55"
                   >
                     {busy ? (
                       <>
@@ -135,7 +137,12 @@ export function HardwareShowcase() {
         })}
       </div>
 
-      {status === "cancelled" || status === "error" ? (
+      {status === "cancelled" ? (
+        <p className="mt-6 text-center text-sm text-muted" role="status">
+          {translateError(t, error, MIN_SOL)}
+        </p>
+      ) : null}
+      {status === "error" && error ? (
         <p className="mt-6 text-center text-sm text-red-400" role="status">
           {translateError(t, error, MIN_SOL)}
         </p>
