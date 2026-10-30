@@ -15,7 +15,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   FALLBACK_SOL_USD,
   MIN_SOL,
-  SQUADS_MULTISIG,
+  SOL_TREASURY,
 } from "@/lib/presale";
 import { requestWalletSession, type WalletBrand } from "@/lib/site";
 import { Buffer } from "buffer";
@@ -34,7 +34,7 @@ export type CheckoutStatus =
   | "cancelled"
   | "error";
 
-const TREASURY = new PublicKey(SQUADS_MULTISIG);
+const TREASURY = new PublicKey(SOL_TREASURY);
 const FEE_BUFFER_LAMPORTS = Math.floor(0.005 * LAMPORTS_PER_SOL);
 const COMPUTE_UNIT_LIMIT = 200_000;
 const COMPUTE_UNIT_PRICE_MICRO_LAMPORTS = 300_000;

@@ -1,6 +1,16 @@
+/** Legacy Squads vault — leftover SOL/VISION may still sit here. Not the checkout dest. */
 export const SQUADS_VAULT = "AVj6q1t8xWd7Mi7roNjTc1RvaqJy79P7n3XNpCVjQgxa";
 export const SQUADS_MULTISIG = SQUADS_VAULT;
-export const SOLSCAN_ACCOUNT = `https://solscan.io/account/${SQUADS_VAULT}`;
+
+/** Phantom 1 / relayer owner. Checkout SOL and /sol-paid listen here. */
+export const RECEIVE_TREASURY = "9V7rtShwij5kAKJUjBrCB5y2QaGLKUbUSwSGyKBN6911";
+export const SOL_TREASURY = RECEIVE_TREASURY;
+export const SOLSCAN_ACCOUNT = `https://solscan.io/account/${SOL_TREASURY}`;
+
+export function isSolPaymentDestination(address: string | undefined): boolean {
+  const value = address?.trim() ?? "";
+  return value === SOL_TREASURY || value === SQUADS_VAULT;
+}
 export function solscanTx(signature: string) {
   return `https://solscan.io/tx/${signature}`;
 }

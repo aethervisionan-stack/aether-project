@@ -1,8 +1,8 @@
 import { PublicKey } from "@solana/web3.js";
-import { SQUADS_VAULT } from "./presale";
+import { RECEIVE_TREASURY, SQUADS_VAULT } from "./presale";
 
 /** Addresses that are wallets/vaults, never an SPL mint. */
-export const KNOWN_NON_MINTS = [SQUADS_VAULT] as const;
+export const KNOWN_NON_MINTS = [SQUADS_VAULT, RECEIVE_TREASURY] as const;
 
 export function isKnownNonMint(value: string): boolean {
   const trimmed = value.trim();
@@ -18,7 +18,7 @@ export function parseMintAddress(raw: string | undefined): PublicKey {
   }
   if (isKnownNonMint(value)) {
     throw new Error(
-      `TOKEN_MINT ${value} is the Squads treasury wallet, not an SPL mint. Replace it with the $VISION mint address.`,
+      `TOKEN_MINT ${value} is a wallet/vault, not an SPL mint. Replace it with the $VISION mint address.`,
     );
   }
   try {

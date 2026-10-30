@@ -15,7 +15,7 @@ import {
   PRESALE_TIERS,
   SOFT_CAP_SOL,
   SOLSCAN_ACCOUNT,
-  SQUADS_VAULT,
+  SOL_TREASURY,
   TIER_SELECT_EVENT,
   VISION_PRICE_USD,
   formatAmount,
@@ -26,7 +26,7 @@ import {
 import { rpcWithFallback } from "@/lib/solana";
 import { HoverLift } from "./Reveal";
 
-const TREASURY = new PublicKey(SQUADS_VAULT);
+const TREASURY = new PublicKey(SOL_TREASURY);
 const MAX_SOL = 40;
 const PRESETS = ["0.5", "1", "2", "5"] as const;
 
@@ -275,7 +275,7 @@ export function PresaleCheckout() {
 
   async function handleCopy() {
     try {
-      await copyText(SQUADS_VAULT);
+      await copyText(SOL_TREASURY);
     } catch {
       /* clipboard can be blocked in some browsers */
     }
@@ -375,7 +375,7 @@ export function PresaleCheckout() {
                 {t.checkout.treasuryKicker}
               </p>
               <p className="mt-3 break-all font-mono text-[13px] leading-relaxed tracking-tight text-ink">
-                {SQUADS_VAULT}
+                {SOL_TREASURY}
               </p>
               <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted">
                 {t.checkout.treasuryBody}

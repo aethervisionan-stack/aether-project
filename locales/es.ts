@@ -31,14 +31,14 @@ export const es: Messages = {
     title: "Kits de hardware + tokens",
     leadBefore: "Precio oficial:",
     leadAfter:
-      "por 1 $VISION. Conecta Phantom o Backpack y envía SOL a la Squads Multisig. Las suscripciones mensuales aceptan de forma nativa $AETH y $VISION.",
+      "por 1 $VISION. Conecta Phantom o Backpack y envía SOL a la tesorería de recepción. Las suscripciones mensuales aceptan de forma nativa $AETH y $VISION.",
     nativePay:
       "Pago de las suscripciones mensuales de la app: $AETH y $VISION se aceptan de forma nativa.",
   },
   checkout: {
-    treasuryKicker: "Tesorería on-chain · Squads",
+    treasuryKicker: "Tesorería on-chain · cartera de recepción",
     treasuryBody:
-      "Vault transparente para auditoría pública. El SOL va directo a esta multisig. Verifica la dirección en la cartera antes de firmar.",
+      "El SOL se envía a esta Phantom de recepción (relayer). Verifica la dirección en la cartera antes de firmar.",
     copy: "Copiar dirección",
     copied: "¡Copiado!",
     audit: "Auditar en Solscan",
@@ -57,7 +57,7 @@ export const es: Messages = {
     buySol: "Buy with Solana",
     connectWallet: "Conectar Phantom / Backpack",
     legal:
-      "Transferencia nativa de SOL a la Squads Multisig. $VISION se acredita según la tasa de esta fase; no es una oferta de valores.",
+      "Transferencia nativa de SOL a la tesorería de recepción. $VISION se acredita según la tasa de esta fase; no es una oferta de valores.",
     paySol: "Pagar con SOL",
     payPix: "Pagar con PIX",
     destLabel: "Cartera Solana que recibe $VISION",
@@ -258,7 +258,7 @@ export const es: Messages = {
     close: "Cerrar",
     closeReceipt: "Cerrar recibo",
     title: "Aporte confirmado on-chain",
-    withTier: "La asignación {tier} se envió a la tesorería Squads.",
+    withTier: "La asignación {tier} se envió a la tesorería de recepción.",
     noTier: "La transferencia de SOL se confirmó en la red Solana.",
     solscan: "Ver en Solscan",
   },

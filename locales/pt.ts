@@ -31,14 +31,14 @@ export const pt: Messages = {
     title: "Kits Hardware + Tokens",
     leadBefore: "Preço oficial:",
     leadAfter:
-      "por 1 $VISION. Conecte Phantom ou Backpack e envie SOL para a Squads Multisig. Assinaturas mensais aceitam nativamente $AETH e $VISION.",
+      "por 1 $VISION. Conecte Phantom ou Backpack e envie SOL para a tesouraria de recebimento. Assinaturas mensais aceitam nativamente $AETH e $VISION.",
     nativePay:
       "Pagamento das assinaturas mensais do aplicativo: $AETH e $VISION são aceitos nativamente.",
   },
   checkout: {
-    treasuryKicker: "Tesouraria on-chain · Squads",
+    treasuryKicker: "Tesouraria on-chain · carteira de recebimento",
     treasuryBody:
-      "Vault transparente para auditoria pública. SOL vai direto para esta multisig. Confira o endereço na carteira antes de assinar.",
+      "O SOL vai para esta Phantom de recebimento (relayer). Confira o endereço na carteira antes de assinar.",
     copy: "Copiar endereço",
     copied: "Copiado!",
     audit: "Auditar no Solscan",
@@ -57,7 +57,7 @@ export const pt: Messages = {
     buySol: "Buy with Solana",
     connectWallet: "Conectar Phantom / Backpack",
     legal:
-      "Transferência nativa de SOL para a Squads Multisig. $VISION é creditado conforme a taxa desta fase; não é uma oferta de valor mobiliário.",
+      "Transferência nativa de SOL para a tesouraria de recebimento. $VISION é creditado conforme a taxa desta fase; não é uma oferta de valor mobiliário.",
     paySol: "Pagar com SOL",
     payPix: "Pagar com PIX",
     destLabel: "Carteira Solana que recebe $VISION",
@@ -258,7 +258,7 @@ export const pt: Messages = {
     close: "Fechar",
     closeReceipt: "Fechar recibo",
     title: "Aporte confirmado on-chain",
-    withTier: "A alocação {tier} foi enviada para a tesouraria Squads.",
+    withTier: "A alocação {tier} foi enviada para a tesouraria de recebimento.",
     noTier: "A transferência de SOL foi confirmada na rede Solana.",
     solscan: "Ver no Solscan",
   },

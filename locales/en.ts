@@ -29,14 +29,14 @@ export const en = {
     title: "Hardware kits + tokens",
     leadBefore: "Official price:",
     leadAfter:
-      "per 1 $VISION. Connect Phantom or Backpack and send SOL to the Squads Multisig. Monthly subscriptions natively accept $AETH and $VISION.",
+      "per 1 $VISION. Connect Phantom or Backpack and send SOL to the receive treasury. Monthly subscriptions natively accept $AETH and $VISION.",
     nativePay:
       "Monthly app subscription payments: $AETH and $VISION are accepted natively.",
   },
   checkout: {
-    treasuryKicker: "On-chain treasury · Squads",
+    treasuryKicker: "On-chain treasury · receive wallet",
     treasuryBody:
-      "Public vault for on-chain audit. SOL goes straight to this multisig. Check the address in your wallet before signing.",
+      "SOL is sent to this Phantom receive wallet (relayer). Check the address in your wallet before signing.",
     copy: "Copy Address",
     copied: "Copied!",
     audit: "Audit on Solscan",
@@ -55,7 +55,7 @@ export const en = {
     buySol: "Buy with Solana",
     connectWallet: "Connect Phantom / Backpack",
     legal:
-      "Native SOL transfer to the Squads Multisig. $VISION is credited at this phase rate; this is not a securities offering.",
+      "Native SOL transfer to the receive treasury. $VISION is credited at this phase rate; this is not a securities offering.",
     paySol: "Pay with SOL",
     payPix: "Pay with PIX",
     destLabel: "Solana wallet that receives $VISION",
@@ -256,7 +256,7 @@ export const en = {
     close: "Close",
     closeReceipt: "Close receipt",
     title: "On-chain contribution confirmed",
-    withTier: "The {tier} allocation was sent to the Squads treasury.",
+    withTier: "The {tier} allocation was sent to the receive treasury.",
     noTier: "The SOL transfer was confirmed on the Solana network.",
     solscan: "View on Solscan",
   },

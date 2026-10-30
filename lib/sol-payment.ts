@@ -4,12 +4,12 @@ import {
   type PartiallyDecodedInstruction,
 } from "@solana/web3.js";
 import { MEMO_PROGRAM_ID } from "@/lib/memo";
-import { SQUADS_VAULT } from "@/lib/presale";
+import { SOL_TREASURY, isSolPaymentDestination } from "@/lib/presale";
 import { executeWithRpcFallback } from "@/lib/solana";
 
 export { MEMO_PROGRAM_ID };
 
-const TREASURY = new PublicKey(SQUADS_VAULT);
+const TREASURY = new PublicKey(SOL_TREASURY);
 
 function instructionProgramId(
   ix: ParsedInstruction | PartiallyDecodedInstruction,
@@ -66,18 +66,19 @@ export async function verifySolPayment(input: {
         type?: string;
         info?: { destination?: string; lamports?: number };
       };
-      if (
-        parsedIx.type === "transfer" &&
-        parsedIx.info?.destination === TREASURY.toBase58()
-      ) {
+      const dest = parsedIx.info?.destination;
+      if (parsedIx.type === "transfer" && isSolPaymentDestination(dest)) {
         sawTreasury = true;
-        lamports = parsedIx.info.lamports ?? 0;
+        lamports = parsedIx.info?.lamports ?? 0;
       }
     }
   }
 
   if (!sawTreasury) {
-    return { ok: false, reason: "No SOL transfer to Squads treasury in this tx" };
+    return {
+      ok: false,
+      reason: `No SOL transfer to receive treasury ${TREASURY.toBase58()} in this tx`,
+    };
   }
   if (!sawMemo) {
     return { ok: false, reason: "Memo does not match this order id" };

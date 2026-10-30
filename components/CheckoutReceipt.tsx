@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Check, ExternalLink, X } from "lucide-react";
 import { useEffect } from "react";
 import { interpolate, useI18n } from "@/lib/i18n";
-import { SQUADS_MULTISIG, solscanTx } from "@/lib/presale";
+import { SOL_TREASURY, solscanTx } from "@/lib/presale";
 
 type CheckoutReceiptProps = {
   open: boolean;
@@ -83,7 +83,7 @@ export function CheckoutReceipt({
               <p className="mt-3 text-sm leading-relaxed text-cyan">{note}</p>
             ) : null}
             <p className="mt-3 break-all font-mono text-[11px] text-muted">
-              {SQUADS_MULTISIG}
+              {SOL_TREASURY}
             </p>
             <a
               href={solscanTx(txHash)}

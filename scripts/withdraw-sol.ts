@@ -2,9 +2,8 @@
  * Dry-run SOL transfer from the fulfillment hot wallet
  * (secrets/mint-authority.json) to a destination Phantom.
  *
- * This is NOT the Squads treasury. Checkout SOL lands on
- * AVj6q1t8xWd7Mi7roNjTc1RvaqJy79P7n3XNpCVjQgxa and cannot be
- * moved with this keypair.
+ * Checkout SOL now lands on RECEIVE_TREASURY (9V7rt…).
+ * This script moves SOL already on that same hot wallet.
  *
  * Keep at least MIN_RESERVE SOL on the hot wallet for SPL fees.
  *
