@@ -87,6 +87,7 @@ export const en = {
     title: "Four generations. One middleware.",
     lead: "Vision 1.0 to Vision 4.0 connect you to Aether’s decentralized AI. Each card sends a native SOL transfer to the Squads Multisig.",
     connectBuy: "Connect and buy",
+    visualAlt: "Studio visual of {name}",
     v1: {
       tag: "Essential",
       category: "Entry-Level · Smart Audio",
@@ -220,6 +221,11 @@ export const en = {
         body: "Strategic raise for the $AETH launch with a native blockchain, plus $VISION on Solana.",
       },
     ],
+  },
+  trust: {
+    label: "Network and treasury",
+    solana: "Powered by Solana",
+    squads: "Secured by Squads Multisig",
   },
   footer: {
     rights: "© 2026 Aether Vision. All rights reserved.",

@@ -2,6 +2,7 @@
 
 import { CheckoutReceipt } from "@/components/CheckoutReceipt";
 import { HoverLift, Reveal } from "@/components/Reveal";
+import { VisionProductVisual } from "@/components/VisionProductVisual";
 import { useAetherCheckout } from "@/hooks/useAetherCheckout";
 import { HARDWARE_LINE } from "@/lib/hardware";
 import { translateError, useI18n } from "@/lib/i18n";
@@ -62,6 +63,8 @@ export function HardwareShowcase() {
                       : "border-white/10 bg-surface/40 hover:border-cyan/30"
                   }`}
                 >
+                  <VisionProductVisual model={device.id} name={device.name} />
+
                   <div className="flex items-start justify-between gap-3">
                     <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted">
                       {copy.tag}

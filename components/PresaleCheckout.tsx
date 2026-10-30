@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Check, Copy, ExternalLink, Loader2, Shield } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CheckoutReceipt } from "@/components/CheckoutReceipt";
+import { TrustBadges } from "@/components/TrustBadges";
 import { useAetherCheckout } from "@/hooks/useAetherCheckout";
 import { translateError, useI18n } from "@/lib/i18n";
 import {
@@ -436,6 +437,7 @@ export function PresaleCheckout() {
           <p className="mt-4 text-xs leading-relaxed text-muted">
             {t.checkout.legal}
           </p>
+          <TrustBadges className="mt-5" />
         </article>
       </div>
 

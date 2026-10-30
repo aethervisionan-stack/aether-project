@@ -44,10 +44,10 @@ export const metadata: Metadata = {
     description: SITE_DESCRIPTION,
     images: [
       {
-        url: "/og.jpg",
-        width: 1376,
-        height: 768,
-        alt: "Aether Vision — Vision 1.0 to 4.0, on-chain AI glasses presale",
+        url: "/og",
+        width: 1200,
+        height: 630,
+        alt: "Aether Vision - Decentralized AI Hardware on Solana",
       },
     ],
   },
@@ -57,7 +57,14 @@ export const metadata: Metadata = {
     creator: "@VISIONAETH",
     title: SITE_TITLE,
     description: SITE_DESCRIPTION,
-    images: ["/og.jpg"],
+    images: [
+      {
+        url: "/og",
+        width: 1200,
+        height: 630,
+        alt: "Aether Vision - Decentralized AI Hardware on Solana",
+      },
+    ],
   },
   icons: {
     icon: [

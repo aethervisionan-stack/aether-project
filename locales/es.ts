@@ -89,6 +89,7 @@ export const es: Messages = {
     title: "Cuatro generaciones. Un middleware.",
     lead: "Vision 1.0 a Vision 4.0 te conectan a la IA descentralizada de Aether. Cada card dispara una transferencia nativa de SOL a la Squads Multisig.",
     connectBuy: "Conectar y comprar",
+    visualAlt: "Visual de estudio de {name}",
     v1: {
       tag: "Esencial",
       category: "Entry-Level · Smart Audio",
@@ -222,6 +223,11 @@ export const es: Messages = {
         body: "Recaudación estratégica para el lanzamiento de $AETH con blockchain nativa, además del token $VISION en Solana.",
       },
     ],
+  },
+  trust: {
+    label: "Red y tesorería",
+    solana: "Powered by Solana",
+    squads: "Secured by Squads Multisig",
   },
   footer: {
     rights: "© 2026 Aether Vision. Todos los derechos reservados.",

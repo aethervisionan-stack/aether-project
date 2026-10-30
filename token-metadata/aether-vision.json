@@ -1,0 +1,17 @@
+{
+  "name": "Aether Vision",
+  "symbol": "VISION",
+  "description": "Aether Vision — decentralized AI hardware on Solana. $VISION powers the Vision 1.0–4.0 line, App Bridge and ecosystem rewards.",
+  "image": "https://aether-project-eight.vercel.app/logo.png",
+  "external_url": "https://aether-project-eight.vercel.app",
+  "seller_fee_basis_points": 0,
+  "properties": {
+    "category": "fungible",
+    "files": [
+      {
+        "uri": "https://aether-project-eight.vercel.app/logo.png",
+        "type": "image/png"
+      }
+    ]
+  }
+}

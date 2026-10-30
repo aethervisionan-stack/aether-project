@@ -1,5 +1,6 @@
 "use client";
 
+import { TrustBadges } from "@/components/TrustBadges";
 import { useI18n } from "@/lib/i18n";
 import { Mail, X } from "lucide-react";
 
@@ -17,6 +18,7 @@ export function Footer() {
             AETHER
           </p>
           <p className="mt-3 max-w-sm text-sm text-muted">{t.footer.rights}</p>
+          <TrustBadges className="mt-5" />
         </div>
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-6">
           <a
