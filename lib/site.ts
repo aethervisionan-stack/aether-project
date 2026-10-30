@@ -1,8 +1,17 @@
-export const SITE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL ??
-  (process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : "https://aether-project-eight.vercel.app");
+function resolveSiteUrl(): string {
+  const explicit = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  if (explicit) return explicit.replace(/\/$/, "");
+  const vercel = process.env.VERCEL_URL?.trim();
+  if (vercel) {
+    return (vercel.startsWith("http") ? vercel : `https://${vercel}`).replace(
+      /\/$/,
+      "",
+    );
+  }
+  return "https://aether-project-eight.vercel.app";
+}
+
+export const SITE_URL = resolveSiteUrl();
 
 export const SITE_NAME = "Aether Vision";
 export const SITE_TITLE =

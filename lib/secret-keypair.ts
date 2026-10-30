@@ -2,6 +2,14 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Keypair } from "@solana/web3.js";
 
+function parseSecretEnv(raw: string, label: string): Keypair {
+  let parsed: unknown = JSON.parse(raw.trim());
+  if (typeof parsed === "string") {
+    parsed = JSON.parse(parsed);
+  }
+  return keypairFromJson(parsed, label);
+}
+
 function keypairFromJson(json: unknown, label: string): Keypair {
   if (!Array.isArray(json) || json.length !== 64) {
     throw new Error(
@@ -19,17 +27,17 @@ export function loadSecretKeypair(
   filePath: string | undefined,
   secretEnv: string | undefined,
 ): Keypair {
-  if (filePath?.trim()) {
-    const absolute = resolve(process.cwd(), filePath.trim());
-    if (!existsSync(absolute)) {
-      throw new Error(`Keypair file not found: ${absolute}`);
+  const pathValue = filePath?.trim();
+  if (pathValue) {
+    const absolute = resolve(process.cwd(), pathValue);
+    if (existsSync(absolute)) {
+      const json = JSON.parse(readFileSync(absolute, "utf8")) as unknown;
+      return keypairFromJson(json, absolute);
     }
-    const json = JSON.parse(readFileSync(absolute, "utf8")) as unknown;
-    return keypairFromJson(json, absolute);
   }
 
   if (secretEnv?.trim()) {
-    return keypairFromJson(JSON.parse(secretEnv) as unknown, "secret env");
+    return parseSecretEnv(secretEnv, "secret env");
   }
 
   throw new Error(
@@ -41,7 +49,7 @@ export function loadSecretKeypair(
 export function loadDistributionKeypair(): Keypair {
   const distribution = process.env.DISTRIBUTION_SECRET?.trim();
   if (distribution) {
-    return keypairFromJson(JSON.parse(distribution) as unknown, "DISTRIBUTION_SECRET");
+    return parseSecretEnv(distribution, "DISTRIBUTION_SECRET");
   }
   return loadSecretKeypair(
     process.env.MINT_AUTHORITY_KEYPAIR?.trim() || "./secrets/mint-authority.json",
