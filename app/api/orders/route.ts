@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
-import { createOrder, updateOrder, type PayMethod } from "@/lib/orders";
+import {
+  createOrder,
+  updateOrder,
+  usesPostgresDatabase,
+  type PayMethod,
+} from "@/lib/orders";
 import { buildPixCopyPaste, pixConfig } from "@/lib/pix";
 import { toPublicOrder } from "@/lib/public-order";
 import { quoteVisionForLamports } from "@/lib/vision-pricing";
@@ -64,7 +69,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       order: toPublicOrder(order),
-      storage: process.env.DATABASE_URL ? "postgres" : "file",
+      storage: usesPostgresDatabase() ? "postgres" : "file",
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "order_failed";

@@ -84,17 +84,26 @@ export function quoteVisionForSol(input: {
   const bonusPct = input.bonusPct ?? 0;
   const pool = raydiumReserves();
 
+  if (!(input.solPaid > 0) || !(input.solUsd > 0)) {
+    throw new Error("SOL paid and SOL/USD must be positive to quote $VISION");
+  }
+
   let priceVisionSol: number;
   let priceVisionUsd: number;
   if (mode === "raydium" && pool) {
     priceVisionSol = pool.sol / pool.vision;
     priceVisionUsd = priceVisionSol * input.solUsd;
   } else {
+    // Presale: $0.05 / VISION. Amount = (SOL * SOL/USD) / 0.05.
     priceVisionUsd = VISION_PRICE_USD;
     priceVisionSol = priceVisionUsd / input.solUsd;
   }
 
-  const visionBase = input.solPaid / priceVisionSol;
+  const usdValue = input.solPaid * input.solUsd;
+  const visionBase =
+    mode === "raydium" && pool
+      ? input.solPaid / priceVisionSol
+      : usdValue / VISION_PRICE_USD;
   const visionUi = visionBase * (1 + bonusPct / 100);
 
   return {

@@ -5,6 +5,7 @@ import { toPublicOrder } from "@/lib/public-order";
 import { verifySolPayment } from "@/lib/sol-payment";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 /**
  * Helius-style webhook: { signature } or { txs: [{ signature, memo }] }.
@@ -43,18 +44,41 @@ export async function POST(request: Request) {
       expectedLamports: order.solLamports,
     });
     if (!verified.ok) {
+      console.log("[solana-webhook] verification failed", {
+        orderId: order.id,
+        signature,
+        reason: verified.reason,
+      });
       results.push({ signature, error: verified.reason });
       continue;
     }
-    const fulfilled = await markPaidAndFulfill(order.id, {
-      solSignature: signature,
-      solLamports: verified.lamports,
-    });
-    results.push({
-      signature,
-      order: toPublicOrder(fulfilled.order),
-      skipped: fulfilled.skipped ?? null,
-    });
+    try {
+      const fulfilled = await markPaidAndFulfill(order.id, {
+        solSignature: signature,
+        solLamports: verified.lamports,
+      });
+      console.log("[solana-webhook] fulfill result", {
+        orderId: fulfilled.order.id,
+        status: fulfilled.order.status,
+        skipped: fulfilled.skipped ?? null,
+        splSignature: fulfilled.order.splSignature,
+        fulfillError: fulfilled.order.fulfillError,
+      });
+      results.push({
+        signature,
+        order: toPublicOrder(fulfilled.order),
+        skipped: fulfilled.skipped ?? null,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error("[solana-webhook] fulfillment threw", {
+        orderId: order.id,
+        signature,
+        name: error instanceof Error ? error.name : "unknown",
+        message,
+      });
+      results.push({ signature, error: "fulfill_failed", detail: message });
+    }
   }
 
   return NextResponse.json({ results });

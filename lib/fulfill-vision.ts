@@ -42,8 +42,27 @@ export async function quoteForFulfillment(
   paidLamports?: number | null,
 ): Promise<VisionQuote> {
   const lamports = paidLamports ?? order.solLamports;
-  if (order.method === "sol" && lamports && lamports > 0) {
-    return quoteVisionForLamports({ lamports, tierId: order.tierId });
+  if (order.method === "sol") {
+    if (!lamports || lamports <= 0) {
+      throw new Error(
+        "SOL order has no verified lamports from the Squads treasury transfer",
+      );
+    }
+    const quote = await quoteVisionForLamports({
+      lamports,
+      tierId: order.tierId,
+    });
+    log("fulfill", "VISION amount from SOL received at treasury", {
+      orderId: order.id,
+      paidLamports: lamports,
+      solPaid: quote.solPaid,
+      solUsd: quote.solUsd,
+      solUsdSource: quote.solUsdSource,
+      bonusPct: quote.bonusPct,
+      checkoutVisionAmount: order.visionAmount,
+      visionUi: quote.visionUi,
+    });
+    return quote;
   }
   const sol = await fetchSolUsd();
   const solPaid = order.usd > 0 ? order.usd / sol.usd : 0;
@@ -93,7 +112,7 @@ export async function fulfillVisionOrder(orderId: string): Promise<FulfillResult
   }
 
   const mint = parseMintAddress(process.env.TOKEN_MINT);
-  const quote = await quoteForFulfillment(order);
+  const quote = await quoteForFulfillment(order, order.solLamports);
   const visionUi = quote.visionUi;
   if (!Number.isFinite(visionUi) || visionUi <= 0) {
     throw new Error("Cannot compute $VISION amount for this order");
@@ -210,11 +229,15 @@ export async function fulfillVisionOrder(orderId: string): Promise<FulfillResult
     );
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
-    log("fulfill", "on-chain error", { err: detail });
-    await updateOrder(orderId, {
+    log("fulfill", "on-chain SPL error — SOL stays paid, VISION not sent", {
+      orderId,
+      name: error instanceof Error ? error.name : "unknown",
+      err: detail,
+    });
+    const next = await updateOrder(orderId, {
       fulfillError: `SPL transfer failed: ${detail}`,
     });
-    throw new Error(`SPL transfer failed: ${detail}`);
+    return { order: next ?? order, skipped: "spl_failed" };
   }
 
   log("fulfill", "confirmed — $VISION sent", {

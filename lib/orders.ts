@@ -68,8 +68,32 @@ export function assertDestPubkey(value: string): string {
   return key.toBase58();
 }
 
+function postgresUrl(): string | null {
+  const raw = process.env.DATABASE_URL?.trim() ?? "";
+  const url = raw.replace(/^['"]+|['"]+$/g, "").trim();
+  if (!url) return null;
+  const mint = process.env.TOKEN_MINT?.trim();
+  if (mint && url === mint) {
+    console.error(
+      "[orders] DATABASE_URL is set to TOKEN_MINT. Neon was not called; using file fallback.",
+    );
+    return null;
+  }
+  if (!/^postgres(ql)?:\/\//i.test(url)) {
+    console.error(
+      "[orders] DATABASE_URL must be a postgresql:// URI (Neon pooler). Non-postgres value ignored; using file fallback.",
+    );
+    return null;
+  }
+  return url;
+}
+
+export function usesPostgresDatabase(): boolean {
+  return Boolean(postgresUrl());
+}
+
 function fileBackend() {
-  return !process.env.DATABASE_URL?.trim();
+  return !usesPostgresDatabase();
 }
 
 async function readFileOrders(): Promise<VisionOrder[]> {
@@ -88,12 +112,19 @@ async function writeFileOrders(orders: VisionOrder[]) {
 }
 
 async function pgQuery<T>(sql: string, params: unknown[] = []): Promise<T[]> {
-  const url = process.env.DATABASE_URL?.trim();
+  const url = postgresUrl();
   if (!url) return [];
-  const { neon } = await import("@neondatabase/serverless");
-  const sqlFn = neon(url);
-  const rows = await sqlFn.query(sql, params);
-  return rows as T[];
+  try {
+    const { neon } = await import("@neondatabase/serverless");
+    const sqlFn = neon(url);
+    const rows = await sqlFn.query(sql, params);
+    return rows as T[];
+  } catch (error) {
+    console.error("[orders] Neon query failed", {
+      message: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
 }
 
 export async function ensureOrderTable() {
@@ -149,8 +180,10 @@ export async function createOrder(input: CreateOrderInput): Promise<VisionOrder>
   if (fileBackend()) {
     if (process.env.VERCEL) {
       console.warn(
-        "[orders] DATABASE_URL is not set on Vercel. Orders are stored in /tmp and may not survive across serverless invocations. Set DATABASE_URL for production fulfillment.",
+        "[orders] Neon DATABASE_URL missing or invalid. Orders are stored in /tmp and may not survive across serverless invocations.",
       );
+    } else {
+      console.log("[orders] using file backend (.data/orders.json)");
     }
     const orders = await readFileOrders();
     orders.push(order);
@@ -159,6 +192,7 @@ export async function createOrder(input: CreateOrderInput): Promise<VisionOrder>
   }
 
   await ensureOrderTable();
+  console.log("[orders] using Neon postgres");
   await pgQuery(
     `INSERT INTO vision_orders (id, payload) VALUES ($1, $2::jsonb)`,
     [order.id, JSON.stringify(order)],
