@@ -13,12 +13,8 @@
  */
 import "dotenv/config";
 
-import { existsSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import {
   Connection,
-  Keypair,
-  PublicKey,
   clusterApiUrl,
   type Cluster,
 } from "@solana/web3.js";
@@ -31,6 +27,8 @@ import {
 } from "@solana/spl-token";
 import { Metaplex, keypairIdentity } from "@metaplex-foundation/js";
 import { TokenStandard } from "@metaplex-foundation/mpl-token-metadata";
+import { assertMetadataUri, parseMintAddress } from "../lib/token-guard";
+import { loadSecretKeypair } from "./load-keypair";
 
 const TOKEN_NAME = "Aether Vision";
 const TOKEN_SYMBOL = "VISION";
@@ -38,14 +36,6 @@ const SELLER_FEE_BASIS_POINTS = 0;
 const EXPECTED_UI_SUPPLY = Number(
   process.env.EXPECTED_UI_SUPPLY ?? 1_000_000_000,
 );
-
-function required(name: string): string {
-  const value = process.env[name]?.trim();
-  if (!value) {
-    throw new Error(`Missing required env var: ${name}`);
-  }
-  return value;
-}
 
 function solscanClusterQuery(cluster: string): string {
   return cluster === "mainnet-beta" ? "" : `?cluster=${cluster}`;
@@ -63,26 +53,10 @@ function solscanAccount(address: string, cluster: string): string {
   return `https://solscan.io/account/${address}${solscanClusterQuery(cluster)}`;
 }
 
-function loadMintAuthority(): Keypair {
-  const filePath = process.env.MINT_AUTHORITY_KEYPAIR?.trim();
-  const secretEnv = process.env.MINT_AUTHORITY_SECRET?.trim();
-
-  if (filePath) {
-    const absolute = resolve(filePath);
-    if (!existsSync(absolute)) {
-      throw new Error(`Keypair file not found: ${absolute}`);
-    }
-    const json = JSON.parse(readFileSync(absolute, "utf8")) as number[];
-    return Keypair.fromSecretKey(Uint8Array.from(json));
-  }
-
-  if (secretEnv) {
-    const json = JSON.parse(secretEnv) as number[];
-    return Keypair.fromSecretKey(Uint8Array.from(json));
-  }
-
-  throw new Error(
-    "Set MINT_AUTHORITY_KEYPAIR (JSON file) or MINT_AUTHORITY_SECRET (JSON array).",
+function loadMintAuthority() {
+  return loadSecretKeypair(
+    process.env.MINT_AUTHORITY_KEYPAIR,
+    process.env.MINT_AUTHORITY_SECRET,
   );
 }
 
@@ -102,8 +76,8 @@ export async function registerVisionMetadata() {
   const cluster = clusterFromEnv();
   const rpc =
     process.env.SOLANA_RPC_URL?.trim() || clusterApiUrl(cluster);
-  const mintAddress = new PublicKey(required("TOKEN_MINT"));
-  const metadataUri = required("METADATA_URI");
+  const mintAddress = parseMintAddress(process.env.TOKEN_MINT);
+  const metadataUri = assertMetadataUri(process.env.METADATA_URI);
   const payer = loadMintAuthority();
 
   const connection = new Connection(rpc, {

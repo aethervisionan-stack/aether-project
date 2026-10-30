@@ -10,6 +10,7 @@ type CheckoutReceiptProps = {
   open: boolean;
   txHash: string | null;
   tierName?: string | null;
+  note?: string | null;
   onClose: () => void;
 };
 
@@ -17,6 +18,7 @@ export function CheckoutReceipt({
   open,
   txHash,
   tierName,
+  note,
   onClose,
 }: CheckoutReceiptProps) {
   const { t } = useI18n();
@@ -77,6 +79,9 @@ export function CheckoutReceipt({
                 ? interpolate(t.receipt.withTier, { tier: tierName })
                 : t.receipt.noTier}
             </p>
+            {note ? (
+              <p className="mt-3 text-sm leading-relaxed text-cyan">{note}</p>
+            ) : null}
             <p className="mt-3 break-all font-mono text-[11px] text-muted">
               {SQUADS_MULTISIG}
             </p>

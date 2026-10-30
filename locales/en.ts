@@ -56,6 +56,20 @@ export const en = {
     connectWallet: "Connect Phantom / Backpack",
     legal:
       "Native SOL transfer to the Squads Multisig. $VISION is credited at this phase rate; this is not a securities offering.",
+    paySol: "Pay with SOL",
+    payPix: "Pay with PIX",
+    destLabel: "Solana wallet that receives $VISION",
+    destPlaceholder: "Paste destination address or connect Phantom",
+    pixHint:
+      "Open your bank app, paste the PIX code, then wait. $VISION is sent to the wallet above after payment confirms.",
+    pixCopy: "Copy PIX code",
+    pixWaiting: "Waiting for PIX payment…",
+    pixSimulate: "Simulate PIX (dev)",
+    creatingOrder: "Creating order…",
+    fulfillPending: "Payment confirmed. Sending $VISION…",
+    fulfillWaitWallet:
+      "Payment recorded. Token transfer waits until the distribution wallet is configured.",
+    fulfillOk: "$VISION sent to your wallet.",
     select: "Select",
     contribution: "Vision allocation",
     visionBonus: "$VISION · bonus",

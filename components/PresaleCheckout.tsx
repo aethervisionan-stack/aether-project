@@ -60,6 +60,7 @@ export function PresaleCheckout() {
     connectWallet,
     reset,
     connected,
+    publicKey,
     solUsd,
   } = useAetherCheckout();
 
@@ -68,12 +69,67 @@ export function PresaleCheckout() {
   const [raisedSol, setRaisedSol] = useState(0);
   const [copied, setCopied] = useState(false);
   const [activeTier, setActiveTier] = useState<string | null>(null);
+  const [payMethod, setPayMethod] = useState<"sol" | "pix">("sol");
+  const [destPubkey, setDestPubkey] = useState("");
+  const [pixCode, setPixCode] = useState<string | null>(null);
+  const [pixOrderId, setPixOrderId] = useState<string | null>(null);
+  const [orderBusy, setOrderBusy] = useState(false);
+  const [orderError, setOrderError] = useState<string | null>(null);
+  const [fulfillNote, setFulfillNote] = useState<string | null>(null);
+  const [pixCopied, setPixCopied] = useState(false);
 
   useEffect(() => {
     if (!copied) return;
     const timer = window.setTimeout(() => setCopied(false), 1800);
     return () => window.clearTimeout(timer);
   }, [copied]);
+
+  useEffect(() => {
+    if (!pixCopied) return;
+    const timer = window.setTimeout(() => setPixCopied(false), 1800);
+    return () => window.clearTimeout(timer);
+  }, [pixCopied]);
+
+  useEffect(() => {
+    if (publicKey && !destPubkey) {
+      setDestPubkey(publicKey.toBase58());
+    }
+  }, [publicKey, destPubkey]);
+
+  useEffect(() => {
+    if (!pixOrderId) return;
+    let cancelled = false;
+    const timer = window.setInterval(async () => {
+      try {
+        const response = await fetch(`/api/orders/${pixOrderId}`, {
+          cache: "no-store",
+        });
+        const data = (await response.json()) as {
+          order?: {
+            status?: string;
+            splSignature?: string | null;
+            fulfillError?: string | null;
+          };
+        };
+        if (cancelled || !data.order) return;
+        if (data.order.status === "fulfilled") {
+          setFulfillNote(t.checkout.fulfillOk);
+        } else if (data.order.status === "paid") {
+          setFulfillNote(
+            data.order.fulfillError
+              ? t.checkout.fulfillWaitWallet
+              : t.checkout.fulfillPending,
+          );
+        }
+      } catch {
+        /* keep polling */
+      }
+    }, 3000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [pixOrderId, t.checkout.fulfillOk, t.checkout.fulfillPending, t.checkout.fulfillWaitWallet]);
 
   useEffect(() => {
     let cancelled = false;
@@ -196,19 +252,94 @@ export function PresaleCheckout() {
     setCopied(true);
   }
 
-  async function contribute() {
+  async function createPresaleOrder(method: "sol" | "pix") {
+    const dest = destPubkey.trim() || publicKey?.toBase58() || "";
     const name =
       PRESALE_TIERS.find((tier) => tier.id === activeTier)?.name ??
       t.checkout.contribution;
-    const signature = await handlePurchase(name, quote.solAmount);
-    if (!signature) return;
+    const response = await fetch("/api/orders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        method,
+        destPubkey: dest,
+        usd: quote.usd,
+        solLamports: Math.floor(quote.solAmount * LAMPORTS_PER_SOL),
+        tierId: activeTier,
+        tierName: name,
+      }),
+    });
+    const data = (await response.json()) as {
+      order?: {
+        id: string;
+        pixCopyPaste?: string | null;
+      };
+      error?: string;
+    };
+    if (!response.ok || !data.order) {
+      throw new Error(data.error ?? "order_failed");
+    }
+    return { ...data.order, tierName: name };
+  }
+
+  async function contribute() {
+    setOrderError(null);
+    setFulfillNote(null);
+    setOrderBusy(true);
     try {
-      const { value: lamportsNow } = await rpcWithFallback(connection, (rpc) =>
-        rpc.getBalance(TREASURY, "confirmed"),
+      const order = await createPresaleOrder("sol");
+      const signature = await handlePurchase(
+        order.tierName,
+        quote.solAmount,
+        order.id,
       );
-      setRaisedSol(lamportsNow / LAMPORTS_PER_SOL);
-    } catch {
-      /* progress bar updates on the next poll */
+      if (!signature) return;
+      try {
+        const paid = await fetch(`/api/orders/${order.id}/sol-paid`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ signature }),
+        });
+        const payload = (await paid.json()) as {
+          order?: { fulfillError?: string | null; splSignature?: string | null };
+        };
+        if (payload.order?.splSignature) {
+          setFulfillNote(t.checkout.fulfillOk);
+        } else if (payload.order?.fulfillError) {
+          setFulfillNote(t.checkout.fulfillWaitWallet);
+        } else {
+          setFulfillNote(t.checkout.fulfillPending);
+        }
+      } catch {
+        setFulfillNote(t.checkout.fulfillPending);
+      }
+      try {
+        const { value: lamportsNow } = await rpcWithFallback(connection, (rpc) =>
+          rpc.getBalance(TREASURY, "confirmed"),
+        );
+        setRaisedSol(lamportsNow / LAMPORTS_PER_SOL);
+      } catch {
+        /* progress bar updates on the next poll */
+      }
+    } catch (error) {
+      setOrderError(error instanceof Error ? error.message : "order_failed");
+    } finally {
+      setOrderBusy(false);
+    }
+  }
+
+  async function startPix() {
+    setOrderError(null);
+    setFulfillNote(null);
+    setOrderBusy(true);
+    try {
+      const order = await createPresaleOrder("pix");
+      setPixOrderId(order.id);
+      setPixCode(order.pixCopyPaste ?? "");
+    } catch (error) {
+      setOrderError(error instanceof Error ? error.message : "order_failed");
+    } finally {
+      setOrderBusy(false);
     }
   }
 
@@ -309,6 +440,42 @@ export function PresaleCheckout() {
           </div>
 
           <div className="mt-6 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setPayMethod("sol")}
+              className={`rounded-full border px-3.5 py-1.5 text-xs transition duration-300 ${
+                payMethod === "sol"
+                  ? "border-cyan/50 bg-cyan/10 text-cyan"
+                  : "border-white/10 text-muted hover:border-cyan/30 hover:text-ink"
+              }`}
+            >
+              {t.checkout.paySol}
+            </button>
+            <button
+              type="button"
+              onClick={() => setPayMethod("pix")}
+              className={`rounded-full border px-3.5 py-1.5 text-xs transition duration-300 ${
+                payMethod === "pix"
+                  ? "border-cyan/50 bg-cyan/10 text-cyan"
+                  : "border-white/10 text-muted hover:border-cyan/30 hover:text-ink"
+              }`}
+            >
+              {t.checkout.payPix}
+            </button>
+          </div>
+
+          <label className="mt-6 block text-[13px] text-muted" htmlFor="dest-pubkey">
+            {t.checkout.destLabel}
+          </label>
+          <input
+            id="dest-pubkey"
+            value={destPubkey}
+            onChange={(event) => setDestPubkey(event.target.value)}
+            placeholder={t.checkout.destPlaceholder}
+            className="mt-2 w-full rounded-2xl border border-white/10 bg-onyx/70 px-4 py-3 font-mono text-[13px] text-ink outline-none transition duration-300 focus:border-cyan/40 focus:ring-2 focus:ring-cyan/20"
+          />
+
+          <div className="mt-6 flex flex-wrap gap-2">
             {PRESETS.map((preset) => (
               <button
                 key={preset}
@@ -388,23 +555,78 @@ export function PresaleCheckout() {
             </div>
           </div>
 
+          {payMethod === "pix" && pixCode ? (
+            <div className="mt-6 rounded-2xl border border-cyan/20 bg-cyan/[0.04] p-4">
+              <p className="text-sm leading-relaxed text-muted">
+                {t.checkout.pixHint}
+              </p>
+              <img
+                alt="PIX QR"
+                className="mx-auto mt-4 h-44 w-44 rounded-xl bg-white p-2"
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=176x176&data=${encodeURIComponent(pixCode)}`}
+              />
+              <p className="mt-3 break-all font-mono text-[11px] leading-relaxed text-ink">
+                {pixCode}
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  void copyText(pixCode);
+                  setPixCopied(true);
+                }}
+                className="mt-3 inline-flex items-center gap-2 rounded-full border border-white/10 px-3.5 py-2 text-xs text-ink hover:border-cyan/40 hover:text-cyan"
+              >
+                {pixCopied ? t.checkout.copied : t.checkout.pixCopy}
+              </button>
+              <p className="mt-3 text-sm text-cyan">
+                {fulfillNote ?? t.checkout.pixWaiting}
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!pixOrderId) return;
+                  void fetch(`/api/orders/${pixOrderId}/mock-pay`, {
+                    method: "POST",
+                  }).then(async (response) => {
+                    const data = (await response.json()) as {
+                      order?: { fulfillError?: string | null; splSignature?: string | null };
+                    };
+                    if (data.order?.splSignature) setFulfillNote(t.checkout.fulfillOk);
+                    else if (data.order?.fulfillError)
+                      setFulfillNote(t.checkout.fulfillWaitWallet);
+                    else setFulfillNote(t.checkout.fulfillPending);
+                  });
+                }}
+                className="mt-2 text-[11px] text-muted underline-offset-2 hover:text-cyan hover:underline"
+              >
+                {t.checkout.pixSimulate}
+              </button>
+            </div>
+          ) : null}
+
           <button
             type="button"
             onClick={() => {
+              if (payMethod === "pix") {
+                void startPix();
+                return;
+              }
               if (!connected) {
                 connectWallet();
                 return;
               }
               void contribute();
             }}
-            disabled={loading}
+            disabled={loading || orderBusy}
             className="cta-pulse glow-cta mt-6 inline-flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-cyan to-neon px-6 py-3.5 text-sm font-medium text-onyx transition duration-300 hover:brightness-110 disabled:opacity-55"
           >
-            {loading ? (
+            {loading || orderBusy ? (
               <>
                 <Loader2 className="animate-spin" size={16} />
-                {t.checkout.confirming}
+                {orderBusy ? t.checkout.creatingOrder : t.checkout.confirming}
               </>
+            ) : payMethod === "pix" ? (
+              t.checkout.payPix
             ) : connected ? (
               t.checkout.buySol
             ) : (
@@ -421,6 +643,16 @@ export function PresaleCheckout() {
                 role="status"
               >
                 {translateError(t, error, MIN_SOL, errorDetail)}
+              </motion.p>
+            ) : null}
+            {orderError ? (
+              <motion.p
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mt-4 text-sm text-red-400"
+                role="status"
+              >
+                {orderError}
               </motion.p>
             ) : null}
             {status === "error" && error ? (
@@ -497,6 +729,7 @@ export function PresaleCheckout() {
         open={status === "success"}
         txHash={txHash}
         tierName={tierName}
+        note={fulfillNote}
         onClose={reset}
       />
     </div>

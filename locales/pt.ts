@@ -58,6 +58,20 @@ export const pt: Messages = {
     connectWallet: "Conectar Phantom / Backpack",
     legal:
       "Transferência nativa de SOL para a Squads Multisig. $VISION é creditado conforme a taxa desta fase; não é uma oferta de valor mobiliário.",
+    paySol: "Pagar com SOL",
+    payPix: "Pagar com PIX",
+    destLabel: "Carteira Solana que recebe $VISION",
+    destPlaceholder: "Cole o endereço ou conecte a Phantom",
+    pixHint:
+      "Abra o app do banco, cole o código PIX e aguarde. O $VISION vai para a carteira acima após a confirmação.",
+    pixCopy: "Copiar código PIX",
+    pixWaiting: "Aguardando pagamento PIX…",
+    pixSimulate: "Simular PIX (dev)",
+    creatingOrder: "Criando pedido…",
+    fulfillPending: "Pagamento confirmado. Enviando $VISION…",
+    fulfillWaitWallet:
+      "Pagamento registado. A transferência espera a carteira de distribuição.",
+    fulfillOk: "$VISION enviado para a tua carteira.",
     select: "Selecionar",
     contribution: "Aporte Vision",
     visionBonus: "$VISION · bônus",

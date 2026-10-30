@@ -9,6 +9,7 @@ import {
   SendTransactionError,
   SystemProgram,
   Transaction,
+  TransactionInstruction,
 } from "@solana/web3.js";
 import { useCallback, useEffect, useState } from "react";
 import {
@@ -17,7 +18,9 @@ import {
   SQUADS_MULTISIG,
 } from "@/lib/presale";
 import { requestWalletSession, type WalletBrand } from "@/lib/site";
+import { Buffer } from "buffer";
 import { rpcWithFallback } from "@/lib/solana";
+import { MEMO_PROGRAM_ID } from "@/lib/memo";
 
 export type CheckoutStatus =
   | "idle"
@@ -167,7 +170,7 @@ export function useAetherCheckout() {
   );
 
   const handlePurchase = useCallback(
-    async (name: string, priceInSol: number) => {
+    async (name: string, priceInSol: number, memo?: string) => {
       setError(null);
       setErrorDetail(null);
       setTxHash(null);
@@ -228,8 +231,18 @@ export function useAetherCheckout() {
             lamports,
           }),
         );
+        if (memo?.trim()) {
+          transaction.add(
+            new TransactionInstruction({
+              keys: [],
+              programId: MEMO_PROGRAM_ID,
+              data: Buffer.from(memo.trim(), "utf8"),
+            }),
+          );
+        }
         transaction.feePayer = publicKey;
         transaction.recentBlockhash = blockhash;
+        transaction.lastValidBlockHeight = lastValidBlockHeight;
 
         const { value: signature, connection: sending } = await rpcWithFallback(
           rpc,

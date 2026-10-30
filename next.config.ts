@@ -4,6 +4,7 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   compress: true,
+  serverExternalPackages: ["@neondatabase/serverless"],
   transpilePackages: [
     "@solana/wallet-adapter-react",
     "@solana/wallet-adapter-react-ui",
