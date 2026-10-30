@@ -103,7 +103,6 @@ export const en = {
     title: "Four generations. One middleware.",
     lead: "Vision 1.0 to Vision 4.0 connect you to Aether’s decentralized AI. Each card sends a native SOL transfer to the Squads Multisig.",
     connectBuy: "Connect and buy",
-    visualAlt: "Studio visual of {name}",
     v1: {
       tag: "Essential",
       category: "Entry-Level · Smart Audio",

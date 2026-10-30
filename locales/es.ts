@@ -106,7 +106,6 @@ export const es: Messages = {
     title: "Cuatro generaciones. Un middleware.",
     lead: "Vision 1.0 a Vision 4.0 te conectan a la IA descentralizada de Aether. Cada card dispara una transferencia nativa de SOL a la Squads Multisig.",
     connectBuy: "Conectar y comprar",
-    visualAlt: "Visual de estudio de {name}",
     v1: {
       tag: "Esencial",
       category: "Entry-Level · Smart Audio",
