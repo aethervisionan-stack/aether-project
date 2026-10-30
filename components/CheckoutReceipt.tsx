@@ -3,6 +3,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, ExternalLink, X } from "lucide-react";
 import { useEffect } from "react";
+import { VisionDeliveryNotice } from "@/components/VisionDeliveryNotice";
 import { interpolate, useI18n } from "@/lib/i18n";
 import { SOL_TREASURY, solscanTx } from "@/lib/presale";
 
@@ -82,6 +83,7 @@ export function CheckoutReceipt({
             {note ? (
               <p className="mt-3 text-sm leading-relaxed text-cyan">{note}</p>
             ) : null}
+            <VisionDeliveryNotice className="mt-4" tone="success" />
             <p className="mt-3 break-all font-mono text-[11px] text-muted">
               {SOL_TREASURY}
             </p>

@@ -7,6 +7,7 @@ import { Check, Copy, ExternalLink, Loader2, Shield } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CheckoutReceipt } from "@/components/CheckoutReceipt";
 import { TrustBadges } from "@/components/TrustBadges";
+import { VisionDeliveryNotice } from "@/components/VisionDeliveryNotice";
 import { useAetherCheckout } from "@/hooks/useAetherCheckout";
 import { translateError, useI18n } from "@/lib/i18n";
 import {
@@ -380,6 +381,7 @@ export function PresaleCheckout() {
               <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted">
                 {t.checkout.treasuryBody}
               </p>
+              <VisionDeliveryNotice className="mt-4" />
               <div className="mt-5 flex flex-wrap gap-3">
                 <button
                   type="button"
@@ -652,6 +654,7 @@ export function PresaleCheckout() {
               t.checkout.connectWallet
             )}
           </button>
+          <VisionDeliveryNotice className="mt-4" />
 
           <AnimatePresence>
             {status === "cancelled" ? (

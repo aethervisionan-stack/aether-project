@@ -2,6 +2,7 @@
 
 import { CheckoutReceipt } from "@/components/CheckoutReceipt";
 import { HoverLift, Reveal } from "@/components/Reveal";
+import { VisionDeliveryNotice } from "@/components/VisionDeliveryNotice";
 import { VisionProductVisual } from "@/components/VisionProductVisual";
 import { useAetherCheckout } from "@/hooks/useAetherCheckout";
 import { HARDWARE_LINE } from "@/lib/hardware";
@@ -46,6 +47,7 @@ export function HardwareShowcase() {
           {t.hardware.title}
         </h2>
         <p className="mt-4 max-w-2xl text-pretty text-muted">{t.hardware.lead}</p>
+        <VisionDeliveryNotice className="mt-5 max-w-2xl" />
       </Reveal>
 
       <div className="mt-12 grid grid-cols-1 gap-5 md:grid-cols-2">

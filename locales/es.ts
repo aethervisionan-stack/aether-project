@@ -68,10 +68,13 @@ export const es: Messages = {
     pixWaiting: "Esperando el pago PIX…",
     pixSimulate: "Simular PIX (dev)",
     creatingOrder: "Creando pedido…",
-    fulfillPending: "Pago confirmado. Enviando $VISION…",
+    deliveryNotice:
+      "El envío de los tokens $VISION lo hace manualmente un administrador y puede tardar hasta 24 horas en aparecer en tu cartera después de confirmar el pago.",
+    fulfillPending:
+      "Pago confirmado. Un administrador envía el $VISION en un plazo de 24 horas.",
     fulfillWaitWallet:
-      "Pago registrado. La transferencia espera la cartera de distribución.",
-    fulfillOk: "$VISION enviado a tu cartera.",
+      "Pago registrado. El $VISION lo envía manualmente un administrador en un plazo de 24 horas.",
+    fulfillOk: "Pago confirmado. El $VISION puede tardar hasta 24 horas en llegar.",
     select: "Seleccionar",
     contribution: "Aporte Vision",
     visionBonus: "$VISION · bonus",
@@ -260,6 +263,8 @@ export const es: Messages = {
     title: "Aporte confirmado on-chain",
     withTier: "La asignación {tier} se envió a la tesorería de recepción.",
     noTier: "La transferencia de SOL se confirmó en la red Solana.",
+    deliveryNotice:
+      "El envío de los tokens $VISION lo hace manualmente un administrador y puede tardar hasta 24 horas en aparecer en tu cartera después de este pago.",
     solscan: "Ver en Solscan",
   },
   errors: {

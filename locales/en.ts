@@ -66,10 +66,12 @@ export const en = {
     pixWaiting: "Waiting for PIX payment…",
     pixSimulate: "Simulate PIX (dev)",
     creatingOrder: "Creating order…",
-    fulfillPending: "Payment confirmed. Sending $VISION…",
+    deliveryNotice:
+      "$VISION tokens are sent manually by an administrator and can take up to 24 hours to appear in your wallet after payment is confirmed.",
+    fulfillPending: "Payment confirmed. $VISION is delivered by an admin within 24 hours.",
     fulfillWaitWallet:
-      "Payment recorded. Token transfer waits until the distribution wallet is configured.",
-    fulfillOk: "$VISION sent to your wallet.",
+      "Payment recorded. $VISION is sent manually by an administrator within 24 hours.",
+    fulfillOk: "Payment confirmed. $VISION may take up to 24 hours to arrive.",
     select: "Select",
     contribution: "Vision allocation",
     visionBonus: "$VISION · bonus",
@@ -258,6 +260,8 @@ export const en = {
     title: "On-chain contribution confirmed",
     withTier: "The {tier} allocation was sent to the receive treasury.",
     noTier: "The SOL transfer was confirmed on the Solana network.",
+    deliveryNotice:
+      "$VISION is sent manually by an administrator and can take up to 24 hours to appear in your wallet after this payment.",
     solscan: "View on Solscan",
   },
   errors: {
