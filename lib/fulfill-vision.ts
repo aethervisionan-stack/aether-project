@@ -1,9 +1,7 @@
 import {
   ComputeBudgetProgram,
   Connection,
-  Keypair,
   PublicKey,
-  Transaction,
   type TransactionInstruction,
   clusterApiUrl,
 } from "@solana/web3.js";
@@ -18,11 +16,12 @@ import {
 import { parseMintAddress } from "@/lib/token-guard";
 import { loadDistributionKeypair } from "@/lib/secret-keypair";
 import { getOrder, updateOrder, type VisionOrder } from "@/lib/orders";
+import { sendAndConfirmWithFreshBlockhash } from "@/lib/send-with-blockhash";
 import { quoteVisionForLamports, quoteVisionForSol, fetchSolUsd, bonusPctForTier } from "@/lib/vision-pricing";
 import type { VisionQuote } from "@/lib/vision-pricing";
 
-const COMPUTE_UNIT_LIMIT = 200_000;
-const COMPUTE_UNIT_PRICE_MICRO_LAMPORTS = 100_000;
+const COMPUTE_UNIT_LIMIT = 300_000;
+const COMPUTE_UNIT_PRICE_MICRO_LAMPORTS = 1_000_000;
 
 function log(scope: string, message: string, extra?: Record<string, unknown>) {
   if (extra) {
@@ -30,107 +29,6 @@ function log(scope: string, message: string, extra?: Record<string, unknown>) {
     return;
   }
   console.log(`[${scope}] ${message}`);
-}
-
-function isBlockhashExpiredError(error: unknown): boolean {
-  const name = error instanceof Error ? error.name : "";
-  const message = error instanceof Error ? error.message : String(error ?? "");
-  return /block height exceeded|blockhash not found|has expired|TransactionExpiredBlockheightExceeded/i.test(
-    `${name} ${message}`,
-  );
-}
-
-async function signatureLanded(
-  connection: Connection,
-  signature: string,
-): Promise<boolean> {
-  const { value } = await connection.getSignatureStatuses([signature]);
-  const status = value[0];
-  if (!status || status.err) return false;
-  return (
-    status.confirmationStatus === "confirmed" ||
-    status.confirmationStatus === "finalized"
-  );
-}
-
-async function sendAndConfirmWithFreshBlockhash(
-  connection: Connection,
-  payer: Keypair,
-  instructions: TransactionInstruction[],
-): Promise<string> {
-  const maxAttempts = 4;
-  let lastError: unknown;
-
-  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    const latest = await connection.getLatestBlockhashAndContext("confirmed");
-    const { blockhash, lastValidBlockHeight } = latest.value;
-    const minContextSlot = latest.context.slot;
-
-    const tx = new Transaction();
-    tx.feePayer = payer.publicKey;
-    tx.recentBlockhash = blockhash;
-    tx.lastValidBlockHeight = lastValidBlockHeight;
-    tx.add(...instructions);
-    tx.sign(payer);
-
-    log("fulfill", "signing with fresh confirmed blockhash", {
-      attempt,
-      blockhash,
-      lastValidBlockHeight,
-      minContextSlot,
-    });
-
-    let signature = "";
-    try {
-      signature = await connection.sendRawTransaction(tx.serialize(), {
-        skipPreflight: false,
-        preflightCommitment: "confirmed",
-        minContextSlot,
-        maxRetries: 8,
-      });
-      log("fulfill", "submitted", {
-        signature,
-        lastValidBlockHeight,
-        solscan: `https://solscan.io/tx/${signature}`,
-      });
-
-      const confirmation = await connection.confirmTransaction(
-        {
-          signature,
-          blockhash,
-          lastValidBlockHeight,
-        },
-        "confirmed",
-      );
-      if (confirmation.value.err) {
-        throw new Error(
-          `on-chain error: ${JSON.stringify(confirmation.value.err)}`,
-        );
-      }
-      return signature;
-    } catch (error) {
-      lastError = error;
-      if (signature && (await signatureLanded(connection, signature))) {
-        log("fulfill", "tx already confirmed after expiry race", { signature });
-        return signature;
-      }
-      if (!isBlockhashExpiredError(error) || attempt === maxAttempts) {
-        throw error;
-      }
-      log(
-        "fulfill",
-        "block height exceeded — rebuilding tx with a new lastValidBlockHeight",
-        {
-          attempt,
-          message: error instanceof Error ? error.message : String(error),
-        },
-      );
-    }
-  }
-
-  throw lastError instanceof Error
-    ? lastError
-    : new Error("SPL transfer failed after blockhash retries");
 }
 
 function uiToRaw(amount: number, decimals: number): bigint {

@@ -15,15 +15,24 @@
  */
 import "dotenv/config";
 
-import { Connection, LAMPORTS_PER_SOL, PublicKey, clusterApiUrl } from "@solana/web3.js";
+import {
+  ComputeBudgetProgram,
+  Connection,
+  LAMPORTS_PER_SOL,
+  PublicKey,
+  clusterApiUrl,
+} from "@solana/web3.js";
 import {
   TOKEN_PROGRAM_ID,
+  createAssociatedTokenAccountInstruction,
+  createTransferInstruction,
   getAccount,
   getAssociatedTokenAddress,
   getMint,
 } from "@solana/spl-token";
 import { loadDistributionKeypair } from "../lib/secret-keypair";
 import { parseMintAddress } from "../lib/token-guard";
+import { sendAndConfirmWithFreshBlockhash } from "../lib/send-with-blockhash";
 
 const EXPECTED_OWNER =
   process.env.PHANTOM_OWNER?.trim() ||
@@ -131,6 +140,81 @@ async function main() {
 
   const ready = matches && sol >= MIN_SOL_FOR_FEES && ataExists && visionUi > 0;
   console.log("[status]", ready ? "READY for auto-fulfill" : "NOT READY — see flags above");
+
+  if (process.argv.includes("--smoke-send")) {
+    if (!ready) {
+      console.log("[smoke] skipped — key/balances not ready");
+      process.exitCode = 1;
+      return;
+    }
+    const dest = new PublicKey(flag("dest") || expected.toBase58());
+    const amountUi = Number(flag("amount") ?? "1");
+    const destAta = await getAssociatedTokenAddress(
+      mint,
+      dest,
+      false,
+      TOKEN_PROGRAM_ID,
+    );
+    let destBefore = 0;
+    let destExists = true;
+    try {
+      const destAccount = await getAccount(
+        connection,
+        destAta,
+        "confirmed",
+        TOKEN_PROGRAM_ID,
+      );
+      destBefore =
+        Number(BigInt(destAccount.amount.toString())) / 10 ** mintInfo.decimals;
+    } catch {
+      destExists = false;
+    }
+    const raw = BigInt(Math.round(amountUi * 10 ** mintInfo.decimals));
+    const ixs = [
+      ComputeBudgetProgram.setComputeUnitLimit({ units: 300_000 }),
+      ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 1_000_000 }),
+    ];
+    if (!destExists) {
+      ixs.push(
+        createAssociatedTokenAccountInstruction(
+          payer.publicKey,
+          destAta,
+          dest,
+          mint,
+          TOKEN_PROGRAM_ID,
+        ),
+      );
+    }
+    ixs.push(
+      createTransferInstruction(
+        ata,
+        destAta,
+        payer.publicKey,
+        raw,
+        [],
+        TOKEN_PROGRAM_ID,
+      ),
+    );
+    console.log("[smoke] sending", amountUi, "VISION to", dest.toBase58());
+    const signature = await sendAndConfirmWithFreshBlockhash(
+      connection,
+      payer,
+      ixs,
+    );
+    const destAfterAccount = await getAccount(
+      connection,
+      destAta,
+      "confirmed",
+      TOKEN_PROGRAM_ID,
+    );
+    const destAfter =
+      Number(BigInt(destAfterAccount.amount.toString())) / 10 ** mintInfo.decimals;
+    console.log("[smoke] dest ATA before", destBefore);
+    console.log("[smoke] dest ATA after", destAfter);
+    console.log("[smoke] signature", signature);
+    console.log("[smoke] solscan", `https://solscan.io/tx/${signature}`);
+    return;
+  }
 
   const orderId = flag("replay-order");
   const solSignature = flag("sol-signature");
