@@ -70,8 +70,9 @@ export function assertDestPubkey(value: string): string {
 
 function postgresUrl(): string | null {
   const raw = process.env.DATABASE_URL?.trim() ?? "";
-  const url = raw.replace(/^['"]+|['"]+$/g, "").trim();
+  let url = raw.replace(/^['"]+|['"]+$/g, "").trim();
   if (!url) return null;
+
   const mint = process.env.TOKEN_MINT?.trim();
   if (mint && url === mint) {
     console.error(
@@ -79,13 +80,35 @@ function postgresUrl(): string | null {
     );
     return null;
   }
-  if (!/^postgres(ql)?:\/\//i.test(url)) {
+
+  if (/^postgres:\/\//i.test(url)) {
+    url = `postgresql://${url.slice("postgres://".length)}`;
+  }
+  if (!/^postgresql:\/\//i.test(url)) {
     console.error(
       "[orders] DATABASE_URL must be a postgresql:// URI (Neon pooler). Non-postgres value ignored; using file fallback.",
     );
     return null;
   }
-  return url;
+
+  try {
+    const parsed = new URL(url);
+    if (!parsed.searchParams.get("sslmode")) {
+      parsed.searchParams.set("sslmode", "require");
+    }
+    return parsed.toString();
+  } catch {
+    console.error("[orders] DATABASE_URL is not a valid URI; using file fallback.");
+    return null;
+  }
+}
+
+function assertPostgresOnVercel() {
+  if (process.env.VERCEL && !usesPostgresDatabase()) {
+    throw new Error(
+      "DATABASE_URL must be a Neon postgresql:// pooler URI. File /tmp storage is disabled in production.",
+    );
+  }
 }
 
 export function usesPostgresDatabase(): boolean {
@@ -177,14 +200,10 @@ export async function createOrder(input: CreateOrderInput): Promise<VisionOrder>
     updatedAt: nowIso(),
   };
 
+  assertPostgresOnVercel();
+
   if (fileBackend()) {
-    if (process.env.VERCEL) {
-      console.warn(
-        "[orders] Neon DATABASE_URL missing or invalid. Orders are stored in /tmp and may not survive across serverless invocations.",
-      );
-    } else {
-      console.log("[orders] using file backend (.data/orders.json)");
-    }
+    console.log("[orders] using file backend (.data/orders.json)");
     const orders = await readFileOrders();
     orders.push(order);
     await writeFileOrders(orders);
@@ -201,6 +220,7 @@ export async function createOrder(input: CreateOrderInput): Promise<VisionOrder>
 }
 
 export async function getOrder(id: string): Promise<VisionOrder | null> {
+  assertPostgresOnVercel();
   if (fileBackend()) {
     const orders = await readFileOrders();
     return orders.find((item) => item.id === id) ?? null;
@@ -217,6 +237,7 @@ export async function updateOrder(
   id: string,
   patch: Partial<VisionOrder>,
 ): Promise<VisionOrder | null> {
+  assertPostgresOnVercel();
   const current = await getOrder(id);
   if (!current) return null;
   const next: VisionOrder = {
@@ -246,6 +267,7 @@ export async function findOrderByPixTxid(
   txid: string,
 ): Promise<VisionOrder | null> {
   const needle = txid.trim();
+  assertPostgresOnVercel();
   if (fileBackend()) {
     const orders = await readFileOrders();
     return (

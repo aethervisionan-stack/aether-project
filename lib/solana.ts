@@ -8,10 +8,9 @@ export const SOLANA_CONNECTION_CONFIG: ConnectionConfig = {
 };
 
 const PUBLIC_RPC_ENDPOINTS = [
+  "https://api.mainnet-beta.solana.com",
   "https://solana-rpc.publicnode.com",
   "https://rpc.ankr.com/solana",
-  "https://solana-mainnet.rpc.extrnode.com",
-  "https://api.mainnet-beta.solana.com",
 ];
 
 export const RPC_ENDPOINTS = [
@@ -28,7 +27,10 @@ export function getUpstreamRpcEndpoints(): string[] {
     ...PUBLIC_RPC_ENDPOINTS,
   ].filter((url): url is string => Boolean(url && url.trim()));
 
-  return [...new Set(endpoints)];
+  const unique = [...new Set(endpoints)];
+  const dead = unique.filter((url) => /extrnode/i.test(url));
+  const live = unique.filter((url) => !/extrnode/i.test(url));
+  return [...live, ...dead];
 }
 
 export const PRIMARY_SOLANA_RPC =
@@ -138,6 +140,16 @@ export async function executeWithRpcFallback<T>(
   }
 
   throw lastError ?? new Error("All Solana RPC endpoints failed");
+}
+
+export async function pickLiveServerConnection(
+  preferred?: Connection,
+): Promise<Connection> {
+  const { connection } = await executeWithRpcFallback(async (conn) => {
+    await conn.getSlot("confirmed");
+    return true;
+  }, preferred);
+  return connection;
 }
 
 export async function rpcWithFallback<T>(

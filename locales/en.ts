@@ -269,6 +269,8 @@ export const en = {
     insufficient:
       "Insufficient SOL balance for transaction and network fees.",
     simulation: "Transaction simulation failed.",
+    expired:
+      "The network took too long to confirm. If SOL already left your wallet, do not pay again — the treasury may have received it.",
     generic: "Transaction failed.",
   },
   lang: {

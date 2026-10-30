@@ -73,6 +73,9 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "order_failed";
+    if (message.includes("DATABASE_URL") || message.includes("/tmp")) {
+      return NextResponse.json({ error: "database_unavailable", detail: message }, { status: 503 });
+    }
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }

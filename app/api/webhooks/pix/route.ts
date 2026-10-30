@@ -1,9 +1,8 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { findOrderByPixTxid, getOrder } from "@/lib/orders";
-import { markPaidAndFulfill } from "@/lib/fulfill-vision";
+import { fulfillApiBody, markPaidAndFulfill } from "@/lib/fulfill-vision";
 import { pixConfig } from "@/lib/pix";
-import { toPublicOrder } from "@/lib/public-order";
 
 export const runtime = "nodejs";
 
@@ -63,8 +62,5 @@ export async function POST(request: Request) {
   const result = await markPaidAndFulfill(order.id, {
     pixTxid: order.pixTxid ?? orderId,
   });
-  return NextResponse.json({
-    order: toPublicOrder(result.order),
-    skipped: result.skipped ?? null,
-  });
+  return NextResponse.json(fulfillApiBody(result));
 }

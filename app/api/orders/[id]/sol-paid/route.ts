@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { getOrder } from "@/lib/orders";
-import { markPaidAndFulfill } from "@/lib/fulfill-vision";
-import { toPublicOrder } from "@/lib/public-order";
+import { fulfillApiBody, markPaidAndFulfill } from "@/lib/fulfill-vision";
 import { verifySolPayment } from "@/lib/sol-payment";
 
 export const runtime = "nodejs";
@@ -19,7 +18,20 @@ export async function POST(
   context: { params: Promise<{ id: string }> },
 ) {
   const { id } = await context.params;
-  const order = await getOrder(id);
+  let order;
+  try {
+    order = await getOrder(id);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes("DATABASE_URL") || message.includes("/tmp")) {
+      console.error("[sol-paid] database unavailable", errorLog(error));
+      return NextResponse.json(
+        { error: "database_unavailable", detail: message },
+        { status: 503 },
+      );
+    }
+    throw error;
+  }
   if (!order) {
     console.log("[sol-paid] order not found", { id });
     return NextResponse.json({ error: "not_found" }, { status: 404 });
@@ -87,18 +99,26 @@ export async function POST(
       solSignature: body.signature,
       solLamports: verified.lamports,
     });
+    const payload = fulfillApiBody(result, body.signature);
     console.log("[sol-paid] fulfill result", {
       orderId: result.order.id,
       status: result.order.status,
-      skipped: result.skipped ?? null,
-      splSignature: result.order.splSignature,
-      fulfillError: result.order.fulfillError,
+      skipped: payload.skipped,
+      txHash: payload.txHash,
+      splSignature: payload.splSignature,
+      error: payload.error,
+      detail: payload.detail,
       visionAmount: result.order.visionAmount,
     });
-    return NextResponse.json({
-      order: toPublicOrder(result.order),
-      skipped: result.skipped ?? null,
-    });
+    if (payload.error) {
+      console.error("[sol-paid] $VISION not sent", {
+        orderId: order.id,
+        solSignature: body.signature,
+        skipped: payload.skipped,
+        detail: payload.detail,
+      });
+    }
+    return NextResponse.json(payload);
   } catch (error) {
     console.error("[sol-paid] fulfillment threw", {
       orderId: order.id,
@@ -109,6 +129,9 @@ export async function POST(
       {
         error: "fulfill_failed",
         detail: errorLog(error).message,
+        txHash: null,
+        solSignature: body.signature,
+        splSignature: null,
       },
       { status: 502 },
     );

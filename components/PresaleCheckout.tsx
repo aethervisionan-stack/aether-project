@@ -46,6 +46,36 @@ function copyText(value: string) {
   return Promise.resolve();
 }
 
+type SolPaidPayload = {
+  txHash?: string | null;
+  error?: string | null;
+  detail?: string | null;
+  order?: { fulfillError?: string | null; splSignature?: string | null };
+};
+
+async function notifySolPaid(
+  orderId: string,
+  signature: string,
+): Promise<SolPaidPayload> {
+  let last: SolPaidPayload = {};
+  for (let attempt = 1; attempt <= 4; attempt += 1) {
+    try {
+      const paid = await fetch(`/api/orders/${orderId}/sol-paid`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ signature }),
+      });
+      last = (await paid.json()) as SolPaidPayload;
+      if (last.txHash || last.order?.splSignature) return last;
+      if (paid.status < 500 && paid.status !== 503) return last;
+    } catch {
+      last = { error: "sol_paid_unreachable" };
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1500 * attempt));
+  }
+  return last;
+}
+
 export function PresaleCheckout() {
   const { t, locale } = useI18n();
   const { connection } = useConnection();
@@ -294,23 +324,12 @@ export function PresaleCheckout() {
         order.id,
       );
       if (!signature) return;
-      try {
-        const paid = await fetch(`/api/orders/${order.id}/sol-paid`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ signature }),
-        });
-        const payload = (await paid.json()) as {
-          order?: { fulfillError?: string | null; splSignature?: string | null };
-        };
-        if (payload.order?.splSignature) {
-          setFulfillNote(t.checkout.fulfillOk);
-        } else if (payload.order?.fulfillError) {
-          setFulfillNote(t.checkout.fulfillWaitWallet);
-        } else {
-          setFulfillNote(t.checkout.fulfillPending);
-        }
-      } catch {
+      const payload = await notifySolPaid(order.id, signature);
+      if (payload.txHash || payload.order?.splSignature) {
+        setFulfillNote(t.checkout.fulfillOk);
+      } else if (payload.detail || payload.order?.fulfillError) {
+        setFulfillNote(t.checkout.fulfillWaitWallet);
+      } else {
         setFulfillNote(t.checkout.fulfillPending);
       }
       try {

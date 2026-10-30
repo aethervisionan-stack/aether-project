@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { getOrder } from "@/lib/orders";
-import { markPaidAndFulfill } from "@/lib/fulfill-vision";
-import { toPublicOrder } from "@/lib/public-order";
+import { fulfillApiBody, markPaidAndFulfill } from "@/lib/fulfill-vision";
 import { verifySolPayment } from "@/lib/sol-payment";
 
 export const runtime = "nodejs";
@@ -57,18 +56,16 @@ export async function POST(request: Request) {
         solSignature: signature,
         solLamports: verified.lamports,
       });
+      const payload = fulfillApiBody(fulfilled, signature);
       console.log("[solana-webhook] fulfill result", {
         orderId: fulfilled.order.id,
         status: fulfilled.order.status,
-        skipped: fulfilled.skipped ?? null,
-        splSignature: fulfilled.order.splSignature,
-        fulfillError: fulfilled.order.fulfillError,
+        skipped: payload.skipped,
+        txHash: payload.txHash,
+        error: payload.error,
+        detail: payload.detail,
       });
-      results.push({
-        signature,
-        order: toPublicOrder(fulfilled.order),
-        skipped: fulfilled.skipped ?? null,
-      });
+      results.push({ signature, ...payload });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       console.error("[solana-webhook] fulfillment threw", {

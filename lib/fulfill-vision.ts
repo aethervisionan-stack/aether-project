@@ -1,12 +1,10 @@
 import {
   ComputeBudgetProgram,
-  Connection,
+  LAMPORTS_PER_SOL,
   PublicKey,
   type TransactionInstruction,
-  clusterApiUrl,
 } from "@solana/web3.js";
 import {
-  TOKEN_PROGRAM_ID,
   createAssociatedTokenAccountInstruction,
   createTransferInstruction,
   getAccount,
@@ -16,12 +14,20 @@ import {
 import { parseMintAddress } from "@/lib/token-guard";
 import { loadDistributionKeypair } from "@/lib/secret-keypair";
 import { getOrder, updateOrder, type VisionOrder } from "@/lib/orders";
-import { sendAndConfirmWithFreshBlockhash } from "@/lib/send-with-blockhash";
+import {
+  describeSolanaSendError,
+  sendAndConfirmWithFreshBlockhash,
+} from "@/lib/send-with-blockhash";
 import { quoteVisionForLamports, quoteVisionForSol, fetchSolUsd, bonusPctForTier } from "@/lib/vision-pricing";
 import type { VisionQuote } from "@/lib/vision-pricing";
+import { SQUADS_VAULT } from "@/lib/presale";
+import { executeWithRpcFallback } from "@/lib/solana";
+import { toPublicOrder } from "@/lib/public-order";
 
 const COMPUTE_UNIT_LIMIT = 300_000;
 const COMPUTE_UNIT_PRICE_MICRO_LAMPORTS = 1_000_000;
+const MIN_FEE_SOL = 0.005;
+const SQUADS = new PublicKey(SQUADS_VAULT);
 
 function log(scope: string, message: string, extra?: Record<string, unknown>) {
   if (extra) {
@@ -29,6 +35,18 @@ function log(scope: string, message: string, extra?: Record<string, unknown>) {
     return;
   }
   console.log(`[${scope}] ${message}`);
+}
+
+function logError(scope: string, message: string, extra?: Record<string, unknown>) {
+  if (extra) {
+    console.error(`[${scope}] ${message}`, extra);
+    return;
+  }
+  console.error(`[${scope}] ${message}`);
+}
+
+function uiAmount(raw: bigint | number | string, decimals: number): number {
+  return Number(BigInt(raw.toString())) / 10 ** decimals;
 }
 
 function uiToRaw(amount: number, decimals: number): bigint {
@@ -79,6 +97,23 @@ export type FulfillResult = {
   skipped?: string;
 };
 
+export function fulfillApiBody(result: FulfillResult, solSignature?: string | null) {
+  const spl = result.order.splSignature;
+  const skipped = result.skipped ?? null;
+  const deliveryFailed =
+    Boolean(result.order.fulfillError) ||
+    Boolean(skipped && skipped !== "already_fulfilled");
+  return {
+    order: toPublicOrder(result.order),
+    txHash: spl ?? null,
+    solSignature: result.order.solSignature ?? solSignature ?? null,
+    splSignature: spl ?? null,
+    skipped,
+    error: deliveryFailed ? (skipped ?? "fulfill_failed") : null,
+    detail: result.order.fulfillError ?? null,
+  };
+}
+
 export async function fulfillVisionOrder(orderId: string): Promise<FulfillResult> {
   const order = await getOrder(orderId);
   if (!order) {
@@ -118,26 +153,47 @@ export async function fulfillVisionOrder(orderId: string): Promise<FulfillResult
     throw new Error("Cannot compute $VISION amount for this order");
   }
 
-  const rpc =
-    process.env.SOLANA_RPC_URL?.trim() ||
-    clusterApiUrl(
-      (process.env.SOLANA_CLUSTER as "mainnet-beta" | "devnet" | "testnet") ??
-        "mainnet-beta",
-    );
-  const connection = new Connection(rpc, { commitment: "confirmed" });
-  const mintInfo = await getMint(connection, mint, "confirmed", TOKEN_PROGRAM_ID);
+  let connection;
+  let tokenProgram: PublicKey;
+  let mintInfo;
+  try {
+    const live = await executeWithRpcFallback(async (rpc) => {
+      const mintAccount = await rpc.getAccountInfo(mint, "confirmed");
+      if (!mintAccount) {
+        throw new TypeError(`TOKEN_MINT ${mint.toBase58()} account not found`);
+      }
+      const info = await getMint(rpc, mint, "confirmed", mintAccount.owner);
+      return { tokenProgram: mintAccount.owner, mintInfo: info };
+    });
+    connection = live.connection;
+    tokenProgram = live.result.tokenProgram;
+    mintInfo = live.result.mintInfo;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    logError("fulfill", "no live Solana RPC for SPL transfer", {
+      orderId,
+      err: message,
+    });
+    throw new Error(`solana_rpc_error: ${message}`);
+  }
   const destOwner = new PublicKey(order.destPubkey);
   const sourceAta = await getAssociatedTokenAddress(
     mint,
     payer.publicKey,
     false,
-    TOKEN_PROGRAM_ID,
+    tokenProgram,
   );
   const destAta = await getAssociatedTokenAddress(
     mint,
     destOwner,
     false,
-    TOKEN_PROGRAM_ID,
+    tokenProgram,
+  );
+  const squadsAta = await getAssociatedTokenAddress(
+    mint,
+    SQUADS,
+    true,
+    tokenProgram,
   );
   const rawAmount = uiToRaw(visionUi, mintInfo.decimals);
 
@@ -155,42 +211,84 @@ export async function fulfillVisionOrder(orderId: string): Promise<FulfillResult
     decimals: mintInfo.decimals,
     rawAmount: rawAmount.toString(),
     mint: mint.toBase58(),
-    from: payer.publicKey.toBase58(),
+    tokenProgram: tokenProgram.toBase58(),
+    signer: payer.publicKey.toBase58(),
     to: destOwner.toBase58(),
     sourceAta: sourceAta.toBase58(),
     destAta: destAta.toBase58(),
+    squadsAta: squadsAta.toBase58(),
+    rpc: connection.rpcEndpoint,
     solSignature: order.solSignature,
   });
+
+  const payerLamports = await connection.getBalance(payer.publicKey, "confirmed");
+  const payerSol = payerLamports / LAMPORTS_PER_SOL;
+  log("fulfill", "distribution wallet SOL (fees + ATA rent)", {
+    pubkey: payer.publicKey.toBase58(),
+    sol: payerSol,
+    minFeeSol: MIN_FEE_SOL,
+  });
+  if (payerSol < MIN_FEE_SOL) {
+    const message = `Distribution wallet ${payer.publicKey.toBase58()} has ${payerSol} SOL; need >= ${MIN_FEE_SOL} SOL for fees and ATA rent-exemption.`;
+    logError("fulfill", message, { orderId, payerLamports });
+    const next = await updateOrder(orderId, { fulfillError: message });
+    return { order: next ?? order, skipped: "insufficient_sol_fees" };
+  }
 
   const source = await getAccount(
     connection,
     sourceAta,
     "confirmed",
-    TOKEN_PROGRAM_ID,
+    tokenProgram,
   ).catch(() => null);
-  const sourceUi = source
-    ? Number(BigInt(source.amount.toString())) / 10 ** mintInfo.decimals
+  const sourceUi = source ? uiAmount(source.amount.toString(), mintInfo.decimals) : 0;
+  const squadsAccount = await getAccount(
+    connection,
+    squadsAta,
+    "confirmed",
+    tokenProgram,
+  ).catch(() => null);
+  const squadsUi = squadsAccount
+    ? uiAmount(squadsAccount.amount.toString(), mintInfo.decimals)
     : 0;
-  log("fulfill", "source ATA balance", {
-    exists: Boolean(source),
-    ui: sourceUi,
+  log("fulfill", "token account balances", {
+    sourceExists: Boolean(source),
+    sourceUi,
+    squadsExists: Boolean(squadsAccount),
+    squadsUi,
   });
 
   if (!source || BigInt(source.amount.toString()) < rawAmount) {
     const message =
-      "Phantom ATA missing or insufficient $VISION. Transfer not sent; payment stays paid.";
-    log("fulfill", message, { neededUi: visionUi, haveUi: sourceUi });
+      squadsUi > 0
+        ? `$VISION float is in Squads vault ATA ${squadsAta.toBase58()} (${squadsUi} tokens). Auto-fulfill signs with ${payer.publicKey.toBase58()} (ATA ${sourceAta.toBase58()} has ${sourceUi}). A Squads vault cannot be spent with MINT_AUTHORITY_SECRET. Move a $VISION float from Squads to the distribution wallet, then replay this order.`
+        : `Distribution ATA ${sourceAta.toBase58()} missing or insufficient $VISION (have ${sourceUi}, need ${visionUi}).`;
+    logError("fulfill", message, {
+      orderId,
+      neededUi: visionUi,
+      haveUi: sourceUi,
+      squadsUi,
+    });
     const next = await updateOrder(orderId, { fulfillError: message });
     return { order: next ?? order, skipped: "insufficient_float" };
   }
 
   let destExists = true;
   try {
-    await getAccount(connection, destAta, "confirmed", TOKEN_PROGRAM_ID);
+    await getAccount(connection, destAta, "confirmed", tokenProgram);
   } catch {
     destExists = false;
   }
-  log("fulfill", destExists ? "buyer ATA exists" : "will create buyer ATA");
+  if (destExists) {
+    log("fulfill", "buyer ATA exists", { destAta: destAta.toBase58() });
+  } else {
+    log("fulfill", "creating buyer ATA (payer covers rent-exemption)", {
+      destAta: destAta.toBase58(),
+      destOwner: destOwner.toBase58(),
+      mint: mint.toBase58(),
+      tokenProgram: tokenProgram.toBase58(),
+    });
+  }
 
   const instructions: TransactionInstruction[] = [
     ComputeBudgetProgram.setComputeUnitLimit({ units: COMPUTE_UNIT_LIMIT }),
@@ -205,7 +303,7 @@ export async function fulfillVisionOrder(orderId: string): Promise<FulfillResult
         destAta,
         destOwner,
         mint,
-        TOKEN_PROGRAM_ID,
+        tokenProgram,
       ),
     );
   }
@@ -216,7 +314,7 @@ export async function fulfillVisionOrder(orderId: string): Promise<FulfillResult
       payer.publicKey,
       rawAmount,
       [],
-      TOKEN_PROGRAM_ID,
+      tokenProgram,
     ),
   );
 
@@ -228,16 +326,28 @@ export async function fulfillVisionOrder(orderId: string): Promise<FulfillResult
       instructions,
     );
   } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error);
-    log("fulfill", "on-chain SPL error — SOL stays paid, VISION not sent", {
+    const described = await describeSolanaSendError(error, connection);
+    const detail = [
+      described.kind,
+      described.name,
+      described.message,
+      described.logs?.slice(-8).join(" | "),
+    ]
+      .filter(Boolean)
+      .join(" — ");
+    logError("fulfill", "on-chain SPL error — SOL stays paid, VISION not sent", {
       orderId,
-      name: error instanceof Error ? error.name : "unknown",
-      err: detail,
+      kind: described.kind,
+      name: described.name,
+      message: described.message,
+      logs: described.logs,
+      destExists,
+      payerSol,
     });
     const next = await updateOrder(orderId, {
       fulfillError: `SPL transfer failed: ${detail}`,
     });
-    return { order: next ?? order, skipped: "spl_failed" };
+    return { order: next ?? order, skipped: described.kind };
   }
 
   log("fulfill", "confirmed — $VISION sent", {

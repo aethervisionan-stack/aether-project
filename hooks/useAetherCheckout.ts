@@ -21,6 +21,11 @@ import { requestWalletSession, type WalletBrand } from "@/lib/site";
 import { Buffer } from "buffer";
 import { rpcWithFallback } from "@/lib/solana";
 import { MEMO_PROGRAM_ID } from "@/lib/memo";
+import {
+  confirmSubmittedSignature,
+  signatureFromErrorMessage,
+  waitUntilSignatureLanded,
+} from "@/lib/send-with-blockhash";
 
 export type CheckoutStatus =
   | "idle"
@@ -32,7 +37,7 @@ export type CheckoutStatus =
 const TREASURY = new PublicKey(SQUADS_MULTISIG);
 const FEE_BUFFER_LAMPORTS = Math.floor(0.005 * LAMPORTS_PER_SOL);
 const COMPUTE_UNIT_LIMIT = 200_000;
-const COMPUTE_UNIT_PRICE_MICRO_LAMPORTS = 100_000;
+const COMPUTE_UNIT_PRICE_MICRO_LAMPORTS = 300_000;
 const MAX_ERROR_DETAIL = 480;
 
 function unwrapErrors(error: unknown): unknown[] {
@@ -86,6 +91,7 @@ export type CheckoutErrorCode =
   | "cancelled"
   | "insufficient"
   | "simulation"
+  | "expired"
   | "generic";
 
 function classifyError(error: unknown, hasLogs: boolean): {
@@ -105,6 +111,13 @@ function classifyError(error: unknown, hasLogs: boolean): {
   }
   if (hasLogs || /simulation/i.test(message)) {
     return { status: "error", code: "simulation" };
+  }
+  if (
+    /block height exceeded|blockhash not found|has expired|TransactionExpiredBlockheightExceeded/i.test(
+      message,
+    )
+  ) {
+    return { status: "error", code: "expired" };
   }
   return { status: "error", code: "generic" };
 }
@@ -211,12 +224,11 @@ export function useAetherCheckout() {
           return null;
         }
 
-        const {
-          value: { blockhash, lastValidBlockHeight },
-          connection: rpc,
-        } = await rpcWithFallback(fundedConnection, (next) =>
-          next.getLatestBlockhash("confirmed"),
+        const latest = await fundedConnection.getLatestBlockhashAndContext(
+          "confirmed",
         );
+        const { blockhash, lastValidBlockHeight } = latest.value;
+        const minContextSlot = latest.context.slot;
 
         const transaction = new Transaction().add(
           ComputeBudgetProgram.setComputeUnitLimit({
@@ -244,34 +256,59 @@ export function useAetherCheckout() {
         transaction.recentBlockhash = blockhash;
         transaction.lastValidBlockHeight = lastValidBlockHeight;
 
-        const { value: signature, connection: sending } = await rpcWithFallback(
-          rpc,
-          (next) => sendTransaction(transaction, next),
-        );
-
-        const { value: confirmation } = await rpcWithFallback(sending, (next) =>
-          next.confirmTransaction(
-            {
-              signature,
+        let signature: string;
+        try {
+          signature = await sendTransaction(transaction, fundedConnection, {
+            minContextSlot,
+            maxRetries: 8,
+            preflightCommitment: "confirmed",
+          });
+        } catch (sendCaught) {
+          const maybeSig = signatureFromErrorMessage(sendCaught);
+          if (maybeSig) {
+            await confirmSubmittedSignature(
+              fundedConnection,
+              maybeSig,
               blockhash,
               lastValidBlockHeight,
-            },
-            "confirmed",
-          ),
-        );
+            );
+            signature = maybeSig;
+          } else {
+            throw sendCaught;
+          }
+        }
 
-        if (confirmation.value.err) {
-          const detail = JSON.stringify(confirmation.value.err);
-          setStatus("error");
-          setError("generic");
-          setErrorDetail(detail.slice(0, MAX_ERROR_DETAIL));
-          return null;
+        try {
+          await confirmSubmittedSignature(
+            fundedConnection,
+            signature,
+            blockhash,
+            lastValidBlockHeight,
+          );
+        } catch (confirmCaught) {
+          const landed = await waitUntilSignatureLanded(
+            fundedConnection,
+            signature,
+          );
+          if (!landed) {
+            console.warn(
+              "[checkout] confirm timed out; still returning signature for /sol-paid",
+              signatureFromErrorMessage(confirmCaught) ?? signature,
+            );
+          }
         }
 
         setTxHash(signature);
         setStatus("success");
         return signature;
       } catch (caught) {
+        const recovered = signatureFromErrorMessage(caught);
+        if (recovered && (await waitUntilSignatureLanded(connection, recovered))) {
+          setTxHash(recovered);
+          setStatus("success");
+          return recovered;
+        }
+
         const sendError = asSendTransactionError(caught);
         let logs: string[] | null = null;
         if (sendError) {
@@ -290,7 +327,7 @@ export function useAetherCheckout() {
         setStatus(mapped.status);
         setError(mapped.code);
         setErrorDetail(
-          mapped.code === "cancelled"
+          mapped.code === "cancelled" || mapped.code === "expired"
             ? null
             : formatErrorDetail(caught, logs),
         );

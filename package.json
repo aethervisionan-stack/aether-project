@@ -18,7 +18,9 @@
     "token:test-fulfillment": "tsx scripts/test-fulfillment.ts",
     "token:import-phantom": "tsx scripts/import-phantom-mnemonic.ts",
     "token:test-paid-sol": "tsx scripts/test-paid-sol-order.ts",
-    "token:withdraw-sol": "tsx scripts/withdraw-sol.ts"
+    "token:withdraw-sol": "tsx scripts/withdraw-sol.ts",
+    "token:fund-relayer": "tsx scripts/fund-relayer.ts",
+    "token:mint-fresh-supply": "tsx scripts/mint-fresh-supply.ts"
   },
   "dependencies": {
     "@metaplex-foundation/js": "^0.20.1",
@@ -31,6 +33,7 @@
     "@solana/wallet-adapter-react": "^0.15.40",
     "@solana/wallet-adapter-react-ui": "^0.9.40",
     "@solana/web3.js": "^1.99.0",
+    "bs58": "^6.0.0",
     "dotenv": "^16.4.7",
     "framer-motion": "^14.7.1",
     "lucide-react": "^1.63.0",

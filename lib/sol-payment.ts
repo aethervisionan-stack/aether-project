@@ -1,12 +1,11 @@
 import {
-  Connection,
   PublicKey,
-  clusterApiUrl,
   type ParsedInstruction,
   type PartiallyDecodedInstruction,
 } from "@solana/web3.js";
 import { MEMO_PROGRAM_ID } from "@/lib/memo";
 import { SQUADS_VAULT } from "@/lib/presale";
+import { executeWithRpcFallback } from "@/lib/solana";
 
 export { MEMO_PROGRAM_ID };
 
@@ -25,20 +24,16 @@ export async function verifySolPayment(input: {
 }): Promise<
   { ok: true; lamports: number } | { ok: false; reason: string }
 > {
-  const rpc =
-    process.env.SOLANA_RPC_URL?.trim() ||
-    clusterApiUrl(
-      (process.env.SOLANA_CLUSTER as "mainnet-beta" | "devnet" | "testnet") ??
-        "mainnet-beta",
-    );
-  const connection = new Connection(rpc, { commitment: "confirmed" });
-  const parsed = await connection.getParsedTransaction(input.signature, {
-    maxSupportedTransactionVersion: 0,
-    commitment: "confirmed",
+  const { result: parsed } = await executeWithRpcFallback(async (connection) => {
+    const tx = await connection.getParsedTransaction(input.signature, {
+      maxSupportedTransactionVersion: 0,
+      commitment: "confirmed",
+    });
+    if (!tx) {
+      throw new TypeError("Transaction not found or not confirmed");
+    }
+    return tx;
   });
-  if (!parsed) {
-    return { ok: false, reason: "Transaction not found or not confirmed" };
-  }
   if (parsed.meta?.err) {
     return { ok: false, reason: "Transaction failed on-chain" };
   }

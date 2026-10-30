@@ -1,6 +1,7 @@
 import {
   Connection,
   Keypair,
+  SendTransactionError,
   Transaction,
   type TransactionInstruction,
 } from "@solana/web3.js";
@@ -26,6 +27,56 @@ export function isBlockhashExpiredError(error: unknown): boolean {
   return /block height exceeded|blockhash not found|has expired|TransactionExpiredBlockheightExceeded|blockhash.*not.*found/i.test(
     `${name} ${message}`,
   );
+}
+
+export async function describeSolanaSendError(
+  error: unknown,
+  connection?: Connection,
+): Promise<{
+  kind: string;
+  name: string;
+  message: string;
+  logs: string[] | null;
+}> {
+  const name = error instanceof Error ? error.name : "unknown";
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  let logs: string[] | null = null;
+  const sendError =
+    error instanceof SendTransactionError
+      ? error
+      : error &&
+          typeof error === "object" &&
+          "getLogs" in error &&
+          typeof (error as SendTransactionError).getLogs === "function"
+        ? (error as SendTransactionError)
+        : null;
+  if (sendError) {
+    logs = sendError.logs ?? null;
+    if (!logs?.length && connection) {
+      try {
+        logs = await sendError.getLogs(connection);
+      } catch {
+        logs = sendError.logs ?? null;
+      }
+    }
+  }
+  const joined = `${name} ${message} ${logs?.join(" ") ?? ""}`;
+  let kind = "send_failed";
+  if (isBlockhashExpiredError(error)) kind = "blockhash_expired";
+  else if (/rent.?exempt|insufficient funds for rent/i.test(joined)) {
+    kind = "rent_exemption";
+  } else if (/insufficient|0x1\b/i.test(joined)) {
+    kind = "insufficient_funds";
+  }
+  return { kind, name, message, logs };
+}
+
+export function signatureFromErrorMessage(error: unknown): string | null {
+  const text = error instanceof Error ? error.message : String(error ?? "");
+  const match = text.match(
+    /Signature\s+([1-9A-HJ-NP-Za-km-z]{32,88})\s+has expired/i,
+  );
+  return match?.[1] ?? null;
 }
 
 async function signatureLanded(
@@ -141,4 +192,51 @@ export async function sendAndConfirmWithFreshBlockhash(
   throw lastError instanceof Error
     ? lastError
     : new Error("SPL transfer failed after blockhash retries");
+}
+
+/**
+ * Wallet sendTransaction often returns a signature before the cluster has
+ * seen it. confirmTransaction then throws "block height exceeded" even when
+ * the transfer already landed. Poll getSignatureStatuses before failing.
+ */
+export async function confirmSubmittedSignature(
+  connection: Connection,
+  signature: string,
+  blockhash: string,
+  lastValidBlockHeight: number,
+): Promise<void> {
+  try {
+    const confirmation = await connection.confirmTransaction(
+      {
+        signature,
+        blockhash,
+        lastValidBlockHeight,
+      },
+      "confirmed",
+    );
+    if (confirmation.value.err) {
+      throw new Error(
+        `on-chain error: ${JSON.stringify(confirmation.value.err)}`,
+      );
+    }
+  } catch (error) {
+    if (await waitUntilSignatureLanded(connection, signature)) {
+      log("landed after confirm race", { signature });
+      return;
+    }
+    throw error;
+  }
+}
+
+export async function waitUntilSignatureLanded(
+  connection: Connection,
+  signature: string,
+  attempts = 10,
+  delayMs = 1500,
+): Promise<boolean> {
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    if (await signatureLanded(connection, signature)) return true;
+    if (attempt < attempts) await delay(delayMs);
+  }
+  return false;
 }

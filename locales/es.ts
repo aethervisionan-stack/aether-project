@@ -271,6 +271,8 @@ export const es: Messages = {
     insufficient:
       "Saldo insuficiente de SOL para la transacción y las comisiones de red.",
     simulation: "Falló la simulación de la transacción.",
+    expired:
+      "La red tardó demasiado en confirmar. Si el SOL ya salió de la cartera, no vuelvas a pagar — la tesorería puede haberlo recibido.",
     generic: "Error en la transacción.",
   },
   lang: {
