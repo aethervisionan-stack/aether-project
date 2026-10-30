@@ -17,7 +17,8 @@
     "token:raydium-price": "tsx scripts/calculate-raydium-price.ts",
     "token:test-fulfillment": "tsx scripts/test-fulfillment.ts",
     "token:import-phantom": "tsx scripts/import-phantom-mnemonic.ts",
-    "token:test-paid-sol": "tsx scripts/test-paid-sol-order.ts"
+    "token:test-paid-sol": "tsx scripts/test-paid-sol-order.ts",
+    "token:withdraw-sol": "tsx scripts/withdraw-sol.ts"
   },
   "dependencies": {
     "@metaplex-foundation/js": "^0.20.1",
