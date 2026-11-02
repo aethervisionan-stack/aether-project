@@ -1,4 +1,30 @@
-import { Connection, type Commitment, type ConnectionConfig } from "@solana/web3.js";
+import {
+  getAccount,
+  getAssociatedTokenAddress,
+  getMint,
+  TOKEN_2022_PROGRAM_ID,
+  TOKEN_PROGRAM_ID,
+} from "@solana/spl-token";
+import {
+  Connection,
+  Keypair,
+  LAMPORTS_PER_SOL,
+  PublicKey,
+  type Commitment,
+  type ConnectionConfig,
+} from "@solana/web3.js";
+import bs58 from "bs58";
+
+/** Fortaleza local auto-custody simulation — secret key in browser storage. */
+export const FORTALEZA_SECRET_STORAGE_KEY = "aether-fortaleza-secret";
+
+export const VISION_MINT_ADDRESS =
+  process.env.NEXT_PUBLIC_VISION_MINT_ADDRESS?.trim() ||
+  "2iGxAEtYLYb8NBvtQEoPbuDZzTEezWzu7G3nYDrabftv";
+
+export const TREASURY_WALLET =
+  process.env.NEXT_PUBLIC_TREASURY_WALLET?.trim() ||
+  "9V7rtShwij5kAKJUjBrCB5y2QaGLKUbUSwSGyKBN6911";
 
 export const SOLANA_RPC_PROXY_PATH = "/api/solana-rpc";
 
@@ -161,4 +187,98 @@ export async function rpcWithFallback<T>(
     primary,
   );
   return { value: result, connection };
+}
+
+/** Connection rooted in `NEXT_PUBLIC_SOLANA_RPC_URL` (browser uses local RPC proxy). */
+export function getSolanaConnection(): Connection {
+  const envRpc = process.env.NEXT_PUBLIC_SOLANA_RPC_URL?.trim();
+  const endpoint =
+    typeof window !== "undefined"
+      ? getClientRpcEndpoint()
+      : envRpc || PRIMARY_SOLANA_RPC;
+  return createSolanaConnection(endpoint);
+}
+
+export function shortenAddress(address: string, chars = 4): string {
+  const value = address.trim();
+  if (value.length <= chars * 2 + 3) return value;
+  return `${value.slice(0, chars)}...${value.slice(-chars)}`;
+}
+
+/**
+ * Generate a Solana Keypair if missing; persist SecretKey in localStorage
+ * for Fortaleza auto-custody simulation (device-local only).
+ */
+export function getOrCreateLocalWallet(): Keypair {
+  if (typeof window === "undefined") {
+    throw new Error("getOrCreateLocalWallet is browser-only");
+  }
+
+  const existing = window.localStorage.getItem(FORTALEZA_SECRET_STORAGE_KEY);
+  if (existing) {
+    try {
+      const secret =
+        existing.startsWith("[")
+          ? Uint8Array.from(JSON.parse(existing) as number[])
+          : bs58.decode(existing);
+      return Keypair.fromSecretKey(secret);
+    } catch {
+      window.localStorage.removeItem(FORTALEZA_SECRET_STORAGE_KEY);
+    }
+  }
+
+  const keypair = Keypair.generate();
+  window.localStorage.setItem(
+    FORTALEZA_SECRET_STORAGE_KEY,
+    bs58.encode(keypair.secretKey),
+  );
+  return keypair;
+}
+
+export async function getSolBalance(publicKeyStr: string): Promise<number> {
+  const connection = getSolanaConnection();
+  const lamports = await connection.getBalance(
+    new PublicKey(publicKeyStr),
+    "confirmed",
+  );
+  return lamports / LAMPORTS_PER_SOL;
+}
+
+async function readTokenUiBalance(
+  connection: Connection,
+  owner: PublicKey,
+  mint: PublicKey,
+  programId: PublicKey,
+): Promise<number | null> {
+  try {
+    const ata = await getAssociatedTokenAddress(
+      mint,
+      owner,
+      false,
+      programId,
+    );
+    const account = await getAccount(connection, ata, "confirmed", programId);
+    const mintInfo = await getMint(connection, mint, "confirmed", programId);
+    return Number(account.amount) / 10 ** mintInfo.decimals;
+  } catch {
+    return null;
+  }
+}
+
+export async function getVisionBalance(publicKeyStr: string): Promise<number> {
+  const connection = getSolanaConnection();
+  const owner = new PublicKey(publicKeyStr);
+  const mint = new PublicKey(VISION_MINT_ADDRESS);
+
+  for (const programId of [TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID]) {
+    const balance = await readTokenUiBalance(
+      connection,
+      owner,
+      mint,
+      programId,
+    );
+    if (balance != null) return balance;
+  }
+
+  return 0;
 }

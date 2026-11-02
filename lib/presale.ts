@@ -3,7 +3,9 @@ export const SQUADS_VAULT = "AVj6q1t8xWd7Mi7roNjTc1RvaqJy79P7n3XNpCVjQgxa";
 export const SQUADS_MULTISIG = SQUADS_VAULT;
 
 /** Phantom 1 / relayer owner. Checkout SOL and /sol-paid listen here. */
-export const RECEIVE_TREASURY = "9V7rtShwij5kAKJUjBrCB5y2QaGLKUbUSwSGyKBN6911";
+export const RECEIVE_TREASURY =
+  process.env.NEXT_PUBLIC_TREASURY_WALLET?.trim() ||
+  "9V7rtShwij5kAKJUjBrCB5y2QaGLKUbUSwSGyKBN6911";
 export const SOL_TREASURY = RECEIVE_TREASURY;
 export const SOLSCAN_ACCOUNT = `https://solscan.io/account/${SOL_TREASURY}`;
 

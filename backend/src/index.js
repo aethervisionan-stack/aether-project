@@ -11,6 +11,7 @@ import {
   TOKEN_2022_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
 } from '@solana/spl-token';
+import { renderLandingHtml } from './landing.html.js';
 
 const PORT = Number(process.env.PORT || 8000);
 const VISION_TOKEN_MINT =
@@ -19,6 +20,8 @@ const VISION_TOKEN_MINT =
 const TREASURY_PUBLIC_KEY =
   process.env.TREASURY_PUBLIC_KEY?.trim() ||
   '9V7rtShwij5kAKJUjBrCB5y2QaGLKUbUSwSGyKBN6911';
+const EXPO_WEB_URL =
+  process.env.EXPO_WEB_URL?.replace(/\/$/, '') || 'http://localhost:8081';
 
 const RPC_ENDPOINTS = [
   process.env.SOLANA_RPC_URL,
@@ -47,6 +50,70 @@ async function getVisionBalance(ownerStr) {
   return classic ?? 0;
 }
 
+function landingPayload() {
+  return {
+    ok: true,
+    brand: 'Aether Vision',
+    tagline: 'Carteira Fortaleza + Copiloto de Voz',
+    description:
+      'App Expo local com auto-custódia SOL/$VISION e Voice Copilot (expo-audio + VAD).',
+    visionTokenMint: VISION_TOKEN_MINT,
+    treasuryPublicKey: TREASURY_PUBLIC_KEY,
+    expoWebUrl: EXPO_WEB_URL,
+    features: [
+      {
+        id: 'wallet',
+        title: 'Carteira Fortaleza',
+        href: '/wallet',
+        summary: 'SOL + $VISION, QR e chaves no dispositivo',
+      },
+      {
+        id: 'copilot',
+        title: 'Copiloto de Voz',
+        href: '/copilot',
+        summary: 'expo-audio com VAD por metering',
+      },
+    ],
+    routes: {
+      wallet: '/(tabs)/wallet',
+      copilot: '/(tabs)/copilot',
+      health: '/health',
+      balances: '/api/balances/:address',
+      config: '/api/config',
+    },
+  };
+}
+
+function wantsHtml(req) {
+  if (String(req.query.format || '').toLowerCase() === 'json') return false;
+  if (String(req.query.format || '').toLowerCase() === 'html') return true;
+  const accept = String(req.headers.accept || '');
+  if (accept.includes('application/json') && !accept.includes('text/html')) {
+    return false;
+  }
+  return accept.includes('text/html');
+}
+
+function sendLanding(req, res) {
+  const data = landingPayload();
+  if (wantsHtml(req)) {
+    res
+      .status(200)
+      .type('html')
+      .send(
+        renderLandingHtml({
+          brand: data.brand,
+          tagline: data.tagline,
+          visionTokenMint: data.visionTokenMint,
+          treasuryPublicKey: data.treasuryPublicKey,
+          expoWebUrl: data.expoWebUrl,
+        }),
+      );
+    return;
+  }
+  res.status(200).json(data);
+}
+
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -64,22 +131,12 @@ app.get('/api/config', (_req, res) => {
   res.json({
     visionTokenMint: VISION_TOKEN_MINT,
     treasuryPublicKey: TREASURY_PUBLIC_KEY,
+    expoWebUrl: EXPO_WEB_URL,
   });
 });
 
-app.get('/api/landing', (_req, res) => {
-  res.status(200).json({
-    ok: true,
-    brand: 'Aether Vision',
-    tagline: 'Carteira Fortaleza + Voice Copilot',
-    visionTokenMint: VISION_TOKEN_MINT,
-    treasuryPublicKey: TREASURY_PUBLIC_KEY,
-    routes: {
-      wallet: '/(tabs)/wallet',
-      copilot: '/(tabs)/copilot',
-    },
-  });
-});
+app.get('/', sendLanding);
+app.get('/api/landing', sendLanding);
 
 app.get('/api/balances/:address', async (req, res) => {
   try {
@@ -101,6 +158,7 @@ app.get('/api/balances/:address', async (req, res) => {
       vision,
       treasury: TREASURY_PUBLIC_KEY,
       mint: VISION_TOKEN_MINT,
+      source: 'backend',
     });
   } catch (err) {
     console.error('[balances]', err);
@@ -114,4 +172,5 @@ app.listen(PORT, () => {
   console.log(`[aether-vision-backend] http://localhost:${PORT}`);
   console.log(`  VISION_TOKEN_MINT=${VISION_TOKEN_MINT}`);
   console.log(`  TREASURY_PUBLIC_KEY=${TREASURY_PUBLIC_KEY}`);
+  console.log(`  EXPO_WEB_URL=${EXPO_WEB_URL}`);
 });

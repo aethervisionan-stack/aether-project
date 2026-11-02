@@ -6,6 +6,7 @@ import { HardwareShowcase } from "@/components/HardwareShowcase";
 import { Header } from "@/components/Header";
 import { LanguageSelector } from "@/components/LanguageSelector";
 import { PresaleCheckout } from "@/components/PresaleCheckout";
+import { FortalezaWallet } from "@/components/FortalezaWallet";
 import { WalletNotice } from "@/components/WalletNotice";
 import { HoverLift, Reveal } from "@/components/Reveal";
 import { useI18n } from "@/lib/i18n";
@@ -33,6 +34,7 @@ export function HomePage() {
       <CursorGlow />
       <Header />
       <WalletNotice />
+      <FortalezaWallet />
       <LanguageSelector />
 
       <main className="relative z-10">

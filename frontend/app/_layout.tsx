@@ -12,7 +12,8 @@ import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
+import { Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import 'react-native-reanimated';
@@ -22,7 +23,7 @@ import { colors } from '@/constants/theme';
 export { ErrorBoundary } from 'expo-router';
 
 export const unstable_settings = {
-  anchor: '(tabs)',
+  initialRouteName: 'index',
 };
 
 SplashScreen.preventAutoHideAsync();
@@ -39,6 +40,11 @@ const aetherDark = {
     notification: colors.cyan,
   },
 };
+
+function MaybeKeyboard({ children }: { children: ReactNode }) {
+  if (Platform.OS === 'web') return <>{children}</>;
+  return <KeyboardProvider>{children}</KeyboardProvider>;
+}
 
 export default function RootLayout() {
   const [loaded, error] = useFonts({
@@ -65,17 +71,21 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.onyx }}>
-      <KeyboardProvider>
+      <MaybeKeyboard>
         <QueryClientProvider client={queryClient}>
           <ThemeProvider value={aetherDark}>
             <StatusBar style="light" />
-            <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.onyx } }}>
+            <Stack
+              screenOptions={{
+                headerShown: false,
+                contentStyle: { backgroundColor: colors.onyx },
+              }}>
               <Stack.Screen name="index" />
               <Stack.Screen name="(tabs)" />
             </Stack>
           </ThemeProvider>
         </QueryClientProvider>
-      </KeyboardProvider>
+      </MaybeKeyboard>
     </GestureHandlerRootView>
   );
 }

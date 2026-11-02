@@ -6,6 +6,7 @@ import {
   useAudioRecorderState,
 } from 'expo-audio';
 import * as Haptics from 'expo-haptics';
+import { Link } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Platform,
@@ -25,30 +26,37 @@ import { colors, spacing } from '@/constants/theme';
 import { BACKEND_URL } from '@/lib/config';
 
 type VadState = 'idle' | 'listening' | 'speech' | 'silence';
+type Mode = 'live' | 'demo';
 
 const VAD_SPEECH_THRESHOLD = 0.12;
 const VAD_SILENCE_FRAMES = 8;
 
 export default function CopilotScreen() {
   const insets = useSafeAreaInsets();
-  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const recorder = useAudioRecorder({
+    ...RecordingPresets.HIGH_QUALITY,
+    isMeteringEnabled: true,
+  });
   const recorderState = useAudioRecorderState(recorder, 80);
   const [permission, setPermission] = useState<boolean | null>(null);
   const [vad, setVad] = useState<VadState>('idle');
+  const [mode, setMode] = useState<Mode>('live');
+  const [demoLevel, setDemoLevel] = useState(0);
   const [transcript, setTranscript] = useState(
-    'Toque em Ouvir para ativar o Voice Copilot com VAD.',
+    'Toque em Ouvir para ativar o Copiloto de Voz com VAD.',
   );
   const [backendHint, setBackendHint] = useState<string | null>(null);
   const silenceFrames = useRef(0);
   const pulse = useSharedValue(1);
+  const demoTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const metering = useMemo(() => {
+  const liveMetering = useMemo(() => {
     const raw = (recorderState as { metering?: number }).metering;
     if (typeof raw !== 'number' || !Number.isFinite(raw)) return 0;
-    // expo-audio metering is typically dBFS (~ -160..0). Normalize to 0..1.
-    const normalized = Math.min(1, Math.max(0, (raw + 60) / 60));
-    return normalized;
+    return Math.min(1, Math.max(0, (raw + 60) / 60));
   }, [recorderState]);
+
+  const metering = mode === 'demo' ? demoLevel : liveMetering;
 
   useEffect(() => {
     void (async () => {
@@ -63,8 +71,14 @@ export default function CopilotScreen() {
   }, []);
 
   useEffect(() => {
+    return () => {
+      if (demoTimer.current) clearInterval(demoTimer.current);
+    };
+  }, []);
+
+  useEffect(() => {
     if (vad === 'idle') return;
-    if (!recorderState.isRecording) return;
+    if (mode === 'live' && !recorderState.isRecording) return;
 
     if (metering >= VAD_SPEECH_THRESHOLD) {
       silenceFrames.current = 0;
@@ -82,23 +96,57 @@ export default function CopilotScreen() {
     pulse.value = withSpring(1);
     if (silenceFrames.current >= VAD_SILENCE_FRAMES) {
       setVad('silence');
-      setTranscript('Silêncio detectado pelo VAD. Aguardando fala…');
-    } else {
+      setTranscript(
+        mode === 'demo'
+          ? 'Demo VAD: silêncio simulado. Aguarde o próximo pico…'
+          : 'Silêncio detectado pelo VAD. Aguardando fala…',
+      );
+    } else if (vad !== 'listening') {
       setVad('listening');
     }
-  }, [metering, recorderState.isRecording, vad, pulse]);
+  }, [metering, recorderState.isRecording, vad, pulse, mode]);
 
   const orbStyle = useAnimatedStyle(() => ({
     transform: [{ scale: pulse.value }],
     opacity: 0.55 + Math.min(0.45, (pulse.value - 1) * 2),
   }));
 
+  const stopDemo = () => {
+    if (demoTimer.current) {
+      clearInterval(demoTimer.current);
+      demoTimer.current = null;
+    }
+    setDemoLevel(0);
+  };
+
+  const startDemoVad = async () => {
+    stopDemo();
+    setMode('demo');
+    setVad('listening');
+    setTranscript(
+      'Modo demo VAD (web/sem microfone): simulando níveis de áudio…',
+    );
+    let t = 0;
+    demoTimer.current = setInterval(() => {
+      t += 1;
+      // Speech bursts every ~2s
+      const speaking = t % 20 < 8;
+      setDemoLevel(speaking ? 0.35 + Math.random() * 0.4 : Math.random() * 0.05);
+    }, 100);
+    try {
+      await Haptics.selectionAsync();
+    } catch {
+      // ignore
+    }
+  };
+
   const startListening = async () => {
     try {
       const { granted } = await requestRecordingPermissionsAsync();
       setPermission(granted);
       if (!granted) {
-        setTranscript('Permissão de microfone negada.');
+        setTranscript('Permissão de microfone negada — iniciando demo VAD.');
+        await startDemoVad();
         return;
       }
 
@@ -107,27 +155,30 @@ export default function CopilotScreen() {
         allowsRecording: true,
       });
 
-      await recorder.prepareToRecordAsync({
-        ...RecordingPresets.HIGH_QUALITY,
-        isMeteringEnabled: true,
-      });
+      await recorder.prepareToRecordAsync();
       recorder.record();
       silenceFrames.current = 0;
+      setMode('live');
       setVad('listening');
       setTranscript('Ouvindo… VAD monitorando o nível do microfone.');
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      try {
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      } catch {
+        // ignore
+      }
     } catch (err) {
       console.warn('[Copilot] start failed', err);
-      setVad('idle');
       setTranscript(
         Platform.OS === 'web'
-          ? 'Gravação/VAD limitada no web. Use Expo Go no dispositivo para o microfone completo.'
-          : 'Não foi possível iniciar o microfone.',
+          ? 'Microfone indisponível no web — usando demo VAD.'
+          : 'Não foi possível iniciar o microfone — usando demo VAD.',
       );
+      await startDemoVad();
     }
   };
 
   const stopListening = async () => {
+    stopDemo();
     try {
       if (recorderState.isRecording) {
         await recorder.stop();
@@ -136,9 +187,14 @@ export default function CopilotScreen() {
       // ignore stop errors
     }
     setVad('idle');
+    setMode('live');
     pulse.value = withSpring(1);
-    setTranscript('Copilot pausado.');
-    await Haptics.selectionAsync();
+    setTranscript('Copiloto pausado.');
+    try {
+      await Haptics.selectionAsync();
+    } catch {
+      // ignore
+    }
   };
 
   const listening = vad !== 'idle';
@@ -152,10 +208,19 @@ export default function CopilotScreen() {
           paddingBottom: insets.bottom + spacing.xl,
         },
       ]}>
-      <Text style={styles.brand}>Aether Vision</Text>
-      <Text style={styles.title}>Voice Copilot</Text>
+      <View style={styles.topRow}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.brand}>Aether Vision</Text>
+          <Text style={styles.title}>Copiloto de Voz</Text>
+        </View>
+        <Link href="/" asChild>
+          <Pressable style={styles.linkChip}>
+            <Text style={styles.linkChipText}>Landing</Text>
+          </Pressable>
+        </Link>
+      </View>
       <Text style={styles.subtitle}>
-        expo-audio + VAD (detecção de atividade de voz por metering)
+        expo-audio + VAD {mode === 'demo' ? '(demo)' : '(ao vivo)'}
       </Text>
 
       <View style={styles.stage}>
@@ -173,7 +238,9 @@ export default function CopilotScreen() {
 
       <Text style={styles.transcript}>{transcript}</Text>
       {permission === false ? (
-        <Text style={styles.error}>Ative o microfone nas permissões do app.</Text>
+        <Text style={styles.error}>
+          Microfone bloqueado — demo VAD disponível.
+        </Text>
       ) : null}
       {backendHint ? <Text style={styles.hint}>{backendHint}</Text> : null}
 
@@ -187,6 +254,11 @@ export default function CopilotScreen() {
             <Text style={styles.btnStopText}>Parar</Text>
           </Pressable>
         )}
+        {!listening ? (
+          <Pressable style={styles.btnGhost} onPress={() => void startDemoVad()}>
+            <Text style={styles.btnGhostText}>Demo VAD</Text>
+          </Pressable>
+        ) : null}
       </View>
     </View>
   );
@@ -198,6 +270,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.onyx,
     paddingHorizontal: spacing.lg,
   },
+  topRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   brand: {
     color: colors.cyan,
     fontSize: 13,
@@ -211,6 +284,14 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginTop: 4,
   },
+  linkChip: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  linkChipText: { color: colors.muted, fontSize: 12 },
   subtitle: {
     color: colors.muted,
     fontSize: 13,
@@ -276,4 +357,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   btnStopText: { color: colors.ink, fontWeight: '600', fontSize: 15 },
+  btnGhost: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 999,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  btnGhostText: { color: colors.ink, fontWeight: '600', fontSize: 14 },
 });

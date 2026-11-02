@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
+import { Link } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -14,12 +15,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { colors, spacing } from '@/constants/theme';
 import { fetchBalancesFromBackend } from '@/lib/api';
+import { copyText } from '@/lib/clipboard';
 import {
   getOrCreateLocalWallet,
   getSolBalance,
   getVisionBalance,
   shortenAddress,
   TREASURY_WALLET,
+  VISION_MINT_ADDRESS,
 } from '@/lib/solana';
 
 function formatBalance(value: number | null | undefined, digits = 4): string {
@@ -34,6 +37,8 @@ export default function WalletScreen() {
   const insets = useSafeAreaInsets();
   const [address, setAddress] = useState<string | null>(null);
   const [initError, setInitError] = useState<string | null>(null);
+  const [copied, setCopied] = useState<'wallet' | 'treasury' | null>(null);
+  const [source, setSource] = useState<'backend' | 'rpc' | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -53,47 +58,63 @@ export default function WalletScreen() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!copied) return;
+    const t = setTimeout(() => setCopied(null), 1600);
+    return () => clearTimeout(t);
+  }, [copied]);
+
   const balancesQuery = useQuery({
     queryKey: ['wallet-balances', address],
     enabled: Boolean(address),
     queryFn: async () => {
       if (!address) throw new Error('Sem endereço');
       try {
-        return await fetchBalancesFromBackend(address);
+        const data = await fetchBalancesFromBackend(address);
+        setSource('backend');
+        return data;
       } catch {
         const [sol, vision] = await Promise.all([
           getSolBalance(address),
           getVisionBalance(address),
         ]);
+        setSource('rpc');
         return {
           address,
           sol,
           vision,
           treasury: TREASURY_WALLET,
-          mint: '',
+          mint: VISION_MINT_ADDRESS,
+          source: 'rpc',
         };
       }
     },
   });
 
   const onRefresh = useCallback(async () => {
-    await Haptics.selectionAsync();
+    try {
+      await Haptics.selectionAsync();
+    } catch {
+      // web may not support haptics
+    }
     await balancesQuery.refetch();
   }, [balancesQuery]);
 
-  const onCopy = useCallback(async (value: string) => {
-    try {
-      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(value);
+  const onCopy = useCallback(async (value: string, kind: 'wallet' | 'treasury') => {
+    const ok = await copyText(value);
+    if (ok) {
+      setCopied(kind);
+      try {
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } catch {
+        // ignore
       }
-    } catch {
-      // Clipboard may be unavailable on some Expo Go / web contexts.
     }
   }, []);
 
   const sol = balancesQuery.data?.sol ?? null;
   const vision = balancesQuery.data?.vision ?? null;
+  const mint = balancesQuery.data?.mint || VISION_MINT_ADDRESS;
   const loading = !address || (balancesQuery.isLoading && sol == null);
 
   return (
@@ -103,8 +124,17 @@ export default function WalletScreen() {
         styles.content,
         { paddingTop: insets.top + spacing.md, paddingBottom: insets.bottom + spacing.xl },
       ]}>
-      <Text style={styles.brand}>Aether Vision</Text>
-      <Text style={styles.title}>Carteira Fortaleza</Text>
+      <View style={styles.topRow}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.brand}>Aether Vision</Text>
+          <Text style={styles.title}>Carteira Fortaleza</Text>
+        </View>
+        <Link href="/" asChild>
+          <Pressable style={styles.linkChip}>
+            <Text style={styles.linkChipText}>Landing</Text>
+          </Pressable>
+        </Link>
+      </View>
       <Text style={styles.badge}>
         100% Auto-Custódia • Chaves no Dispositivo
       </Text>
@@ -158,13 +188,17 @@ export default function WalletScreen() {
           <Pressable
             style={styles.btnGhost}
             disabled={!address}
-            onPress={() => address && void onCopy(address)}>
-            <Text style={styles.btnGhostText}>Copiar carteira</Text>
+            onPress={() => address && void onCopy(address, 'wallet')}>
+            <Text style={styles.btnGhostText}>
+              {copied === 'wallet' ? 'Copiado!' : 'Copiar carteira'}
+            </Text>
           </Pressable>
           <Pressable
             style={styles.btnGhost}
-            onPress={() => void onCopy(TREASURY_WALLET)}>
-            <Text style={styles.btnGhostText}>Copiar tesouraria</Text>
+            onPress={() => void onCopy(TREASURY_WALLET, 'treasury')}>
+            <Text style={styles.btnGhostText}>
+              {copied === 'treasury' ? 'Copiado!' : 'Copiar tesouraria'}
+            </Text>
           </Pressable>
           <Pressable style={styles.btnPrimary} onPress={() => void onRefresh()}>
             <Text style={styles.btnPrimaryText}>
@@ -176,6 +210,12 @@ export default function WalletScreen() {
         <Text style={styles.treasury}>
           Tesouraria: {shortenAddress(TREASURY_WALLET, 4)}
         </Text>
+        <Text style={styles.treasury}>Mint: {shortenAddress(mint, 4)}</Text>
+        {source ? (
+          <Text style={styles.source}>
+            Fonte: {source === 'backend' ? 'API local (:8000)' : 'RPC direto (fallback)'}
+          </Text>
+        ) : null}
 
         {balancesQuery.isError ? (
           <Text style={styles.error}>
@@ -190,6 +230,7 @@ export default function WalletScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.onyx },
   content: { paddingHorizontal: spacing.lg, gap: spacing.sm },
+  topRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   brand: {
     color: colors.cyan,
     fontSize: 13,
@@ -203,6 +244,14 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginTop: 4,
   },
+  linkChip: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  linkChipText: { color: colors.muted, fontSize: 12 },
   badge: {
     color: colors.cyan,
     fontSize: 11,
@@ -268,6 +317,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   btnPrimaryText: { color: colors.onyx, fontWeight: '700', fontSize: 13 },
-  treasury: { color: colors.muted, fontSize: 12, marginTop: spacing.sm },
+  treasury: { color: colors.muted, fontSize: 12, marginTop: 2 },
+  source: { color: colors.neon, fontSize: 11, marginTop: 6 },
   error: { color: colors.violet, fontSize: 12, marginTop: 4 },
 });

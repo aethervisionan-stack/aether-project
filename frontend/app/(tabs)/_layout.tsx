@@ -35,7 +35,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="copilot"
         options={{
-          title: 'Copilot',
+          title: 'Copiloto',
           tabBarIcon: ({ color }) => <TabGlyph label="♪" color={color} />,
         }}
       />
