@@ -50,3 +50,16 @@ Modo único: **dark**. Sem tema claro nesta versão.
 ## Fora de âmbito (v1)
 
 API, autenticação, compra on-chain, blog, i18n. Waitlist é UI local.
+
+## Aether Vision ($VISION) — transparência e segurança
+
+O token público da linha é **$VISION**, com supply fixo de **2.000.000.000**. As alocações públicas mantêm os percentuais e acompanham esse supply: pré-venda 10–20% (200M a 400M), liquidez Raydium 40% (800M), ecossistema 30% (600M) e time 10% (200M).
+
+O cronograma abaixo é condição de abertura de mercado e aparece na landing, na seção de pré-venda / TGE condicional.
+
+1. **Captação inicial.** A pré-venda abre e arrecada ao preço público de R$ 0,05 / token ($0.05 USD).
+2. **KYC e auditoria.** A verificação de identidade da equipe e a emissão do Relatório de Auditoria do contrato inteligente ocorrem integralmente durante o período de pré-venda.
+3. **Conclusão com sucesso.** KYC e auditoria terminam com sucesso antes do Token Generation Event (TGE) e antes da liberação oficial do pool de liquidez na Raydium. Sem essas duas conclusões, o pool não é liberado e a negociação pública não abre.
+4. **Liquidez e TGE.** Com a captação concluída, o fundo de liquidez injetado, o KYC verificado e a auditoria emitida, o TGE e o pool na Raydium são liberados.
+
+A mensagem para o investidor é explícita: o cronograma é público, a identidade da equipe e o contrato são verificados antes do mercado aberto, e a abertura depende dessas duas etapas.

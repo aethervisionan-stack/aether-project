@@ -32,6 +32,29 @@ export const en = {
       "per 1 $VISION. Connect Phantom or Backpack and send SOL to the receive treasury. Monthly subscriptions natively accept $AETH and $VISION.",
     nativePay:
       "Monthly app subscription payments: $AETH and $VISION are accepted natively.",
+    tge: {
+      kicker: "Conditional TGE",
+      title: "Liquidity, KYC and audit before any public trading",
+      priceLabel: "Presale price",
+      price: "R$ 0.05",
+      priceUnit: " / token",
+      priceUsd: "$0.05 USD",
+      ruleLabel: "TGE rule",
+      rule: "The Token Generation Event (TGE) and the official release of the Raydium liquidity pool happen only after the presale raise is successfully completed, the liquidity fund is injected, team KYC is finished, and the smart contract Audit Report is issued.",
+      steps: [
+        "Initial presale raise",
+        "Team KYC and smart contract Audit Report, during the presale",
+        "Successful completion of KYC and the audit",
+        "Injection of the liquidity fund",
+        "TGE and official release of the Raydium pool",
+      ],
+      kycLabel: "Transparency and security",
+      kycBody:
+        "KYC — identity verification of the team — and issuance of the smart contract Audit Report both run in full during the presale and are successfully completed before the Token Generation Event (TGE) and the official release of the Raydium liquidity pool. The commitment is public: no open-market trading starts until the team’s identity is verified and the contract audit is complete.",
+      valueLabel: "Value proposition",
+      value:
+        "This mechanic secures price stability, solid support and sustainable appreciation from the first minute of public trading.",
+    },
   },
   checkout: {
     treasuryKicker: "On-chain treasury · receive wallet",
@@ -185,32 +208,32 @@ export const en = {
   },
   tokenomics: {
     kicker: "Transparent tokenomics",
-    title: "$VISION · 1,000,000,000",
-    lead: "Fixed 1 billion supply. Presale between 10% and 20% at $0.05. Liquidity, app rewards and team with public allocation.",
+    title: "$VISION · 2,000,000,000",
+    lead: "Fixed 2 billion supply. Presale between 10% and 20% at $0.05. Liquidity, app rewards and team with public allocation.",
     items: [
       {
         label: "Presale / Soft Launch",
         value: "10–20%",
         detail:
-          "100M to 200M $VISION at $0.05. Estimated raise of up to $10M to fund glasses and the app for years.",
+          "200M to 400M $VISION at $0.05. Estimated raise of up to $20M to fund glasses and the app for years.",
       },
       {
         label: "Raydium liquidity",
         value: "40%",
         detail:
-          "400M $VISION in the DEX pool, allocated with funds raised after the presale.",
+          "800M $VISION in the DEX pool, allocated with funds raised after the presale.",
       },
       {
         label: "Ecosystem & rewards",
         value: "30%",
         detail:
-          "300M $VISION for cashback, referral bonuses and DePIN app rewards.",
+          "600M $VISION for cashback, referral bonuses and DePIN app rewards.",
       },
       {
         label: "Team & marketing",
         value: "10%",
         detail:
-          "100M $VISION locked for the development team and long-term expansion.",
+          "200M $VISION locked for the development team and long-term expansion.",
       },
     ],
     note: "$AETH launches on the native mainnet; $VISION powers the app and Solana liquidity. Both enter Buyback & Burn after the first batch.",

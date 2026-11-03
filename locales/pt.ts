@@ -34,6 +34,29 @@ export const pt: Messages = {
       "por 1 $VISION. Conecte Phantom ou Backpack e envie SOL para a tesouraria de recebimento. Assinaturas mensais aceitam nativamente $AETH e $VISION.",
     nativePay:
       "Pagamento das assinaturas mensais do aplicativo: $AETH e $VISION são aceitos nativamente.",
+    tge: {
+      kicker: "TGE Condicional",
+      title: "Liquidez, KYC e auditoria antes de qualquer negociação pública",
+      priceLabel: "Preço da pré-venda",
+      price: "R$ 0,05",
+      priceUnit: " / token",
+      priceUsd: "$0.05 USD",
+      ruleLabel: "Regra do TGE",
+      rule: "O Token Generation Event (TGE) e a liberação oficial do pool de liquidez na Raydium só acontecem depois da conclusão bem-sucedida da captação, da injeção do fundo de liquidez, do KYC da equipe e do Relatório de Auditoria do contrato inteligente.",
+      steps: [
+        "Captação inicial da pré-venda",
+        "KYC da equipe e Relatório de Auditoria do contrato, durante a pré-venda",
+        "Conclusão com sucesso do KYC e da auditoria",
+        "Injeção do fundo de liquidez",
+        "TGE e liberação oficial do pool na Raydium",
+      ],
+      kycLabel: "Transparência e segurança",
+      kycBody:
+        "O KYC — verificação de identidade da equipe — e a emissão do Relatório de Auditoria do contrato inteligente ocorrem integralmente durante o período de pré-venda e são concluídos com sucesso antes do Token Generation Event (TGE) e da liberação oficial do pool de liquidez na Raydium. O compromisso é público: nenhuma negociação em mercado aberto começa sem a identidade da equipe verificada e sem a auditoria do contrato concluída.",
+      valueLabel: "Proposta de valor",
+      value:
+        "Essa mecânica garante estabilidade de preço, suporte sólido e valorização sustentável desde o primeiro minuto de negociação pública.",
+    },
   },
   checkout: {
     treasuryKicker: "Tesouraria on-chain · carteira de recebimento",
@@ -188,32 +211,32 @@ export const pt: Messages = {
   },
   tokenomics: {
     kicker: "Tokenomics transparente",
-    title: "$VISION · 1.000.000.000",
-    lead: "Supply fixo de 1 bilhão. Pré-venda entre 10% e 20% a $0,05. Liquidez, recompensas do app e time com alocação pública.",
+    title: "$VISION · 2.000.000.000",
+    lead: "Supply fixo de 2 bilhões. Pré-venda entre 10% e 20% a $0,05. Liquidez, recompensas do app e time com alocação pública.",
     items: [
       {
         label: "Pré-venda / Soft Launch",
         value: "10–20%",
         detail:
-          "100M a 200M $VISION a $0,05. Arrecadação estimada de até $10M para financiar óculos e o app por anos.",
+          "200M a 400M $VISION a $0,05. Arrecadação estimada de até $20M para financiar óculos e o app por anos.",
       },
       {
         label: "Liquidez Raydium",
         value: "40%",
         detail:
-          "400M $VISION no pool DEX, alocados com os fundos arrecadados após a pré-venda.",
+          "800M $VISION no pool DEX, alocados com os fundos arrecadados após a pré-venda.",
       },
       {
         label: "Ecossistema & Recompensas",
         value: "30%",
         detail:
-          "300M $VISION para cashback, bônus de indicação e recompensas DePIN do app.",
+          "600M $VISION para cashback, bônus de indicação e recompensas DePIN do app.",
       },
       {
         label: "Time & Marketing",
         value: "10%",
         detail:
-          "100M $VISION travados para o time de desenvolvimento e expansão de longo prazo.",
+          "200M $VISION travados para o time de desenvolvimento e expansão de longo prazo.",
       },
     ],
     note: "$AETH entra na mainnet nativa; $VISION opera o app e a liquidez na Solana. Ambos entram no ciclo de Buyback & Burn após o primeiro lote.",

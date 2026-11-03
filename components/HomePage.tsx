@@ -11,12 +11,15 @@ import { HoverLift, Reveal } from "@/components/Reveal";
 import { useI18n } from "@/lib/i18n";
 import { formatUsd, VISION_PRICE_USD } from "@/lib/presale";
 import {
+  BadgeCheck,
   Bluetooth,
+  CircleDollarSign,
   Droplets,
   Factory,
   Glasses,
   Lock,
   Rocket,
+  ShieldCheck,
   Sparkles,
   Users,
   Wallet,
@@ -97,7 +100,7 @@ export function HomePage() {
                       {t.hero.token}
                     </dt>
                     <dd className="mt-1 font-mono text-[13px] text-ink">
-                      1B $VISION
+                      2B $VISION
                     </dd>
                   </div>
                   <div>
@@ -137,6 +140,84 @@ export function HomePage() {
             <p className="mt-6 rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-muted">
               {t.presale.nativePay}
             </p>
+
+            <div id="tge" className="mt-14 scroll-mt-24">
+              <Reveal>
+                <div className="glass relative overflow-hidden rounded-[1.75rem] p-6 sm:p-8 md:p-10">
+                  <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(6,182,212,0.14),transparent_48%),radial-gradient(ellipse_at_bottom_left,rgba(139,92,246,0.12),transparent_42%)]" />
+                  <div className="relative">
+                    <p className="inline-flex items-center gap-2 text-[11px] uppercase tracking-[0.22em] text-cyan">
+                      <Sparkles size={12} />
+                      {t.presale.tge.kicker}
+                    </p>
+                    <h3 className="mt-3 max-w-3xl font-display text-2xl tracking-tight md:text-4xl md:tracking-[-0.03em]">
+                      {t.presale.tge.title}
+                    </h3>
+                    <p className="mt-4 max-w-3xl text-sm leading-relaxed text-muted sm:text-base">
+                      <span className="text-ink">{t.presale.tge.ruleLabel}. </span>
+                      {t.presale.tge.rule}
+                    </p>
+
+                    <div className="mt-8 grid gap-4 lg:grid-cols-[0.9fr_1.1fr_0.95fr]">
+                      <article className="rounded-2xl border border-cyan/25 bg-cyan/[0.06] p-5">
+                        <CircleDollarSign className="text-cyan" size={18} />
+                        <p className="mt-4 text-[11px] uppercase tracking-[0.18em] text-muted">
+                          {t.presale.tge.priceLabel}
+                        </p>
+                        <p className="mt-2 font-display text-3xl tracking-tight text-ink tabular">
+                          {t.presale.tge.price}
+                          <span className="ml-1 text-base font-normal text-muted">
+                            {t.presale.tge.priceUnit}
+                          </span>
+                        </p>
+                        <p className="mt-2 font-mono text-[13px] text-cyan">
+                          {t.presale.tge.priceUsd}
+                        </p>
+                      </article>
+
+                      <article className="rounded-2xl border border-white/10 bg-onyx/45 p-5">
+                        <Droplets className="text-cyan" size={18} />
+                        <p className="mt-4 text-[11px] uppercase tracking-[0.18em] text-muted">
+                          {t.presale.tge.ruleLabel}
+                        </p>
+                        <ol className="mt-4 space-y-3">
+                          {t.presale.tge.steps.map((step, index) => (
+                            <li key={step} className="flex gap-3 text-sm leading-relaxed text-ink">
+                              <span className="font-mono text-[11px] tracking-[0.14em] text-cyan">
+                                0{index + 1}
+                              </span>
+                              <span>{step}</span>
+                            </li>
+                          ))}
+                        </ol>
+                      </article>
+
+                      <article className="rounded-2xl border border-white/10 bg-surface/50 p-5">
+                        <ShieldCheck className="text-violet" size={18} />
+                        <p className="mt-4 text-[11px] uppercase tracking-[0.18em] text-muted">
+                          {t.presale.tge.valueLabel}
+                        </p>
+                        <p className="mt-3 text-sm leading-relaxed text-muted">
+                          {t.presale.tge.value}
+                        </p>
+                      </article>
+                    </div>
+
+                    <article className="mt-4 flex gap-4 rounded-2xl border border-violet/30 bg-violet/[0.07] p-5 sm:p-6">
+                      <BadgeCheck className="mt-0.5 shrink-0 text-violet" size={18} />
+                      <div>
+                        <p className="text-[11px] uppercase tracking-[0.18em] text-violet">
+                          {t.presale.tge.kycLabel}
+                        </p>
+                        <p className="mt-2 text-sm leading-relaxed text-ink sm:text-[15px]">
+                          {t.presale.tge.kycBody}
+                        </p>
+                      </div>
+                    </article>
+                  </div>
+                </div>
+              </Reveal>
+            </div>
           </div>
         </section>
 
