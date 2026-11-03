@@ -62,3 +62,51 @@ export async function fetchBackendConfig(): Promise<{
     treasuryPublicKey: string;
   }>;
 }
+
+export type PricesPayload = {
+  solUsd: number;
+  visionUsd: number;
+  source: string;
+};
+
+export type BurnEvent = {
+  id: string;
+  amount: number;
+  ts: string;
+  note: string;
+};
+
+export type BurnStats = {
+  totalBurned: number;
+  burned24h: number;
+  recentBurns: BurnEvent[];
+  source: string;
+};
+
+export type CopilotReply = {
+  reply: string;
+  mode: 'live' | 'mock';
+  model?: string;
+};
+
+export async function fetchPrices(): Promise<PricesPayload> {
+  const res = await fetch(`${BACKEND_URL}/api/prices`);
+  if (!res.ok) throw new Error(`Prices ${res.status}`);
+  return res.json() as Promise<PricesPayload>;
+}
+
+export async function fetchBurnStats(): Promise<BurnStats> {
+  const res = await fetch(`${BACKEND_URL}/api/burn`);
+  if (!res.ok) throw new Error(`Burn ${res.status}`);
+  return res.json() as Promise<BurnStats>;
+}
+
+export async function askCopilot(message: string): Promise<CopilotReply> {
+  const res = await fetch(`${BACKEND_URL}/api/copilot`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message }),
+  });
+  if (!res.ok) throw new Error(`Copilot ${res.status}`);
+  return res.json() as Promise<CopilotReply>;
+}

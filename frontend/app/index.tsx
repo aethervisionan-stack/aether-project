@@ -80,6 +80,18 @@ export default function LandingScreen() {
             </Pressable>
           </Link>
         </View>
+
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Burn Tracker</Text>
+          <Text style={styles.cardBody}>
+            Buyback & burn de $VISION com preços e histórico demo.
+          </Text>
+          <Link href="/(tabs)/burn" asChild>
+            <Pressable style={styles.btnGhost}>
+              <Text style={styles.btnGhostText}>Abrir Burn</Text>
+            </Pressable>
+          </Link>
+        </View>
       </View>
 
       <View style={styles.meta}>

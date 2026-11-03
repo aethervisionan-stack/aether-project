@@ -19,6 +19,7 @@ import { KeyboardProvider } from 'react-native-keyboard-controller';
 import 'react-native-reanimated';
 
 import { colors } from '@/constants/theme';
+import { I18nProvider } from '@/lib/i18n';
 
 export { ErrorBoundary } from 'expo-router';
 
@@ -73,17 +74,19 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.onyx }}>
       <MaybeKeyboard>
         <QueryClientProvider client={queryClient}>
-          <ThemeProvider value={aetherDark}>
-            <StatusBar style="light" />
-            <Stack
-              screenOptions={{
-                headerShown: false,
-                contentStyle: { backgroundColor: colors.onyx },
-              }}>
-              <Stack.Screen name="index" />
-              <Stack.Screen name="(tabs)" />
-            </Stack>
-          </ThemeProvider>
+          <I18nProvider>
+            <ThemeProvider value={aetherDark}>
+              <StatusBar style="light" />
+              <Stack
+                screenOptions={{
+                  headerShown: false,
+                  contentStyle: { backgroundColor: colors.onyx },
+                }}>
+                <Stack.Screen name="index" />
+                <Stack.Screen name="(tabs)" />
+              </Stack>
+            </ThemeProvider>
+          </I18nProvider>
         </QueryClientProvider>
       </MaybeKeyboard>
     </GestureHandlerRootView>

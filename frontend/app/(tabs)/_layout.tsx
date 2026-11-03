@@ -39,6 +39,13 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <TabGlyph label="♪" color={color} />,
         }}
       />
+      <Tabs.Screen
+        name="burn"
+        options={{
+          title: 'Burn',
+          tabBarIcon: ({ color }) => <TabGlyph label="△" color={color} />,
+        }}
+      />
     </Tabs>
   );
 }

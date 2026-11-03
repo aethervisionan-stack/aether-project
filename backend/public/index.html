@@ -1,0 +1,686 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{BRAND}} — Landing</title>
+  <meta name="description" content="{{TAGLINE}}. Pré-venda $VISION, Carteira Fortaleza, Copiloto de Voz e Burn Tracker." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Syne:wght@500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            onyx: "#030305",
+            surface: "#121216",
+            neon: "#06b6d4",
+            cyan: "#22d3ee",
+            violet: "#8b5cf6",
+            electric: "#2563eb",
+            ink: "#f4f4f5",
+            muted: "#a1a1aa",
+          },
+          fontFamily: {
+            display: ["Syne", "ui-sans-serif", "system-ui", "sans-serif"],
+            sans: ["IBM Plex Sans", "Segoe UI", "ui-sans-serif", "system-ui", "sans-serif"],
+            mono: ["ui-monospace", "Cascadia Code", "Segoe UI Mono", "Menlo", "monospace"],
+          },
+        },
+      },
+    };
+  </script>
+  <script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+  <style>
+    html { scroll-behavior: smooth; }
+    body {
+      background: #030305;
+      color: #f4f4f5;
+      font-family: "IBM Plex Sans", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+    }
+    .font-display { font-family: Syne, ui-sans-serif, system-ui, sans-serif; }
+    @keyframes hero-drift {
+      0%, 100% { transform: translate3d(0,0,0) scale(1); opacity: 0.9; }
+      50% { transform: translate3d(2%, -1.5%, 0) scale(1.04); opacity: 1; }
+    }
+    .hero-aura { animation: hero-drift 14s ease-in-out infinite; }
+    @keyframes mark-breathe {
+      0%, 100% { filter: drop-shadow(0 0 10px rgba(34, 211, 238, 0.45)); }
+      50% { filter: drop-shadow(0 0 22px rgba(139, 92, 246, 0.55)); }
+    }
+    .mark { animation: mark-breathe 4.8s ease-in-out infinite; }
+    ::selection { background: rgba(6, 182, 212, 0.28); color: #f4f4f5; }
+    .tabular { font-variant-numeric: tabular-nums; }
+    .grid-aether {
+      background-image:
+        linear-gradient(rgba(255, 255, 255, 0.028) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.028) 1px, transparent 1px);
+      background-size: 64px 64px;
+    }
+    .glass {
+      background: linear-gradient(180deg, rgba(18, 18, 22, 0.72) 0%, rgba(8, 8, 12, 0.58) 100%);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .glow-cta {
+      box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.28), 0 12px 40px rgba(6, 182, 212, 0.18);
+    }
+    @keyframes cta-pulse {
+      0%, 100% { box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.28), 0 12px 40px rgba(6, 182, 212, 0.18); }
+      50% { box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.55), 0 18px 52px rgba(6, 182, 212, 0.34); }
+    }
+    .cta-pulse { animation: cta-pulse 2.8s ease-in-out infinite; }
+    .hover-lift { transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1); }
+    .hover-lift:hover { transform: translateY(-4px); }
+    input[type="range"].sol-slider {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 4px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #06b6d4 var(--sol-pct, 10%), rgba(255, 255, 255, 0.08) var(--sol-pct, 10%));
+      outline: none;
+    }
+    input[type="range"].sol-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 999px;
+      background: #f4f4f5;
+      border: 2px solid #06b6d4;
+      box-shadow: 0 0 16px rgba(6, 182, 212, 0.45);
+      cursor: pointer;
+    }
+    input[type="range"].sol-slider::-moz-range-thumb {
+      width: 18px;
+      height: 18px;
+      border-radius: 999px;
+      background: #f4f4f5;
+      border: 2px solid #06b6d4;
+      box-shadow: 0 0 16px rgba(6, 182, 212, 0.45);
+      cursor: pointer;
+    }
+    .preset.is-on, .pay.is-on {
+      border-color: rgba(34, 211, 238, 0.5);
+      background: rgba(34, 211, 238, 0.1);
+      color: #22d3ee;
+    }
+    .tier.is-selected {
+      border-color: rgba(139, 92, 246, 0.45);
+      box-shadow: 0 0 40px rgba(139, 92, 246, 0.14);
+    }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      .cta-pulse, .hero-aura, .mark { animation: none; }
+      .hover-lift:hover { transform: none; }
+    }
+  </style>
+</head>
+<body class="bg-onyx text-ink antialiased" data-expo="{{EXPO_WEB_URL}}" data-mint="{{VISION_TOKEN_MINT}}" data-treasury="{{TREASURY_PUBLIC_KEY}}">
+  <div id="cursor-glow" aria-hidden="true" class="pointer-events-none fixed inset-0 z-0 hidden md:block"></div>
+
+  <header class="sticky top-0 z-50 border-b border-white/10 bg-[#030305]/72 backdrop-blur-xl">
+    <div class="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-5">
+      <a href="#topo" class="inline-flex items-center gap-2.5" aria-label="Aether Vision">
+        <svg class="mark h-9 w-9" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+          <circle cx="16" cy="16" r="14.5" stroke="#22d3ee" stroke-width="1.5"/>
+          <path d="M16 6.5L24 22H8L16 6.5Z" stroke="#22d3ee" stroke-width="1.5" stroke-linejoin="round"/>
+          <circle cx="16" cy="16" r="2.2" fill="#22d3ee"/>
+        </svg>
+        <span class="bg-gradient-to-r from-cyan via-neon to-violet bg-clip-text font-display text-[13px] font-semibold tracking-[0.34em] text-transparent">AETHER</span>
+      </a>
+      <nav class="hidden items-center gap-8 lg:flex" aria-label="Principal">
+        <a href="#hardware" class="text-[13px] text-muted transition-colors duration-300 hover:text-ink">Hardware</a>
+        <a href="#presale" class="text-[13px] text-muted transition-colors duration-300 hover:text-ink">Pré-venda</a>
+        <a href="#tokenomics" class="text-[13px] text-muted transition-colors duration-300 hover:text-ink">Tokenomics</a>
+        <a href="#visao" class="text-[13px] text-muted transition-colors duration-300 hover:text-ink">Visão</a>
+        <a href="#desenvolvimento" class="text-[13px] text-muted transition-colors duration-300 hover:text-ink">Updates</a>
+      </nav>
+      <div class="flex items-center gap-2">
+        <a href="https://x.com/VISIONAETH" target="_blank" rel="noreferrer" class="hidden rounded-full border border-white/10 p-2 text-muted transition duration-300 hover:border-cyan/40 hover:text-cyan sm:inline-flex" aria-label="X @VISIONAETH">
+          <i data-lucide="x" class="h-3.5 w-3.5"></i>
+        </a>
+        <a href="mailto:aethervision.an@gmail.com" class="hidden rounded-full border border-white/10 p-2 text-muted transition duration-300 hover:border-cyan/40 hover:text-cyan sm:inline-flex" aria-label="aethervision.an@gmail.com">
+          <i data-lucide="mail" class="h-3.5 w-3.5"></i>
+        </a>
+        <a id="cta-presale-header" href="#presale" class="cta-pulse glow-cta hidden rounded-full bg-gradient-to-r from-cyan to-neon px-4 py-2 text-[13px] font-medium text-onyx transition duration-300 hover:brightness-110 md:inline-flex">Entrar na Pré-venda</a>
+        <button id="menu-btn" type="button" class="inline-flex rounded-full border border-white/10 p-2 text-ink lg:hidden" aria-expanded="false" aria-label="Abrir menu">
+          <i data-lucide="menu" class="h-4 w-4"></i>
+        </button>
+      </div>
+    </div>
+    <nav id="mobile-nav" class="hidden border-t border-white/10 lg:hidden" aria-label="Mobile">
+      <div class="flex flex-col gap-3 px-5 py-5">
+        <a href="#hardware" class="nav-mobile text-sm text-muted">Hardware</a>
+        <a href="#presale" class="nav-mobile text-sm text-muted">Pré-venda</a>
+        <a href="#tokenomics" class="nav-mobile text-sm text-muted">Tokenomics</a>
+        <a href="#visao" class="nav-mobile text-sm text-muted">Visão</a>
+        <a href="#desenvolvimento" class="nav-mobile text-sm text-muted">Updates</a>
+        <a href="#presale" class="nav-mobile cta-pulse glow-cta mt-2 inline-flex w-fit rounded-full bg-gradient-to-r from-cyan to-neon px-4 py-2 text-sm font-medium text-onyx">Entrar na Pré-venda</a>
+        <a href="{{EXPO_WEB_URL}}/wallet" class="nav-mobile text-sm text-cyan">Acessar Carteira</a>
+        <a href="{{EXPO_WEB_URL}}/copilot" class="nav-mobile text-sm text-cyan">Abrir Copiloto</a>
+        <a href="{{EXPO_WEB_URL}}/burn" class="nav-mobile text-sm text-cyan">Burn Tracker</a>
+      </div>
+    </nav>
+  </header>
+
+  <main class="relative z-10">
+    <section id="topo" class="grid-aether relative scroll-mt-24 min-h-[100svh] overflow-hidden border-b border-white/10">
+      <div class="hero-aura pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_18%_12%,rgba(34,211,238,0.22),transparent_42%),radial-gradient(ellipse_at_88%_78%,rgba(139,92,246,0.24),transparent_48%),linear-gradient(180deg,rgba(3,3,5,0.2),rgba(3,3,5,0.92))]"></div>
+      <div class="relative mx-auto flex min-h-[100svh] max-w-6xl flex-col justify-center px-5 py-24 md:py-28">
+        <div class="max-w-3xl">
+          <p class="font-display text-[13px] font-semibold uppercase tracking-[0.42em] text-cyan">AETHER VISION</p>
+          <h1 class="mt-6 font-display text-[clamp(2.8rem,8vw,6.4rem)] font-extrabold leading-[0.92] tracking-[-0.05em] text-ink">
+            {{BRAND}}
+          </h1>
+          <p class="mt-5 max-w-xl text-lg leading-relaxed text-muted sm:text-xl">{{TAGLINE}} — óculos com IA, auto-custódia SOL/$VISION e buyback que queima tokens com as vendas.</p>
+          <div class="mt-10 flex flex-wrap gap-3">
+            <a id="cta-presale" href="#presale" class="cta-pulse glow-cta rounded-full bg-gradient-to-r from-cyan to-neon px-6 py-3.5 text-sm font-semibold text-onyx transition duration-300 hover:brightness-110">Entrar na Pré-venda</a>
+            <a id="cta-wallet" href="{{EXPO_WEB_URL}}/wallet" class="rounded-full border border-white/15 px-6 py-3.5 text-sm text-ink transition duration-300 hover:border-cyan/40 hover:text-cyan">Carteira</a>
+            <a id="cta-copilot" href="{{EXPO_WEB_URL}}/copilot" class="rounded-full border border-white/15 px-6 py-3.5 text-sm text-ink transition duration-300 hover:border-cyan/40 hover:text-cyan">Copiloto</a>
+            <a id="cta-burn" href="{{EXPO_WEB_URL}}/burn" class="rounded-full border border-white/15 px-6 py-3.5 text-sm text-ink transition duration-300 hover:border-violet/50 hover:text-violet">Burn</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="presale" class="scroll-mt-24 border-b border-white/10">
+      <div class="mx-auto max-w-6xl px-5 py-20 md:py-28">
+        <p class="text-[11px] uppercase tracking-[0.22em] text-cyan">Pré-venda · Tesouraria</p>
+        <h2 class="mt-3 font-display text-3xl tracking-tight md:text-5xl md:tracking-[-0.03em]">Kits Hardware + Tokens</h2>
+        <p class="mt-4 max-w-2xl text-muted">Preço oficial: <span class="text-cyan">US$ 0,05</span> por 1 $VISION. Conecte Phantom ou Backpack e envie SOL para a tesouraria de recebimento. Assinaturas mensais aceitam nativamente $AETH e $VISION.</p>
+
+        <div class="mt-12 grid gap-5 lg:grid-cols-2">
+          <article class="glass rounded-[1.75rem] p-6 md:p-8">
+            <p class="text-[11px] uppercase tracking-[0.18em] text-cyan">Tesouraria on-chain · carteira de recebimento</p>
+            <p id="treasury-addr" class="mt-3 break-all font-mono text-sm text-ink">{{TREASURY_PUBLIC_KEY}}</p>
+            <p class="mt-3 max-w-xl text-sm leading-relaxed text-muted">O SOL vai para esta Phantom de recebimento (relayer). Confira o endereço na carteira antes de assinar.</p>
+            <p class="mt-2 break-all font-mono text-[11px] text-muted">Mint $VISION · {{VISION_TOKEN_MINT}}</p>
+            <div class="mt-4 flex gap-3 rounded-2xl border border-cyan/20 bg-cyan/[0.06] px-3.5 py-3" role="note">
+              <span class="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-cyan/25 bg-cyan/10 text-cyan">
+                <i data-lucide="info" class="h-3.5 w-3.5"></i>
+              </span>
+              <p class="text-[12px] leading-relaxed text-muted">O envio dos tokens $VISION é feito manualmente pelo administrador e pode levar até 24 horas para aparecer na sua carteira após a confirmação do pagamento.</p>
+            </div>
+            <div class="mt-5 flex flex-wrap gap-3">
+              <button id="copy-treasury" type="button" class="inline-flex min-w-[138px] items-center justify-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3.5 py-2 text-xs text-ink transition duration-300 hover:border-cyan/40 hover:text-cyan">
+                <i data-lucide="copy" class="h-3.5 w-3.5"></i>
+                <span id="copy-label">Copiar endereço</span>
+              </button>
+              <a id="solscan-link" href="https://solscan.io/account/{{TREASURY_PUBLIC_KEY}}" target="_blank" rel="noreferrer" class="inline-flex items-center gap-2 rounded-full border border-white/10 px-3.5 py-2 text-xs text-ink transition duration-300 hover:border-cyan/40 hover:text-cyan">
+                <i data-lucide="external-link" class="h-3.5 w-3.5"></i>
+                Auditar no Solscan
+              </a>
+            </div>
+            <div class="mt-8">
+              <div class="mb-3 flex flex-wrap items-center justify-between gap-2 text-sm">
+                <span class="text-muted">Progresso da fase</span>
+                <span id="raised-label" class="tabular font-mono text-[13px] text-ink">— / 2.000 SOL</span>
+              </div>
+              <div class="relative h-2 overflow-hidden rounded-full bg-white/[0.06]">
+                <div id="raised-bar" class="absolute inset-y-0 left-0 bg-gradient-to-r from-violet to-cyan transition-[width] duration-700 ease-out" style="width:0%"></div>
+                <div class="absolute top-0 h-full w-px bg-ink/50" style="left:25%" aria-hidden="true"></div>
+              </div>
+              <div class="mt-3 flex flex-wrap justify-between gap-2 font-mono text-[11px] text-muted">
+                <span>Soft Cap 500 SOL</span>
+                <span>Hard Cap 2000 SOL</span>
+              </div>
+            </div>
+          </article>
+
+          <article class="glass rounded-[1.75rem] p-6 md:p-8">
+            <div class="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <h3 class="font-display text-xl tracking-tight">Checkout da pré-venda</h3>
+                <p class="mt-2 max-w-xl text-sm leading-relaxed text-muted">1 $VISION = US$ 0,05. Taxa ao vivo: <span id="rate-label" class="text-cyan">1 SOL ≈ — $VISION</span> <span id="rate-source" class="text-muted">· fallback US$ 150</span>.</p>
+              </div>
+              <p class="font-mono text-[11px] uppercase tracking-[0.16em] text-muted">Phantom · Backpack</p>
+            </div>
+            <div class="mt-6 flex flex-wrap gap-2">
+              <button type="button" class="pay is-on rounded-full border border-white/10 px-3.5 py-1.5 text-xs text-muted" data-pay="sol">Pagar com SOL</button>
+              <button type="button" class="pay rounded-full border border-white/10 px-3.5 py-1.5 text-xs text-muted" data-pay="pix">Pagar com PIX</button>
+            </div>
+            <p id="pix-note" class="mt-4 hidden text-sm leading-relaxed text-muted">O PIX é confirmado no checkout da aplicação. O $VISION segue para a carteira que você indicar depois do pagamento.</p>
+            <label class="mt-6 block text-[13px] text-muted" for="dest-pubkey">Carteira Solana que recebe $VISION</label>
+            <input id="dest-pubkey" class="mt-2 w-full rounded-2xl border border-white/10 bg-onyx/70 px-4 py-3 font-mono text-[13px] text-ink outline-none transition duration-300 focus:border-cyan/40 focus:ring-2 focus:ring-cyan/20" placeholder="Cole o endereço ou conecte a Phantom" />
+            <div class="mt-6 flex flex-wrap gap-2">
+              <button type="button" class="preset rounded-full border border-white/10 px-3.5 py-1.5 text-xs text-muted" data-sol="0.5">0.5 SOL</button>
+              <button type="button" class="preset is-on rounded-full border border-white/10 px-3.5 py-1.5 text-xs text-muted" data-sol="1">1 SOL</button>
+              <button type="button" class="preset rounded-full border border-white/10 px-3.5 py-1.5 text-xs text-muted" data-sol="2">2 SOL</button>
+              <button type="button" class="preset rounded-full border border-white/10 px-3.5 py-1.5 text-xs text-muted" data-sol="5">5 SOL</button>
+            </div>
+            <label class="mt-7 block text-[13px] text-muted" for="sol-amount">Quantidade em SOL</label>
+            <input id="sol-amount" inputmode="decimal" value="1" class="mt-2 w-full rounded-2xl border border-white/10 bg-onyx/70 px-4 py-3.5 font-mono text-lg tabular text-ink outline-none transition duration-300 focus:border-cyan/40 focus:ring-2 focus:ring-cyan/20" />
+            <input id="sol-slider" class="sol-slider mt-5" type="range" min="0.05" max="40" step="0.05" value="1" aria-label="Slider de SOL" />
+            <div class="mt-6 grid gap-3 sm:grid-cols-3">
+              <div class="rounded-2xl border border-white/10 bg-onyx/50 p-4">
+                <p class="text-[10px] uppercase tracking-[0.2em] text-muted">USD</p>
+                <p id="quote-usd" class="mt-2 font-display text-2xl tracking-tight text-violet tabular">—</p>
+              </div>
+              <div class="rounded-2xl border border-white/10 bg-onyx/50 p-4">
+                <p class="text-[10px] uppercase tracking-[0.2em] text-muted">Bônus</p>
+                <p id="quote-bonus" class="mt-2 font-display text-2xl tracking-tight text-ink tabular">0%</p>
+              </div>
+              <div class="rounded-2xl border border-cyan/25 bg-cyan/[0.06] p-4">
+                <p class="text-[10px] uppercase tracking-[0.2em] text-muted">Você recebe</p>
+                <p id="quote-vision" class="mt-2 font-display text-2xl tracking-tight text-cyan tabular">—</p>
+              </div>
+            </div>
+            <a href="{{EXPO_WEB_URL}}/wallet" class="cta-pulse glow-cta mt-6 inline-flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-cyan to-neon px-6 py-3.5 text-sm font-medium text-onyx transition duration-300 hover:brightness-110">Acessar Carteira</a>
+            <p class="mt-4 text-xs leading-relaxed text-muted">Transferência nativa de SOL para a tesouraria de recebimento. $VISION é creditado conforme a taxa desta fase; não é uma oferta de valor mobiliário.</p>
+            <ul class="mt-5 flex flex-wrap gap-2" aria-label="Rede e tesouraria">
+              <li class="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] uppercase tracking-[0.14em] text-muted">
+                <i class="fa-solid fa-bolt text-cyan" aria-hidden="true"></i>
+                Powered by Solana
+              </li>
+              <li class="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] uppercase tracking-[0.14em] text-muted">
+                <i data-lucide="shield-check" class="h-3.5 w-3.5 text-cyan"></i>
+                Secured by Squads Multisig
+              </li>
+            </ul>
+          </article>
+        </div>
+
+        <div class="mt-5 grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
+          <article class="tier hover-lift flex h-full flex-col rounded-[1.75rem] border border-white/10 bg-surface/40 p-6 backdrop-blur-xl transition duration-500 hover:border-cyan/30" data-tier="early">
+            <p class="text-[10px] uppercase tracking-[0.2em] text-muted">Smart Audio</p>
+            <h3 class="mt-2 font-display text-xl tracking-tight">Vision 1.0</h3>
+            <p class="mt-2 font-display text-3xl tracking-tight text-cyan tabular">US$ 50,00</p>
+            <p class="mt-2 font-mono text-xs text-cyan/90">1.050 $VISION · bônus 5%</p>
+            <ul class="mt-5 flex-1 space-y-2 text-sm leading-relaxed text-muted">
+              <li class="flex gap-2"><span class="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-cyan"></span><span>Alocação Vision 1.0 · áudio essencial</span></li>
+              <li class="flex gap-2"><span class="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-cyan"></span><span>Equivalente a 3 meses de assinatura do app de IA</span></li>
+            </ul>
+            <button type="button" class="tier-btn mt-6 rounded-full border border-white/10 px-4 py-2.5 text-sm font-medium text-ink transition duration-300 hover:border-cyan/40 hover:text-cyan" data-select="early">Selecionar Vision 1.0</button>
+          </article>
+          <article class="tier hover-lift flex h-full flex-col rounded-[1.75rem] border border-white/10 bg-surface/40 p-6 backdrop-blur-xl transition duration-500 hover:border-cyan/30" data-tier="pro">
+            <p class="text-[10px] uppercase tracking-[0.2em] text-muted">AI Camera</p>
+            <h3 class="mt-2 font-display text-xl tracking-tight">Vision 2.0</h3>
+            <p class="mt-2 font-display text-3xl tracking-tight text-cyan tabular">US$ 200,00</p>
+            <p class="mt-2 font-mono text-xs text-cyan/90">4.600 $VISION · bônus 15%</p>
+            <ul class="mt-5 flex-1 space-y-2 text-sm leading-relaxed text-muted">
+              <li class="flex gap-2"><span class="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-cyan"></span><span>Alocação Vision 2.0 · câmera 12MP multimodal</span></li>
+              <li class="flex gap-2"><span class="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-cyan"></span><span>Equivalente a 6 meses de assinatura do app</span></li>
+            </ul>
+            <button type="button" class="tier-btn mt-6 rounded-full border border-white/10 px-4 py-2.5 text-sm font-medium text-ink transition duration-300 hover:border-cyan/40 hover:text-cyan" data-select="pro">Selecionar Vision 2.0</button>
+          </article>
+          <article class="tier hover-lift flex h-full flex-col rounded-[1.75rem] border border-white/10 bg-surface/40 p-6 backdrop-blur-xl transition duration-500 hover:border-cyan/30" data-tier="master">
+            <p class="text-[10px] uppercase tracking-[0.2em] text-muted">Executivo</p>
+            <h3 class="mt-2 font-display text-xl tracking-tight">Vision 3.0</h3>
+            <p class="mt-2 font-display text-3xl tracking-tight text-cyan tabular">US$ 600,00</p>
+            <p class="mt-2 font-mono text-xs text-cyan/90">15.000 $VISION · bônus 25%</p>
+            <ul class="mt-5 flex-1 space-y-2 text-sm leading-relaxed text-muted">
+              <li class="flex gap-2"><span class="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-cyan"></span><span>Alocação Vision 3.0 · titânio e condução óssea</span></li>
+              <li class="flex gap-2"><span class="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-cyan"></span><span>Assinatura vitalícia do app + 10.000 $AETH na mainnet</span></li>
+            </ul>
+            <button type="button" class="tier-btn mt-6 rounded-full border border-white/10 px-4 py-2.5 text-sm font-medium text-ink transition duration-300 hover:border-cyan/40 hover:text-cyan" data-select="master">Selecionar Vision 3.0</button>
+          </article>
+          <article class="tier is-selected hover-lift flex h-full flex-col rounded-[1.75rem] border border-violet/40 bg-surface/70 p-6 shadow-[0_0_40px_rgba(139,92,246,0.12)] backdrop-blur-xl transition duration-500" data-tier="apex">
+            <p class="text-[10px] uppercase tracking-[0.2em] text-muted">Flagship AR</p>
+            <h3 class="mt-2 font-display text-xl tracking-tight">Vision 4.0</h3>
+            <p class="mt-2 font-display text-3xl tracking-tight text-cyan tabular">US$ 1.200,00</p>
+            <p class="mt-2 font-mono text-xs text-cyan/90">31.200 $VISION · bônus 30%</p>
+            <ul class="mt-5 flex-1 space-y-2 text-sm leading-relaxed text-muted">
+              <li class="flex gap-2"><span class="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-cyan"></span><span>Alocação Vision 4.0 · Micro-OLED AR neural</span></li>
+              <li class="flex gap-2"><span class="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-cyan"></span><span>Alocação prioritária + assinatura vitalícia + 10.000 $AETH</span></li>
+            </ul>
+            <button type="button" class="tier-btn mt-6 rounded-full bg-violet px-4 py-2.5 text-sm font-medium text-ink transition duration-300 hover:brightness-110" data-select="apex">Selecionar Vision 4.0</button>
+          </article>
+        </div>
+        <p class="mt-6 rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-muted">Pagamento das assinaturas mensais do aplicativo: $AETH e $VISION são aceitos nativamente.</p>
+      </div>
+    </section>
+
+    <section id="hardware" class="scroll-mt-24 border-b border-white/10">
+      <div class="mx-auto max-w-6xl px-5 py-20 md:py-28">
+        <p class="text-[11px] uppercase tracking-[0.22em] text-cyan">Linha Vision</p>
+        <h2 class="mt-3 font-display text-3xl tracking-tight md:text-5xl md:tracking-[-0.03em]">Quatro gerações. Um middleware.</h2>
+        <p class="mt-4 max-w-2xl text-pretty text-muted">Vision 1.0 a Vision 4.0 conectam o usuário à IA descentralizada da Aether. Cada card abre a pré-venda na tesouraria de recebimento.</p>
+        <div class="mt-12 grid grid-cols-1 gap-5 md:grid-cols-2">
+          <article class="hover-lift flex h-full min-w-0 flex-col rounded-[1.75rem] border border-white/10 bg-surface/40 p-6 backdrop-blur-xl transition duration-500 hover:border-cyan/30 sm:p-8">
+            <div class="flex items-start justify-between gap-3">
+              <p class="font-mono text-[11px] uppercase tracking-[0.2em] text-muted">Essencial</p>
+              <p class="font-display text-3xl tracking-tight text-cyan tabular">1.0</p>
+            </div>
+            <h3 class="mt-5 font-display text-2xl tracking-tight">Vision 1.0</h3>
+            <p class="mt-1 text-[11px] uppercase tracking-[0.14em] text-cyan">Entry-Level · Smart Audio</p>
+            <p class="mt-4 text-sm font-medium leading-relaxed text-ink">IA no dia a dia, sem câmera e sem excesso.</p>
+            <p class="mt-2 text-sm leading-relaxed text-muted">Porta de entrada da linha. Áudio bidirecional, comandos de voz e App Bridge — a experiência essencial de inteligência no wearable.</p>
+            <dl class="mt-6 divide-y divide-white/10 border-y border-white/10 text-sm">
+              <div class="flex justify-between gap-4 py-2.5"><dt class="font-mono text-[10px] uppercase tracking-[0.16em] text-muted">Câmera</dt><dd>Não possui</dd></div>
+              <div class="flex justify-between gap-4 py-2.5"><dt class="font-mono text-[10px] uppercase tracking-[0.16em] text-muted">Áudio</dt><dd class="text-right">Bidirecional open-ear</dd></div>
+              <div class="flex justify-between gap-4 py-2.5"><dt class="font-mono text-[10px] uppercase tracking-[0.16em] text-muted">Interface</dt><dd class="text-right">Voz + App Bridge</dd></div>
+            </dl>
+            <a href="#presale" class="tier-link cta-pulse glow-cta mt-6 inline-flex w-full items-center justify-center rounded-full bg-gradient-to-r from-cyan to-neon px-4 py-2.5 text-sm font-medium text-onyx" data-select="early">Entrar na Pré-venda</a>
+          </article>
+          <article class="hover-lift flex h-full min-w-0 flex-col rounded-[1.75rem] border border-white/10 bg-surface/40 p-6 backdrop-blur-xl transition duration-500 hover:border-cyan/30 sm:p-8">
+            <div class="flex items-start justify-between gap-3">
+              <p class="font-mono text-[11px] uppercase tracking-[0.2em] text-muted">Equilíbrio</p>
+              <p class="font-display text-3xl tracking-tight text-cyan tabular">2.0</p>
+            </div>
+            <h3 class="mt-5 font-display text-2xl tracking-tight">Vision 2.0</h3>
+            <p class="mt-1 text-[11px] uppercase tracking-[0.14em] text-cyan">AI Camera · Visão multimodal</p>
+            <p class="mt-4 text-sm font-medium leading-relaxed text-ink">Captura visual discreta e análise em tempo real.</p>
+            <p class="mt-2 text-sm leading-relaxed text-muted">Visão computacional, tradução e contexto multimodal no middleware de IA.</p>
+            <dl class="mt-6 divide-y divide-white/10 border-y border-white/10 text-sm">
+              <div class="flex justify-between gap-4 py-2.5"><dt class="font-mono text-[10px] uppercase tracking-[0.16em] text-muted">Câmera</dt><dd class="text-right">12MP na dobradiça</dd></div>
+              <div class="flex justify-between gap-4 py-2.5"><dt class="font-mono text-[10px] uppercase tracking-[0.16em] text-muted">IA</dt><dd class="text-right">Visão multimodal</dd></div>
+              <div class="flex justify-between gap-4 py-2.5"><dt class="font-mono text-[10px] uppercase tracking-[0.16em] text-muted">Live</dt><dd class="text-right">Tradução em tempo real</dd></div>
+            </dl>
+            <a href="#presale" class="tier-link cta-pulse glow-cta mt-6 inline-flex w-full items-center justify-center rounded-full bg-gradient-to-r from-cyan to-neon px-4 py-2.5 text-sm font-medium text-onyx" data-select="pro">Entrar na Pré-venda</a>
+          </article>
+          <article class="hover-lift flex h-full min-w-0 flex-col rounded-[1.75rem] border border-white/10 bg-surface/40 p-6 backdrop-blur-xl transition duration-500 hover:border-cyan/30 sm:p-8">
+            <div class="flex items-start justify-between gap-3">
+              <p class="font-mono text-[11px] uppercase tracking-[0.2em] text-muted">Luxo</p>
+              <p class="font-display text-3xl tracking-tight text-cyan tabular">3.0</p>
+            </div>
+            <h3 class="mt-5 font-display text-2xl tracking-tight">Vision 3.0</h3>
+            <p class="mt-1 text-[11px] uppercase tracking-[0.14em] text-cyan">Futurista invisível · Executivo</p>
+            <p class="mt-4 text-sm font-medium leading-relaxed text-ink">Titânio, condução óssea e discrição de grife.</p>
+            <p class="mt-2 text-sm leading-relaxed text-muted">Visual de armação de alto padrão, áudio por condução óssea e gestos táteis nas hastes.</p>
+            <dl class="mt-6 divide-y divide-white/10 border-y border-white/10 text-sm">
+              <div class="flex justify-between gap-4 py-2.5"><dt class="font-mono text-[10px] uppercase tracking-[0.16em] text-muted">Áudio</dt><dd class="text-right">Condução óssea</dd></div>
+              <div class="flex justify-between gap-4 py-2.5"><dt class="font-mono text-[10px] uppercase tracking-[0.16em] text-muted">Gestos</dt><dd class="text-right">Controle tátil</dd></div>
+              <div class="flex justify-between gap-4 py-2.5"><dt class="font-mono text-[10px] uppercase tracking-[0.16em] text-muted">Material</dt><dd class="text-right">Titânio ultrafino</dd></div>
+            </dl>
+            <a href="#presale" class="tier-link cta-pulse glow-cta mt-6 inline-flex w-full items-center justify-center rounded-full bg-gradient-to-r from-cyan to-neon px-4 py-2.5 text-sm font-medium text-onyx" data-select="master">Entrar na Pré-venda</a>
+          </article>
+          <article class="hover-lift flex h-full min-w-0 flex-col rounded-[1.75rem] border border-cyan/30 bg-gradient-to-b from-cyan/[0.07] via-surface/60 to-violet/[0.06] p-6 shadow-[0_0_48px_rgba(6,182,212,0.1)] backdrop-blur-xl transition duration-500 hover:border-cyan/50 sm:p-8">
+            <div class="flex items-start justify-between gap-3">
+              <p class="font-mono text-[11px] uppercase tracking-[0.2em] text-muted">Halo</p>
+              <p class="font-display text-3xl tracking-tight text-cyan tabular">4.0</p>
+            </div>
+            <h3 class="mt-5 font-display text-2xl tracking-tight">Vision 4.0</h3>
+            <p class="mt-1 text-[11px] uppercase tracking-[0.14em] text-cyan">Flagship holográfico · Micro-OLED AR</p>
+            <p class="mt-4 text-sm font-medium leading-relaxed text-ink">AR contextual, neural tracking e o ápice da linha.</p>
+            <p class="mt-2 text-sm leading-relaxed text-muted">Lentes eletrocrômicas, câmeras estéreo de profundidade e projetores Micro-OLED no middleware Aether.</p>
+            <dl class="mt-6 divide-y divide-white/10 border-y border-white/10 text-sm">
+              <div class="flex justify-between gap-4 py-2.5"><dt class="font-mono text-[10px] uppercase tracking-[0.16em] text-muted">Display</dt><dd class="text-right">Micro-OLED AR</dd></div>
+              <div class="flex justify-between gap-4 py-2.5"><dt class="font-mono text-[10px] uppercase tracking-[0.16em] text-muted">Visão</dt><dd class="text-right">Estéreo de profundidade</dd></div>
+              <div class="flex justify-between gap-4 py-2.5"><dt class="font-mono text-[10px] uppercase tracking-[0.16em] text-muted">Material</dt><dd class="text-right">Titânio · carbono</dd></div>
+            </dl>
+            <a href="#presale" class="tier-link cta-pulse glow-cta mt-6 inline-flex w-full items-center justify-center rounded-full bg-gradient-to-r from-cyan to-neon px-4 py-2.5 text-sm font-medium text-onyx" data-select="apex">Entrar na Pré-venda</a>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="visao" class="scroll-mt-24 border-b border-white/10">
+      <div class="mx-auto max-w-6xl px-5 py-20 md:py-28">
+        <p class="text-[11px] uppercase tracking-[0.22em] text-violet">Visão do produto</p>
+        <h2 class="mt-3 font-display text-3xl tracking-tight md:text-5xl md:tracking-[-0.03em]">Estratégia de valorização AETHER</h2>
+        <p class="mt-4 max-w-2xl text-muted">Hardware acessível agora, tesouraria transparente, e um ciclo em que vendas alimentam queima de tokens e o próximo modelo.</p>
+        <div class="mt-12 grid gap-5 sm:grid-cols-2">
+          <article class="hover-lift h-full rounded-[1.75rem] border border-white/10 bg-surface/40 p-6 backdrop-blur-xl transition duration-500 hover:border-violet/35">
+            <h3 class="font-display text-lg tracking-tight">Vision 1.0 ao Vision 4.0</h3>
+            <p class="mt-2 text-sm leading-relaxed text-muted">Uma linha progressiva: do smart audio essencial ao flagship Micro-OLED AR — função no centro, custo acessível no início, ápice tecnológico no topo.</p>
+          </article>
+          <article class="hover-lift h-full rounded-[1.75rem] border border-white/10 bg-surface/40 p-6 backdrop-blur-xl transition duration-500 hover:border-violet/35">
+            <h3 class="font-display text-lg tracking-tight">Valorização contínua do ecossistema</h3>
+            <p class="mt-2 text-sm leading-relaxed text-muted">O objetivo principal é a valorização do ecossistema AETHER e o desenvolvimento progressivo de modelos de óculos superiores.</p>
+          </article>
+          <article class="hover-lift h-full rounded-[1.75rem] border border-white/10 bg-surface/40 p-6 backdrop-blur-xl transition duration-500 hover:border-violet/35">
+            <h3 class="font-display text-lg tracking-tight">Buyback &amp; Burn automatizado</h3>
+            <p class="mt-2 text-sm leading-relaxed text-muted">Com o sucesso de vendas do primeiro lote, o mecanismo compra e queima $AETH e $VISION, reduzindo oferta conforme o uso real.</p>
+          </article>
+          <article class="hover-lift h-full rounded-[1.75rem] border border-white/10 bg-surface/40 p-6 backdrop-blur-xl transition duration-500 hover:border-violet/35">
+            <h3 class="font-display text-lg tracking-tight">Caixa para a próxima geração</h3>
+            <p class="mt-2 text-sm leading-relaxed text-muted">A receita reabastece o caixa do projeto para desenvolver e lançar modelos ainda mais avançados.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="tokenomics" class="scroll-mt-24 border-b border-white/10">
+      <div class="mx-auto max-w-6xl px-5 py-20 md:py-28">
+        <p class="text-[11px] uppercase tracking-[0.22em] text-cyan">Tokenomics transparente</p>
+        <h2 class="mt-3 font-display text-3xl tracking-tight md:text-5xl md:tracking-[-0.03em]">$VISION · 1.000.000.000</h2>
+        <p class="mt-4 max-w-2xl text-muted">Supply fixo de 1 bilhão. Pré-venda entre 10% e 20% a $0,05. Liquidez, recompensas do app e time com alocação pública.</p>
+        <div class="mt-12 grid gap-5 sm:grid-cols-2">
+          <article class="hover-lift h-full rounded-[1.75rem] border border-white/10 bg-surface/40 p-6 backdrop-blur-xl transition duration-500 hover:border-cyan/30">
+            <i data-lucide="wallet" class="h-[18px] w-[18px] text-cyan"></i>
+            <p class="mt-4 text-[11px] uppercase tracking-[0.18em] text-muted">Pré-venda / Soft Launch</p>
+            <p class="mt-2 font-display text-3xl tracking-tight tabular">10–20%</p>
+            <p class="mt-2 text-sm text-muted">100M a 200M $VISION a $0,05. Arrecadação estimada de até $10M para financiar óculos e o app por anos.</p>
+          </article>
+          <article class="hover-lift h-full rounded-[1.75rem] border border-white/10 bg-surface/40 p-6 backdrop-blur-xl transition duration-500 hover:border-cyan/30">
+            <i data-lucide="droplets" class="h-[18px] w-[18px] text-cyan"></i>
+            <p class="mt-4 text-[11px] uppercase tracking-[0.18em] text-muted">Liquidez Raydium</p>
+            <p class="mt-2 font-display text-3xl tracking-tight tabular">40%</p>
+            <p class="mt-2 text-sm text-muted">400M $VISION no pool DEX, alocados com os fundos arrecadados após a pré-venda.</p>
+          </article>
+          <article class="hover-lift h-full rounded-[1.75rem] border border-white/10 bg-surface/40 p-6 backdrop-blur-xl transition duration-500 hover:border-cyan/30">
+            <i data-lucide="users" class="h-[18px] w-[18px] text-cyan"></i>
+            <p class="mt-4 text-[11px] uppercase tracking-[0.18em] text-muted">Ecossistema &amp; Recompensas</p>
+            <p class="mt-2 font-display text-3xl tracking-tight tabular">30%</p>
+            <p class="mt-2 text-sm text-muted">300M $VISION para cashback, bônus de indicação e recompensas DePIN do app.</p>
+          </article>
+          <article class="hover-lift h-full rounded-[1.75rem] border border-white/10 bg-surface/40 p-6 backdrop-blur-xl transition duration-500 hover:border-cyan/30">
+            <i data-lucide="lock" class="h-[18px] w-[18px] text-cyan"></i>
+            <p class="mt-4 text-[11px] uppercase tracking-[0.18em] text-muted">Time &amp; Marketing</p>
+            <p class="mt-2 font-display text-3xl tracking-tight tabular">10%</p>
+            <p class="mt-2 text-sm text-muted">100M $VISION travados para o time de desenvolvimento e expansão de longo prazo.</p>
+          </article>
+        </div>
+        <p class="mt-8 text-sm text-muted">$AETH entra na mainnet nativa; $VISION opera o app e a liquidez na Solana. Ambos entram no ciclo de Buyback &amp; Burn após o primeiro lote.</p>
+      </div>
+    </section>
+
+    <section id="desenvolvimento" class="scroll-mt-24 border-b border-white/10">
+      <div class="mx-auto max-w-6xl px-5 py-20 md:py-28">
+        <p class="text-[11px] uppercase tracking-[0.22em] text-cyan">Desenvolvimento &amp; atualizações</p>
+        <h2 class="mt-3 font-display text-3xl tracking-tight md:text-5xl md:tracking-[-0.03em]">Build constante, no X oficial</h2>
+        <p class="mt-4 max-w-2xl text-muted">Não publicamos um roadmap estático. As atualizações de desenvolvimento são contínuas e saem no canal oficial <a href="https://x.com/VISIONAETH" target="_blank" rel="noreferrer" class="text-cyan transition hover:underline">@VISIONAETH</a>.</p>
+        <div class="mt-12 grid gap-5 md:grid-cols-3">
+          <article class="hover-lift h-full rounded-[1.75rem] border border-white/10 bg-surface/40 p-6 backdrop-blur-xl transition duration-500 hover:border-cyan/30">
+            <p class="text-[11px] uppercase tracking-[0.18em] text-violet">Pilar 1</p>
+            <i data-lucide="bluetooth" class="mt-4 h-5 w-5 text-cyan"></i>
+            <h3 class="mt-4 font-display text-lg tracking-tight">App Bridge</h3>
+            <p class="mt-2 text-sm leading-relaxed text-muted">Integração Bluetooth entre o smartphone e os óculos Aether Vision — áudio, voz e sessão do app de IA em um único fluxo.</p>
+            <a href="{{EXPO_WEB_URL}}/copilot" class="mt-5 inline-flex text-sm text-cyan hover:underline">Abrir Copiloto</a>
+          </article>
+          <article class="hover-lift h-full rounded-[1.75rem] border border-white/10 bg-surface/40 p-6 backdrop-blur-xl transition duration-500 hover:border-cyan/30">
+            <p class="text-[11px] uppercase tracking-[0.18em] text-violet">Pilar 2</p>
+            <i data-lucide="factory" class="mt-4 h-5 w-5 text-cyan"></i>
+            <h3 class="mt-4 font-display text-lg tracking-tight">Primeiro lote</h3>
+            <p class="mt-2 text-sm leading-relaxed text-muted">Arrecadação para fabricação e lançamento do primeiro lote de óculos, com custo acessível e função no centro do produto.</p>
+          </article>
+          <article class="hover-lift h-full rounded-[1.75rem] border border-white/10 bg-surface/40 p-6 backdrop-blur-xl transition duration-500 hover:border-cyan/30">
+            <p class="text-[11px] uppercase tracking-[0.18em] text-violet">Pilar 3</p>
+            <i data-lucide="rocket" class="mt-4 h-5 w-5 text-cyan"></i>
+            <h3 class="mt-4 font-display text-lg tracking-tight">Mainnet $AETH</h3>
+            <p class="mt-2 text-sm leading-relaxed text-muted">Arrecadação estratégica para o lançamento da criptomoeda $AETH com blockchain nativa, além do token $VISION na Solana.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="relative z-10 border-t border-white/10">
+    <div class="mx-auto flex max-w-6xl flex-col gap-8 px-5 py-14 md:flex-row md:items-start md:justify-between">
+      <div>
+        <p class="font-display text-[13px] tracking-[0.34em] text-cyan">AETHER</p>
+        <p class="mt-3 max-w-sm text-sm text-muted">© 2026 Aether Vision. Todos os direitos reservados.</p>
+        <ul class="mt-5 flex flex-wrap gap-2">
+          <li class="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] uppercase tracking-[0.14em] text-muted">Powered by Solana</li>
+          <li class="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] uppercase tracking-[0.14em] text-muted">Secured by Squads Multisig</li>
+        </ul>
+      </div>
+      <div class="flex flex-col gap-3 text-sm text-muted sm:flex-row sm:items-center sm:gap-6">
+        <a href="https://x.com/VISIONAETH" target="_blank" rel="noreferrer" class="inline-flex items-center gap-2 transition-colors duration-300 hover:text-cyan">@VISIONAETH</a>
+        <a href="mailto:aethervision.an@gmail.com" class="inline-flex items-center gap-2 transition-colors duration-300 hover:text-cyan">aethervision.an@gmail.com</a>
+        <a href="/api/landing?format=json" class="inline-flex items-center gap-2 transition-colors duration-300 hover:text-cyan">JSON</a>
+      </div>
+    </div>
+    <p class="mx-auto max-w-6xl px-5 pb-12 text-xs leading-relaxed text-muted/80">A aquisição de Vouchers/Kits na pré-venda representa a compra antecipada de licenças de uso do aplicativo de inteligência artificial e/ou dispositivos físicos, não constituindo oferta pública de valores mobiliários ou investimentos financeiros especulativos.</p>
+  </footer>
+
+  <script>
+    (function () {
+      const root = document.body;
+      const TIERS = [
+        { id: "early", usd: 50, bonus: 5 },
+        { id: "pro", usd: 200, bonus: 15 },
+        { id: "master", usd: 600, bonus: 25 },
+        { id: "apex", usd: 1200, bonus: 30 },
+      ];
+      const VISION_PRICE = 0.05;
+      const MIN_SOL = 0.05;
+      const MAX_SOL = 40;
+      const HARD_CAP = 2000;
+      let solUsd = 150;
+      let activeTier = null;
+
+      const solInput = document.getElementById("sol-amount");
+      const slider = document.getElementById("sol-slider");
+      const usdEl = document.getElementById("quote-usd");
+      const bonusEl = document.getElementById("quote-bonus");
+      const visionEl = document.getElementById("quote-vision");
+      const rateLabel = document.getElementById("rate-label");
+      const rateSource = document.getElementById("rate-source");
+
+      function money(value) {
+        return value.toLocaleString("pt-BR", { style: "currency", currency: "USD" });
+      }
+      function amount(value, digits) {
+        return value.toLocaleString("pt-BR", { maximumFractionDigits: digits, minimumFractionDigits: 0 });
+      }
+      function currentSol() {
+        const raw = Number.parseFloat(String(solInput.value).replace(",", "."));
+        return Number.isFinite(raw) && raw > 0 ? raw : 0;
+      }
+      function matchedTier(usd) {
+        const selected = TIERS.find((tier) => tier.id === activeTier);
+        if (selected) return selected;
+        return [...TIERS].reverse().find((tier) => usd + 1 >= tier.usd) || null;
+      }
+      function paintPresets() {
+        document.querySelectorAll(".preset").forEach((button) => {
+          button.classList.toggle("is-on", button.dataset.sol === solInput.value);
+        });
+      }
+      function render() {
+        const sol = currentSol();
+        const usd = sol * solUsd;
+        const tier = matchedTier(usd);
+        const bonus = tier ? tier.bonus : 0;
+        const vision = (usd / VISION_PRICE) * (1 + bonus / 100);
+        usdEl.textContent = money(usd);
+        bonusEl.textContent = bonus + "%";
+        visionEl.textContent = amount(vision, 2);
+        const sliderVal = Math.min(MAX_SOL, Math.max(MIN_SOL, sol || 1));
+        const pct = ((sliderVal - MIN_SOL) / (MAX_SOL - MIN_SOL)) * 100;
+        slider.style.setProperty("--sol-pct", pct + "%");
+        if (document.activeElement !== slider) slider.value = String(sliderVal);
+        rateLabel.textContent = "1 SOL ≈ " + amount(solUsd / VISION_PRICE, 0) + " $VISION";
+        paintPresets();
+      }
+      function selectTier(id) {
+        const tier = TIERS.find((item) => item.id === id);
+        if (!tier) return;
+        activeTier = id;
+        solInput.value = (tier.usd / solUsd).toFixed(3);
+        document.querySelectorAll(".tier").forEach((card) => {
+          card.classList.toggle("is-selected", card.dataset.tier === id);
+        });
+        render();
+      }
+
+      document.getElementById("menu-btn").addEventListener("click", () => {
+        const nav = document.getElementById("mobile-nav");
+        const open = nav.classList.toggle("hidden") === false;
+        const btn = document.getElementById("menu-btn");
+        btn.setAttribute("aria-expanded", open ? "true" : "false");
+        btn.setAttribute("aria-label", open ? "Fechar menu" : "Abrir menu");
+      });
+      document.querySelectorAll(".nav-mobile").forEach((link) => {
+        link.addEventListener("click", () => {
+          document.getElementById("mobile-nav").classList.add("hidden");
+        });
+      });
+
+      const glow = document.getElementById("cursor-glow");
+      window.addEventListener("pointermove", (event) => {
+        const x = (event.clientX / window.innerWidth) * 100;
+        const y = (event.clientY / window.innerHeight) * 100;
+        glow.style.background = "radial-gradient(540px circle at " + x + "% " + y + "%, rgba(6,182,212,0.09), transparent 42%)";
+      }, { passive: true });
+
+      solInput.addEventListener("input", () => {
+        activeTier = null;
+        render();
+      });
+      slider.addEventListener("input", () => {
+        activeTier = null;
+        solInput.value = String(Number(slider.value));
+        render();
+      });
+      document.querySelectorAll(".preset").forEach((button) => {
+        button.addEventListener("click", () => {
+          activeTier = null;
+          solInput.value = button.dataset.sol;
+          render();
+        });
+      });
+      document.querySelectorAll("[data-select]").forEach((button) => {
+        button.addEventListener("click", () => {
+          selectTier(button.dataset.select);
+          document.getElementById("presale").scrollIntoView({ behavior: "smooth" });
+        });
+      });
+      document.querySelectorAll(".pay").forEach((button) => {
+        button.addEventListener("click", () => {
+          document.querySelectorAll(".pay").forEach((item) => item.classList.toggle("is-on", item === button));
+          document.getElementById("pix-note").classList.toggle("hidden", button.dataset.pay !== "pix");
+        });
+      });
+      document.getElementById("copy-treasury").addEventListener("click", async () => {
+        const value = root.dataset.treasury || "";
+        try {
+          await navigator.clipboard.writeText(value);
+        } catch {
+          const area = document.createElement("textarea");
+          area.value = value;
+          document.body.appendChild(area);
+          area.select();
+          document.execCommand("copy");
+          area.remove();
+        }
+        const label = document.getElementById("copy-label");
+        label.textContent = "Copiado!";
+        window.setTimeout(() => { label.textContent = "Copiar endereço"; }, 1600);
+      });
+
+      const treasury = root.dataset.treasury;
+      fetch("/api/balances/" + encodeURIComponent(treasury))
+        .then((response) => response.json())
+        .then((data) => {
+          const sol = Number(data.sol);
+          if (!Number.isFinite(sol)) return;
+          document.getElementById("raised-label").textContent = amount(sol, 2) + " / " + amount(HARD_CAP, 0) + " SOL";
+          document.getElementById("raised-bar").style.width = Math.min(100, (sol / HARD_CAP) * 100) + "%";
+        })
+        .catch(() => {});
+
+      fetch("https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd")
+        .then((response) => response.json())
+        .then((data) => {
+          const next = Number(data && data.solana && data.solana.usd);
+          if (!Number.isFinite(next) || next <= 0) return;
+          solUsd = next;
+          rateSource.textContent = "· cotação live";
+          render();
+        })
+        .catch(() => render());
+
+      render();
+      if (window.lucide) window.lucide.createIcons();
+    })();
+  </script>
+</body>
+</html>

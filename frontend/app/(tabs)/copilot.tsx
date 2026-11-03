@@ -22,7 +22,9 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { Waveform } from '@/components/Waveform';
 import { colors, spacing } from '@/constants/theme';
+import { askCopilot } from '@/lib/api';
 import { BACKEND_URL } from '@/lib/config';
 
 type VadState = 'idle' | 'listening' | 'speech' | 'silence';
@@ -46,6 +48,8 @@ export default function CopilotScreen() {
     'Toque em Ouvir para ativar o Copiloto de Voz com VAD.',
   );
   const [backendHint, setBackendHint] = useState<string | null>(null);
+  const [aiReply, setAiReply] = useState<string | null>(null);
+  const [aiBusy, setAiBusy] = useState(false);
   const silenceFrames = useRef(0);
   const pulse = useSharedValue(1);
   const demoTimer = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -199,6 +203,24 @@ export default function CopilotScreen() {
 
   const listening = vad !== 'idle';
 
+  const runMockAsk = async () => {
+    setAiBusy(true);
+    try {
+      const data = await askCopilot(
+        'Resuma o status da Carteira Fortaleza e do burn $VISION.',
+      );
+      setAiReply(
+        `${data.mode === 'mock' ? '[mock] ' : ''}${data.reply}`,
+      );
+    } catch {
+      setAiReply(
+        '[offline] Copiloto mock local: saldos demo, burn tracker e VAD seguem disponíveis sem LLM.',
+      );
+    } finally {
+      setAiBusy(false);
+    }
+  };
+
   return (
     <View
       style={[
@@ -225,6 +247,7 @@ export default function CopilotScreen() {
 
       <View style={styles.stage}>
         <Animated.View style={[styles.orb, orbStyle]} />
+        <Waveform level={metering} />
         <Text style={styles.vadState}>
           {vad === 'idle' && 'Pronto'}
           {vad === 'listening' && 'Ouvindo'}
@@ -237,6 +260,7 @@ export default function CopilotScreen() {
       </View>
 
       <Text style={styles.transcript}>{transcript}</Text>
+      {aiReply ? <Text style={styles.aiReply}>{aiReply}</Text> : null}
       {permission === false ? (
         <Text style={styles.error}>
           Microfone bloqueado — demo VAD disponível.
@@ -259,6 +283,14 @@ export default function CopilotScreen() {
             <Text style={styles.btnGhostText}>Demo VAD</Text>
           </Pressable>
         ) : null}
+        <Pressable
+          style={styles.btnGhost}
+          disabled={aiBusy}
+          onPress={() => void runMockAsk()}>
+          <Text style={styles.btnGhostText}>
+            {aiBusy ? 'Consultando…' : 'Perguntar (mock LLM)'}
+          </Text>
+        </Pressable>
       </View>
     </View>
   );
@@ -327,6 +359,13 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     textAlign: 'center',
     minHeight: 66,
+  },
+  aiReply: {
+    color: colors.neon,
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: 'center',
+    marginTop: spacing.sm,
   },
   hint: {
     color: colors.muted,
