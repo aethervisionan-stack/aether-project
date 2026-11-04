@@ -11,18 +11,20 @@ import { VisionDeliveryNotice } from "@/components/VisionDeliveryNotice";
 import { useAetherCheckout } from "@/hooks/useAetherCheckout";
 import { translateError, useI18n } from "@/lib/i18n";
 import {
-  HARD_CAP_SOL,
   MIN_SOL,
+  PRESALE_HARD_TOKENS,
+  PRESALE_SOFT_TOKENS,
   PRESALE_TIERS,
-  SOFT_CAP_SOL,
   SOLSCAN_ACCOUNT,
   SOL_TREASURY,
   TIER_SELECT_EVENT,
   VISION_PRICE_USD,
+  allocatedVision,
   formatAmount,
   formatUsd,
   visionForUsd,
-  visionFromUsd,
+  visionPerSol,
+  visionPerStablecoin,
 } from "@/lib/presale";
 import { rpcWithFallback } from "@/lib/solana";
 import { HoverLift } from "./Reveal";
@@ -212,7 +214,7 @@ export function PresaleCheckout() {
       selected ??
       [...PRESALE_TIERS].reverse().find((tier) => usd + 1 >= tier.usd);
     const bonusPct = matched?.bonusPct ?? 0;
-    const baseVision = visionFromUsd(usd);
+    const baseVision = visionPerSol(solUsd) * solAmount;
     return {
       solAmount,
       usd,
@@ -222,8 +224,13 @@ export function PresaleCheckout() {
     };
   }, [solInput, solUsd, activeTier]);
 
+  const stableRateLabel = useMemo(
+    () => formatAmount(visionPerStablecoin(), 0, locale),
+    [locale],
+  );
+
   const rateLabel = useMemo(
-    () => formatAmount(visionFromUsd(solUsd), 0, locale),
+    () => formatAmount(visionPerSol(solUsd), 0, locale),
     [solUsd, locale],
   );
 
@@ -234,8 +241,9 @@ export function PresaleCheckout() {
   }, [solInput]);
 
   const sliderPct = ((sliderValue - MIN_SOL) / (MAX_SOL - MIN_SOL)) * 100;
-  const raisedPct = Math.min(100, (raisedSol / HARD_CAP_SOL) * 100);
-  const softPct = (SOFT_CAP_SOL / HARD_CAP_SOL) * 100;
+  const raisedVision = allocatedVision(raisedSol, solUsd);
+  const raisedPct = Math.min(100, (raisedVision / PRESALE_HARD_TOKENS) * 100);
+  const softPct = (PRESALE_SOFT_TOKENS / PRESALE_HARD_TOKENS) * 100;
 
   const selectTier = useCallback(
     (usd: number, id: string) => {
@@ -417,8 +425,8 @@ export function PresaleCheckout() {
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-sm">
               <span className="text-muted">{t.checkout.progress}</span>
               <span className="tabular font-mono text-[13px] text-ink">
-                {formatAmount(raisedSol, 2, locale)} /{" "}
-                {formatAmount(HARD_CAP_SOL, 0, locale)} SOL
+                {formatAmount(raisedVision, 0, locale)} /{" "}
+                {formatAmount(PRESALE_HARD_TOKENS, 0, locale)} $VISION
               </span>
             </div>
             <div className="relative h-2 overflow-hidden rounded-full bg-white/[0.06]">
@@ -433,8 +441,12 @@ export function PresaleCheckout() {
               />
             </div>
             <div className="mt-3 flex flex-wrap justify-between gap-2 font-mono text-[11px] text-muted">
-              <span>Soft Cap {SOFT_CAP_SOL} SOL</span>
-              <span>Hard Cap {HARD_CAP_SOL} SOL</span>
+              <span>
+                Soft Cap {formatAmount(PRESALE_SOFT_TOKENS, 0, locale)} $VISION
+              </span>
+              <span>
+                Hard Cap {formatAmount(PRESALE_HARD_TOKENS, 0, locale)} $VISION
+              </span>
             </div>
           </div>
         </article>
@@ -448,6 +460,14 @@ export function PresaleCheckout() {
               <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted">
                 1 $VISION = {formatUsd(VISION_PRICE_USD, locale)}.{" "}
                 {t.checkout.liveRate}{" "}
+                <span className="text-cyan">
+                  1 USDT = {stableRateLabel} $VISION
+                </span>
+                {" · "}
+                <span className="text-cyan">
+                  1 USDC = {stableRateLabel} $VISION
+                </span>
+                {" · "}
                 <span className="text-cyan">1 SOL ≈ {rateLabel} $VISION</span>
                 {priceLive
                   ? ` · ${t.checkout.liveQuote}`

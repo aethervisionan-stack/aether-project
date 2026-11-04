@@ -9,7 +9,7 @@ import { PresaleCheckout } from "@/components/PresaleCheckout";
 import { WalletNotice } from "@/components/WalletNotice";
 import { HoverLift, Reveal } from "@/components/Reveal";
 import { useI18n } from "@/lib/i18n";
-import { formatUsd, VISION_PRICE_USD } from "@/lib/presale";
+import { formatBrl, formatUsd, VISION_PRICE_USD } from "@/lib/presale";
 import {
   BadgeCheck,
   Bluetooth,
@@ -165,13 +165,13 @@ export function HomePage() {
                           {t.presale.tge.priceLabel}
                         </p>
                         <p className="mt-2 font-display text-3xl tracking-tight text-ink tabular">
-                          {t.presale.tge.price}
+                          {formatBrl(VISION_PRICE_USD, locale)}
                           <span className="ml-1 text-base font-normal text-muted">
                             {t.presale.tge.priceUnit}
                           </span>
                         </p>
                         <p className="mt-2 font-mono text-[13px] text-cyan">
-                          {t.presale.tge.priceUsd}
+                          {formatUsd(VISION_PRICE_USD, locale)}
                         </p>
                       </article>
 

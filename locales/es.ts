@@ -38,9 +38,9 @@ export const es: Messages = {
       kicker: "TGE Condicional",
       title: "Liquidez, KYC y auditoría antes de cualquier negociación pública",
       priceLabel: "Precio de la preventa",
-      price: "R$ 0,05",
+      price: "R$ 0,0001",
       priceUnit: " / token",
-      priceUsd: "$0.05 USD",
+      priceUsd: "$0.0001 USD",
       ruleLabel: "Regla del TGE",
       rule: "El Token Generation Event (TGE) y la liberación oficial del pool de liquidez en Raydium ocurren solo después de la conclusión exitosa de la captación, la inyección del fondo de liquidez, el KYC del equipo y el Informe de Auditoría del contrato inteligente.",
       steps: [
@@ -212,13 +212,13 @@ export const es: Messages = {
   tokenomics: {
     kicker: "Tokenomics transparente",
     title: "$VISION · 2.000.000.000",
-    lead: "Supply fijo de 2 mil millones. Preventa entre 10% y 20% a $0,05. Liquidez, recompensas de la app y equipo con asignación pública.",
+    lead: "Supply fijo de 2 mil millones. Preventa entre 10% y 20% a $0,0001. Liquidez, recompensas de la app y equipo con asignación pública.",
     items: [
       {
         label: "Preventa / Soft Launch",
         value: "10–20%",
         detail:
-          "200M a 400M $VISION a $0,05. Recaudación estimada de hasta $20M para financiar gafas y la app durante años.",
+          "200M a 400M $VISION a $0,0001. Recaudación estimada de hasta US$ 40.000 para financiar gafas y la app durante años.",
       },
       {
         label: "Liquidez Raydium",

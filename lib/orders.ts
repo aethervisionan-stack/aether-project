@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { PublicKey } from "@solana/web3.js";
-import { PRESALE_TIERS, VISION_PRICE_USD, visionForUsd } from "@/lib/presale";
+import { PRESALE_TIERS, visionForUsd, visionFromUsd } from "@/lib/presale";
 
 export type PayMethod = "sol" | "pix";
 export type OrderStatus =
@@ -59,7 +59,7 @@ export function brlFromUsd(usd: number): number {
 function visionAmountFor(usd: number, tierId: string | null): number {
   const tier = PRESALE_TIERS.find((item) => item.id === tierId);
   if (tier) return visionForUsd(usd, tier.bonusPct);
-  return usd / VISION_PRICE_USD;
+  return visionFromUsd(usd);
 }
 
 export function assertDestPubkey(value: string): string {

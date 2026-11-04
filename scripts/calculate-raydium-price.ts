@@ -8,12 +8,13 @@
  * Spot at t0 (no fees):  P_VISION_in_SOL = SOL_reserve / VISION_reserve
  */
 import "dotenv/config";
+import { VISION_PRICE_USD } from "../lib/presale";
 
 const DEFAULT_VISION = 200_000_000;
 const DEFAULT_SOL = [5, 10, 50];
 const DEFAULT_SOL_USD = 97.74;
 const DEFAULT_SUPPLY = 1_000_000_000;
-const PRESALE_USD = 0.05;
+const PRESALE_USD = VISION_PRICE_USD;
 
 type Quote = {
   visionInPool: number;

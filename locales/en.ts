@@ -36,9 +36,9 @@ export const en = {
       kicker: "Conditional TGE",
       title: "Liquidity, KYC and audit before any public trading",
       priceLabel: "Presale price",
-      price: "R$ 0.05",
+      price: "R$ 0.0001",
       priceUnit: " / token",
-      priceUsd: "$0.05 USD",
+      priceUsd: "$0.0001 USD",
       ruleLabel: "TGE rule",
       rule: "The Token Generation Event (TGE) and the official release of the Raydium liquidity pool happen only after the presale raise is successfully completed, the liquidity fund is injected, team KYC is finished, and the smart contract Audit Report is issued.",
       steps: [
@@ -209,13 +209,13 @@ export const en = {
   tokenomics: {
     kicker: "Transparent tokenomics",
     title: "$VISION · 2,000,000,000",
-    lead: "Fixed 2 billion supply. Presale between 10% and 20% at $0.05. Liquidity, app rewards and team with public allocation.",
+    lead: "Fixed 2 billion supply. Presale between 10% and 20% at $0.0001. Liquidity, app rewards and team with public allocation.",
     items: [
       {
         label: "Presale / Soft Launch",
         value: "10–20%",
         detail:
-          "200M to 400M $VISION at $0.05. Estimated raise of up to $20M to fund glasses and the app for years.",
+          "200M to 400M $VISION at $0.0001. Estimated raise of up to $40,000 to fund glasses and the app for years.",
       },
       {
         label: "Raydium liquidity",

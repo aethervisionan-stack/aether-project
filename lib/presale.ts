@@ -15,11 +15,13 @@ export function solscanTx(signature: string) {
   return `https://solscan.io/tx/${signature}`;
 }
 
-export const VISION_PRICE_USD = 0.05;
+/** Presale unit price. Every quote, tier and progress figure derives from this. */
+export const VISION_PRICE_USD = 0.0001;
 export const FALLBACK_SOL_USD = 150;
-export const SOFT_CAP_SOL = 500;
-export const HARD_CAP_SOL = 2000;
 export const MIN_SOL = 0.05;
+/** Progress band: 10% and 20% of the 2,000,000,000 $VISION supply. */
+export const PRESALE_SOFT_TOKENS = 200_000_000;
+export const PRESALE_HARD_TOKENS = 400_000_000;
 export const TIER_SELECT_EVENT = "aether:select-tier";
 
 export function requestPresaleTier(id: string) {
@@ -33,7 +35,24 @@ export function requestPresaleTier(id: string) {
 }
 
 export function visionFromUsd(usd: number): number {
+  if (!(usd > 0) || !(VISION_PRICE_USD > 0)) return 0;
   return usd / VISION_PRICE_USD;
+}
+
+/** 1 USDT or 1 USDC, both treated as US$ 1. */
+export function visionPerStablecoin(): number {
+  return visionFromUsd(1);
+}
+
+/** Live SOL/USD → $VISION at the presale unit price. */
+export function visionPerSol(solUsd: number): number {
+  return visionFromUsd(solUsd);
+}
+
+/** Treasury SOL converted to $VISION already allocated at the unit price. */
+export function allocatedVision(solAmount: number, solUsd: number): number {
+  if (!(solAmount > 0) || !(solUsd > 0)) return 0;
+  return visionFromUsd(solAmount * solUsd);
 }
 
 const NUMBER_LOCALE: Record<string, string> = {
@@ -42,12 +61,30 @@ const NUMBER_LOCALE: Record<string, string> = {
   es: "es-ES",
 };
 
+function usdFractionDigits(value: number): number {
+  const abs = Math.abs(value);
+  if (!Number.isFinite(abs) || abs === 0 || abs >= 0.01) return 2;
+  return Math.min(8, Math.max(4, Math.ceil(-Math.log10(abs))));
+}
+
 export function formatUsd(value: number, locale = "en"): string {
+  const digits = usdFractionDigits(value);
   return new Intl.NumberFormat(NUMBER_LOCALE[locale] ?? "en-US", {
     style: "currency",
     currency: "USD",
-    maximumFractionDigits: 2,
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
   }).format(value);
+}
+
+/** Same numeric unit price, shown as R$ on the static TGE tag. */
+export function formatBrl(value: number, locale = "en"): string {
+  const digits = usdFractionDigits(value);
+  const amount = new Intl.NumberFormat(NUMBER_LOCALE[locale] ?? "en-US", {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(value);
+  return `R$ ${amount}`;
 }
 
 export function formatAmount(

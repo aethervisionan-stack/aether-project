@@ -94,7 +94,7 @@ export function quoteVisionForSol(input: {
     priceVisionSol = pool.sol / pool.vision;
     priceVisionUsd = priceVisionSol * input.solUsd;
   } else {
-    // Presale: $0.05 / VISION. Amount = (SOL * SOL/USD) / 0.05.
+    // Presale: VISION_PRICE_USD per VISION. Amount = (SOL * SOL/USD) / unit price.
     priceVisionUsd = VISION_PRICE_USD;
     priceVisionSol = priceVisionUsd / input.solUsd;
   }
