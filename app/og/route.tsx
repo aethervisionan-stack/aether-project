@@ -108,7 +108,7 @@ export async function GET(request: Request) {
               letterSpacing: "-0.02em",
             }}
           >
-            Decentralized AI Hardware on Solana
+            Real-time Edge AI hardware on Solana
           </div>
         </div>
 

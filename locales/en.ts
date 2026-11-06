@@ -11,25 +11,25 @@ export const en = {
     primary: "Primary",
   },
   hero: {
-    kicker: "Solana DePIN + AI Wearable",
+    kicker: "DePIN ecosystem · Solana infrastructure",
     title: "Aether Vision",
-    headline: "The definitive bridge between hardware and artificial intelligence",
-    body: "The first model is simple, functional and accessible. AI app subscriptions accept $VISION and $AETH. As sales grow, automated buyback burns both tokens and refills the treasury for the next hardware generation.",
+    headline: "The bridge between tactical HUD hardware and real-time Edge AI",
+    body: "Aether Vision is a DePIN hardware line on Solana. The first model is simple, functional, and accessible. App subscriptions settle in the utility token $VISION and in $AETH. As sales grow, an automated buyback burns both tokens and refills the treasury for the next generation.",
     ctaPresale: "Join the presale",
-    ctaHardware: "See the hardware",
+    ctaHardware: "View the hardware",
     cardTitle: "Vision line",
-    cardSub: "Vision 1.0 → 4.0 · App Bridge · AI middleware",
+    cardSub: "Vision 1.0 → 4.0 · App Bridge · real-time Edge AI",
     app: "App",
-    yield: "Yield",
+    yield: "Mechanism",
     token: "Token",
-    vault: "Vault",
+    vault: "Custody",
   },
   presale: {
     kicker: "Presale · Treasury",
-    title: "Hardware kits + tokens",
+    title: "Hardware kits and $VISION",
     leadBefore: "Official price:",
     leadAfter:
-      "per 1 $VISION. Connect Phantom or Backpack and send SOL to the receive treasury. Monthly subscriptions natively accept $AETH and $VISION.",
+      "per $VISION. Connect Phantom or Backpack and send SOL to the receiving treasury. Monthly subscriptions natively accept $AETH and $VISION.",
     nativePay:
       "Monthly app subscription payments: $AETH and $VISION are accepted natively.",
     tge: {
@@ -40,34 +40,34 @@ export const en = {
       priceUnit: " / token",
       priceUsd: "$0.0001 USD",
       ruleLabel: "TGE rule",
-      rule: "The Token Generation Event (TGE) and the official release of the Raydium liquidity pool happen only after the presale raise is successfully completed, the liquidity fund is injected, team KYC is finished, and the smart contract Audit Report is issued.",
+      rule: "The Token Generation Event (TGE) and the official release of the Raydium liquidity pool happen only after the presale closes successfully, the liquidity fund is injected, team KYC is complete, and the smart-contract audit report is issued.",
       steps: [
         "Initial presale raise",
-        "Team KYC and smart contract Audit Report, during the presale",
+        "Team KYC and smart-contract audit, during the presale",
         "Successful completion of KYC and the audit",
         "Injection of the liquidity fund",
         "TGE and official release of the Raydium pool",
       ],
       kycLabel: "Transparency and security",
       kycBody:
-        "KYC — identity verification of the team — and issuance of the smart contract Audit Report both run in full during the presale and are successfully completed before the Token Generation Event (TGE) and the official release of the Raydium liquidity pool. The commitment is public: no open-market trading starts until the team’s identity is verified and the contract audit is complete.",
+        "KYC — identity verification of the team — and issuance of the smart-contract audit report both run in full during the presale and are completed before the Token Generation Event (TGE) and the official release of the Raydium liquidity pool. The commitment is public: no open-market trading starts until the team's identity is verified and the contract audit is complete.",
       valueLabel: "Value proposition",
       value:
-        "This mechanic secures price stability, solid support and sustainable appreciation from the first minute of public trading.",
+        "This sequence is built for orderly liquidity on Raydium, verified issuance, and a disciplined open of public trading on Solana.",
     },
   },
   checkout: {
     treasuryKicker: "On-chain treasury · receive wallet",
     treasuryBody:
-      "SOL is sent to this Phantom receive wallet (relayer). Check the address in your wallet before signing.",
-    copy: "Copy Address",
+      "SOL is sent to this Phantom receiving wallet (relayer). Check the address in your wallet before you sign.",
+    copy: "Copy address",
     copied: "Copied!",
-    audit: "Audit on Solscan",
+    audit: "Verify on Solscan",
     progress: "Phase progress",
     checkoutTitle: "Presale checkout",
     liveRate: "Live rate:",
     liveQuote: "live quote",
-    fallbackQuote: "fallback US$ 150",
+    fallbackQuote: "reference quote: $150",
     wallets: "Phantom · Backpack",
     amountLabel: "Amount in SOL",
     slider: "SOL slider",
@@ -75,10 +75,10 @@ export const en = {
     bonus: "Bonus",
     youReceive: "You receive",
     confirming: "Confirming in wallet…",
-    buySol: "Buy with Solana",
+    buySol: "Buy with SOL",
     connectWallet: "Connect Phantom / Backpack",
     legal:
-      "Native SOL transfer to the receive treasury. $VISION is credited at this phase rate; this is not a securities offering.",
+      "Native SOL transfer to the receiving treasury. $VISION is credited at this phase rate. This is not a securities offering.",
     paySol: "Pay with SOL",
     payPix: "Pay with PIX",
     destLabel: "Solana wallet that receives $VISION",
@@ -124,13 +124,13 @@ export const en = {
   hardware: {
     kicker: "Vision line",
     title: "Four generations. One middleware.",
-    lead: "Vision 1.0 to Vision 4.0 connect you to Aether’s decentralized AI. Each card sends a native SOL transfer to the Squads Multisig.",
+    lead: "Vision 1.0 through Vision 4.0 connect you to Aether Vision's decentralized Edge AI. Each card triggers a native SOL transfer to the Squads Multisig.",
     connectBuy: "Connect and buy",
     v1: {
       tag: "Essential",
-      category: "Entry-Level · Smart Audio",
-      headline: "Everyday AI, no camera, no excess.",
-      body: "The entry point. Bidirectional audio, voice commands and App Bridge — essential wearable intelligence at the best value.",
+      category: "Entry level · Smart audio",
+      headline: "Everyday AI, without a camera and without excess.",
+      body: "The entry point. Bidirectional audio, voice commands, and App Bridge — essential wearable intelligence at the best value.",
       frame: "Classic TR90 frame, ergonomic temples, light chassis.",
       cta: "Secure allocation",
       specs: [
@@ -142,11 +142,11 @@ export const en = {
     },
     v2: {
       tag: "Balance",
-      category: "AI Camera · Multimodal vision",
+      category: "AI camera · Multimodal vision",
       headline: "Discreet visual capture and real-time analysis.",
-      body: "The balanced model. Computer vision, translation and multimodal context in the AI middleware — the full smart-glasses experience.",
+      body: "The balanced model. Computer vision, translation, and multimodal context in the Edge AI middleware — the full smart-glasses experience.",
       frame: "High-density matte TR90, 12MP micro-camera in the hinge.",
-      cta: "Buy Tier",
+      cta: "Secure allocation",
       specs: [
         { label: "Camera", value: "12MP hidden in the hinge" },
         { label: "AI", value: "Multimodal computer vision" },
@@ -156,9 +156,9 @@ export const en = {
     },
     v3: {
       tag: "Luxury",
-      category: "Invisible futurist · Executive",
-      headline: "Titanium, bone conduction and couture discretion.",
-      body: "The executive model. High-end frame look, bone-conduction audio and haptic gestures — maximum elegance with frontier tech.",
+      category: "Stealth executive",
+      headline: "Titanium, bone conduction, and designer discretion.",
+      body: "The executive model. A high-end frame, bone-conduction audio, and haptic gestures — discreet enough for formal use, with leading-edge hardware.",
       frame: "Ultra-thin titanium, acoustic bone conduction, haptic temples.",
       cta: "Secure allocation",
       specs: [
@@ -171,10 +171,10 @@ export const en = {
     v4: {
       tag: "Halo",
       category: "Holographic flagship · Micro-OLED AR",
-      headline: "Contextual AR, neural tracking and the peak of the line.",
-      body: "The flagship. Electrochromic lenses, stereo depth cameras, Micro-OLED projectors and neural tracking — floating AR in Aether middleware.",
-      frame: "Aerospace titanium and carbon fiber. The apex of Aether Vision on Web3.",
-      cta: "Buy Tier",
+      headline: "Contextual AR, neural tracking, and a tactical HUD.",
+      body: "The flagship. Electrochromic lenses, stereo depth cameras, Micro-OLED projectors, and neural tracking — a floating tactical HUD in the Aether Vision middleware.",
+      frame: "Aerospace titanium and carbon fiber. The apex of Aether Vision hardware.",
+      cta: "Secure allocation",
       specs: [
         { label: "Display", value: "Micro-OLED AR projectors" },
         { label: "Vision", value: "Stereo depth cameras" },
@@ -185,20 +185,20 @@ export const en = {
   },
   vision: {
     kicker: "Product vision",
-    title: "AETHER value strategy",
-    lead: "Accessible hardware now, a transparent treasury, and a cycle where sales fuel token burns and the next model.",
+    title: "Aether value strategy",
+    lead: "Accessible hardware now, a transparent treasury, and a cycle in which sales fund token burns and the next model.",
     points: [
       {
-        title: "Vision 1.0 to Vision 4.0",
-        body: "A progressive line: from essential smart audio to the Micro-OLED AR flagship — function first, accessible entry, technological peak at the top.",
+        title: "Vision 1.0 through Vision 4.0",
+        body: "A progressive line: from essential smart audio to the Micro-OLED tactical HUD — function first, an accessible entry, and the technical peak at the top.",
       },
       {
         title: "Continuous ecosystem value",
-        body: "The core goal is to grow the AETHER ecosystem and progressively ship superior glasses models.",
+        body: "The core goal is to grow the Aether Vision ecosystem and progressively ship more advanced glasses.",
       },
       {
-        title: "Automated Buyback & Burn",
-        body: "As the first batch sells, the mechanism buys and burns $AETH and $VISION, shrinking supply with real usage.",
+        title: "Automated buyback and burn",
+        body: "As the first batch sells, the mechanism buys and burns $AETH and $VISION, reducing supply against real usage.",
       },
       {
         title: "Treasury for the next generation",
@@ -209,66 +209,66 @@ export const en = {
   tokenomics: {
     kicker: "Transparent tokenomics",
     title: "$VISION · 2,000,000,000",
-    lead: "Fixed 2 billion supply. Presale between 10% and 20% at $0.0001. Liquidity, app rewards and team with public allocation.",
+    lead: "Fixed supply of 2 billion $VISION. The presale allocates 10% to 20% at $0.0001. Liquidity, app rewards, and the team allocation are public.",
     items: [
       {
-        label: "Presale / Soft Launch",
+        label: "Presale / soft launch",
         value: "10–20%",
         detail:
-          "200M to 400M $VISION at $0.0001. Estimated raise of up to $40,000 to fund glasses and the app for years.",
+          "200M to 400M $VISION at $0.0001 per token. Estimated raise of $20,000 to $40,000 to fund the glasses and the app for years.",
       },
       {
         label: "Raydium liquidity",
         value: "40%",
         detail:
-          "800M $VISION in the DEX pool, allocated with funds raised after the presale.",
+          "800M $VISION in the Raydium liquidity pool, paired with funds raised after the presale.",
       },
       {
-        label: "Ecosystem & rewards",
+        label: "Ecosystem and rewards",
         value: "30%",
         detail:
-          "600M $VISION for cashback, referral bonuses and DePIN app rewards.",
+          "600M $VISION for cashback, referral bonuses, and DePIN ecosystem rewards in the app.",
       },
       {
-        label: "Team & marketing",
+        label: "Team and marketing",
         value: "10%",
         detail:
           "200M $VISION locked for the development team and long-term expansion.",
       },
     ],
-    note: "$AETH launches on the native mainnet; $VISION powers the app and Solana liquidity. Both enter Buyback & Burn after the first batch.",
+    note: "$AETH launches on its native mainnet. $VISION is the utility token for the app and for liquidity on Solana. Both enter buyback and burn after the first batch.",
   },
   updates: {
-    kicker: "Development & updates",
-    title: "Constant build, on official X",
+    kicker: "Development and updates",
+    title: "Continuous build, on official X",
     leadBefore:
-      "We do not publish a static roadmap. Development updates are continuous and go out on the official channel",
+      "We do not publish a static roadmap. Development updates are continuous and are posted on the official channel",
     leadAfter: ".",
     pillar: "Pillar",
     items: [
       {
         title: "App Bridge",
-        body: "Bluetooth integration between the smartphone and Aether Vision glasses — audio, voice and the AI app session in one flow.",
+        body: "Bluetooth integration between the smartphone and Aether Vision glasses — audio, voice, and the AI app session in one flow.",
       },
       {
         title: "First batch",
-        body: "Raise to manufacture and launch the first glasses batch, with accessible cost and function at the center of the product.",
+        body: "Capital to manufacture and launch the first glasses batch, with accessible cost and function at the center of the product.",
       },
       {
         title: "Mainnet $AETH",
-        body: "Strategic raise for the $AETH launch with a native blockchain, plus $VISION on Solana.",
+        body: "Strategic raise for the $AETH launch on a native chain, alongside the utility token $VISION on Solana.",
       },
     ],
   },
   trust: {
     label: "Network and treasury",
-    solana: "Powered by Solana",
+    solana: "Solana infrastructure",
     squads: "Secured by Squads Multisig",
   },
   footer: {
     rights: "© 2026 Aether Vision. All rights reserved.",
     disclaimer:
-      "Purchasing Vouchers/Kits in the presale is an advance purchase of licenses to use the artificial intelligence application and/or physical devices, and does not constitute a public offering of securities or speculative financial investments.",
+      "Purchasing vouchers or kits in the presale is an advance purchase of licenses to use the artificial intelligence application and/or physical devices. It is not a public offering of securities or a speculative financial investment.",
   },
   wallet: {
     body: "No Solana wallet detected. Install Phantom or Backpack to join the on-chain presale.",
@@ -280,7 +280,7 @@ export const en = {
     close: "Close",
     closeReceipt: "Close receipt",
     title: "On-chain contribution confirmed",
-    withTier: "The {tier} allocation was sent to the receive treasury.",
+    withTier: "The {tier} allocation was sent to the receiving treasury.",
     noTier: "The SOL transfer was confirmed on the Solana network.",
     deliveryNotice:
       "$VISION is sent manually by an administrator and can take up to 24 hours to appear in your wallet after this payment.",

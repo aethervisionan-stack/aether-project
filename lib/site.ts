@@ -15,9 +15,9 @@ export const SITE_URL = resolveSiteUrl();
 
 export const SITE_NAME = "Aether Vision";
 export const SITE_TITLE =
-  "Aether Vision — Vision 1.0 to 4.0 | On-chain AI glasses presale";
+  "Aether Vision — Vision 1.0 to 4.0 | DePIN hardware presale on Solana";
 export const SITE_DESCRIPTION =
-  "Presale of Vision 1.0 to 4.0 smart glasses. Contribute SOL to the receive treasury, $VISION and $AETH tokens, App Bridge and decentralized AI on Solana.";
+  "Presale for Vision 1.0 through Vision 4.0 tactical HUD hardware. Contribute SOL to the receiving treasury. The utility token $VISION and $AETH settle app access, App Bridge, and real-time Edge AI on Solana.";
 
 export const PHANTOM_DOWNLOAD = "https://phantom.app/download";
 export const BACKPACK_DOWNLOAD = "https://www.backpack.app/";
