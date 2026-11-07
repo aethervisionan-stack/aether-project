@@ -10,6 +10,13 @@ export interface AgentVote {
   duration_ms: number;
 }
 
+export interface ConsensoAgentLatency {
+  agent_id: string;
+  agent_role: string;
+  duration_ms: number;
+  label: string;
+}
+
 export interface ConsensoResult {
   approved: boolean;
   agreement_ratio: number;
@@ -18,6 +25,7 @@ export interface ConsensoResult {
   hallucination_flags: string[];
   duration_ms: number;
   skipped: boolean;
+  agent_latencies: ConsensoAgentLatency[];
 }
 
 export interface LatencyBreakdown {
@@ -26,14 +34,21 @@ export interface LatencyBreakdown {
   agent_ms: number;
   tts_ms: number;
   total_ms: number;
+  consenso_grounding_ms: number;
+  consenso_safety_tone_ms: number;
+  consenso_consistency_ms: number;
+  consenso_agents_ms: Record<string, number>;
 }
 
 export interface ProcessAudioMeta {
   request_id: string;
   pipeline_mode: string;
+  use_mock_audio: boolean;
   stt_provider: string;
   tts_provider: string;
   consenso_enabled: boolean;
+  used_safe_fallback: boolean;
+  fallback_reason: string | null;
   created_at: string;
   depin_attestation: Record<string, unknown> | null;
 }
@@ -52,10 +67,12 @@ export interface HealthResponse {
   status: string;
   version: string;
   pipeline_mode: string;
+  use_mock_audio: boolean;
   stt_provider: string;
   tts_provider: string;
   consenso_enabled: boolean;
   depin_ready: boolean;
+  web3_rpc_configured: boolean;
 }
 
 export interface ApiErrorBody {

@@ -9,7 +9,12 @@ import httpx
 
 from app.config import Settings
 from app.models.schemas import TtsResult
-from app.services.resilience import retry_async, transient_network_error
+from app.services.resilience import (
+    RecoverableProviderError,
+    classify_provider_failure,
+    retry_async,
+    transient_network_error,
+)
 
 
 class ElevenLabsTts:
@@ -17,13 +22,15 @@ class ElevenLabsTts:
 
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
-        if not settings.elevenlabs_api_key:
-            raise RuntimeError(
-                "TTS_PROVIDER=elevenlabs requires ELEVENLABS_API_KEY. "
-                "Use TTS_PROVIDER=mock or PIPELINE_MODE=mock for local tests."
-            )
 
     async def synthesize(self, text: str) -> TtsResult:
+        if not self._settings.elevenlabs_api_key:
+            raise RecoverableProviderError(
+                "tts",
+                "invalid_api_key: ELEVENLABS_API_KEY missing (USE_MOCK_AUDIO=false)",
+                provider=self.name,
+            )
+
         started = time.perf_counter()
         voice_id = self._settings.elevenlabs_voice_id
         url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
@@ -52,11 +59,15 @@ class ElevenLabsTts:
             except Exception as exc:  # noqa: BLE001
                 raise transient_network_error("elevenlabs-tts", exc) from exc
 
-        audio = await retry_async(
-            _call,
-            attempts=self._settings.retry_attempts,
-            backoff_ms=self._settings.retry_backoff_ms,
-        )
+        try:
+            audio = await retry_async(
+                _call,
+                attempts=self._settings.retry_attempts,
+                backoff_ms=self._settings.retry_backoff_ms,
+            )
+        except Exception as exc:  # noqa: BLE001
+            raise classify_provider_failure("tts", self.name, exc) from exc
+
         elapsed = int((time.perf_counter() - started) * 1000)
         mime = (
             "audio/mpeg"

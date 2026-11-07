@@ -44,7 +44,7 @@ cd backend
 python -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-cp .env.example .env               # PIPELINE_MODE=mock por padrão
+cp .env.example .env               # USE_MOCK_AUDIO=true por padrão
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
@@ -76,39 +76,41 @@ Abra [http://127.0.0.1:5173](http://127.0.0.1:5173).
 Edite `backend/.env`:
 
 ```env
-PIPELINE_MODE=hybrid          # ou production
-STT_PROVIDER=openai           # ou local (pip install openai-whisper + ffmpeg)
-TTS_PROVIDER=openai           # ou elevenlabs | mock
+USE_MOCK_AUDIO=false
 OPENAI_API_KEY=sk-...
-# ELEVENLABS_API_KEY=...      # se TTS_PROVIDER=elevenlabs
-# ELEVENLABS_VOICE_ID=...
+# STT default: openai Whisper. Override: STT_PROVIDER=local
+TTS_PROVIDER=elevenlabs       # ou openai
+ELEVENLABS_API_KEY=...
+ELEVENLABS_VOICE_ID=...
 ```
 
-Reinicie o uvicorn. `STT_PROVIDER=local` exige `openai-whisper` e `ffmpeg` no PATH.
+Reinicie o uvicorn. Se a API real falhar (quota / chave inválida), o backend regista
+erro JSON (`audio.provider.error`) e devolve áudio de **fallback seguro** — o Uvicorn
+não cai. `STT_PROVIDER=local` exige `openai-whisper` e `ffmpeg` no PATH.
 
-Durante o Consenso Alfa, o backend emite logs JSON estruturados
-(`consenso.agent.start` / `consenso.agent.done` / `consenso.done`) com latência por sub-agente
-(grounding, safety_tone, consistency). Se o quórum rejeitar, a TTS usa o fallback seguro —
-nunca o rascunho não validado.
+Durante o Consenso Alfa, o backend emite logs JSON com `duration_ms` por sub-agente
+(Grounding, Safety/Tone, Consistency) e espelha esses valores em
+`consenso.agent_latencies` + `latency.consenso_*_ms` na resposta HTTP.
+
+Web3 (stubs desacoplados em `backend/app/services/web3/`): `HELIUS_RPC_URL`,
+`PYTH_HERMES_URL`, `JUPITER_QUOTE_API_URL` — não entram no `/process-audio`.
 
 ### Variáveis de ambiente principais
 
 | Variável | Default | Descrição |
 | --- | --- | --- |
-| `PIPELINE_MODE` | `mock` | `mock` \| `hybrid` \| `production` |
-| `STT_PROVIDER` | `mock` | `mock` \| `openai` \| `local` |
+| `USE_MOCK_AUDIO` | `true` | `true` = simulado; `false` = Whisper + ElevenLabs/OpenAI |
+| `STT_PROVIDER` | `mock` | `mock` \| `openai` \| `local` (com real: default openai) |
 | `TTS_PROVIDER` | `mock` | `mock` \| `openai` \| `elevenlabs` |
 | `OPENAI_API_KEY` | — | OpenAI Whisper STT + OpenAI TTS |
-| `ELEVENLABS_API_KEY` | — | ElevenLabs TTS (`TTS_PROVIDER=elevenlabs`) |
+| `ELEVENLABS_API_KEY` | — | ElevenLabs TTS |
 | `ELEVENLABS_VOICE_ID` | Rachel default | Voice id ElevenLabs |
-| `WHISPER_MODEL` | `base` | Modelo local Whisper |
-| `WHISPER_LANGUAGE` | `pt` | Idioma STT |
+| `HELIUS_RPC_URL` | — | Solana RPC via Helius (stub) |
+| `HELIUS_API_KEY` | — | Chave Helius (stub) |
+| `PYTH_HERMES_URL` | hermes.pyth.network | Oracle Pyth (stub) |
+| `JUPITER_QUOTE_API_URL` | quote-api.jup.ag/v6 | Jupiter quotes (stub) |
 | `CONSENSO_ENABLED` | `true` | Liga Consenso Alfa |
-| `CONSENSO_AGREEMENT_THRESHOLD` | `0.66` | Fração mínima de votos |
-| `CONSENSO_TIMEOUT_MS` | `2500` | Timeout por agente |
-| `REQUEST_TIMEOUT_MS` | `30000` | Timeout do pipeline |
-| `MAX_AUDIO_BYTES` | `10485760` | Limite do upload |
-| `CORS_ORIGINS` | `http://127.0.0.1:5173,http://localhost:5173` | Vite client (sempre mesclado) |
+| `CORS_ORIGINS` | Vite 5173 | Sempre mesclado com localhost + 127.0.0.1 |
 
 Lista completa: `backend/.env.example`.
 

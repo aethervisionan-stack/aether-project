@@ -8,7 +8,12 @@ from typing import Any
 
 from app.config import Settings
 from app.models.schemas import TtsResult
-from app.services.resilience import retry_async, transient_network_error
+from app.services.resilience import (
+    RecoverableProviderError,
+    classify_provider_failure,
+    retry_async,
+    transient_network_error,
+)
 
 
 class OpenAITts:
@@ -16,20 +21,26 @@ class OpenAITts:
 
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
-        if not settings.openai_api_key:
-            raise RuntimeError(
-                "TTS_PROVIDER=openai requires OPENAI_API_KEY. "
-                "Use TTS_PROVIDER=mock or PIPELINE_MODE=mock for local tests."
-            )
 
     async def synthesize(self, text: str) -> TtsResult:
+        if not self._settings.openai_api_key:
+            raise RecoverableProviderError(
+                "tts",
+                "invalid_api_key: OPENAI_API_KEY missing (USE_MOCK_AUDIO=false)",
+                provider=self.name,
+            )
+
         started = time.perf_counter()
 
         async def _call() -> bytes:
             try:
                 from openai import AsyncOpenAI
             except ImportError as exc:  # pragma: no cover
-                raise RuntimeError("Install openai package for TTS_PROVIDER=openai") from exc
+                raise RecoverableProviderError(
+                    "tts",
+                    f"openai_package_missing: {exc}",
+                    provider=self.name,
+                ) from exc
 
             client = AsyncOpenAI(api_key=self._settings.openai_api_key)
             try:
@@ -43,11 +54,15 @@ class OpenAITts:
             except Exception as exc:  # noqa: BLE001
                 raise transient_network_error("openai-tts", exc) from exc
 
-        audio = await retry_async(
-            _call,
-            attempts=self._settings.retry_attempts,
-            backoff_ms=self._settings.retry_backoff_ms,
-        )
+        try:
+            audio = await retry_async(
+                _call,
+                attempts=self._settings.retry_attempts,
+                backoff_ms=self._settings.retry_backoff_ms,
+            )
+        except Exception as exc:  # noqa: BLE001
+            raise classify_provider_failure("tts", self.name, exc) from exc
+
         elapsed = int((time.perf_counter() - started) * 1000)
         return TtsResult(
             audio_base64=base64.b64encode(audio).decode("ascii"),

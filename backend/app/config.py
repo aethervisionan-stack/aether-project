@@ -33,6 +33,12 @@ class Settings(BaseSettings):
     log_level: str = "info"
     cors_origins: str = ",".join(DEFAULT_VITE_CORS_ORIGINS)
 
+    # Primary audio switch (Phase 1+)
+    # true  → simulated STT/TTS (no paid APIs)
+    # false → OpenAI Whisper STT + ElevenLabs/OpenAI TTS
+    use_mock_audio: bool = True
+
+    # Legacy / fine-grained mode (honored when use_mock_audio=false)
     pipeline_mode: PipelineMode = "mock"
 
     stt_provider: SttProvider = "mock"
@@ -61,9 +67,13 @@ class Settings(BaseSettings):
     retry_attempts: int = Field(default=2, ge=0, le=5)
     retry_backoff_ms: int = Field(default=200, ge=0)
 
-    # Phase 2+ DePIN/Solana seams — declared but unused in Phase 1
-    deployment_network: str = ""
+    # Web3 / Solana prep (stubs — unused by voice pipeline)
+    deployment_network: str = "solana-mainnet"
     solana_rpc_url: str = ""
+    helius_rpc_url: str = ""
+    helius_api_key: str = ""
+    pyth_hermes_url: str = "https://hermes.pyth.network"
+    jupiter_quote_api_url: str = "https://quote-api.jup.ag/v6"
     aether_agent_wallet: str = ""
 
     @field_validator("cors_origins", mode="before")
@@ -82,19 +92,31 @@ class Settings(BaseSettings):
         return merged
 
     def effective_stt_provider(self) -> SttProvider:
-        if self.pipeline_mode == "mock":
+        if self.use_mock_audio:
             return "mock"
-        return self.stt_provider
+        if self.pipeline_mode == "mock" and self.stt_provider == "mock":
+            # use_mock_audio=false wins over legacy PIPELINE_MODE=mock
+            pass
+        if self.stt_provider in ("openai", "local"):
+            return self.stt_provider
+        # Default real STT: OpenAI Whisper
+        return "openai"
 
     def effective_tts_provider(self) -> TtsProvider:
-        if self.pipeline_mode == "mock":
+        if self.use_mock_audio:
             return "mock"
-        if self.pipeline_mode == "hybrid":
-            if self.tts_provider == "openai" and not self.openai_api_key:
-                return "mock"
-            if self.tts_provider == "elevenlabs" and not self.elevenlabs_api_key:
-                return "mock"
-        return self.tts_provider
+        if self.tts_provider in ("openai", "elevenlabs"):
+            return self.tts_provider
+        # Prefer ElevenLabs when key present, else OpenAI Audio
+        if self.elevenlabs_api_key:
+            return "elevenlabs"
+        return "openai"
+
+    def resolved_solana_rpc(self) -> str:
+        """Prefer Helius RPC when configured."""
+        if self.helius_rpc_url:
+            return self.helius_rpc_url
+        return self.solana_rpc_url
 
 
 @lru_cache

@@ -134,7 +134,7 @@ export class ControlApp {
             <i class="dot ${health ? "dot--ok" : "dot--err"}"></i>
             API ${health ? `ok · v${health.version}` : "offline"}
           </span>
-          <span>modo ${health?.pipeline_mode ?? "—"}</span>
+          <span>áudio ${health?.use_mock_audio === false ? "real" : "mock"}</span>
           <span>STT ${health?.stt_provider ?? "—"}</span>
           <span>TTS ${health?.tts_provider ?? "—"}</span>
           <span>Consenso ${health?.consenso_enabled ? "ativo" : "off"}</span>
@@ -207,11 +207,15 @@ export class ControlApp {
                     <div class="block__label" style="margin-top:1rem">Resposta validada</div>
                     <p class="block__body">${escapeHtml(result.response_text)}</p>
                     ${
-                      result.consenso.approved
-                        ? ""
-                        : `<p class="hint" style="margin-top:0.75rem">
-                            Consenso Alfa rejeitou o rascunho — foi usada a resposta segura de fallback.
+                      result.meta.used_safe_fallback || !result.consenso.approved
+                        ? `<p class="hint" style="margin-top:0.75rem">
+                            Fallback seguro ativo${
+                              result.meta.fallback_reason
+                                ? ` (${escapeHtml(result.meta.fallback_reason)})`
+                                : ""
+                            }.
                           </p>`
+                        : ""
                     }
                   </div>
                   <div class="block">
@@ -222,13 +226,25 @@ export class ControlApp {
                       ${result.consenso.duration_ms} ms
                     </p>
                     <div class="votes">
-                      ${result.consenso.votes
-                        .map(
-                          (v) => `<div class="vote">
-                            <span><strong>${escapeHtml(v.agent_role)}</strong><br/><small>${escapeHtml(v.rationale)}</small></span>
-                            <span>${v.approved ? "ok" : "no"} · ${v.score.toFixed(2)}</span>
-                          </div>`,
-                        )
+                      ${(result.consenso.agent_latencies?.length
+                        ? result.consenso.agent_latencies
+                        : result.consenso.votes.map((v) => ({
+                            agent_id: v.agent_id,
+                            agent_role: v.agent_role,
+                            duration_ms: v.duration_ms,
+                            label: v.agent_role,
+                          }))
+                      )
+                        .map((a) => {
+                          const vote = result.consenso.votes.find(
+                            (v) => v.agent_id === a.agent_id,
+                          );
+                          return `<div class="vote">
+                            <span><strong>${escapeHtml(a.label || a.agent_role)}</strong><br/>
+                            <small>${escapeHtml(vote?.rationale ?? "")}</small></span>
+                            <span>${vote?.approved ? "ok" : "no"} · ${a.duration_ms} ms</span>
+                          </div>`;
+                        })
                         .join("")}
                     </div>
                     <div class="latency" style="margin-top:1rem">
@@ -237,6 +253,11 @@ export class ControlApp {
                       <small style="color:var(--muted)">
                         STT ${result.latency.stt_ms} · agente ${result.latency.agent_ms} ·
                         consenso ${result.latency.consenso_ms} · TTS ${result.latency.tts_ms}
+                      </small>
+                      <small style="color:var(--muted); display:block; margin-top:0.35rem">
+                        Grounding ${result.latency.consenso_grounding_ms ?? 0} ms ·
+                        Safety/Tone ${result.latency.consenso_safety_tone_ms ?? 0} ms ·
+                        Consistency ${result.latency.consenso_consistency_ms ?? 0} ms
                       </small>
                     </div>
                   </div>

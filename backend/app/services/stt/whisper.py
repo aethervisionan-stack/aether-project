@@ -9,7 +9,12 @@ from typing import Any
 
 from app.config import Settings
 from app.models.schemas import SttResult
-from app.services.resilience import retry_async, transient_network_error
+from app.services.resilience import (
+    RecoverableProviderError,
+    classify_provider_failure,
+    retry_async,
+    transient_network_error,
+)
 
 
 class OpenAIWhisperStt:
@@ -19,11 +24,6 @@ class OpenAIWhisperStt:
 
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
-        if not settings.openai_api_key:
-            raise RuntimeError(
-                "STT_PROVIDER=openai requires OPENAI_API_KEY. "
-                "Use STT_PROVIDER=mock or PIPELINE_MODE=mock for local tests."
-            )
 
     async def transcribe(
         self,
@@ -33,13 +33,24 @@ class OpenAIWhisperStt:
         content_type: str,
         language: str | None = None,
     ) -> SttResult:
+        if not self._settings.openai_api_key:
+            raise RecoverableProviderError(
+                "stt",
+                "invalid_api_key: OPENAI_API_KEY missing (USE_MOCK_AUDIO=false)",
+                provider=self.name,
+            )
+
         started = time.perf_counter()
 
         async def _call() -> Any:
             try:
                 from openai import AsyncOpenAI
             except ImportError as exc:  # pragma: no cover
-                raise RuntimeError("Install openai package for STT_PROVIDER=openai") from exc
+                raise RecoverableProviderError(
+                    "stt",
+                    f"openai_package_missing: {exc}",
+                    provider=self.name,
+                ) from exc
 
             client = AsyncOpenAI(api_key=self._settings.openai_api_key)
             buffer = io.BytesIO(audio_bytes)
@@ -54,11 +65,15 @@ class OpenAIWhisperStt:
             except Exception as exc:  # noqa: BLE001
                 raise transient_network_error("openai-stt", exc) from exc
 
-        result = await retry_async(
-            _call,
-            attempts=self._settings.retry_attempts,
-            backoff_ms=self._settings.retry_backoff_ms,
-        )
+        try:
+            result = await retry_async(
+                _call,
+                attempts=self._settings.retry_attempts,
+                backoff_ms=self._settings.retry_backoff_ms,
+            )
+        except Exception as exc:  # noqa: BLE001
+            raise classify_provider_failure("stt", self.name, exc) from exc
+
         text = getattr(result, "text", "") or ""
         elapsed = int((time.perf_counter() - started) * 1000)
         return SttResult(
@@ -86,9 +101,10 @@ class LocalWhisperStt:
         try:
             import whisper  # type: ignore
         except ImportError as exc:  # pragma: no cover
-            raise RuntimeError(
-                "STT_PROVIDER=local requires `pip install openai-whisper` and ffmpeg. "
-                "Prefer STT_PROVIDER=mock for lightweight local tests."
+            raise RecoverableProviderError(
+                "stt",
+                "local_whisper_missing: pip install openai-whisper + ffmpeg",
+                provider=self.name,
             ) from exc
         self._model = whisper.load_model(
             self._settings.whisper_model,
@@ -105,23 +121,29 @@ class LocalWhisperStt:
         language: str | None = None,
     ) -> SttResult:
         started = time.perf_counter()
-        model = await asyncio.to_thread(self._load_model)
+        try:
+            model = await asyncio.to_thread(self._load_model)
 
-        def _run() -> Any:
-            import tempfile
-            from pathlib import Path
+            def _run() -> Any:
+                import tempfile
+                from pathlib import Path
 
-            suffix = Path(filename).suffix or ".wav"
-            with tempfile.NamedTemporaryFile(suffix=suffix, delete=True) as tmp:
-                tmp.write(audio_bytes)
-                tmp.flush()
-                return model.transcribe(
-                    tmp.name,
-                    language=language or self._settings.whisper_language,
-                    fp16=False,
-                )
+                suffix = Path(filename).suffix or ".wav"
+                with tempfile.NamedTemporaryFile(suffix=suffix, delete=True) as tmp:
+                    tmp.write(audio_bytes)
+                    tmp.flush()
+                    return model.transcribe(
+                        tmp.name,
+                        language=language or self._settings.whisper_language,
+                        fp16=False,
+                    )
 
-        result = await asyncio.to_thread(_run)
+            result = await asyncio.to_thread(_run)
+        except RecoverableProviderError:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            raise classify_provider_failure("stt", self.name, exc) from exc
+
         text = (result.get("text") or "").strip()
         elapsed = int((time.perf_counter() - started) * 1000)
         return SttResult(

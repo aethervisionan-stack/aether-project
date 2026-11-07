@@ -2,6 +2,7 @@
 
 from app.models.schemas import (
     AgentVote,
+    ConsensoAgentLatency,
     ConsensoResult,
     ErrorResponse,
     HealthResponse,
@@ -14,6 +15,7 @@ from app.models.schemas import (
 
 __all__ = [
     "AgentVote",
+    "ConsensoAgentLatency",
     "ConsensoResult",
     "ErrorResponse",
     "HealthResponse",

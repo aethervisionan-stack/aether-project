@@ -8,7 +8,7 @@ import logging
 import time
 
 from app.config import Settings
-from app.models.schemas import AgentVote, ConsensoResult
+from app.models.schemas import AgentVote, ConsensoAgentLatency, ConsensoResult
 from app.services.consenso_alfa.agents import (
     ConsistencyAgent,
     FactualGroundingAgent,
@@ -18,6 +18,12 @@ from app.services.consenso_alfa.fallback import QUORUM_REJECTED_FALLBACK_PT
 from app.services.consenso_alfa.protocol import ValidationContext, ValidatorAgent
 
 logger = logging.getLogger("aether.consenso_alfa")
+
+_ROLE_LABELS: dict[str, str] = {
+    "factual_grounding": "Grounding",
+    "safety_tone": "Safety/Tone",
+    "consistency": "Consistency",
+}
 
 
 def _log_event(event: str, **fields: object) -> None:
@@ -170,6 +176,16 @@ class ConsensoAlfa:
             flags.append("quorum_rejected")
 
         elapsed = int((time.perf_counter() - started) * 1000)
+        agent_latencies = [
+            ConsensoAgentLatency(
+                agent_id=v.agent_id,
+                agent_role=v.agent_role,
+                duration_ms=v.duration_ms,
+                label=_ROLE_LABELS.get(v.agent_role, v.agent_role),
+            )
+            for v in votes
+        ]
+        latency_by_role = {a.agent_role: a.duration_ms for a in agent_latencies}
         _log_event(
             "consenso.done",
             request_id=request_id,
@@ -181,6 +197,10 @@ class ConsensoAlfa:
             final_chars=len(final_text.strip()),
             used_fallback=not approved,
             duration_ms=elapsed,
+            agent_latencies_ms=latency_by_role,
+            grounding_ms=latency_by_role.get("factual_grounding", 0),
+            safety_tone_ms=latency_by_role.get("safety_tone", 0),
+            consistency_ms=latency_by_role.get("consistency", 0),
         )
         return ConsensoResult(
             approved=approved,
@@ -190,4 +210,5 @@ class ConsensoAlfa:
             hallucination_flags=flags,
             duration_ms=elapsed,
             skipped=False,
+            agent_latencies=agent_latencies,
         )

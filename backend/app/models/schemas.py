@@ -42,6 +42,15 @@ class AgentVote(BaseModel):
     duration_ms: int = 0
 
 
+class ConsensoAgentLatency(BaseModel):
+    """Per-sub-agent validation speed for frontend / dev console."""
+
+    agent_id: str
+    agent_role: str
+    duration_ms: int = Field(ge=0)
+    label: str = ""
+
+
 class ConsensoResult(BaseModel):
     """Multi-agent validation outcome before a response is spoken."""
 
@@ -52,6 +61,7 @@ class ConsensoResult(BaseModel):
     hallucination_flags: list[str] = Field(default_factory=list)
     duration_ms: int = 0
     skipped: bool = False
+    agent_latencies: list[ConsensoAgentLatency] = Field(default_factory=list)
 
 
 class TtsResult(BaseModel):
@@ -69,14 +79,22 @@ class LatencyBreakdown(BaseModel):
     agent_ms: int = 0
     tts_ms: int = 0
     total_ms: int = 0
+    # Per Consenso Alfa sub-agent (ms) — mirrored for easy frontend binding
+    consenso_grounding_ms: int = 0
+    consenso_safety_tone_ms: int = 0
+    consenso_consistency_ms: int = 0
+    consenso_agents_ms: dict[str, int] = Field(default_factory=dict)
 
 
 class ProcessAudioMeta(BaseModel):
     request_id: str
     pipeline_mode: str
+    use_mock_audio: bool = True
     stt_provider: str
     tts_provider: str
     consenso_enabled: bool
+    used_safe_fallback: bool = False
+    fallback_reason: str | None = None
     created_at: datetime = Field(default_factory=utc_now)
     # Seam for Phase 2+ DePIN/Solana attestation (null in Phase 1)
     depin_attestation: dict[str, Any] | None = None
@@ -98,10 +116,12 @@ class HealthResponse(BaseModel):
     status: str
     version: str
     pipeline_mode: str
+    use_mock_audio: bool = True
     stt_provider: str
     tts_provider: str
     consenso_enabled: bool
     depin_ready: bool = False
+    web3_rpc_configured: bool = False
 
 
 class ErrorResponse(BaseModel):
