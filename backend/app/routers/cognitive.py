@@ -55,6 +55,8 @@ class CognitiveChatResponse(BaseModel):
     used_safe_fallback: bool = False
     fallback_reason: str | None = None
     audio_response_url: str | None = None
+    tools: list[dict[str, Any]] = Field(default_factory=list)
+    tools_executed_count: int = 0
 
 
 @router.post("/api/cognitive/chat", response_model=CognitiveChatResponse)
@@ -85,6 +87,7 @@ async def cognitive_chat(body: CognitiveChatRequest) -> CognitiveChatResponse:
 
     history_payload = [h.model_dump() for h in body.history]
 
+    tools_payload: list[dict[str, Any]] = []
     try:
         turn = await gateway.chat(
             query=body.query,
@@ -96,10 +99,12 @@ async def cognitive_chat(body: CognitiveChatRequest) -> CognitiveChatResponse:
             client_id=body.client_id,
             request_id=request_id,
             speakable=False,
+            enable_tools=True,
         )
         draft = turn.text
         used_fallback = False
         fallback_reason = None
+        tools_payload = [t.model_dump() for t in (turn.tools or [])]
     except RecoverableProviderError as exc:
         logger.warning(
             "cognitive.gemini.recoverable detail=%s provider=%s request_id=%s",
@@ -119,6 +124,7 @@ async def cognitive_chat(body: CognitiveChatRequest) -> CognitiveChatResponse:
                 "duration_ms": 0,
                 "provider": turn_provider,
                 "mode": mode,
+                "tools": [],
             },
         )()
 
@@ -134,6 +140,7 @@ async def cognitive_chat(body: CognitiveChatRequest) -> CognitiveChatResponse:
         fallback_reason = fallback_reason or "consenso_quorum_rejected"
 
     status: Literal["ok", "fallback", "error"] = "fallback" if used_fallback else "ok"
+    executed = sum(1 for t in tools_payload if t.get("executed"))
 
     return CognitiveChatResponse(
         status=status,
@@ -151,4 +158,6 @@ async def cognitive_chat(body: CognitiveChatRequest) -> CognitiveChatResponse:
         used_safe_fallback=used_fallback,
         fallback_reason=fallback_reason,
         audio_response_url=None,
+        tools=tools_payload,
+        tools_executed_count=executed,
     )

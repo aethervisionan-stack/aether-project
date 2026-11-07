@@ -7,7 +7,7 @@ from typing import Any
 
 from sqlalchemy import desc, func, select
 
-from app.db.models import AuditTrail, SessionLog, utc_now
+from app.db.models import AuditTrail, ContextNote, SessionLog, utc_now
 from app.db.session import get_session_factory
 from app.models.schemas import ProcessAudioResponse, ToolInvocation
 
@@ -202,3 +202,75 @@ def consolidated_metrics(*, sqlite_url: str = "") -> dict[str, Any]:
             "consensus": {"avg_score": float(avg_score)},
             "audit": {"approve": int(approve), "reject": int(reject)},
         }
+
+
+def store_context_note(
+    *,
+    content: str,
+    client_id: str = "default",
+    tag: str = "geral",
+    request_id: str | None = None,
+    source: str = "gemini_fc",
+    sqlite_url: str = "",
+) -> dict[str, Any]:
+    """Persist a short context note for Gemini FC (never stores secrets)."""
+    cleaned = " ".join((content or "").split())
+    if not cleaned:
+        return {"ok": False, "error": "empty_content"}
+    if len(cleaned) > 2000:
+        cleaned = cleaned[:2000]
+    tag_clean = (tag or "geral").strip().lower()[:64] or "geral"
+    try:
+        factory = get_session_factory(sqlite_url)
+        with factory() as session:
+            note = ContextNote(
+                timestamp=utc_now(),
+                client_id=client_id or "default",
+                tag=tag_clean,
+                content=cleaned,
+                source=source or "gemini_fc",
+                request_id=request_id,
+            )
+            session.add(note)
+            session.commit()
+            session.refresh(note)
+            return {
+                "ok": True,
+                "id": note.id,
+                "tag": note.tag,
+                "client_id": note.client_id,
+                "content_preview": note.content[:160],
+            }
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("store_context_note failed: %s", exc)
+        return {"ok": False, "error": "sqlite_write_failed", "detail": type(exc).__name__}
+
+
+def list_context_notes(
+    *,
+    client_id: str | None = None,
+    tag: str | None = None,
+    limit: int = 20,
+    sqlite_url: str = "",
+) -> list[dict[str, Any]]:
+    limit = max(1, min(int(limit or 20), 50))
+    factory = get_session_factory(sqlite_url)
+    with factory() as session:
+        stmt = select(ContextNote).order_by(desc(ContextNote.timestamp)).limit(limit)
+        if client_id:
+            stmt = stmt.where(ContextNote.client_id == client_id)
+        if tag:
+            stmt = stmt.where(ContextNote.tag == tag.strip().lower())
+        rows = session.scalars(stmt).all()
+        return [
+            {
+                "id": row.id,
+                "timestamp": row.timestamp.isoformat() if row.timestamp else None,
+                "client_id": row.client_id,
+                "tag": row.tag,
+                "content": row.content,
+                "source": row.source,
+                "request_id": row.request_id,
+            }
+            for row in rows
+        ]

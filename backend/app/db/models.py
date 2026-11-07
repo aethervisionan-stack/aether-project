@@ -59,3 +59,19 @@ class AuditTrail(Base):
     arguments_json: Mapped[dict | list | None] = mapped_column(JSON, nullable=True)
     duration_ms: Mapped[int] = mapped_column(Integer, default=0)
     consensus_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+
+class ContextNote(Base):
+    """User/context notes stored by Gemini function calling (table: context_notes)."""
+
+    __tablename__ = "context_notes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    timestamp: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, index=True
+    )
+    client_id: Mapped[str] = mapped_column(String(128), index=True, default="default")
+    tag: Mapped[str] = mapped_column(String(64), index=True, default="geral")
+    content: Mapped[str] = mapped_column(Text, default="")
+    source: Mapped[str] = mapped_column(String(64), default="gemini_fc")
+    request_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)

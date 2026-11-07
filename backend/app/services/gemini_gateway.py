@@ -46,8 +46,11 @@ AETHER_GEMINI_SYSTEM = (
     "TTS Gemini (com fallback local/browser); "
     "memória adaptativa local (Chroma/RAG); auditoria SQLite "
     "(SessionLogs + latências STT·Agent·Consenso·TTS). "
+    "Ferramentas locais (Function Calling) disponíveis: "
+    "query_session_logs, query_metrics, store_context_note, list_context_notes "
+    "— leem/escrevem apenas aether_vision.db (sem SQL arbitrário). "
     "Não invente notas/tarefas a partir de falas comuns; "
-    "só trate memória com pedido explícito salvar/anotar/lembrar. "
+    "só chame store_context_note com pedido explícito salvar/anotar/lembrar. "
     "Nunca invente segredos nem peça ações destrutivas. "
     "Use o histórico estruturado da conversa para continuidade, "
     "sem repetir respostas anteriores verbatim."
@@ -163,6 +166,8 @@ class GeminiGateway:
         system_instruction: str | None = None,
         max_output_tokens: int = 1024,
         speakable: bool = False,
+        enable_tools: bool = True,
+        sqlite_url: str = "",
     ) -> GeminiTurnResult:
         started = time.perf_counter()
         cleaned = " ".join((query or "").split())
@@ -199,6 +204,10 @@ class GeminiGateway:
         preamble_parts.append(f"mode: {resolved_mode} ({model})")
         if speakable:
             preamble_parts.append("Resposta preferencialmente falável (1 frase curta).")
+        if enable_tools:
+            preamble_parts.append(
+                "Pode usar Function Calling nas tools SQLite locais quando útil."
+            )
         preamble = "\n".join(preamble_parts)
 
         system = (system_instruction or AETHER_GEMINI_SYSTEM).strip()
@@ -206,13 +215,17 @@ class GeminiGateway:
         system_full = f"{system}\n\n[Session]\n{preamble}"
 
         try:
-            text, raw_meta = await self._call_gemini(
+            text, tools_log, raw_meta = await self._call_gemini(
                 api_key=key,
                 model=model,
                 system=system_full,
                 messages=messages,
                 max_output_tokens=max_output_tokens,
                 temperature=0.35 if resolved_mode == "pro" else 0.4,
+                enable_tools=enable_tools and not speakable,
+                client_id=client_id,
+                request_id=request_id,
+                sqlite_url=sqlite_url,
             )
         except RecoverableProviderError:
             raise
@@ -227,11 +240,12 @@ class GeminiGateway:
 
         elapsed = int((time.perf_counter() - started) * 1000)
         logger.info(
-            "gemini.chat.done model=%s mode=%s chars=%s history=%s duration_ms=%s request_id=%s",
+            "gemini.chat.done model=%s mode=%s chars=%s history=%s tools=%s duration_ms=%s request_id=%s",
             model,
             resolved_mode,
             len(text),
             len(messages),
+            len(tools_log),
             elapsed,
             request_id,
         )
@@ -240,7 +254,7 @@ class GeminiGateway:
             duration_ms=elapsed,
             provider=model,
             mode=resolved_mode,
-            tools=[],
+            tools=tools_log,
             raw=raw_meta,
         )
 
@@ -253,7 +267,11 @@ class GeminiGateway:
         messages: list[ChatMessage],
         max_output_tokens: int,
         temperature: float,
-    ) -> tuple[str, dict[str, Any]]:
+        enable_tools: bool = False,
+        client_id: str = "default",
+        request_id: str | None = None,
+        sqlite_url: str = "",
+    ) -> tuple[str, list[ToolInvocation], dict[str, Any]]:
         try:
             from google import genai
             from google.genai import types
@@ -264,14 +282,24 @@ class GeminiGateway:
                 provider=model,
             ) from exc
 
+        from app.services.gemini_tools import (
+            MAX_TOOL_ROUNDS,
+            build_genai_tool,
+            execute_gemini_tool,
+            extract_function_calls,
+            invocation_from_handler,
+        )
+
         client = genai.Client(api_key=api_key)
+        tools_cfg = [build_genai_tool(types)] if enable_tools else None
         config = types.GenerateContentConfig(
             system_instruction=system,
             temperature=temperature,
             max_output_tokens=max_output_tokens,
+            tools=tools_cfg,
         )
 
-        contents: list[types.Content] = []
+        contents: list[Any] = []
         for msg in messages:
             contents.append(
                 types.Content(
@@ -280,51 +308,142 @@ class GeminiGateway:
                 )
             )
 
-        async def _once() -> Any:
-            return await client.aio.models.generate_content(
-                model=model,
-                contents=contents,
-                config=config,
-            )
+        tools_log: list[ToolInvocation] = []
+        timeout_s = max(5.0, self._settings.request_timeout_ms / 1000.0)
+        text = ""
+        rounds = 0
 
         try:
-            response = await asyncio.wait_for(
-                _once(),
-                timeout=max(5.0, self._settings.request_timeout_ms / 1000.0),
-            )
-        except TimeoutError as exc:
-            raise RecoverableProviderError(
-                "agent",
-                "gemini_timeout",
-                provider=model,
-            ) from exc
+            for _round in range(MAX_TOOL_ROUNDS if enable_tools else 1):
+                rounds = _round + 1
+
+                async def _once() -> Any:
+                    return await client.aio.models.generate_content(
+                        model=model,
+                        contents=contents,
+                        config=config,
+                    )
+
+                try:
+                    response = await asyncio.wait_for(_once(), timeout=timeout_s)
+                except TimeoutError as exc:
+                    raise RecoverableProviderError(
+                        "agent",
+                        "gemini_timeout",
+                        provider=model,
+                    ) from exc
+
+                calls = extract_function_calls(response) if enable_tools else []
+                if not calls:
+                    text = _extract_text(response)
+                    break
+
+                # Append model turn (with function_call parts) then function responses
+                model_content = None
+                try:
+                    cands = getattr(response, "candidates", None) or []
+                    if cands:
+                        model_content = getattr(cands[0], "content", None)
+                except Exception:  # noqa: BLE001
+                    model_content = None
+                if model_content is not None:
+                    contents.append(model_content)
+                else:
+                    # Reconstruct minimal function_call content
+                    fc_parts = []
+                    for name, args, _fc in calls:
+                        fc_parts.append(
+                            types.Part.from_function_call(name=name, args=args)
+                        )
+                    contents.append(types.Content(role="model", parts=fc_parts))
+
+                response_parts = []
+                for name, args, fc in calls:
+                    result = execute_gemini_tool(
+                        name,
+                        args,
+                        client_id=client_id,
+                        request_id=request_id,
+                        sqlite_url=sqlite_url,
+                    )
+                    tools_log.append(invocation_from_handler(name, args, result))
+                    response_parts.append(
+                        types.Part.from_function_response(
+                            name=name,
+                            response=result.payload,
+                        )
+                    )
+
+                contents.append(types.Content(role="user", parts=response_parts))
+            else:
+                # Exhausted tool rounds without plain text — one last text-only nudge
+                contents.append(
+                    types.Content(
+                        role="user",
+                        parts=[
+                            types.Part.from_text(
+                                text=(
+                                    "Responda agora ao utilizador em texto final, "
+                                    "usando os resultados das tools já obtidos."
+                                )
+                            )
+                        ],
+                    )
+                )
+                config_no_tools = types.GenerateContentConfig(
+                    system_instruction=system,
+                    temperature=temperature,
+                    max_output_tokens=max_output_tokens,
+                )
+
+                async def _final() -> Any:
+                    return await client.aio.models.generate_content(
+                        model=model,
+                        contents=contents,
+                        config=config_no_tools,
+                    )
+
+                try:
+                    response = await asyncio.wait_for(_final(), timeout=timeout_s)
+                    text = _extract_text(response)
+                except TimeoutError as exc:
+                    raise RecoverableProviderError(
+                        "agent",
+                        "gemini_timeout",
+                        provider=model,
+                    ) from exc
         finally:
             try:
                 await client.aio.aclose()
             except Exception:  # noqa: BLE001
                 pass
 
-        text = (getattr(response, "text", None) or "").strip()
-        if not text:
-            try:
-                cands = getattr(response, "candidates", None) or []
-                for cand in cands:
-                    content = getattr(cand, "content", None)
-                    parts = getattr(content, "parts", None) or []
-                    for part in parts:
-                        piece = getattr(part, "text", None)
-                        if piece:
-                            text += str(piece)
-            except Exception:  # noqa: BLE001
-                pass
-            text = text.strip()
-
         meta = {
             "model": model,
             "has_text": bool(text),
             "turns": len(messages),
+            "tool_rounds": rounds,
+            "tools_executed": sum(1 for t in tools_log if t.executed),
         }
-        return text, meta
+        return text, tools_log, meta
+
+
+def _extract_text(response: Any) -> str:
+    text = (getattr(response, "text", None) or "").strip()
+    if text:
+        return text
+    try:
+        cands = getattr(response, "candidates", None) or []
+        for cand in cands:
+            content = getattr(cand, "content", None)
+            parts = getattr(content, "parts", None) or []
+            for part in parts:
+                piece = getattr(part, "text", None)
+                if piece:
+                    text += str(piece)
+    except Exception:  # noqa: BLE001
+        pass
+    return text.strip()
 
 
 def build_sqlite_context(
