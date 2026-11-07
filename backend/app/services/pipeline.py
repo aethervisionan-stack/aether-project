@@ -1,4 +1,4 @@
-"""End-to-end audio pipeline: STT → agent → Consenso Alfa → TTS."""
+"""End-to-end audio pipeline: STT → memory → agent → Consenso Alfa → TTS."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ import time
 import uuid
 
 from app.config import Settings
+from app.core.memory import AdaptiveMemory, get_adaptive_memory
 from app.models.schemas import (
     ConsensoResult,
     LatencyBreakdown,
@@ -36,7 +37,6 @@ def _plog(event: str, **fields: object) -> None:
 
 def _latency_from_consenso(consenso: ConsensoResult) -> dict[str, int]:
     by_role = {a.agent_role: a.duration_ms for a in consenso.agent_latencies}
-    # Also key by vote role if agent_latencies empty (skipped)
     if not by_role:
         by_role = {v.agent_role: v.duration_ms for v in consenso.votes}
     return by_role
@@ -50,13 +50,26 @@ class AudioPipeline:
         tts: TtsProviderProtocol,
         consenso: ConsensoAlfa,
         agent: ResponseAgent | None = None,
+        memory: AdaptiveMemory | None = None,
     ) -> None:
         self._settings = settings
         self._stt = stt
         self._tts = tts
         self._consenso = consenso
-        self._agent = agent or ResponseAgent()
+        self._agent = agent or ResponseAgent(settings)
+        self._memory = memory
         self._mock_tts = MockTts(settings)
+
+    def _memory_or_none(self) -> AdaptiveMemory | None:
+        if not self._settings.memory_enabled:
+            return None
+        if self._memory is not None:
+            return self._memory
+        try:
+            return get_adaptive_memory()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("memory unavailable: %s", exc)
+            return None
 
     async def process(
         self,
@@ -66,6 +79,7 @@ class AudioPipeline:
         content_type: str,
         language: str | None = None,
         locale: str = "pt-BR",
+        client_id: str = "default",
     ) -> ProcessAudioResponse:
         request_id = str(uuid.uuid4())
         total_started = time.perf_counter()
@@ -79,9 +93,11 @@ class AudioPipeline:
             content_type=content_type,
             bytes=len(audio_bytes),
             locale=locale,
+            client_id=client_id,
             use_mock_audio=self._settings.use_mock_audio,
             stt=self._settings.effective_stt_provider(),
             tts=self._settings.effective_tts_provider(),
+            openai_key_configured=bool(self._settings.openai_api_key.strip()),
         )
 
         if len(audio_bytes) > self._settings.max_audio_bytes:
@@ -97,6 +113,49 @@ class AudioPipeline:
                 stage="stt",
                 retryable=False,
                 detail="No bytes received from headset capture",
+            )
+
+        # Real mode without key: fail clearly — never silent mock Whisper success.
+        if (
+            not self._settings.use_mock_audio
+            and not self._settings.openai_api_key.strip()
+            and self._settings.effective_stt_provider() == "openai"
+        ):
+            log_provider_error(
+                stage="stt",
+                provider="openai-whisper",
+                detail="invalid_api_key: OPENAI_API_KEY empty — set backend/.env",
+                request_id=request_id,
+                error_type="invalid_api_key",
+            )
+            used_safe_fallback = True
+            fallback_reason = "stt:invalid_api_key: OPENAI_API_KEY empty"
+            stt = SttResult(
+                text="",
+                language=language or self._settings.whisper_language,
+                confidence=0.0,
+                provider="openai-whisper",
+                duration_ms=0,
+                raw={"fallback": True, "detail": "OPENAI_API_KEY empty"},
+            )
+            return await self._safe_response(
+                request_id=request_id,
+                total_started=total_started,
+                stt=stt,
+                response_text=API_FAILURE_FALLBACK_PT,
+                consenso=ConsensoResult(
+                    approved=False,
+                    agreement_ratio=0.0,
+                    final_text=API_FAILURE_FALLBACK_PT,
+                    votes=[],
+                    hallucination_flags=["missing_openai_api_key"],
+                    duration_ms=0,
+                    skipped=True,
+                    agent_latencies=[],
+                ),
+                used_safe_fallback=True,
+                fallback_reason=fallback_reason,
+                agent_ms=0,
             )
 
         # --- STT (recoverable on real API failure) ---
@@ -157,7 +216,6 @@ class AudioPipeline:
         )
 
         if used_safe_fallback and not stt.text:
-            # Skip agent/consenso — speak API failure fallback via mock TTS.
             return await self._safe_response(
                 request_id=request_id,
                 total_started=total_started,
@@ -178,8 +236,56 @@ class AudioPipeline:
                 agent_ms=0,
             )
 
+        # --- Adaptive memory / client DNA (before gpt-4o-mini) ---
+        memory = self._memory_or_none()
+        memory_context = ""
+        if memory and memory.available and stt.text:
+            hits = memory.search_context(stt.text, client_id=client_id)
+            memory_context = memory.format_context_block(hits)
+            memory.extract_and_store_preferences(stt.text, client_id=client_id)
+            _plog(
+                "pipeline.memory.loaded",
+                request_id=request_id,
+                hits=len(hits),
+                client_id=client_id,
+            )
+
         try:
-            draft = await self._agent.draft(stt.text, locale=locale)
+            draft = await self._agent.draft(
+                stt.text,
+                locale=locale,
+                memory_context=memory_context,
+                settings=self._settings,
+            )
+        except RecoverableProviderError as exc:
+            log_provider_error(
+                stage="agent",
+                provider=exc.provider or "gpt-4o-mini",
+                detail=exc.detail,
+                request_id=request_id,
+                error_type="recoverable_agent",
+            )
+            used_safe_fallback = True
+            fallback_reason = fallback_reason or f"agent:{exc.detail}"
+            return await self._safe_response(
+                request_id=request_id,
+                total_started=total_started,
+                stt=stt,
+                response_text=API_FAILURE_FALLBACK_PT,
+                consenso=ConsensoResult(
+                    approved=False,
+                    agreement_ratio=0.0,
+                    final_text=API_FAILURE_FALLBACK_PT,
+                    votes=[],
+                    hallucination_flags=["agent_provider_failure"],
+                    duration_ms=0,
+                    skipped=True,
+                    agent_latencies=[],
+                ),
+                used_safe_fallback=True,
+                fallback_reason=fallback_reason,
+                agent_ms=0,
+            )
         except Exception as exc:  # noqa: BLE001
             raise PipelineError(
                 "Agent draft failed",
@@ -258,6 +364,15 @@ class AudioPipeline:
             tts = await self._mock_tts.synthesize(speak_text)
             consenso = consenso.model_copy(update={"final_text": speak_text})
 
+        # Persist interaction into client DNA after a successful spoken turn.
+        if memory and memory.available and stt.text and consenso.final_text:
+            memory.remember_interaction(
+                transcript=stt.text,
+                response=consenso.final_text,
+                client_id=client_id,
+                request_id=request_id,
+            )
+
         total_ms = int((time.perf_counter() - total_started) * 1000)
         by_role = _latency_from_consenso(consenso)
         _plog(
@@ -269,6 +384,7 @@ class AudioPipeline:
             consenso_approved=consenso.approved,
             used_safe_fallback=used_safe_fallback,
             tts_ms=tts.duration_ms,
+            audio_url=tts.audio_url,
             grounding_ms=by_role.get("factual_grounding", 0),
             safety_tone_ms=by_role.get("safety_tone", 0),
             consistency_ms=by_role.get("consistency", 0),
@@ -280,6 +396,7 @@ class AudioPipeline:
             consenso=consenso,
             audio_base64=tts.audio_base64,
             audio_mime_type=tts.mime_type,
+            audio_url=tts.audio_url,
             latency=LatencyBreakdown(
                 stt_ms=stt.duration_ms,
                 consenso_ms=consenso.duration_ms,
@@ -331,6 +448,7 @@ class AudioPipeline:
             consenso=consenso,
             audio_base64=tts.audio_base64,
             audio_mime_type=tts.mime_type,
+            audio_url=tts.audio_url,
             latency=LatencyBreakdown(
                 stt_ms=stt.duration_ms,
                 consenso_ms=consenso.duration_ms,

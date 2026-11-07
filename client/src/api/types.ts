@@ -59,6 +59,8 @@ export interface ProcessAudioResponse {
   consenso: ConsensoResult;
   audio_base64: string;
   audio_mime_type: string;
+  /** Relative or absolute URL for GET /audio/{filename} (preferred for autoplay). */
+  audio_url?: string | null;
   latency: LatencyBreakdown;
   meta: ProcessAudioMeta;
 }

@@ -9,6 +9,7 @@ import httpx
 
 from app.config import Settings
 from app.models.schemas import TtsResult
+from app.services.audio_store import save_tts_audio
 from app.services.resilience import (
     RecoverableProviderError,
     classify_provider_failure,
@@ -69,10 +70,12 @@ class ElevenLabsTts:
             raise classify_provider_failure("tts", self.name, exc) from exc
 
         elapsed = int((time.perf_counter() - started) * 1000)
-        mime = (
-            "audio/mpeg"
-            if "mp3" in self._settings.elevenlabs_output_format
-            else "audio/wav"
+        is_mp3 = "mp3" in self._settings.elevenlabs_output_format
+        mime = "audio/mpeg" if is_mp3 else "audio/wav"
+        filename = save_tts_audio(
+            audio,
+            extension="mp3" if is_mp3 else "wav",
+            settings=self._settings,
         )
         return TtsResult(
             audio_base64=base64.b64encode(audio).decode("ascii"),
@@ -81,4 +84,6 @@ class ElevenLabsTts:
             provider=self.name,
             duration_ms=elapsed,
             character_count=len(text),
+            filename=filename,
+            audio_url=f"/audio/{filename}",
         )

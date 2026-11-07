@@ -32,13 +32,14 @@ async def process_audio(
     audio: UploadFile = File(..., description="Microphone capture from the Bluetooth headset"),
     language: str | None = Form(default=None),
     locale: str = Form(default="pt-BR"),
+    client_id: str = Form(default="default"),
     settings: Settings = Depends(get_app_settings),
     pipeline: AudioPipeline = Depends(get_pipeline),
 ) -> ProcessAudioResponse:
     """
     Accepts multipart audio from a generic Bluetooth headset mic,
-    runs STT → agent draft → Consenso Alfa → TTS, and returns
-    transcript + validated text + base64 WAV for headphone playback.
+    runs STT → adaptive memory → gpt-4o-mini → Consenso Alfa → TTS, and returns
+    transcript + validated text + base64 /audio URL for headphone autoplay.
     """
     content_type = audio.content_type or "application/octet-stream"
     filename = audio.filename or "headset-capture.webm"
@@ -57,11 +58,12 @@ async def process_audio(
         ) from exc
 
     logger.info(
-        '{"event":"http.process_audio.received","filename":%s,"content_type":%s,"bytes":%s,"locale":%s}',
+        '{"event":"http.process_audio.received","filename":%s,"content_type":%s,"bytes":%s,"locale":%s,"client_id":%s}',
         json.dumps(filename),
         json.dumps(content_type),
         len(audio_bytes),
         json.dumps(locale),
+        json.dumps(client_id),
     )
 
     try:
@@ -72,6 +74,7 @@ async def process_audio(
                 content_type=content_type,
                 language=language,
                 locale=locale,
+                client_id=client_id or "default",
             ),
             timeout=settings.request_timeout_ms / 1000.0,
         )

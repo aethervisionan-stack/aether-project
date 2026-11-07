@@ -54,13 +54,19 @@ class Settings(BaseSettings):
     consenso_timeout_ms: int = Field(default=2500, ge=100)
 
     tts_provider: TtsProvider = "mock"
-    openai_tts_model: str = "gpt-4o-mini-tts"
+    openai_tts_model: str = "tts-1"
     openai_tts_voice: str = "alloy"
+    openai_agent_model: str = "gpt-4o-mini"
     elevenlabs_api_key: str = ""
     elevenlabs_voice_id: str = "21m00Tcm4TlvDq8ikWAM"
     elevenlabs_model_id: str = "eleven_multilingual_v2"
     elevenlabs_output_format: str = "mp3_44100_128"
     tts_sample_rate: int = 24000
+    tts_audio_dir: str = "data/tts_audio"
+
+    # Adaptive memory (local ChromaDB)
+    chroma_persist_dir: str = "data/chroma"
+    memory_enabled: bool = True
 
     request_timeout_ms: int = Field(default=30_000, ge=1000)
     max_audio_bytes: int = Field(default=10_485_760, ge=1024)

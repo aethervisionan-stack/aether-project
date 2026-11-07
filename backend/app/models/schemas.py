@@ -71,6 +71,8 @@ class TtsResult(BaseModel):
     provider: str
     duration_ms: int = 0
     character_count: int = 0
+    filename: str | None = None
+    audio_url: str | None = None
 
 
 class LatencyBreakdown(BaseModel):
@@ -108,6 +110,7 @@ class ProcessAudioResponse(BaseModel):
     consenso: ConsensoResult
     audio_base64: str
     audio_mime_type: str = "audio/wav"
+    audio_url: str | None = None
     latency: LatencyBreakdown
     meta: ProcessAudioMeta
 

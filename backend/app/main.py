@@ -10,8 +10,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from app import __version__
 from app.config import get_settings
 from app.middleware.errors import pipeline_error_handler, unhandled_error_handler
-from app.routes import health, process_audio
+from app.routes import audio, health, process_audio
 from app.services.resilience import PipelineError
+
+# Ensure .env is loaded early (pydantic-settings also reads it; python-dotenv
+# documents the required OPENAI_API_KEY fill step for operators).
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv()
+except ImportError:  # pragma: no cover
+    pass
 
 settings = get_settings()
 logging.basicConfig(
@@ -24,7 +33,8 @@ app = FastAPI(
     title="Aether Vision Voice API",
     description=(
         "Phase 1 MVP — ultra-fast voice assistant pipeline for generic "
-        "Bluetooth headphones. STT (Whisper) → agent → Consenso Alfa → TTS."
+        "Bluetooth headphones. Whisper → gpt-4o-mini + DNA memory → "
+        "Consenso Alfa → OpenAI TTS."
     ),
     version=__version__,
 )
@@ -47,6 +57,16 @@ app.add_exception_handler(Exception, unhandled_error_handler)
 
 app.include_router(health.router)
 app.include_router(process_audio.router)
+app.include_router(audio.router)
+
+logger.info(
+    "pipeline use_mock_audio=%s stt=%s tts=%s openai_key=%s memory=%s",
+    settings.use_mock_audio,
+    settings.effective_stt_provider(),
+    settings.effective_tts_provider(),
+    "set" if settings.openai_api_key.strip() else "EMPTY — fill backend/.env",
+    settings.memory_enabled,
+)
 
 
 @app.get("/")
@@ -57,4 +77,5 @@ async def root() -> dict[str, str]:
         "docs": "/docs",
         "health": "/health",
         "process_audio": "POST /process-audio",
+        "audio": "GET /audio/{filename}",
     }

@@ -2,7 +2,7 @@ import { voiceApi } from "../api/client";
 import type { HealthResponse, ProcessAudioResponse } from "../api/types";
 import { VoiceApiError } from "../api/types";
 import { HeadsetCapture, listAudioInputs } from "../audio/capture";
-import { playBase64Audio } from "../audio/playback";
+import { playResponseAudio } from "../audio/playback";
 
 /** Portuguese flow states for the Bluetooth headset control UI. */
 type UiPhase = "idle" | "listening" | "validating" | "responding";
@@ -97,7 +97,12 @@ export class ControlApp {
       });
       this.lastResult = result;
       this.setPhase("responding");
-      await playBase64Audio(result.audio_base64, result.audio_mime_type);
+      // Autoplay on OS default output / Bluetooth headset
+      await playResponseAudio({
+        audioUrl: result.audio_url,
+        audioBase64: result.audio_base64,
+        mimeType: result.audio_mime_type,
+      });
       this.setPhase("idle");
     } catch (err) {
       this.capture.cancel();
