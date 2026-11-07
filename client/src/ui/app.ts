@@ -9,8 +9,22 @@ import type {
   SessionHistoryItem,
 } from "../api/types";
 import { VoiceApiError } from "../api/types";
-import { HeadsetCapture, listAudioInputs } from "../audio/capture";
+import type { ConsensoResult } from "../api/types";
+import {
+  CaptureError,
+  HeadsetCapture,
+  isMediaRecorderCaptureAvailable,
+  listAudioInputs,
+  probeCaptureCapabilities,
+  probeMicrophoneAccess,
+} from "../audio/capture";
 import { playResponseAudio } from "../audio/playback";
+import {
+  SpeechCaptureError,
+  WebSpeechCapture,
+  isSpeechRecognitionAvailable,
+  speakLocally,
+} from "../audio/speech";
 import { renderMetricsPanel } from "./components/MetricsPanel";
 import { renderSessionHistory } from "./components/SessionHistory";
 import { escapeHtml, formatMs, formatPercent } from "./html";
@@ -19,6 +33,9 @@ import { renderMarkdown } from "./markdown";
 /** Portuguese flow states for the Bluetooth headset control UI. */
 type UiPhase = "idle" | "listening" | "validating" | "responding";
 type AuditTab = "history" | "metrics";
+/** Mic HUD: MediaRecorder ok · permission denied · Web Speech fallback. */
+type MicStatus = "active" | "blocked" | "safe";
+type CaptureMode = "mediarecorder" | "webspeech";
 
 const PHASE_LABEL: Record<UiPhase, string> = {
   idle: "Pronto",
@@ -27,11 +44,18 @@ const PHASE_LABEL: Record<UiPhase, string> = {
   responding: "A responder...",
 };
 
+const MIC_STATUS_LABEL: Record<MicStatus, string> = {
+  active: "Active",
+  blocked: "Blocked",
+  safe: "Safe Mode",
+};
+
 const HUD_CLIENT_ID = "default";
 
 export class ControlApp {
   private readonly root: HTMLElement;
   private readonly capture = new HeadsetCapture();
+  private readonly speech = new WebSpeechCapture();
   private phase: UiPhase = "idle";
   private health: HealthResponse | null = null;
   private lastResult: ProcessAudioResponse | null = null;
@@ -40,6 +64,11 @@ export class ControlApp {
   private activeMicLabel: string | null = null;
   private healthTimer: number | null = null;
   private readonly healthPollMs = 4_000;
+  private micStatus: MicStatus = "safe";
+  private captureMode: CaptureMode = "mediarecorder";
+  private reconnectBusy = false;
+  private speechInterim = "";
+  private speechPollTimer: number | null = null;
 
   /** Collapsible audit panel (history + metrics). */
   private auditOpen = true;
@@ -63,8 +92,75 @@ export class ControlApp {
   async mount(): Promise<void> {
     this.render();
     await this.refreshHealth();
+    await this.probeMicStatus({ quiet: true });
     await this.refreshAudit({ quiet: true });
     this.startHealthPolling();
+  }
+
+  /** Soft mic probe — no full page reload. Updates Active / Blocked / Safe Mode. */
+  private async probeMicStatus(options: { quiet?: boolean } = {}): Promise<void> {
+    const caps = probeCaptureCapabilities();
+    if (!isMediaRecorderCaptureAvailable()) {
+      this.micStatus = caps.speechRecognition ? "safe" : "blocked";
+      this.captureMode = caps.speechRecognition ? "webspeech" : "mediarecorder";
+      if (!options.quiet && this.micStatus === "safe") {
+        this.errorMessage =
+          "MediaRecorder indisponível — Safe Mode (Web Speech) ativo.";
+      }
+      this.render();
+      return;
+    }
+
+    const probe = await probeMicrophoneAccess();
+    if (probe.ok) {
+      this.micStatus = "active";
+      this.captureMode = "mediarecorder";
+      this.activeMicLabel = probe.label;
+      if (!options.quiet) {
+        this.errorMessage = null;
+      }
+    } else if (probe.error?.kind === "permission_denied") {
+      this.micStatus = "blocked";
+      this.activeMicLabel = null;
+      if (!options.quiet) {
+        this.errorMessage = probe.error.message;
+      }
+    } else if (isSpeechRecognitionAvailable()) {
+      this.micStatus = "safe";
+      this.captureMode = "webspeech";
+      if (!options.quiet) {
+        this.errorMessage =
+          probe.error?.message ??
+          "Captura de áudio falhou — Safe Mode (Web Speech) ativo.";
+      }
+    } else {
+      this.micStatus = "blocked";
+      if (!options.quiet) {
+        this.errorMessage =
+          probe.error?.message ?? "Microfone indisponível neste browser.";
+      }
+    }
+    this.render();
+  }
+
+  private async reconnectMic(): Promise<void> {
+    if (this.reconnectBusy || this.phase !== "idle") return;
+    this.reconnectBusy = true;
+    this.errorMessage = null;
+    this.capture.cancel();
+    this.speech.cancel();
+    this.speechInterim = "";
+    this.render();
+    try {
+      await this.probeMicStatus({ quiet: false });
+      if (this.micStatus === "active") {
+        this.errorMessage = null;
+        this.activeMicLabel = this.activeMicLabel ?? "entrada padrão do sistema";
+      }
+    } finally {
+      this.reconnectBusy = false;
+      this.render();
+    }
   }
 
   private startHealthPolling(): void {
@@ -78,7 +174,31 @@ export class ControlApp {
 
   private setPhase(phase: UiPhase): void {
     this.phase = phase;
+    if (phase === "listening" && this.captureMode === "webspeech") {
+      this.startSpeechInterimPoll();
+    } else {
+      this.stopSpeechInterimPoll();
+    }
     this.render();
+  }
+
+  private startSpeechInterimPoll(): void {
+    this.stopSpeechInterimPoll();
+    this.speechPollTimer = window.setInterval(() => {
+      if (!this.speech.isListening()) return;
+      const next = this.speech.getInterim();
+      if (next !== this.speechInterim) {
+        this.speechInterim = next;
+        this.render();
+      }
+    }, 400);
+  }
+
+  private stopSpeechInterimPoll(): void {
+    if (this.speechPollTimer !== null) {
+      window.clearInterval(this.speechPollTimer);
+      this.speechPollTimer = null;
+    }
   }
 
   private async refreshHealth(options: { quiet?: boolean } = {}): Promise<void> {
@@ -129,13 +249,28 @@ export class ControlApp {
 
   private async refreshDevices(): Promise<void> {
     try {
-      const probe = await navigator.mediaDevices.getUserMedia({ audio: true });
-      probe.getTracks().forEach((t) => t.stop());
+      const probe = await probeMicrophoneAccess();
+      if (!probe.ok) {
+        throw probe.error ?? new CaptureError("unknown", "Falha ao listar microfones.");
+      }
       this.devices = await listAudioInputs();
+      this.micStatus = "active";
+      this.captureMode = "mediarecorder";
+      this.activeMicLabel = probe.label;
       this.errorMessage = null;
-    } catch {
-      this.errorMessage =
-        "Permissão de microfone negada. Autorize o mic do headset Bluetooth no navegador.";
+    } catch (err) {
+      const classified = err instanceof CaptureError ? err : classifySoft(err);
+      if (classified.kind === "permission_denied") {
+        this.micStatus = "blocked";
+        this.errorMessage = classified.message;
+      } else if (isSpeechRecognitionAvailable()) {
+        this.micStatus = "safe";
+        this.captureMode = "webspeech";
+        this.errorMessage = `${classified.message} — Safe Mode disponível.`;
+      } else {
+        this.micStatus = "blocked";
+        this.errorMessage = classified.message;
+      }
     }
     this.render();
   }
@@ -148,20 +283,69 @@ export class ControlApp {
     if (this.phase !== "idle") {
       return;
     }
-    this.errorMessage = null;
-    try {
-      // Uses the OS default input (Bluetooth headset when set as system default).
-      await this.capture.start();
-      this.activeMicLabel = this.capture.getActiveLabel();
-      this.setPhase("listening");
-    } catch {
+    if (this.micStatus === "blocked") {
       this.errorMessage =
-        "Não foi possível abrir o microfone. Confirme o pareamento Bluetooth e a permissão do browser.";
+        "Microfone bloqueado. Autorize a permissão e clique em Reconectar.";
+      this.render();
+      return;
+    }
+    this.errorMessage = null;
+    this.speechInterim = "";
+
+    // Prefer MediaRecorder; fall back to Web Speech Safe Mode without reload.
+    if (this.captureMode === "mediarecorder" && isMediaRecorderCaptureAvailable()) {
+      try {
+        await this.capture.start();
+        this.activeMicLabel = this.capture.getActiveLabel();
+        this.micStatus = "active";
+        this.setPhase("listening");
+        return;
+      } catch (err) {
+        const classified = err instanceof CaptureError ? err : classifySoft(err);
+        this.capture.cancel();
+        if (classified.kind === "permission_denied") {
+          this.micStatus = "blocked";
+          this.errorMessage = classified.message;
+          this.setPhase("idle");
+          return;
+        }
+        if (!isSpeechRecognitionAvailable()) {
+          this.micStatus = "blocked";
+          this.errorMessage = classified.message;
+          this.setPhase("idle");
+          return;
+        }
+        this.micStatus = "safe";
+        this.captureMode = "webspeech";
+        this.errorMessage =
+          "MediaRecorder falhou — a usar Safe Mode (Web Speech).";
+      }
+    }
+
+    try {
+      await this.speech.start({ lang: "pt-BR" });
+      this.micStatus = "safe";
+      this.captureMode = "webspeech";
+      this.activeMicLabel = "Web Speech · Safe Mode";
+      this.setPhase("listening");
+    } catch (err) {
+      this.speech.cancel();
+      if (err instanceof SpeechCaptureError && err.kind === "blocked") {
+        this.micStatus = "blocked";
+      }
+      this.errorMessage =
+        err instanceof Error
+          ? err.message
+          : "Não foi possível iniciar a captura de voz.";
       this.setPhase("idle");
     }
   }
 
   private async finishRecord(): Promise<void> {
+    if (this.captureMode === "webspeech" || this.speech.isListening()) {
+      await this.finishSpeechSafeMode();
+      return;
+    }
     this.setPhase("validating");
     try {
       const captured = await this.capture.stop();
@@ -194,6 +378,41 @@ export class ControlApp {
         }`;
       } else {
         this.errorMessage = "Falha ao processar o áudio.";
+      }
+      this.setPhase("idle");
+    }
+  }
+
+  /** Safe Mode: Web Speech transcript → cognitive chat → local TTS. */
+  private async finishSpeechSafeMode(): Promise<void> {
+    this.setPhase("validating");
+    try {
+      const heard = await this.speech.stop();
+      this.speechInterim = "";
+      const historyForApi = this.chatHistory.slice();
+      const res = await voiceApi.cognitiveChat({
+        query: heard.transcript,
+        history: historyForApi,
+        mode: this.geminiMode,
+        locale: "pt-BR",
+        client_id: HUD_CLIENT_ID,
+      });
+      this.lastChat = res;
+      this.lastResult = processAudioFromCognitive(res, heard.transcript);
+      this.pushChatTurn(heard.transcript, res.gemini_response);
+      this.setPhase("responding");
+      await speakLocally(res.gemini_response || res.response_text, "pt-BR");
+      this.setPhase("idle");
+      void this.refreshAudit({ quiet: true });
+    } catch (err) {
+      this.speech.cancel();
+      if (err instanceof SpeechCaptureError) {
+        this.errorMessage = err.message;
+        if (err.kind === "blocked") this.micStatus = "blocked";
+      } else if (err instanceof VoiceApiError) {
+        this.errorMessage = `${err.message}${err.detail ? ` — ${err.detail}` : ""}`;
+      } else {
+        this.errorMessage = "Falha no Safe Mode (Web Speech).";
       }
       this.setPhase("idle");
     }
@@ -347,10 +566,21 @@ export class ControlApp {
         >
           <span class="flow-status__pulse" aria-hidden="true"></span>
           <strong>${escapeHtml(phaseLabel)}</strong>
+          ${micStatusBadge(this.micStatus)}
           ${
             this.activeMicLabel
               ? `<span class="flow-status__mic">mic: ${escapeHtml(this.activeMicLabel)}</span>`
               : `<span class="flow-status__mic">mic: entrada padrão do sistema</span>`
+          }
+          ${
+            this.captureMode === "webspeech"
+              ? `<span class="flow-status__mic">via Web Speech</span>`
+              : ""
+          }
+          ${
+            listening && this.speechInterim
+              ? `<span class="flow-status__mic">“…${escapeHtml(this.speechInterim)}”</span>`
+              : ""
           }
           ${toolHudBanner(result, this.phase)}
         </div>
@@ -359,25 +589,39 @@ export class ControlApp {
           <h2 id="capture-title">Headset Bluetooth</h2>
           <p class="hint">
             Pareie o fone no sistema operacional, selecione-o como entrada/saída padrão,
-            depois grave um comando curto. O áudio sobe como
-            <code>multipart/form-data</code> em <code>POST /process-audio</code>.
+            depois grave um comando curto. Preferência:
+            <code>MediaRecorder</code> → <code>POST /process-audio</code>.
+            Se falhar, Safe Mode usa Web Speech → <code>/api/cognitive/chat</code>
+            sem recarregar a página.
           </p>
           <div class="controls">
             <button
               type="button"
               class="btn-primary ${listening ? "is-recording" : ""}"
               data-action="record"
-              ${busy ? "disabled" : ""}
+              ${busy || this.micStatus === "blocked" ? "disabled" : ""}
             >
               ${
                 listening
-                  ? "Parar e enviar"
+                  ? this.captureMode === "webspeech"
+                    ? "Parar Safe Mode"
+                    : "Parar e enviar"
                   : this.phase === "validating"
                     ? "Validando no Consenso Alfa..."
                     : this.phase === "responding"
                       ? "A responder..."
-                      : "Gravar com o headset"
+                      : this.micStatus === "safe"
+                        ? "Falar (Safe Mode)"
+                        : "Gravar com o headset"
               }
+            </button>
+            <button
+              type="button"
+              class="btn-ghost"
+              data-action="reconnect"
+              ${busy || this.reconnectBusy ? "disabled" : ""}
+            >
+              ${this.reconnectBusy ? "A reconectar..." : "Reconectar / Retry"}
             </button>
             <button type="button" class="btn-ghost" data-action="devices" ${busy ? "disabled" : ""}>
               Listar microfones
@@ -631,6 +875,12 @@ export class ControlApp {
         void this.toggleRecord();
       },
     );
+    this.root.querySelector<HTMLButtonElement>('[data-action="reconnect"]')?.addEventListener(
+      "click",
+      () => {
+        void this.reconnectMic();
+      },
+    );
     this.root.querySelector<HTMLButtonElement>('[data-action="devices"]')?.addEventListener(
       "click",
       () => {
@@ -645,6 +895,76 @@ export class ControlApp {
     );
     this.bindAuditControls();
   }
+}
+
+function classifySoft(err: unknown): CaptureError {
+  if (err instanceof CaptureError) return err;
+  return new CaptureError(
+    "unknown",
+    err instanceof Error ? err.message : "Falha de microfone.",
+    true,
+  );
+}
+
+function processAudioFromCognitive(
+  res: CognitiveChatResponse,
+  transcript: string,
+): ProcessAudioResponse {
+  const raw = res.consenso as Partial<ConsensoResult> | undefined;
+  const consenso: ConsensoResult = {
+    approved: raw?.approved ?? true,
+    agreement_ratio: raw?.agreement_ratio ?? res.consensus_confidence ?? 0,
+    final_text: raw?.final_text ?? res.gemini_response,
+    votes: raw?.votes ?? [],
+    hallucination_flags: raw?.hallucination_flags ?? [],
+    duration_ms: raw?.duration_ms ?? 0,
+    skipped: raw?.skipped ?? false,
+    agent_latencies: raw?.agent_latencies ?? [],
+  };
+  return {
+    transcript,
+    transcription: transcript,
+    response_text: res.response_text,
+    gemini_response: res.gemini_response,
+    consenso,
+    consensus_confidence: res.consensus_confidence,
+    audio_base64: "",
+    audio_mime_type: "audio/mpeg",
+    audio_url: res.audio_response_url,
+    audio_response_url: res.audio_response_url,
+    status: res.status,
+    latency: {
+      stt_ms: 0,
+      agent_ms: res.duration_ms,
+      consenso_ms: consenso.duration_ms,
+      tts_ms: 0,
+      total_ms: res.duration_ms,
+      consenso_grounding_ms: 0,
+      consenso_safety_tone_ms: 0,
+      consenso_consistency_ms: 0,
+      consenso_agents_ms: {},
+    },
+    meta: {
+      request_id: res.request_id,
+      pipeline_mode: "safe-mode-webspeech",
+      use_mock_audio: false,
+      stt_provider: "web-speech",
+      tts_provider: "speechSynthesis",
+      consenso_enabled: true,
+      used_safe_fallback: res.used_safe_fallback,
+      fallback_reason: res.fallback_reason ?? "client_safe_mode_webspeech",
+      created_at: new Date().toISOString(),
+      depin_attestation: null,
+      cognitive_provider: res.cognitive_provider,
+    },
+  };
+}
+
+function micStatusBadge(status: MicStatus): string {
+  return `<span class="mic-badge mic-badge--${status}" title="Estado do microfone">
+    <i class="dot dot--${status === "active" ? "ok" : status === "blocked" ? "err" : "warn"}"></i>
+    Mic ${escapeHtml(MIC_STATUS_LABEL[status])}
+  </span>`;
 }
 
 function extensionForMime(mimeType: string): string {

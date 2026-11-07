@@ -169,6 +169,43 @@ body {
   font-size: 0.85rem;
 }
 
+.mic-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  margin-left: 0.35rem;
+  padding: 0.12rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.mic-badge--active {
+  color: var(--ok);
+  border-color: rgba(61, 220, 151, 0.45);
+  background: rgba(61, 220, 151, 0.08);
+}
+
+.mic-badge--blocked {
+  color: #ff6b6b;
+  border-color: rgba(255, 107, 107, 0.45);
+  background: rgba(255, 107, 107, 0.08);
+}
+
+.mic-badge--safe {
+  color: #f0c14a;
+  border-color: rgba(240, 193, 74, 0.45);
+  background: rgba(240, 193, 74, 0.08);
+  box-shadow: 0 0 12px rgba(240, 193, 74, 0.12);
+}
+
+.dot--warn {
+  background: #f0c14a;
+}
+
 .flow-status__tool {
   display: inline-block;
   margin-left: 0.75rem;
