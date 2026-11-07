@@ -98,17 +98,17 @@ class AgentService:
 
         client = AsyncOpenAI(api_key=self._settings.openai_api_key)
         system = (
-            "You are Aether Vision — a direct, concise, smart voice assistant for Bluetooth headsets. "
-            "Reply in the user's language (default Portuguese pt-BR). "
-            "Speakable answers only: ideally ONE short sentence after any tools (minimize TTS latency). "
-            "Be helpful and precise; do not ramble or narrate your reasoning. "
-            "Do NOT auto-categorize ordinary utterances as tarefa, nota, rotina, or preferência. "
-            "Call memory_write_note ONLY when the user explicitly asks to save/remember/store something. "
-            "Call memory_read_notes ONLY when the conversation needs previously saved notes or preferences. "
-            "Honor [Learned preferences] context when it is already provided — do not re-tag it. "
-            "Use other tools when useful: env status, CPU/RAM (get_system_metrics), process list, "
-            "open_browser_url (allowlisted https only), project dirs/logs. "
-            "Never invent secrets. Never request destructive OS actions."
+            "Você é o Aether, copiloto de voz articulado e direto para headsets Bluetooth. "
+            "Responda no idioma do utilizador (padrão: português pt-BR). "
+            "Seja claro, inteligente e objetivo — preferencialmente UMA frase falável após ferramentas "
+            "(baixa latência de TTS). Não divague nem narre o seu raciocínio. "
+            "Não invente notas, tarefas, rotinas nem preferências a partir de falas comuns. "
+            "Só use memory_write_note quando o utilizador pedir explicitamente para salvar, anotar ou lembrar. "
+            "Só use memory_read_notes quando a conversa precisar do histórico já guardado. "
+            "Se [Learned preferences] já vier no contexto, honre-o — sem reclassificar a fala. "
+            "Use outras ferramentas quando forem úteis: status do ambiente, CPU/RAM (get_system_metrics), "
+            "processos, open_browser_url (apenas https allowlisted), pastas/logs do projeto. "
+            "Nunca invente segredos. Nunca peça ações destrutivas no sistema."
         )
         user_parts = []
         if memory_context.strip():
@@ -319,10 +319,20 @@ class AgentService:
         want_procs = any(k in lower for k in ("processo", "processos", "processes"))
         want_browser = any(k in lower for k in ("abre o browser", "abrir o navegador", "open browser", "abre https"))
         want_dirs = any(k in lower for k in ("pasta", "diretório", "diretorio", "folders", "dirs"))
-        # Explicit save/remember only — never treat bare "nota"/"tarefa" as a write.
+        # Explicit salvar / anotar / lembrar only — never bare "nota"/"tarefa".
         want_save = any(
             k in lower
             for k in (
+                "salvar",
+                "salva isso",
+                "salva que",
+                "salva esta",
+                "salve",
+                "anotar",
+                "anota que",
+                "anota isso",
+                "anote",
+                "lembrar",
                 "lembra que",
                 "lembra disso",
                 "lembra isso",
@@ -331,13 +341,6 @@ class AgentService:
                 "guarde",
                 "guarda isso",
                 "guarda que",
-                "salva isso",
-                "salva que",
-                "salva esta",
-                "salve",
-                "anota que",
-                "anota isso",
-                "anote",
                 "remember that",
                 "remember this",
                 "save this",

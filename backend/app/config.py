@@ -66,8 +66,8 @@ class Settings(BaseSettings):
     consenso_timeout_ms: int = Field(default=2500, ge=100)
 
     tts_provider: TtsProvider = "mock"
-    openai_tts_model: str = "tts-1"
-    openai_tts_voice: str = "alloy"
+    openai_tts_model: str = "tts-1-hd"
+    openai_tts_voice: str = "nova"
     openai_agent_model: str = "gpt-4o-mini"
     elevenlabs_api_key: str = ""
     elevenlabs_voice_id: str = "21m00Tcm4TlvDq8ikWAM"

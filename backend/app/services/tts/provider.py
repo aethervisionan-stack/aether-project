@@ -1,4 +1,4 @@
-"""High-fidelity TTS via OpenAI Audio (tts-1) — MP3 for headphone playback."""
+"""High-fidelity TTS via OpenAI Audio (tts-1-hd / nova) — MP3 for headphone playback."""
 
 from __future__ import annotations
 
