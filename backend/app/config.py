@@ -80,6 +80,9 @@ class Settings(BaseSettings):
     chroma_persist_dir: str = "data/chroma"
     memory_enabled: bool = True
 
+    # Structured session persistence (SQLite relative to backend/)
+    sqlite_path: str = "aether_vision.db"
+
     request_timeout_ms: int = Field(default=30_000, ge=1000)
     max_audio_bytes: int = Field(default=10_485_760, ge=1024)
     retry_attempts: int = Field(default=2, ge=0, le=5)

@@ -17,6 +17,7 @@ from app.models.schemas import (
     SttResult,
     ToolInvocation,
 )
+from app.db.store import persist_process_audio
 from app.services.agent_service import AgentService
 from app.services.consenso_alfa import ConsensoAlfa
 from app.services.resilience import (
@@ -30,6 +31,12 @@ from app.services.tts import TtsProviderProtocol
 from app.services.tts.mock import MockTts
 
 logger = logging.getLogger("aether.pipeline")
+
+
+def _persist_session(response: ProcessAudioResponse, *, client_id: str) -> ProcessAudioResponse:
+    """Best-effort SessionLogs + AuditTrail write; never fails the HTTP response."""
+    persist_process_audio(response, client_id=client_id)
+    return response
 
 
 def _plog(event: str, **fields: object) -> None:
@@ -173,6 +180,7 @@ class AudioPipeline:
                 used_safe_fallback=True,
                 fallback_reason=fallback_reason,
                 agent_ms=0,
+                client_id=client_id,
             )
 
         # --- STT (recoverable on real API failure) ---
@@ -251,6 +259,7 @@ class AudioPipeline:
                 used_safe_fallback=True,
                 fallback_reason=fallback_reason,
                 agent_ms=0,
+                client_id=client_id,
             )
 
         # --- Adaptive memory / client DNA (before gpt-4o-mini) ---
@@ -310,6 +319,7 @@ class AudioPipeline:
                 fallback_reason=fallback_reason,
                 agent_ms=0,
                 tools=tools,
+                client_id=client_id,
             )
         except Exception as exc:  # noqa: BLE001
             raise PipelineError(
@@ -418,7 +428,7 @@ class AudioPipeline:
         )
 
         executed_count = sum(1 for t in tools if t.executed)
-        return ProcessAudioResponse(
+        response = ProcessAudioResponse(
             transcript=stt.text,
             response_text=consenso.final_text,
             consenso=consenso,
@@ -451,6 +461,7 @@ class AudioPipeline:
                 tools_executed_count=executed_count,
             ),
         )
+        return _persist_session(response, client_id=client_id)
 
     async def _safe_response(
         self,
@@ -464,6 +475,7 @@ class AudioPipeline:
         fallback_reason: str | None,
         agent_ms: int,
         tools: list[ToolInvocation] | None = None,
+        client_id: str = "default",
     ) -> ProcessAudioResponse:
         tool_list = tools or []
         tts = await self._mock_tts.synthesize(response_text)
@@ -475,7 +487,7 @@ class AudioPipeline:
             reason=fallback_reason,
             total_ms=total_ms,
         )
-        return ProcessAudioResponse(
+        response = ProcessAudioResponse(
             transcript=stt.text,
             response_text=response_text,
             consenso=consenso,
@@ -508,3 +520,4 @@ class AudioPipeline:
                 tools_executed_count=sum(1 for t in tool_list if t.executed),
             ),
         )
+        return _persist_session(response, client_id=client_id)

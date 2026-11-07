@@ -17,6 +17,10 @@ backend/.pytest_cache/
 backend/.mypy_cache/
 backend/*.egg-info/
 backend/data/
+backend/aether_vision.db
+backend/aether_vision.db-*
+backend/*.db
+backend/*.db-*
 __pycache__/
 .venv/
 venv/
