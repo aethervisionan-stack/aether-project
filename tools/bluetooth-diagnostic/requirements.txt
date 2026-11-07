@@ -1,0 +1,10 @@
+# Dedicated deps for tools/bluetooth-diagnostic/diagnostico_bluetooth.py
+# Do NOT merge into backend/requirements.txt — keeps the FastAPI voice stack lean.
+#
+# Install (Windows PowerShell / cmd):
+#   cd tools\bluetooth-diagnostic
+#   python -m venv .venv
+#   .venv\Scripts\activate
+#   pip install -r requirements.txt
+
+bleak>=0.22.0,<1.0.0

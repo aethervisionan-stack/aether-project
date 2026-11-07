@@ -124,6 +124,22 @@ pytest -q
 
 ---
 
+## Diagnóstico Bluetooth (Windows — headset não aparece)
+
+Pasta dedicada (deps próprias, **não** usa `backend/requirements.txt`):
+
+`tools/bluetooth-diagnostic/`
+
+```bat
+cd tools\bluetooth-diagnostic
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+python diagnostico_bluetooth.py
+```
+
+Ver `tools/bluetooth-diagnostic/README.md`.
+
 ## Landing Next.js (existente)
 
 ```bash
