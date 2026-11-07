@@ -8,3 +8,12 @@ out
 !.env.example
 .vercel
 .data
+
+# Android (Visão do Éter module under android/)
+android/.gradle/
+android/**/build/
+android/local.properties
+android/.idea/
+android/*.iml
+android/captures/
+android/.cxx/

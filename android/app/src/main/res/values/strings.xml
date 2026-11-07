@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Visão do Éter</string>
+    <!-- Replace with your Firebase App Check reCAPTCHA site key for release builds. -->
+    <string name="recaptcha_site_key" translatable="false"></string>
+</resources>
