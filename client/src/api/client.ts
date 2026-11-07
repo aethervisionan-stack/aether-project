@@ -4,10 +4,17 @@ import type {
   MetricsResponse,
   ProcessAudioResponse,
 } from "./types";
-import { VoiceApiError, type ApiErrorBody } from "./types";
+import {
+  VoiceApiError,
+  normalizeProcessAudioResponse,
+  type ApiErrorBody,
+} from "./types";
 
 export interface VoiceApiConfig {
-  /** Empty string uses Vite `/api` proxy in development. */
+  /**
+   * FastAPI origin. Empty string → Vite `/api` proxy → http://127.0.0.1:8000.
+   * Set `VITE_API_BASE_URL=http://127.0.0.1:8000` to call the API directly.
+   */
   baseUrl: string;
   timeoutMs: number;
 }
@@ -95,7 +102,9 @@ export class VoiceApiClient {
       if (!res.ok) {
         throw await parseError(res);
       }
-      return (await res.json()) as ProcessAudioResponse;
+      const raw = (await res.json()) as ProcessAudioResponse;
+      // Map transcript/response_text/consenso/audio_url → HUD Gemini aliases.
+      return normalizeProcessAudioResponse(raw);
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
         throw new VoiceApiError(408, {

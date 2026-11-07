@@ -63,8 +63,14 @@ export interface ProcessAudioMeta {
   depin_attestation: Record<string, unknown> | null;
   tools_invoked?: boolean;
   tools_executed_count?: number;
+  /** openai | gemini (from backend cognitive engine). */
+  cognitive_provider?: string | null;
 }
 
+/**
+ * Canonical FastAPI envelope from POST /process-audio.
+ * Also carries HUD aliases (transcription, gemini_response, …) filled by normalize().
+ */
 export interface ProcessAudioResponse {
   transcript: string;
   response_text: string;
@@ -76,6 +82,18 @@ export interface ProcessAudioResponse {
   tools?: ToolInvocation[];
   latency: LatencyBreakdown;
   meta: ProcessAudioMeta;
+
+  // --- HUD / Gemini-facing aliases (mapped from backend fields) ---
+  /** Pipeline outcome for the turn: ok | fallback */
+  status?: string;
+  /** Alias of `transcript` */
+  transcription?: string;
+  /** Alias of `response_text` (Gemini or GPT draft after Consenso) */
+  gemini_response?: string;
+  /** Alias of `consenso.agreement_ratio` (0–1) */
+  consensus_confidence?: number;
+  /** Alias of `audio_url` */
+  audio_response_url?: string | null;
 }
 
 export interface HealthResponse {
@@ -92,6 +110,9 @@ export interface HealthResponse {
   openai_api_key_configured?: boolean;
   /** True when key starts with sk- and passes length/charset checks. */
   has_valid_openai_key?: boolean;
+  gemini_api_key_configured?: boolean;
+  has_valid_gemini_key?: boolean;
+  cognitive_provider?: string;
   /** Absolute path of the .env file the backend loaded. */
   env_file?: string;
   api_port?: number;
@@ -173,5 +194,21 @@ export interface MetricsResponse {
   audit: {
     approve: number;
     reject: number;
+  };
+}
+
+/** Normalize backend envelope → HUD aliases without renaming wire fields. */
+export function normalizeProcessAudioResponse(
+  raw: ProcessAudioResponse,
+): ProcessAudioResponse {
+  const status =
+    raw.meta?.used_safe_fallback || !raw.consenso?.approved ? "fallback" : "ok";
+  return {
+    ...raw,
+    status,
+    transcription: raw.transcript,
+    gemini_response: raw.response_text,
+    consensus_confidence: raw.consenso?.agreement_ratio ?? 0,
+    audio_response_url: raw.audio_url ?? null,
   };
 }

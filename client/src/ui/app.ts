@@ -10,7 +10,8 @@ import { HeadsetCapture, listAudioInputs } from "../audio/capture";
 import { playResponseAudio } from "../audio/playback";
 import { renderMetricsPanel } from "./components/MetricsPanel";
 import { renderSessionHistory } from "./components/SessionHistory";
-import { escapeHtml } from "./html";
+import { escapeHtml, formatPercent } from "./html";
+import { renderMarkdown } from "./markdown";
 
 /** Portuguese flow states for the Bluetooth headset control UI. */
 type UiPhase = "idle" | "listening" | "validating" | "responding";
@@ -239,7 +240,9 @@ export class ControlApp {
 
         <div class="status-row" aria-live="polite">
           ${apiConnectionBadge(health)}
+          ${cognitiveBadge(health)}
           ${openaiKeyBadge(health)}
+          ${geminiKeyBadge(health)}
           <span>áudio ${health?.use_mock_audio === false ? "real" : "mock"}</span>
           <span>STT ${health?.stt_provider ?? "—"}</span>
           <span>TTS ${health?.tts_provider ?? "—"}</span>
@@ -247,6 +250,7 @@ export class ControlApp {
           <span>v${health?.version ?? "—"}</span>
         </div>
 
+        ${connectionBanner(health)}
         ${openaiKeyWarning(health)}
 
         <div
@@ -312,10 +316,25 @@ export class ControlApp {
             result
               ? `<div class="result-grid">
                   <div class="block">
-                    <div class="block__label">Transcrição</div>
-                    <p class="block__body">${escapeHtml(result.transcript)}</p>
-                    <div class="block__label" style="margin-top:1rem">Resposta validada</div>
-                    <p class="block__body">${escapeHtml(result.response_text)}</p>
+                    <div class="block__label">Transcrição (STT)</div>
+                    <p class="block__body">${escapeHtml(
+                      result.transcription ?? result.transcript,
+                    )}</p>
+                    <div class="block__label" style="margin-top:1rem">
+                      Resposta ${
+                        (result.meta.cognitive_provider ?? "openai") === "gemini"
+                          ? "Gemini"
+                          : "agente"
+                      }
+                      ${
+                        result.status
+                          ? ` · <span class="status-pill status-pill--${escapeHtml(result.status)}">${escapeHtml(result.status)}</span>`
+                          : ""
+                      }
+                    </div>
+                    <div class="gemini-reply md-frame">
+                      ${renderMarkdown(result.gemini_response ?? result.response_text)}
+                    </div>
                     ${
                       result.meta.used_safe_fallback || !result.consenso.approved
                         ? `<p class="hint" style="margin-top:0.75rem">
@@ -327,11 +346,46 @@ export class ControlApp {
                           </p>`
                         : ""
                     }
+                    ${
+                      result.audio_response_url || result.audio_url
+                        ? `<p class="hint" style="margin-top:0.5rem">
+                            Áudio:
+                            <a class="audio-link" href="${escapeHtml(
+                              result.audio_response_url ?? result.audio_url ?? "",
+                            )}" target="_blank" rel="noreferrer">audio_response_url</a>
+                          </p>`
+                        : ""
+                    }
                   </div>
                   <div class="block">
                     <div class="block__label">Consenso Alfa</div>
-                    <p class="block__body">
-                      ${result.consenso.approved ? "aprovado" : "rejeitado"} ·
+                    <div class="confidence">
+                      <div class="confidence__head">
+                        <span>${result.consenso.approved ? "aprovado" : "rejeitado"}</span>
+                        <strong>${formatPercent(
+                          result.consensus_confidence ?? result.consenso.agreement_ratio,
+                        )}</strong>
+                      </div>
+                      <div class="confidence__track" aria-hidden="true">
+                        <span
+                          class="confidence__fill"
+                          style="width:${Math.max(
+                            0,
+                            Math.min(
+                              100,
+                              Math.round(
+                                (result.consensus_confidence ??
+                                  result.consenso.agreement_ratio) * 100,
+                              ),
+                            ),
+                          )}%"
+                        ></span>
+                      </div>
+                      <small class="hint">${result.consenso.duration_ms} ms · motor ${escapeHtml(
+                        result.meta.cognitive_provider ?? "—",
+                      )}</small>
+                    </div>
+                    <p class="block__body" style="margin-top:0.75rem">
                       acordo ${(result.consenso.agreement_ratio * 100).toFixed(0)}% ·
                       ${result.consenso.duration_ms} ms
                     </p>
@@ -463,14 +517,54 @@ function extensionForMime(mimeType: string): string {
 function apiConnectionBadge(health: HealthResponse | null): string {
   if (health) {
     const port = health.api_port ?? 8000;
-    return `<span class="conn-badge conn-badge--online" title="GET /health ok">
+    return `<span class="conn-badge conn-badge--online" title="GET /health ok → 127.0.0.1:${port}">
       <i class="dot dot--ok"></i>
-      API Online na porta ${port}
+      Backend ligado · :${port}
     </span>`;
   }
-  return `<span class="conn-badge conn-badge--offline" title="Backend não responde">
+  return `<span class="conn-badge conn-badge--offline" title="Backend não responde em 127.0.0.1:8000">
     <i class="dot dot--err"></i>
-    Desconectada
+    Backend desligado
+  </span>`;
+}
+
+function connectionBanner(health: HealthResponse | null): string {
+  if (health) {
+    return `<p class="conn-banner conn-banner--ok" role="status">
+      Ligado a <code>127.0.0.1:${health.api_port ?? 8000}</code>
+      · cognitive <strong>${escapeHtml(health.cognitive_provider ?? "—")}</strong>
+      · Gemini key ${health.has_valid_gemini_key ? "ok" : "em falta"}
+      · OpenAI key ${health.has_valid_openai_key ? "ok" : "em falta"}
+    </p>`;
+  }
+  return `<p class="conn-banner conn-banner--err" role="status">
+      Sem ligação ao FastAPI. Arranque o backend em <code>127.0.0.1:8000</code>
+      (ex.: <code>backend\\.venv\\Scripts\\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload</code>).
+    </p>`;
+}
+
+function cognitiveBadge(health: HealthResponse | null): string {
+  const engine = health?.cognitive_provider ?? "—";
+  const cls =
+    engine === "gemini" ? "conn-badge--online" : engine === "openai" ? "conn-badge--online" : "conn-badge--offline";
+  return `<span class="conn-badge ${cls}" title="Motor cognitivo efetivo">
+    cognitive: ${escapeHtml(engine)}
+  </span>`;
+}
+
+function geminiKeyBadge(health: HealthResponse | null): string {
+  if (!health) {
+    return `<span class="conn-badge conn-badge--offline">GEMINI: —</span>`;
+  }
+  if (health.has_valid_gemini_key) {
+    return `<span class="conn-badge conn-badge--online" title="GEMINI_API_KEY válida">
+      <i class="dot dot--ok"></i>
+      GEMINI: ok
+    </span>`;
+  }
+  return `<span class="conn-badge conn-badge--offline" title="Defina GEMINI_API_KEY em backend/.env">
+    <i class="dot dot--err"></i>
+    GEMINI: em falta
   </span>`;
 }
 

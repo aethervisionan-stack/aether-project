@@ -586,3 +586,138 @@ button:not(:disabled):hover {
   border-radius: 999px;
   max-width: 100%;
 }
+
+/* --- Gemini reply + Consenso confidence --- */
+
+.conn-banner {
+  margin: 0;
+  padding: 0.7rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.9rem;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.conn-banner--ok {
+  border-color: rgba(61, 220, 151, 0.35);
+  background: rgba(61, 220, 151, 0.06);
+}
+
+.conn-banner--err {
+  border-color: rgba(255, 107, 107, 0.4);
+  background: rgba(255, 107, 107, 0.08);
+  color: var(--text);
+}
+
+.conn-banner code {
+  font-size: 0.85em;
+}
+
+.gemini-reply {
+  margin-top: 0.35rem;
+}
+
+.md-frame {
+  padding: 0.85rem 0 0.25rem;
+  border-top: 1px solid var(--border);
+}
+
+.md {
+  display: grid;
+  gap: 0.55rem;
+  line-height: 1.55;
+  color: var(--text);
+}
+
+.md-p {
+  margin: 0;
+}
+
+.md-list {
+  margin: 0;
+  padding-left: 1.2rem;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.md-code {
+  margin: 0;
+  padding: 0.75rem 0.9rem;
+  overflow-x: auto;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.85rem;
+}
+
+.md code {
+  font-family: ui-monospace, "Cascadia Code", "SF Mono", Consolas, monospace;
+  font-size: 0.88em;
+  background: rgba(0, 240, 255, 0.08);
+  padding: 0.1em 0.35em;
+  border-radius: 3px;
+}
+
+.md-code code {
+  background: transparent;
+  padding: 0;
+}
+
+.status-pill {
+  display: inline-block;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.1rem 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  vertical-align: middle;
+}
+
+.status-pill--ok {
+  color: var(--ok);
+  border-color: rgba(61, 220, 151, 0.45);
+}
+
+.status-pill--fallback {
+  color: #f0c14a;
+  border-color: rgba(240, 193, 74, 0.45);
+}
+
+.confidence {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.confidence__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: baseline;
+  font-size: 0.95rem;
+}
+
+.confidence__head strong {
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  color: var(--ether);
+}
+
+.confidence__track {
+  height: 8px;
+  background: var(--ether-dim);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.confidence__fill {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, rgba(0, 240, 255, 0.55), var(--ether));
+  animation: meter 650ms ease-out both;
+}
+
+.audio-link {
+  color: var(--ether);
+}
