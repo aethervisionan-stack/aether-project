@@ -496,6 +496,7 @@ class AudioPipeline:
                 sqlite_context=sqlite_ctx,
                 client_id=client_id,
                 request_id=request_id,
+                mode=self._settings.gemini_mode,
             )
             return AgentTurnResult(
                 text=gemini_turn.text,

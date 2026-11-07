@@ -212,3 +212,37 @@ export function normalizeProcessAudioResponse(
     audio_response_url: raw.audio_url ?? null,
   };
 }
+
+export type GeminiMode = "flash" | "pro";
+
+export interface ChatHistoryItem {
+  role: "user" | "model" | "assistant";
+  content: string;
+}
+
+export interface CognitiveChatRequest {
+  query: string;
+  history?: ChatHistoryItem[];
+  mode?: GeminiMode;
+  locale?: string;
+  client_id?: string;
+}
+
+/** Unified payload from POST /api/cognitive/chat */
+export interface CognitiveChatResponse {
+  status: "ok" | "fallback" | "error";
+  query: string;
+  transcription: string;
+  gemini_response: string;
+  response_text: string;
+  consensus_confidence: number;
+  consenso: ConsensoResult;
+  model: string;
+  mode: GeminiMode | string;
+  duration_ms: number;
+  cognitive_provider: string;
+  request_id: string;
+  used_safe_fallback: boolean;
+  fallback_reason: string | null;
+  audio_response_url: string | null;
+}

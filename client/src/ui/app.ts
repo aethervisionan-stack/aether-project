@@ -1,5 +1,8 @@
 import { voiceApi } from "../api/client";
 import type {
+  ChatHistoryItem,
+  CognitiveChatResponse,
+  GeminiMode,
   HealthResponse,
   MetricsResponse,
   ProcessAudioResponse,
@@ -10,7 +13,7 @@ import { HeadsetCapture, listAudioInputs } from "../audio/capture";
 import { playResponseAudio } from "../audio/playback";
 import { renderMetricsPanel } from "./components/MetricsPanel";
 import { renderSessionHistory } from "./components/SessionHistory";
-import { escapeHtml, formatPercent } from "./html";
+import { escapeHtml, formatMs, formatPercent } from "./html";
 import { renderMarkdown } from "./markdown";
 
 /** Portuguese flow states for the Bluetooth headset control UI. */
@@ -45,6 +48,13 @@ export class ControlApp {
   private metrics: MetricsResponse | null = null;
   private auditLoading = false;
   private auditError: string | null = null;
+
+  /** Gemini cognitive chat (flash | pro) + structured history. */
+  private geminiMode: GeminiMode = "flash";
+  private chatHistory: ChatHistoryItem[] = [];
+  private lastChat: CognitiveChatResponse | null = null;
+  private chatBusy = false;
+  private chatDraft = "";
 
   constructor(root: HTMLElement) {
     this.root = root;
@@ -162,6 +172,10 @@ export class ControlApp {
         clientId: HUD_CLIENT_ID,
       });
       this.lastResult = result;
+      this.pushChatTurn(
+        result.transcription ?? result.transcript,
+        result.gemini_response ?? result.response_text,
+      );
       this.setPhase("responding");
       // Autoplay on OS default output / Bluetooth headset
       await playResponseAudio({
@@ -182,6 +196,48 @@ export class ControlApp {
         this.errorMessage = "Falha ao processar o áudio.";
       }
       this.setPhase("idle");
+    }
+  }
+
+  private pushChatTurn(userText: string, modelText: string): void {
+    const u = userText.trim();
+    const m = modelText.trim();
+    if (u) this.chatHistory.push({ role: "user", content: u });
+    if (m) this.chatHistory.push({ role: "model", content: m });
+    // Keep client history lean for the API
+    if (this.chatHistory.length > 24) {
+      this.chatHistory = this.chatHistory.slice(-24);
+    }
+  }
+
+  private async sendCognitiveChat(): Promise<void> {
+    const query = this.chatDraft.trim();
+    if (!query || this.chatBusy) return;
+    this.chatBusy = true;
+    this.errorMessage = null;
+    this.render();
+    try {
+      const historyForApi = this.chatHistory.slice();
+      const res = await voiceApi.cognitiveChat({
+        query,
+        history: historyForApi,
+        mode: this.geminiMode,
+        locale: "pt-BR",
+        client_id: HUD_CLIENT_ID,
+      });
+      this.lastChat = res;
+      this.pushChatTurn(query, res.gemini_response);
+      this.chatDraft = "";
+      void this.refreshAudit({ quiet: true });
+    } catch (err) {
+      if (err instanceof VoiceApiError) {
+        this.errorMessage = `${err.message}${err.detail ? ` — ${err.detail}` : ""}`;
+      } else {
+        this.errorMessage = "Falha no chat cognitivo Gemini.";
+      }
+    } finally {
+      this.chatBusy = false;
+      this.render();
     }
   }
 
@@ -206,6 +262,36 @@ export class ControlApp {
       "click",
       () => {
         void this.refreshAudit();
+      },
+    );
+    this.root.querySelectorAll<HTMLButtonElement>("[data-gemini-mode]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const mode = btn.dataset.geminiMode;
+        if (mode === "flash" || mode === "pro") {
+          this.geminiMode = mode;
+          this.render();
+        }
+      });
+    });
+    this.root.querySelector<HTMLTextAreaElement>('[data-field="chat-draft"]')?.addEventListener(
+      "input",
+      (ev) => {
+        this.chatDraft = (ev.target as HTMLTextAreaElement).value;
+      },
+    );
+    this.root.querySelector<HTMLButtonElement>('[data-action="chat-send"]')?.addEventListener(
+      "click",
+      () => {
+        void this.sendCognitiveChat();
+      },
+    );
+    this.root.querySelector<HTMLButtonElement>('[data-action="chat-clear"]')?.addEventListener(
+      "click",
+      () => {
+        this.chatHistory = [];
+        this.lastChat = null;
+        this.chatDraft = "";
+        this.render();
       },
     );
   }
@@ -429,6 +515,60 @@ export class ControlApp {
                 </div>`
               : `<p class="hint">Nenhuma captura ainda. Grave um teste com o headset.</p>`
           }
+        </section>
+
+        <section class="panel cognitive-panel" aria-labelledby="cognitive-title">
+          <h2 id="cognitive-title">Chat cognitivo Gemini</h2>
+          <p class="hint">
+            <code>POST /api/cognitive/chat</code> com
+            <code>mode</code> + histórico estruturado → Consenso Alfa → payload unificado.
+          </p>
+          <div class="mode-selector" role="group" aria-label="Modelo Gemini">
+            <button
+              type="button"
+              class="mode-chip ${this.geminiMode === "flash" ? "is-active" : ""}"
+              data-gemini-mode="flash"
+              ${this.chatBusy ? "disabled" : ""}
+            >
+              Flash · gemini-2.5-flash
+            </button>
+            <button
+              type="button"
+              class="mode-chip ${this.geminiMode === "pro" ? "is-active" : ""}"
+              data-gemini-mode="pro"
+              ${this.chatBusy ? "disabled" : ""}
+            >
+              Pro · gemini-2.5-pro
+            </button>
+          </div>
+          <label class="chat-label" for="chat-draft">Pergunta</label>
+          <textarea
+            id="chat-draft"
+            class="chat-draft"
+            data-field="chat-draft"
+            rows="3"
+            placeholder="Ex.: resume a arquitetura STT → Gemini → Consenso → TTS"
+            ${this.chatBusy ? "disabled" : ""}
+          >${escapeHtml(this.chatDraft)}</textarea>
+          <div class="controls">
+            <button
+              type="button"
+              class="btn-primary"
+              data-action="chat-send"
+              ${this.chatBusy ? "disabled" : ""}
+            >
+              ${this.chatBusy ? "A pensar..." : "Enviar chat"}
+            </button>
+            <button
+              type="button"
+              class="btn-ghost"
+              data-action="chat-clear"
+              ${this.chatBusy ? "disabled" : ""}
+            >
+              Limpar histórico
+            </button>
+          </div>
+          ${renderCognitiveChatResult(this.lastChat, this.chatHistory)}
         </section>
 
         <section class="panel audit-panel" aria-labelledby="audit-title">
@@ -655,5 +795,87 @@ function toolsPanelHtml(result: ProcessAudioResponse): string {
       executada(s) · ${tools.length} invocação(ões)
     </p>
     <div class="votes">${rows}</div>
+  </div>`;
+}
+
+function renderCognitiveChatResult(
+  last: CognitiveChatResponse | null,
+  history: ChatHistoryItem[],
+): string {
+  const historyBlock =
+    history.length === 0
+      ? `<p class="hint">Histórico vazio — as voltas de chat e voz entram aqui.</p>`
+      : `<div class="chat-history" aria-label="Histórico da conversa">
+          ${history
+            .map((m) => {
+              const who = m.role === "user" ? "Você" : "Aether";
+              const body =
+                m.role === "user"
+                  ? `<p class="block__body">${escapeHtml(m.content)}</p>`
+                  : `<div class="gemini-reply md-frame">${renderMarkdown(m.content)}</div>`;
+              return `<article class="chat-turn chat-turn--${escapeHtml(m.role)}">
+                <div class="block__label">${who}</div>
+                ${body}
+              </article>`;
+            })
+            .join("")}
+        </div>`;
+
+  if (!last) {
+    return `<div class="cognitive-result">${historyBlock}</div>`;
+  }
+
+  const ratio = last.consensus_confidence ?? last.consenso?.agreement_ratio ?? 0;
+  const approved = last.consenso?.approved ?? false;
+  const duration = last.duration_ms ?? last.consenso?.duration_ms ?? 0;
+
+  return `<div class="cognitive-result">
+    ${historyBlock}
+    <div class="result-grid" style="margin-top:1rem">
+      <div class="block">
+        <div class="block__label">
+          Última resposta Gemini
+          <span class="status-pill status-pill--${escapeHtml(last.status)}">${escapeHtml(last.status)}</span>
+          · ${escapeHtml(String(last.mode))} · ${escapeHtml(last.model)}
+        </div>
+        <div class="gemini-reply md-frame">
+          ${renderMarkdown(last.gemini_response || last.response_text)}
+        </div>
+        ${
+          last.used_safe_fallback
+            ? `<p class="hint" style="margin-top:0.75rem">
+                Fallback seguro${
+                  last.fallback_reason
+                    ? ` (${escapeHtml(last.fallback_reason)})`
+                    : ""
+                }.
+              </p>`
+            : ""
+        }
+      </div>
+      <div class="block">
+        <div class="block__label">Consenso Alfa · telemetria</div>
+        <div class="confidence">
+          <div class="confidence__head">
+            <span>${approved ? "aprovado" : "rejeitado"}</span>
+            <strong>${formatPercent(ratio)}</strong>
+          </div>
+          <div class="confidence__track" aria-hidden="true">
+            <span
+              class="confidence__fill"
+              style="width:${Math.max(0, Math.min(100, Math.round(ratio * 100)))}%"
+            ></span>
+          </div>
+          <small class="hint">${formatMs(duration)} · motor ${escapeHtml(
+            last.cognitive_provider,
+          )}</small>
+        </div>
+        <p class="block__body" style="margin-top:0.75rem">
+          acordo ${(ratio * 100).toFixed(0)}% ·
+          ${last.consenso?.duration_ms ?? 0} ms consenso ·
+          request ${escapeHtml(last.request_id.slice(0, 8))}…
+        </p>
+      </div>
+    </div>
   </div>`;
 }

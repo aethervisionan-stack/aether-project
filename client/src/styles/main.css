@@ -721,3 +721,84 @@ button:not(:disabled):hover {
 .audio-link {
   color: var(--ether);
 }
+
+.cognitive-panel .mode-selector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.75rem 0 1rem;
+}
+
+.mode-chip {
+  appearance: none;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.45rem 0.85rem;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  transition: border-color 160ms ease, color 160ms ease, background 160ms ease;
+}
+
+.mode-chip:hover:not(:disabled) {
+  color: var(--text);
+  border-color: rgba(0, 240, 255, 0.45);
+}
+
+.mode-chip.is-active {
+  color: var(--ether);
+  border-color: rgba(0, 240, 255, 0.55);
+  background: rgba(0, 240, 255, 0.08);
+}
+
+.mode-chip:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.chat-label {
+  display: block;
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 0.35rem;
+}
+
+.chat-draft {
+  width: 100%;
+  resize: vertical;
+  min-height: 4.5rem;
+  margin-bottom: 0.85rem;
+  padding: 0.75rem 0.9rem;
+  font: inherit;
+  color: var(--text);
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.chat-draft:focus {
+  outline: 1px solid rgba(0, 240, 255, 0.45);
+  border-color: rgba(0, 240, 255, 0.45);
+}
+
+.chat-history {
+  display: grid;
+  gap: 0.85rem;
+  margin-top: 1rem;
+  max-height: 22rem;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+
+.chat-turn {
+  padding-bottom: 0.65rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.chat-turn--user .block__body {
+  color: var(--muted);
+}

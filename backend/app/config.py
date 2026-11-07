@@ -77,6 +77,8 @@ class Settings(BaseSettings):
     cognitive_provider: CognitiveProvider = "auto"
     gemini_api_key: str = ""
     gemini_model: str = "gemini-2.5-flash"
+    # Default voice-path mode when cognitive engine is Gemini: flash | pro
+    gemini_mode: str = "flash"
     gemini_inject_sqlite_context: bool = True
 
     elevenlabs_api_key: str = ""

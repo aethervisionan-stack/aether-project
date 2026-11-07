@@ -1,4 +1,6 @@
 import type {
+  CognitiveChatRequest,
+  CognitiveChatResponse,
   HealthResponse,
   HistoryResponse,
   MetricsResponse,
@@ -163,6 +165,32 @@ export class VoiceApiClient {
         throw await parseError(res);
       }
       return (await res.json()) as MetricsResponse;
+    } finally {
+      window.clearTimeout(timer);
+    }
+  }
+
+  /** Gemini flash|pro chat → Consenso → unified HUD payload. */
+  async cognitiveChat(body: CognitiveChatRequest): Promise<CognitiveChatResponse> {
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), this.config.timeoutMs);
+    try {
+      const res = await fetch(resolveUrl("/cognitive/chat", this.config.baseUrl), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query: body.query,
+          history: body.history ?? [],
+          mode: body.mode ?? "flash",
+          locale: body.locale ?? "pt-BR",
+          client_id: body.client_id ?? "default",
+        }),
+        signal: controller.signal,
+      });
+      if (!res.ok) {
+        throw await parseError(res);
+      }
+      return (await res.json()) as CognitiveChatResponse;
     } finally {
       window.clearTimeout(timer);
     }

@@ -14,6 +14,7 @@ from app.config import get_settings
 from app.core.config import BACKEND_ENV_FILE, load_backend_dotenv
 from app.db import init_db
 from app.middleware.errors import pipeline_error_handler, unhandled_error_handler
+from app.routers import cognitive as cognitive_router
 from app.routers import history as history_router
 from app.routes import audio, health, process_audio
 from app.services.resilience import PipelineError
@@ -67,6 +68,7 @@ app.include_router(health.router)
 app.include_router(process_audio.router)
 app.include_router(audio.router)
 app.include_router(history_router.router)
+app.include_router(cognitive_router.router)
 
 logger.info(
     "pipeline use_mock_audio=%s stt=%s tts=%s openai_key_valid=%s env_file=%s memory=%s",
@@ -90,4 +92,5 @@ async def root() -> dict[str, str]:
         "audio": "GET /audio/{filename}",
         "history": "GET /api/history",
         "metrics": "GET /api/metrics",
+        "cognitive_chat": "POST /api/cognitive/chat",
     }
