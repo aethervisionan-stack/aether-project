@@ -285,16 +285,26 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "function": {
             "name": "memory_read_notes",
             "description": (
-                "Search adaptive memory with semantic tags: rotina, preferência, tarefa."
+                "Read previously saved adaptive-memory notes/preferences. "
+                "Call ONLY when the conversation needs saved history "
+                "(e.g. user asks what was stored, recalls a preference, or needs a past note). "
+                "Do NOT call on ordinary chit-chat. Optional tag filter: "
+                f"{', '.join(sorted(SEMANTIC_TAGS))}."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "query": {"type": "string"},
+                    "query": {
+                        "type": "string",
+                        "description": "Search text for notes the user previously asked to save.",
+                    },
                     "client_id": {"type": "string"},
                     "tag": {
                         "type": "string",
-                        "description": f"Optional filter: {', '.join(sorted(SEMANTIC_TAGS))}.",
+                        "description": (
+                            f"Optional filter only when the user named a category "
+                            f"({', '.join(sorted(SEMANTIC_TAGS))})."
+                        ),
                     },
                 },
                 "required": ["query"],
@@ -307,16 +317,25 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "function": {
             "name": "memory_write_note",
             "description": (
-                "Store a short note/preference/task in adaptive DNA with a semantic tag "
-                "(rotina | preferência | tarefa)."
+                "Persist a short note into adaptive DNA. "
+                "Call ONLY on an explicit user request to save/remember/store "
+                "(e.g. 'lembra que…', 'guarda isto', 'salva esta nota', 'remember that…'). "
+                "Do NOT invent tarefa/nota/rotina labels for normal utterances. "
+                "Tag with rotina | preferência | tarefa only when the user clearly implies that category."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "text": {"type": "string"},
+                    "text": {
+                        "type": "string",
+                        "description": "Exact content the user asked to save (not a paraphrase of chit-chat).",
+                    },
                     "tag": {
                         "type": "string",
-                        "description": "Semantic tag: rotina, preferência, or tarefa.",
+                        "description": (
+                            "Use only when clearly implied: rotina, preferência, or tarefa. "
+                            "Default preferência if unspecified."
+                        ),
                     },
                     "key": {
                         "type": "string",

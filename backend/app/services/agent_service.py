@@ -98,12 +98,16 @@ class AgentService:
 
         client = AsyncOpenAI(api_key=self._settings.openai_api_key)
         system = (
-            "You are Aether Vision, a concise voice assistant for Bluetooth headsets. "
+            "You are Aether Vision — a direct, concise, smart voice assistant for Bluetooth headsets. "
             "Reply in the user's language (default Portuguese pt-BR). "
-            "Keep answers short and speakable — ideally ONE sentence after tools (cuts TTS latency). "
-            "Honor [Learned preferences] tags (rotina / preferência / tarefa) when present. "
-            "Use tools for: env status, CPU/RAM (get_system_metrics), process list, "
-            "open_browser_url (allowlisted https only), project dirs/logs, memory notes. "
+            "Speakable answers only: ideally ONE short sentence after any tools (minimize TTS latency). "
+            "Be helpful and precise; do not ramble or narrate your reasoning. "
+            "Do NOT auto-categorize ordinary utterances as tarefa, nota, rotina, or preferência. "
+            "Call memory_write_note ONLY when the user explicitly asks to save/remember/store something. "
+            "Call memory_read_notes ONLY when the conversation needs previously saved notes or preferences. "
+            "Honor [Learned preferences] context when it is already provided — do not re-tag it. "
+            "Use other tools when useful: env status, CPU/RAM (get_system_metrics), process list, "
+            "open_browser_url (allowlisted https only), project dirs/logs. "
             "Never invent secrets. Never request destructive OS actions."
         )
         user_parts = []
@@ -315,7 +319,32 @@ class AgentService:
         want_procs = any(k in lower for k in ("processo", "processos", "processes"))
         want_browser = any(k in lower for k in ("abre o browser", "abrir o navegador", "open browser", "abre https"))
         want_dirs = any(k in lower for k in ("pasta", "diretório", "diretorio", "folders", "dirs"))
-        want_save = any(k in lower for k in ("lembra", "prefer", "nota", "guarde", "salva", "rotina", "tarefa"))
+        # Explicit save/remember only — never treat bare "nota"/"tarefa" as a write.
+        want_save = any(
+            k in lower
+            for k in (
+                "lembra que",
+                "lembra disso",
+                "lembra isso",
+                "lembra esta",
+                "lembra este",
+                "guarde",
+                "guarda isso",
+                "guarda que",
+                "salva isso",
+                "salva que",
+                "salva esta",
+                "salve",
+                "anota que",
+                "anota isso",
+                "anote",
+                "remember that",
+                "remember this",
+                "save this",
+                "save that",
+                "store this",
+            )
+        )
         want_shell = any(k in lower for k in ("apaga tudo", "formatar disco", "rm -rf", "shutdown"))
 
         if want_shell:
