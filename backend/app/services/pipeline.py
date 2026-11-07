@@ -18,8 +18,9 @@ from app.models.schemas import (
     ToolInvocation,
 )
 from app.db.store import persist_process_audio
-from app.services.agent_service import AgentService
+from app.services.agent_service import AgentService, AgentTurnResult
 from app.services.consenso_alfa import ConsensoAlfa
+from app.services.gemini_gateway import GeminiGateway, build_sqlite_context
 from app.services.resilience import (
     API_FAILURE_FALLBACK_PT,
     PipelineError,
@@ -59,6 +60,7 @@ class AudioPipeline:
         consenso: ConsensoAlfa,
         agent_service: AgentService | None = None,
         memory: AdaptiveMemory | None = None,
+        gemini: GeminiGateway | None = None,
         **legacy: object,
     ) -> None:
         self._settings = settings
@@ -67,6 +69,7 @@ class AudioPipeline:
         self._consenso = consenso
         self._memory = memory
         self._mock_tts = MockTts(settings)
+        self._gemini = gemini or GeminiGateway(settings)
         # Backward-compatible: tests may still pass agent=ResponseAgent(...)
         if agent_service is not None:
             self._agent_service = agent_service
@@ -281,19 +284,21 @@ class AudioPipeline:
             )
 
         tools: list[ToolInvocation] = []
+        cognitive = self._settings.effective_cognitive_provider()
         try:
-            turn = await self._agent_service.run(
+            turn = await self._run_cognitive(
                 stt.text,
                 locale=locale,
                 memory_context=memory_context,
                 client_id=client_id,
                 request_id=request_id,
+                cognitive=cognitive,
             )
             tools = list(turn.tools)
         except RecoverableProviderError as exc:
             log_provider_error(
                 stage="agent",
-                provider=exc.provider or "gpt-4o-mini",
+                provider=exc.provider or cognitive,
                 detail=exc.detail,
                 request_id=request_id,
                 error_type="recoverable_agent",
@@ -320,6 +325,7 @@ class AudioPipeline:
                 agent_ms=0,
                 tools=tools,
                 client_id=client_id,
+                cognitive_provider=cognitive,
             )
         except Exception as exc:  # noqa: BLE001
             raise PipelineError(
@@ -333,6 +339,7 @@ class AudioPipeline:
             "pipeline.agent.done",
             request_id=request_id,
             provider=turn.provider,
+            cognitive=cognitive,
             draft_chars=len(turn.text),
             duration_ms=turn.duration_ms,
             tools_invoked=len(tools),
@@ -459,9 +466,51 @@ class AudioPipeline:
                 depin_attestation=None,
                 tools_invoked=bool(tools),
                 tools_executed_count=executed_count,
+                cognitive_provider=cognitive,
             ),
         )
         return _persist_session(response, client_id=client_id)
+
+    async def _run_cognitive(
+        self,
+        transcript: str,
+        *,
+        locale: str,
+        memory_context: str,
+        client_id: str,
+        request_id: str,
+        cognitive: str,
+    ) -> AgentTurnResult:
+        """
+        Draft reply after STT: Gemini (cognitive engine) or OpenAI AgentService.
+        Output always continues to Consenso Alfa in the caller.
+        """
+        if cognitive == "gemini":
+            sqlite_ctx = ""
+            if self._settings.gemini_inject_sqlite_context:
+                sqlite_ctx = build_sqlite_context(client_id=client_id, limit=5)
+            gemini_turn = await self._gemini.generate(
+                transcript,
+                locale=locale,
+                memory_context=memory_context,
+                sqlite_context=sqlite_ctx,
+                client_id=client_id,
+                request_id=request_id,
+            )
+            return AgentTurnResult(
+                text=gemini_turn.text,
+                duration_ms=gemini_turn.duration_ms,
+                provider=gemini_turn.provider,
+                tools=list(gemini_turn.tools),
+            )
+
+        return await self._agent_service.run(
+            transcript,
+            locale=locale,
+            memory_context=memory_context,
+            client_id=client_id,
+            request_id=request_id,
+        )
 
     async def _safe_response(
         self,
@@ -476,6 +525,7 @@ class AudioPipeline:
         agent_ms: int,
         tools: list[ToolInvocation] | None = None,
         client_id: str = "default",
+        cognitive_provider: str | None = None,
     ) -> ProcessAudioResponse:
         tool_list = tools or []
         tts = await self._mock_tts.synthesize(response_text)
@@ -518,6 +568,8 @@ class AudioPipeline:
                 depin_attestation=None,
                 tools_invoked=bool(tool_list),
                 tools_executed_count=sum(1 for t in tool_list if t.executed),
+                cognitive_provider=cognitive_provider
+                or self._settings.effective_cognitive_provider(),
             ),
         )
         return _persist_session(response, client_id=client_id)

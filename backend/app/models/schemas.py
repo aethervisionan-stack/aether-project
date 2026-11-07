@@ -114,6 +114,7 @@ class ProcessAudioMeta(BaseModel):
     depin_attestation: dict[str, Any] | None = None
     tools_invoked: bool = False
     tools_executed_count: int = 0
+    cognitive_provider: str | None = None
 
 
 class ProcessAudioResponse(BaseModel):
@@ -143,6 +144,9 @@ class HealthResponse(BaseModel):
     # Presence / validity flags only — never expose the secret value
     openai_api_key_configured: bool = False
     has_valid_openai_key: bool = False
+    gemini_api_key_configured: bool = False
+    has_valid_gemini_key: bool = False
+    cognitive_provider: str = "openai"
     env_file: str = ""
     api_port: int = 8000
 

@@ -29,6 +29,9 @@ async def health(settings: Settings = Depends(get_app_settings)) -> HealthRespon
         web3_rpc_configured=bool(settings.resolved_solana_rpc()),
         openai_api_key_configured=bool(settings.openai_api_key.strip()),
         has_valid_openai_key=key_ok,
+        gemini_api_key_configured=bool(settings.gemini_api_key.strip()),
+        has_valid_gemini_key=settings.has_valid_gemini_key(),
+        cognitive_provider=settings.effective_cognitive_provider(),
         env_file=str(BACKEND_ENV_FILE),
         api_port=settings.port,
     )

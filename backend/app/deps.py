@@ -9,6 +9,7 @@ from app.config import Settings, get_settings
 from app.core.memory import AdaptiveMemory, get_adaptive_memory
 from app.services.agent_service import AgentService
 from app.services.consenso_alfa import ConsensoAlfa
+from app.services.gemini_gateway import GeminiGateway
 from app.services.pipeline import AudioPipeline
 from app.services.stt import build_stt_provider
 from app.services.tts import build_tts_provider
@@ -35,6 +36,7 @@ def get_pipeline() -> AudioPipeline:
         consenso=consenso,
         agent_service=agent_service,
         memory=memory,
+        gemini=GeminiGateway(settings),
     )
 
 

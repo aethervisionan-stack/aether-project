@@ -43,6 +43,9 @@ def test_health(client: TestClient) -> None:
     assert "openai_api_key_configured" in body
     assert "has_valid_openai_key" in body
     assert isinstance(body["has_valid_openai_key"], bool)
+    assert "gemini_api_key_configured" in body
+    assert "has_valid_gemini_key" in body
+    assert "cognitive_provider" in body
     assert body["api_port"] == 8000
     assert "env_file" in body
     assert body["env_file"].replace("\\", "/").endswith("backend/.env")

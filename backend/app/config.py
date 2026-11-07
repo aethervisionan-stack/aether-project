@@ -10,6 +10,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.core.config import (
     BACKEND_ENV_FILE,
+    is_valid_gemini_api_key,
     is_valid_openai_api_key,
     load_backend_dotenv,
     normalize_secret,
@@ -18,6 +19,7 @@ from app.core.config import (
 PipelineMode = Literal["mock", "hybrid", "production"]
 SttProvider = Literal["mock", "openai", "local"]
 TtsProvider = Literal["mock", "openai", "elevenlabs"]
+CognitiveProvider = Literal["auto", "gemini", "openai"]
 
 # Always permitted for the Vite control client (local Bluetooth test).
 DEFAULT_VITE_CORS_ORIGINS: tuple[str, ...] = (
@@ -69,6 +71,14 @@ class Settings(BaseSettings):
     openai_tts_model: str = "tts-1-hd"
     openai_tts_voice: str = "nova"
     openai_agent_model: str = "gpt-4o-mini"
+
+    # Cognitive engine (draft before Consenso Alfa)
+    # auto → Gemini when GEMINI_API_KEY valid, else OpenAI agent/tools
+    cognitive_provider: CognitiveProvider = "auto"
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-2.5-flash"
+    gemini_inject_sqlite_context: bool = True
+
     elevenlabs_api_key: str = ""
     elevenlabs_voice_id: str = "21m00Tcm4TlvDq8ikWAM"
     elevenlabs_model_id: str = "eleven_multilingual_v2"
@@ -102,7 +112,13 @@ class Settings(BaseSettings):
     def _strip_origins(cls, value: object) -> object:
         return value
 
-    @field_validator("openai_api_key", "elevenlabs_api_key", mode="before")
+    @field_validator(
+        "openai_api_key",
+        "elevenlabs_api_key",
+        "gemini_api_key",
+        "helius_api_key",
+        mode="before",
+    )
     @classmethod
     def _normalize_secrets(cls, value: object) -> str:
         return normalize_secret(value)
@@ -120,6 +136,24 @@ class Settings(BaseSettings):
     def has_valid_openai_key(self) -> bool:
         """True when OPENAI_API_KEY looks usable (sk-…); never expose the secret."""
         return is_valid_openai_api_key(self.openai_api_key)
+
+    def has_valid_gemini_key(self) -> bool:
+        """True when GEMINI_API_KEY looks usable; never expose the secret."""
+        return is_valid_gemini_api_key(self.gemini_api_key)
+
+    def effective_cognitive_provider(self) -> Literal["gemini", "openai"]:
+        """Resolve which draft engine the pipeline should call."""
+        if self.use_mock_audio:
+            return "openai"  # deterministic tool mock path
+        pref = self.cognitive_provider
+        if pref == "openai":
+            return "openai"
+        if pref == "gemini":
+            return "gemini"
+        # auto
+        if self.has_valid_gemini_key():
+            return "gemini"
+        return "openai"
 
     def effective_stt_provider(self) -> SttProvider:
         if self.use_mock_audio:

@@ -45,6 +45,17 @@ def is_valid_openai_api_key(value: object) -> bool:
     return bool(_OPENAI_KEY_RE.match(key))
 
 
+def is_valid_gemini_api_key(value: object) -> bool:
+    """True when GEMINI_API_KEY looks present/usable (never log the value)."""
+    key = normalize_secret(value)
+    if not key or key.lower() in {"", "your-key-here", "changeme", "placeholder"}:
+        return False
+    # Google AI Studio keys are typically long; often start with AIza.
+    if len(key) < 20:
+        return False
+    return True
+
+
 def load_backend_dotenv(*, override: bool = False) -> Path:
     """
     Load `backend/.env` using an absolute path (independent of process CWD).
@@ -68,15 +79,17 @@ def load_backend_dotenv(*, override: bool = False) -> Path:
 
     loaded = load_dotenv(dotenv_path=path, override=override)
     # Normalize quoted empty / quoted keys into os.environ for downstream readers
-    raw = os.environ.get("OPENAI_API_KEY")
-    if raw is not None:
-        os.environ["OPENAI_API_KEY"] = normalize_secret(raw)
+    for env_name in ("OPENAI_API_KEY", "GEMINI_API_KEY"):
+        raw = os.environ.get(env_name)
+        if raw is not None:
+            os.environ[env_name] = normalize_secret(raw)
 
     logger.info(
-        "dotenv load path=%s loaded=%s cwd=%s openai_key_valid=%s",
+        "dotenv load path=%s loaded=%s cwd=%s openai_key_valid=%s gemini_key_valid=%s",
         path,
         bool(loaded),
         os.getcwd(),
         is_valid_openai_api_key(os.environ.get("OPENAI_API_KEY")),
+        is_valid_gemini_api_key(os.environ.get("GEMINI_API_KEY")),
     )
     return path
