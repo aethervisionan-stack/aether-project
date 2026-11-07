@@ -9,6 +9,7 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    strictPort: true, // fail loudly if :5173 is taken (no silent hop)
     host: "127.0.0.1",
     proxy: {
       "/api": {

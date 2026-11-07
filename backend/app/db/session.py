@@ -5,10 +5,12 @@ from __future__ import annotations
 import logging
 from functools import lru_cache
 from pathlib import Path
+from typing import Any
 
 from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from app.core.config import BACKEND_DIR
 from app.db.models import Base
@@ -46,17 +48,18 @@ def get_engine(sqlite_url: str = "") -> Engine:
         path_hint = str(path)
 
     # StaticPool for :memory: so create_all and sessions share one connection.
-    connect_args: dict = {"check_same_thread": False}
-    engine_kwargs: dict = {"future": True, "connect_args": connect_args}
+    connect_args: dict[str, bool] = {"check_same_thread": False}
+    engine_kwargs: dict[str, Any] = {
+        "future": True,
+        "connect_args": connect_args,
+    }
     if ":memory:" in url:
-        from sqlalchemy.pool import StaticPool
-
         engine_kwargs["poolclass"] = StaticPool
 
     engine = create_engine(url, **engine_kwargs)
 
     @event.listens_for(engine, "connect")
-    def _set_sqlite_pragma(dbapi_connection, connection_record) -> None:  # noqa: ANN001
+    def _set_sqlite_pragma(dbapi_connection: Any, connection_record: Any) -> None:
         _ = connection_record
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA journal_mode=WAL")

@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-
-from contextlib import asynccontextmanager
 
 from app import __version__
 from app.config import get_settings
@@ -30,7 +30,7 @@ logger = logging.getLogger("aether.main")
 
 
 @asynccontextmanager
-async def lifespan(_app: FastAPI):
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     db_path = init_db()
     logger.info("sqlite tables ready path=%s", db_path)
     yield

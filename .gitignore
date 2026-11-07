@@ -28,3 +28,7 @@ venv/
 # Vite client
 client/dist/
 client/.vite/
+
+# Stale incremental TS build info (root / IDE)
+*.tsbuildinfo
+tsconfig.tsbuildinfo
