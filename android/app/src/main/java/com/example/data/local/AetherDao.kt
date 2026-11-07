@@ -5,12 +5,11 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
-import androidx.room.Transaction
 import kotlinx.coroutines.flow.Flow
 
 /**
  * Facade DAO used by [com.example.data.repository.AetherRepository].
- * Room exposes separate entity DAOs as well via [AetherDatabase].
+ * Room also exposes entity-specific DAOs via [AetherDatabase].
  */
 @Dao
 interface AetherDao {
@@ -26,6 +25,9 @@ interface AetherDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertNote(note: MemoryNote): Long
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertNotes(notes: List<MemoryNote>)
+
     @Delete
     suspend fun deleteNote(note: MemoryNote)
 
@@ -40,11 +42,4 @@ interface AetherDao {
 
     @Query("DELETE FROM interaction_logs")
     suspend fun clearLogs()
-
-    @Transaction
-    suspend fun seedIfEmpty(seedNotes: List<MemoryNote>) {
-        if (noteCount() == 0) {
-            seedNotes.forEach { insertNote(it) }
-        }
-    }
 }

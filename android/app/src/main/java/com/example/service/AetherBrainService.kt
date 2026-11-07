@@ -19,7 +19,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
-import java.util.concurrent.TimeUnit
 
 data class BrainResponse(
     val spokenText: String,
@@ -30,10 +29,8 @@ data class BrainResponse(
 
 class AetherBrainService {
 
-    private val okHttpClient = OkHttpClient.Builder()
-        .connectTimeout(6, TimeUnit.SECONDS)
-        .readTimeout(10, TimeUnit.SECONDS)
-        .build()
+    // Reuse the shared client so BODY logging + timing interceptors appear in Logcat.
+    private val okHttpClient: OkHttpClient = AetherApiClient.okHttpClient
 
     // Firebase AI Logic com gemini-3.8-flash inicializado sob demanda (lazy)
     private val firebaseAiModel by lazy {
@@ -226,7 +223,9 @@ class AetherBrainService {
             if (response.isSuccessful) {
                 val bodyStr = response.body?.string() ?: return null
                 val json = JSONObject(bodyStr)
-                val text = json.optString("text", json.optString("response", json.optString("spoken_response", null)))
+                val text = sequenceOf("spoken_response", "response_text", "response", "text")
+                    .map { key -> json.optString(key, "") }
+                    .firstOrNull { it.isNotBlank() }
                 Log.i("AetherBrainService", "Sucesso via OkHttp fallback ($endpoint): ${text?.take(60)}...")
                 text
             } else {

@@ -123,87 +123,105 @@ class AetherViewModel(application: Application) : AndroidViewModel(application) 
 
         viewModelScope.launch {
             val totalStart = System.currentTimeMillis()
-            _sessionState.value = AudioSessionState.Thinking
+            try {
+                _sessionState.value = AudioSessionState.Thinking
 
-            val sttElapsed = (140L + (inputText.length % 60)).coerceIn(110L, 230L)
-            val recentNotes = repository.getRecentNotesOnce(4)
-            val notesSummary = recentNotes.joinToString("; ") { "${it.title}: ${it.content}" }
-            val history = recentLogs.value.take(3).map { "Operador: ${it.userInputText} | Resposta: ${it.copilotResponseText}" }
+                val sttElapsed = (140L + (inputText.length % 60)).coerceIn(110L, 230L)
+                val recentNotes = repository.getRecentNotesOnce(4)
+                val notesSummary = recentNotes.joinToString("; ") { "${it.title}: ${it.content}" }
+                val history = recentLogs.value.take(3).map { "Operador: ${it.userInputText} | Resposta: ${it.copilotResponseText}" }
 
-            Log.i("AetherViewModel", "Disparando processQuery para prompt: '$inputText' | Backend: ${backendUrl.value}")
-            val brainResponse = try {
-                brainService.processQuery(
-                    prompt = inputText,
-                    sessionHistory = history,
-                    recentNotesSummary = notesSummary,
-                    geminiApiKey = geminiApiKey.value.takeIf { it.isNotBlank() },
-                    backendUrl = backendUrl.value.takeIf { it.isNotBlank() }
-                )
-            } catch (e: Exception) {
-                Log.e("AetherViewModel", "Erro ao executar brainService.processQuery: ${e.localizedMessage}", e)
-                throw e
-            }
-
-            _sessionState.value = AudioSessionState.ValidatingConsensus
-            val consensus = consensusEngine.validateResponse(
-                prompt = inputText,
-                response = brainResponse.spokenText,
-                sessionHistory = history,
-                availableMemoryContext = notesSummary
-            )
-            _consensusResult.value = consensus
-
-            brainResponse.gatedToolEvent?.let { gatedEvent ->
-                if (isAutoApproveGatedTools.value) {
-                    executeGatedTool(gatedEvent)
-                } else {
-                    _pendingGatedEvent.value = gatedEvent
+                Log.i(TAG, "pipeline.start prompt='$inputText' backend=${backendUrl.value} device=${deviceState.value.deviceName}")
+                val brainResponse = try {
+                    brainService.processQuery(
+                        prompt = inputText,
+                        sessionHistory = history,
+                        recentNotesSummary = notesSummary,
+                        geminiApiKey = geminiApiKey.value.takeIf { it.isNotBlank() },
+                        backendUrl = backendUrl.value.takeIf { it.isNotBlank() }
+                    )
+                } catch (e: Exception) {
+                    Log.e(TAG, "brainService.processQuery failed: ${e.localizedMessage}", e)
+                    throw e
                 }
-            }
+                Log.i(
+                    TAG,
+                    "pipeline.brain model=${brainResponse.modelUsed} cognitiveMs=${brainResponse.cognitiveLatencyMs} gated=${brainResponse.gatedToolEvent?.toolName}"
+                )
 
-            _sessionState.value = AudioSessionState.Speaking
-            _lastCopilotResponse.value = brainResponse.spokenText
+                _sessionState.value = AudioSessionState.ValidatingConsensus
+                val consensus = consensusEngine.validateResponse(
+                    prompt = inputText,
+                    response = brainResponse.spokenText,
+                    sessionHistory = history,
+                    availableMemoryContext = notesSummary
+                )
+                _consensusResult.value = consensus
+                Log.i(
+                    TAG,
+                    "pipeline.consensus grounding=${consensus.groundingScore} safety=${consensus.safetyPassed} ms=${consensus.latencyMs}"
+                )
 
-            val ttsDuration = (180L + (brainResponse.spokenText.length * 3L)).coerceIn(160L, 260L)
-
-            ttsEngine.speak(
-                text = brainResponse.spokenText,
-                openAiApiKey = openAiApiKey.value.takeIf { it.isNotBlank() },
-                onStart = { _sessionState.value = AudioSessionState.Speaking },
-                onComplete = {
-                    if (isContinuousListening.value) {
-                        startListening()
+                brainResponse.gatedToolEvent?.let { gatedEvent ->
+                    if (isAutoApproveGatedTools.value) {
+                        executeGatedTool(gatedEvent)
                     } else {
-                        _sessionState.value = AudioSessionState.Idle
+                        _pendingGatedEvent.value = gatedEvent
                     }
                 }
-            )
 
-            val totalElapsed = System.currentTimeMillis() - totalStart
-            val metrics = LatencyMetrics(
-                sttMs = sttElapsed,
-                agentCognitiveMs = brainResponse.cognitiveLatencyMs,
-                consensusMs = consensus.latencyMs,
-                ttsMs = ttsDuration
-            )
-            _latencyMetrics.value = metrics
+                _sessionState.value = AudioSessionState.Speaking
+                _lastCopilotResponse.value = brainResponse.spokenText
 
-            repository.logInteraction(
-                InteractionLog(
-                    userInputText = inputText,
-                    copilotResponseText = brainResponse.spokenText,
-                    audioDevice = deviceState.value.deviceName,
-                    sttLatencyMs = metrics.sttMs,
-                    llmLatencyMs = metrics.agentCognitiveMs,
-                    consensusLatencyMs = metrics.consensusMs,
-                    ttsLatencyMs = metrics.ttsMs,
-                    totalLatencyMs = metrics.totalMs,
-                    groundingScore = consensus.groundingScore,
-                    safetyStatus = if (consensus.safetyPassed) "PASSED" else "WARNING",
-                    consistencyScore = consensus.consistencyScore,
-                    toolInvoked = brainResponse.gatedToolEvent?.toolName
+                val ttsDuration = (180L + (brainResponse.spokenText.length * 3L)).coerceIn(160L, 260L)
+
+                ttsEngine.speak(
+                    text = brainResponse.spokenText,
+                    openAiApiKey = openAiApiKey.value.takeIf { it.isNotBlank() },
+                    onStart = { _sessionState.value = AudioSessionState.Speaking },
+                    onComplete = {
+                        if (isContinuousListening.value) {
+                            startListening()
+                        } else {
+                            _sessionState.value = AudioSessionState.Idle
+                        }
+                    }
                 )
-            )
+
+                val metrics = LatencyMetrics(
+                    sttMs = sttElapsed,
+                    agentCognitiveMs = brainResponse.cognitiveLatencyMs,
+                    consensusMs = consensus.latencyMs,
+                    ttsMs = ttsDuration
+                )
+                _latencyMetrics.value = metrics
+                Log.i(
+                    TAG,
+                    "pipeline.done wallMs=${System.currentTimeMillis() - totalStart} totalMs=${metrics.totalMs} sla=${metrics.isSlaMet}"
+                )
+
+                repository.logInteraction(
+                    InteractionLog(
+                        userInputText = inputText,
+                        copilotResponseText = brainResponse.spokenText,
+                        audioDevice = deviceState.value.deviceName,
+                        sttLatencyMs = metrics.sttMs,
+                        llmLatencyMs = metrics.agentCognitiveMs,
+                        consensusLatencyMs = metrics.consensusMs,
+                        ttsLatencyMs = metrics.ttsMs,
+                        totalLatencyMs = metrics.totalMs,
+                        groundingScore = consensus.groundingScore,
+                        safetyStatus = if (consensus.safetyPassed) "PASSED" else "WARNING",
+                        consistencyScore = consensus.consistencyScore,
+                        toolInvoked = brainResponse.gatedToolEvent?.toolName
+                    )
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "pipeline.failed after ${System.currentTimeMillis() - totalStart}ms: ${e.localizedMessage}", e)
+                _lastCopilotResponse.value =
+                    "Falha no pipeline de áudio. Verifique Logcat (AetherViewModel / AetherBrainService / AetherApiClient)."
+                _sessionState.value = AudioSessionState.Idle
+            }
         }
     }
 
@@ -276,5 +294,9 @@ class AetherViewModel(application: Application) : AndroidViewModel(application) 
         speechRecognizer.release()
         ttsEngine.release()
         bluetoothHelper.release()
+    }
+
+    companion object {
+        private const val TAG = "AetherViewModel"
     }
 }

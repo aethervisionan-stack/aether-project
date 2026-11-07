@@ -17,6 +17,9 @@ android {
         versionCode = 1
         versionName = "1.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Emulator → host FastAPI default (also in AetherApiClient.DEFAULT_BASE_URL).
+        buildConfigField("String", "DEFAULT_BACKEND_URL", "\"http://10.0.2.2:8000/\"")
     }
 
     buildTypes {
@@ -37,10 +40,6 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
-    }
-
     buildFeatures {
         compose = true
         buildConfig = true
@@ -50,6 +49,12 @@ android {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
     }
 }
 
@@ -87,12 +92,11 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation("org.jetbrains.kotlin:kotlin-reflect")
 
-    // Firebase AI Logic + App Check
-    implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
+    // Firebase AI Logic + App Check (BOM must be new enough to manage firebase-ai)
+    implementation(platform("com.google.firebase:firebase-bom:35.1.0"))
     implementation("com.google.firebase:firebase-ai")
     implementation("com.google.firebase:firebase-appcheck")
     implementation("com.google.firebase:firebase-appcheck-debug")
     implementation("com.google.firebase:firebase-appcheck-playintegrity")
-    // Provides RecaptchaAppCheckProviderFactory used by AppCheckUtil (release path).
-    implementation("com.google.firebase:firebase-appcheck-recaptchaenterprise")
+    implementation("com.google.firebase:firebase-appcheck-recaptcha")
 }

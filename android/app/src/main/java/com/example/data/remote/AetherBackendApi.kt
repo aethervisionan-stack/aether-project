@@ -12,9 +12,9 @@ data class AudioProcessRequestDto(
 )
 
 data class AudioProcessResponseDto(
-    @Json(name = "spoken_response") val spokenResponse: String? = null,
+    @param:Json(name = "spoken_response") val spokenResponse: String? = null,
     val response: String? = null,
-    @Json(name = "response_text") val responseText: String? = null,
+    @param:Json(name = "response_text") val responseText: String? = null,
     val text: String? = null,
     val transcript: String? = null
 )
@@ -22,7 +22,7 @@ data class AudioProcessResponseDto(
 data class HealthResponseDto(
     val status: String? = null,
     val version: String? = null,
-    @Json(name = "pipeline_mode") val pipelineMode: String? = null
+    @param:Json(name = "pipeline_mode") val pipelineMode: String? = null
 )
 
 interface AetherBackendApi {

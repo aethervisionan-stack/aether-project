@@ -2,9 +2,11 @@ package com.example.service
 
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothHeadset
+import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.content.Context
 import android.media.AudioManager
+import android.os.Build
 import android.util.Log
 import com.example.data.model.AudioDeviceState
 import com.example.data.model.DeviceType
@@ -16,7 +18,7 @@ class BluetoothAudioHelper(context: Context) {
 
     private val appContext = context.applicationContext
     private val audioManager = appContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-    private val bluetoothAdapter: BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
+    private val bluetoothAdapter: BluetoothAdapter? = resolveAdapter()
 
     private val _deviceState = MutableStateFlow(
         AudioDeviceState(
@@ -35,12 +37,14 @@ class BluetoothAudioHelper(context: Context) {
         override fun onServiceConnected(profile: Int, proxy: BluetoothProfile?) {
             if (profile == BluetoothProfile.HEADSET) {
                 headsetProxy = proxy as? BluetoothHeadset
+                Log.i(TAG, "HEADSET profile connected devices=${headsetProxy?.connectedDevices?.size ?: 0}")
                 refreshScoState()
             }
         }
 
         override fun onServiceDisconnected(profile: Int) {
             if (profile == BluetoothProfile.HEADSET) {
+                Log.w(TAG, "HEADSET profile disconnected")
                 headsetProxy = null
                 updateState(isSco = false)
             }
@@ -51,22 +55,28 @@ class BluetoothAudioHelper(context: Context) {
         runCatching {
             bluetoothAdapter?.getProfileProxy(appContext, profileListener, BluetoothProfile.HEADSET)
         }.onFailure { Log.w(TAG, "Bluetooth profile proxy unavailable: ${it.message}") }
-        // Prefer SCO for M100 path when possible; safe no-op on emulator without BT.
+
         runCatching {
             audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
             audioManager.startBluetoothSco()
             audioManager.isBluetoothScoOn = true
+            Log.i(TAG, "Requested Bluetooth SCO start scoOn=${audioManager.isBluetoothScoOn}")
+        }.onFailure {
+            Log.w(TAG, "SCO start failed (emulator/no BT is OK): ${it.localizedMessage}")
         }
         refreshScoState()
     }
 
     fun selectDevice(deviceType: DeviceType) {
+        Log.i(TAG, "selectDevice=$deviceType")
         when (deviceType) {
             DeviceType.BLUETOOTH_HEADSET_M100 -> {
                 runCatching {
                     audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
                     audioManager.startBluetoothSco()
                     audioManager.isBluetoothScoOn = true
+                }.onFailure {
+                    Log.e(TAG, "Failed enabling SCO: ${it.localizedMessage}", it)
                 }
                 _deviceState.value = AudioDeviceState(
                     currentDevice = deviceType,
@@ -101,13 +111,17 @@ class BluetoothAudioHelper(context: Context) {
 
     fun release() {
         stopScoQuietly()
-        bluetoothAdapter?.closeProfileProxy(BluetoothProfile.HEADSET, headsetProxy)
+        runCatching {
+            bluetoothAdapter?.closeProfileProxy(BluetoothProfile.HEADSET, headsetProxy)
+        }.onFailure { Log.w(TAG, "closeProfileProxy: ${it.localizedMessage}") }
         headsetProxy = null
+        Log.i(TAG, "release()")
     }
 
     private fun refreshScoState() {
         val sco = audioManager.isBluetoothScoOn ||
             (headsetProxy?.connectedDevices?.isNotEmpty() == true)
+        Log.d(TAG, "refreshScoState sco=$sco mode=${audioManager.mode}")
         updateState(isSco = sco)
     }
 
@@ -121,7 +135,6 @@ class BluetoothAudioHelper(context: Context) {
     }
 
     private fun estimateBattery(): Int {
-        // Android does not expose a stable generic headset battery API for all M100 clones.
         return _deviceState.value.batteryPercent.coerceIn(1, 100)
     }
 
@@ -130,6 +143,21 @@ class BluetoothAudioHelper(context: Context) {
             audioManager.stopBluetoothSco()
             audioManager.isBluetoothScoOn = false
             audioManager.mode = AudioManager.MODE_NORMAL
+        }.onFailure { Log.w(TAG, "stopScoQuietly: ${it.localizedMessage}") }
+    }
+
+    private fun resolveAdapter(): BluetoothAdapter? {
+        return try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val manager = appContext.getSystemService(BluetoothManager::class.java)
+                manager?.adapter
+            } else {
+                @Suppress("DEPRECATION")
+                BluetoothAdapter.getDefaultAdapter()
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "resolveAdapter failed: ${e.localizedMessage}")
+            null
         }
     }
 

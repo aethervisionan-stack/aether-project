@@ -33,10 +33,21 @@ object AetherApiClient {
         .addInterceptor(loggingInterceptor)
         .addInterceptor { chain ->
             val request = chain.request()
+            val started = System.currentTimeMillis()
+            Log.i(TAG, "→ ${request.method} ${request.url}")
             try {
-                chain.proceed(request)
+                val response = chain.proceed(request)
+                Log.i(
+                    TAG,
+                    "← ${response.code} ${request.url} in ${System.currentTimeMillis() - started}ms"
+                )
+                response
             } catch (e: Exception) {
-                Log.e(TAG, "Falha de conexão com ${request.url}: ${e.localizedMessage}", e)
+                Log.e(
+                    TAG,
+                    "Falha de conexão com ${request.url} após ${System.currentTimeMillis() - started}ms: ${e.localizedMessage}",
+                    e
+                )
                 throw e
             }
         }

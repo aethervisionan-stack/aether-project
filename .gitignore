@@ -13,6 +13,7 @@ out
 android/.gradle/
 android/**/build/
 android/local.properties
+# Keep local.properties out of git (SDK path is machine-specific).
 android/.idea/
 android/*.iml
 android/captures/
