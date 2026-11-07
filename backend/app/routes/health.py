@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends
 
 from app import __version__
 from app.config import Settings
+from app.core.config import BACKEND_ENV_FILE
 from app.deps import get_app_settings
 from app.models.schemas import HealthResponse
 
@@ -15,6 +16,7 @@ router = APIRouter(tags=["health"])
 @router.get("/health", response_model=HealthResponse)
 async def health(settings: Settings = Depends(get_app_settings)) -> HealthResponse:
     depin_ready = bool(settings.resolved_solana_rpc() and settings.aether_agent_wallet)
+    key_ok = settings.has_valid_openai_key()
     return HealthResponse(
         status="ok",
         version=__version__,
@@ -26,5 +28,7 @@ async def health(settings: Settings = Depends(get_app_settings)) -> HealthRespon
         depin_ready=depin_ready,
         web3_rpc_configured=bool(settings.resolved_solana_rpc()),
         openai_api_key_configured=bool(settings.openai_api_key.strip()),
+        has_valid_openai_key=key_ok,
+        env_file=str(BACKEND_ENV_FILE),
         api_port=settings.port,
     )

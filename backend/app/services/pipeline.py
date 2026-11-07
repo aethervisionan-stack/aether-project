@@ -135,13 +135,13 @@ class AudioPipeline:
         # Real mode without key: fail clearly — never silent mock Whisper success.
         if (
             not self._settings.use_mock_audio
-            and not self._settings.openai_api_key.strip()
+            and not self._settings.has_valid_openai_key()
             and self._settings.effective_stt_provider() == "openai"
         ):
             log_provider_error(
                 stage="stt",
                 provider="openai-whisper",
-                detail="invalid_api_key: OPENAI_API_KEY empty — set backend/.env",
+                detail="invalid_api_key: OPENAI_API_KEY missing/invalid — set sk-… in backend/.env",
                 request_id=request_id,
                 error_type="invalid_api_key",
             )

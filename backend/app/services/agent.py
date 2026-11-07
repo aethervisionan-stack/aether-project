@@ -46,10 +46,10 @@ class ResponseAgent:
         if cfg.use_mock_audio:
             return await self._mock_draft(transcript, locale=locale)
 
-        if not cfg.openai_api_key.strip():
+        if not cfg.has_valid_openai_key():
             raise RecoverableProviderError(
                 "agent",
-                "invalid_api_key: OPENAI_API_KEY missing — fill backend/.env (no silent mock)",
+                "invalid_api_key: OPENAI_API_KEY missing/invalid — paste sk-… in backend/.env",
                 provider="gpt-4o-mini",
             )
 

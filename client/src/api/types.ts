@@ -90,6 +90,10 @@ export interface HealthResponse {
   web3_rpc_configured: boolean;
   /** Presence only — never the secret value. */
   openai_api_key_configured?: boolean;
+  /** True when key starts with sk- and passes length/charset checks. */
+  has_valid_openai_key?: boolean;
+  /** Absolute path of the .env file the backend loaded. */
+  env_file?: string;
   api_port?: number;
 }
 

@@ -9,18 +9,13 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app import __version__
 from app.config import get_settings
+from app.core.config import BACKEND_ENV_FILE, load_backend_dotenv
 from app.middleware.errors import pipeline_error_handler, unhandled_error_handler
 from app.routes import audio, health, process_audio
 from app.services.resilience import PipelineError
 
-# Ensure .env is loaded early (pydantic-settings also reads it; python-dotenv
-# documents the required OPENAI_API_KEY fill step for operators).
-try:
-    from dotenv import load_dotenv
-
-    load_dotenv()
-except ImportError:  # pragma: no cover
-    pass
+# Absolute-path dotenv BEFORE settings cache (CWD-independent).
+load_backend_dotenv(override=False)
 
 settings = get_settings()
 logging.basicConfig(
@@ -60,11 +55,12 @@ app.include_router(process_audio.router)
 app.include_router(audio.router)
 
 logger.info(
-    "pipeline use_mock_audio=%s stt=%s tts=%s openai_key=%s memory=%s",
+    "pipeline use_mock_audio=%s stt=%s tts=%s openai_key_valid=%s env_file=%s memory=%s",
     settings.use_mock_audio,
     settings.effective_stt_provider(),
     settings.effective_tts_provider(),
-    "set" if settings.openai_api_key.strip() else "EMPTY — fill backend/.env",
+    settings.has_valid_openai_key(),
+    BACKEND_ENV_FILE,
     settings.memory_enabled,
 )
 

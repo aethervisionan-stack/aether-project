@@ -41,7 +41,11 @@ def test_health(client: TestClient) -> None:
     assert body["pipeline_mode"] == "mock"
     assert body["consenso_enabled"] is True
     assert "openai_api_key_configured" in body
+    assert "has_valid_openai_key" in body
+    assert isinstance(body["has_valid_openai_key"], bool)
     assert body["api_port"] == 8000
+    assert "env_file" in body
+    assert body["env_file"].replace("\\", "/").endswith("backend/.env")
 
 
 def test_process_audio_mock(client: TestClient) -> None:

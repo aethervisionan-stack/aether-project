@@ -131,4 +131,8 @@ def test_health_exposes_use_mock_audio() -> None:
     assert body["stt_provider"] == "mock"
     assert "openai_api_key_configured" in body
     assert isinstance(body["openai_api_key_configured"], bool)
+    assert "has_valid_openai_key" in body
+    # Automated tests force empty key via conftest — mocks must still work.
+    assert body["has_valid_openai_key"] is False
     assert body.get("api_port") == 8000
+    assert str(body.get("env_file", "")).replace("\\", "/").endswith("backend/.env")

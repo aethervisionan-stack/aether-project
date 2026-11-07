@@ -8,6 +8,13 @@ from typing import Literal
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.core.config import (
+    BACKEND_ENV_FILE,
+    is_valid_openai_api_key,
+    load_backend_dotenv,
+    normalize_secret,
+)
+
 PipelineMode = Literal["mock", "hybrid", "production"]
 SttProvider = Literal["mock", "openai", "local"]
 TtsProvider = Literal["mock", "openai", "elevenlabs"]
@@ -18,12 +25,17 @@ DEFAULT_VITE_CORS_ORIGINS: tuple[str, ...] = (
     "http://localhost:5173",
 )
 
+# Load backend/.env by absolute path BEFORE Settings() reads the environment.
+# Critical when uvicorn is started from the repo root (CWD ≠ backend/).
+load_backend_dotenv(override=False)
+
 
 class Settings(BaseSettings):
     """Typed settings for the FastAPI voice service."""
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        # Absolute path — never depend on process CWD
+        env_file=str(BACKEND_ENV_FILE),
         env_file_encoding="utf-8",
         extra="ignore",
     )
@@ -87,6 +99,11 @@ class Settings(BaseSettings):
     def _strip_origins(cls, value: object) -> object:
         return value
 
+    @field_validator("openai_api_key", "elevenlabs_api_key", mode="before")
+    @classmethod
+    def _normalize_secrets(cls, value: object) -> str:
+        return normalize_secret(value)
+
     @property
     def cors_origin_list(self) -> list[str]:
         """Configured CORS origins plus Vite defaults (deduped, order preserved)."""
@@ -96,6 +113,10 @@ class Settings(BaseSettings):
             if origin not in merged:
                 merged.append(origin)
         return merged
+
+    def has_valid_openai_key(self) -> bool:
+        """True when OPENAI_API_KEY looks usable (sk-…); never expose the secret."""
+        return is_valid_openai_api_key(self.openai_api_key)
 
     def effective_stt_provider(self) -> SttProvider:
         if self.use_mock_audio:
@@ -127,4 +148,6 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
+    # Ensure dotenv is applied even if Settings was imported before main ran.
+    load_backend_dotenv(override=False)
     return Settings()

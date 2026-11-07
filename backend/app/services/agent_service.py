@@ -80,10 +80,10 @@ class AgentService:
                 started=started,
             )
 
-        if not self._settings.openai_api_key.strip():
+        if not self._settings.has_valid_openai_key():
             raise RecoverableProviderError(
                 "agent",
-                "invalid_api_key: OPENAI_API_KEY missing — fill backend/.env (no silent mock)",
+                "invalid_api_key: OPENAI_API_KEY missing/invalid — paste sk-… in backend/.env",
                 provider="gpt-4o-mini",
             )
 

@@ -152,6 +152,7 @@ export class ControlApp {
 
         <div class="status-row" aria-live="polite">
           ${apiConnectionBadge(health)}
+          ${openaiKeyBadge(health)}
           <span>áudio ${health?.use_mock_audio === false ? "real" : "mock"}</span>
           <span>STT ${health?.stt_provider ?? "—"}</span>
           <span>TTS ${health?.tts_provider ?? "—"}</span>
@@ -342,6 +343,22 @@ function apiConnectionBadge(health: HealthResponse | null): string {
   </span>`;
 }
 
+function openaiKeyBadge(health: HealthResponse | null): string {
+  if (!health) {
+    return `<span class="conn-badge conn-badge--offline">OPENAI_API_KEY: —</span>`;
+  }
+  if (health.has_valid_openai_key) {
+    return `<span class="conn-badge conn-badge--online" title="Chave sk-… carregada de backend/.env">
+      <i class="dot dot--ok"></i>
+      OPENAI_API_KEY: ok
+    </span>`;
+  }
+  return `<span class="conn-badge conn-badge--offline" title="Cole sk-… em backend/.env e reinicie o Uvicorn">
+    <i class="dot dot--err"></i>
+    OPENAI_API_KEY: em falta
+  </span>`;
+}
+
 function openaiKeyWarning(health: HealthResponse | null): string {
   if (!health) {
     return `<p class="warn-banner" role="status">
@@ -349,14 +366,19 @@ function openaiKeyWarning(health: HealthResponse | null): string {
       <code>start_app.ps1</code> na raiz do repositório.
     </p>`;
   }
-  if (health.openai_api_key_configured === false) {
-    return `<p class="warn-banner warn-banner--key" role="status">
-      <strong>OPENAI_API_KEY em falta.</strong>
-      Preencha a chave em <code>backend/.env</code> para Whisper, gpt-4o-mini e TTS reais.
-      Sem a chave, o pipeline usa fallback seguro (não há Whisper falso).
-    </p>`;
+  const keyOk = health.has_valid_openai_key === true;
+  if (keyOk) {
+    return "";
   }
-  return "";
+  const envPath = health.env_file?.trim() || "backend/.env";
+  return `<p class="warn-banner warn-banner--key" role="status">
+      <strong>OPENAI_API_KEY não carregada / inválida.</strong>
+      Cole a chave (deve começar com <code>sk-</code>) neste ficheiro e reinicie o Uvicorn:<br/>
+      <code>${escapeHtml(envPath)}</code><br/>
+      Exemplo de linha: <code>OPENAI_API_KEY=sk-proj-…</code> (sem aspas).<br/>
+      Confirme com <code>GET /health</code> → <code>has_valid_openai_key: true</code>.
+      Enquanto estiver em falta, o pipeline usa fallback seguro (sem Whisper falso).
+    </p>`;
 }
 
 function toolHudBanner(result: ProcessAudioResponse | null, phase: UiPhase): string {
