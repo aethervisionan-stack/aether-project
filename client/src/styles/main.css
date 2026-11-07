@@ -206,6 +206,64 @@ body {
   background: #f0c14a;
 }
 
+.mic-banner {
+  margin: 0.75rem 0 0;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.9rem;
+  line-height: 1.45;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem 0.75rem;
+  align-items: center;
+}
+
+.mic-banner--safe {
+  border-color: rgba(240, 193, 74, 0.4);
+  background: rgba(240, 193, 74, 0.07);
+  color: var(--text);
+}
+
+.mic-banner--blocked {
+  border-color: rgba(255, 107, 107, 0.45);
+  background: rgba(255, 107, 107, 0.08);
+  color: var(--text);
+}
+
+.mic-banner code {
+  font-size: 0.85em;
+}
+
+.mic-banner__btn {
+  appearance: none;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.8rem;
+  padding: 0.3rem 0.65rem;
+  color: var(--ether);
+  background: rgba(0, 240, 255, 0.08);
+  border: 1px solid rgba(0, 240, 255, 0.4);
+  border-radius: var(--radius);
+  transition: background 160ms ease, border-color 160ms ease;
+}
+
+.mic-banner__btn:hover {
+  background: rgba(0, 240, 255, 0.16);
+  border-color: rgba(0, 240, 255, 0.65);
+}
+
+.device-list__item.is-headset {
+  color: var(--ether);
+}
+
+.device-list__item.is-headset::before {
+  content: "BT · ";
+  opacity: 0.7;
+  letter-spacing: 0.04em;
+  font-size: 0.78em;
+}
+
 .flow-status__tool {
   display: inline-block;
   margin-left: 0.75rem;

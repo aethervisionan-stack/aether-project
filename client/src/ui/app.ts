@@ -15,8 +15,13 @@ import {
   HeadsetCapture,
   isMediaRecorderCaptureAvailable,
   listAudioInputs,
+  looksLikeHeadsetLabel,
+  pickPreferredAudioInput,
   probeCaptureCapabilities,
   probeMicrophoneAccess,
+  queryMicPermissionState,
+  watchMicrophoneEnvironment,
+  type MicPermissionState,
 } from "../audio/capture";
 import { playResponseAudio } from "../audio/playback";
 import {
@@ -69,6 +74,11 @@ export class ControlApp {
   private reconnectBusy = false;
   private speechInterim = "";
   private speechPollTimer: number | null = null;
+  private preferredDeviceId: string | null = null;
+  private permissionState: MicPermissionState = "unknown";
+  private autoRetryDone = false;
+  private micWatchStop: (() => void) | null = null;
+  private enteringSafeMode = false;
 
   /** Collapsible audit panel (history + metrics). */
   private auditOpen = true;
@@ -93,46 +103,120 @@ export class ControlApp {
     this.render();
     await this.refreshHealth();
     await this.probeMicStatus({ quiet: true });
+    this.bindMicEnvironmentWatch();
+    // One soft auto-retry if still blocked (permission prompt may have been missed).
+    if (this.micStatus === "blocked" && !this.autoRetryDone) {
+      this.autoRetryDone = true;
+      window.setTimeout(() => {
+        if (this.micStatus === "blocked" && this.phase === "idle") {
+          void this.reconnectMic({ fromAutoRetry: true });
+        }
+      }, 1200);
+    }
     await this.refreshAudit({ quiet: true });
     this.startHealthPolling();
   }
 
+  private bindMicEnvironmentWatch(): void {
+    this.micWatchStop?.();
+    this.micWatchStop = watchMicrophoneEnvironment({
+      onDevicesChanged: () => {
+        void this.refreshDeviceLabel({ quiet: true });
+      },
+      onPermissionChange: (state) => {
+        this.permissionState = state;
+        if (state === "granted") {
+          void this.probeMicStatus({ quiet: true });
+        } else if (state === "denied") {
+          // Instant Safe Mode — never freeze on Blocked when Web Speech works.
+          void this.enterSafeModeInstant(
+            "Permissão negada pelo browser — Safe Mode ativo.",
+          );
+        }
+        this.render();
+      },
+    });
+  }
+
   /** Soft mic probe — no full page reload. Updates Active / Blocked / Safe Mode. */
   private async probeMicStatus(options: { quiet?: boolean } = {}): Promise<void> {
+    this.permissionState = await queryMicPermissionState();
     const caps = probeCaptureCapabilities();
     if (!isMediaRecorderCaptureAvailable()) {
-      this.micStatus = caps.speechRecognition ? "safe" : "blocked";
-      this.captureMode = caps.speechRecognition ? "webspeech" : "mediarecorder";
-      if (!options.quiet && this.micStatus === "safe") {
-        this.errorMessage =
-          "MediaRecorder indisponível — Safe Mode (Web Speech) ativo.";
+      if (caps.speechRecognition) {
+        await this.enterSafeModeInstant(
+          options.quiet
+            ? null
+            : "MediaRecorder indisponível — Safe Mode (Web Speech) ativo.",
+        );
+      } else {
+        this.micStatus = "blocked";
+        this.captureMode = "mediarecorder";
+        if (!options.quiet) {
+          this.errorMessage = "Microfone e Web Speech indisponíveis neste browser.";
+        }
+        this.render();
+      }
+      return;
+    }
+
+    const probe = await probeMicrophoneAccess({
+      preferredDeviceId: this.preferredDeviceId,
+      timeoutMs: 8_000,
+    });
+    if (probe.ok) {
+      this.micStatus = "active";
+      this.captureMode = "mediarecorder";
+      this.activeMicLabel = probe.label;
+      this.preferredDeviceId = probe.deviceId;
+      this.permissionState = "granted";
+      try {
+        this.devices = await listAudioInputs();
+        const preferred = pickPreferredAudioInput(this.devices);
+        if (preferred?.label) {
+          this.activeMicLabel = preferred.label;
+          this.preferredDeviceId = preferred.deviceId;
+        }
+      } catch {
+        // enumeration optional after grant
+      }
+      if (!options.quiet) {
+        this.errorMessage = null;
       }
       this.render();
       return;
     }
 
-    const probe = await probeMicrophoneAccess();
-    if (probe.ok) {
-      this.micStatus = "active";
-      this.captureMode = "mediarecorder";
-      this.activeMicLabel = probe.label;
-      if (!options.quiet) {
-        this.errorMessage = null;
-      }
-    } else if (probe.error?.kind === "permission_denied") {
+    // NotAllowed / timeout / missing → prefer Safe Mode instantly (no UI freeze).
+    const kind = probe.error?.kind;
+    if (
+      (kind === "permission_denied" || kind === "timeout" || kind === "unsupported") &&
+      isSpeechRecognitionAvailable()
+    ) {
+      this.permissionState = kind === "permission_denied" ? "denied" : this.permissionState;
+      await this.enterSafeModeInstant(
+        options.quiet
+          ? null
+          : probe.error?.message ?? "A entrar em Safe Mode (Web Speech).",
+      );
+      return;
+    }
+
+    if (kind === "permission_denied") {
       this.micStatus = "blocked";
+      this.permissionState = "denied";
       this.activeMicLabel = null;
       if (!options.quiet) {
-        this.errorMessage = probe.error.message;
+        this.errorMessage =
+          "Microfone bloqueado. Autorize o site ou use Safe Mode / Reconectar.";
       }
     } else if (isSpeechRecognitionAvailable()) {
-      this.micStatus = "safe";
-      this.captureMode = "webspeech";
-      if (!options.quiet) {
-        this.errorMessage =
-          probe.error?.message ??
-          "Captura de áudio falhou — Safe Mode (Web Speech) ativo.";
-      }
+      await this.enterSafeModeInstant(
+        options.quiet
+          ? null
+          : probe.error?.message ?? "Captura falhou — Safe Mode ativo.",
+      );
+      return;
     } else {
       this.micStatus = "blocked";
       if (!options.quiet) {
@@ -143,10 +227,69 @@ export class ControlApp {
     this.render();
   }
 
-  private async reconnectMic(): Promise<void> {
+  /** Flip to Safe Mode immediately without awaiting another getUserMedia. */
+  private async enterSafeModeInstant(message: string | null): Promise<void> {
+    if (this.enteringSafeMode) return;
+    this.enteringSafeMode = true;
+    try {
+      this.capture.cancel();
+      this.micStatus = "safe";
+      this.captureMode = "webspeech";
+      // Keep real headset label if we already know it (e.g. Headset M100).
+      if (!this.activeMicLabel || this.activeMicLabel.startsWith("Web Speech")) {
+        try {
+          const inputs = await listAudioInputs();
+          const preferred = pickPreferredAudioInput(inputs);
+          if (preferred?.label) {
+            this.activeMicLabel = preferred.label;
+            this.preferredDeviceId = preferred.deviceId;
+          } else if (!this.activeMicLabel) {
+            this.activeMicLabel = "Web Speech · Safe Mode";
+          }
+        } catch {
+          if (!this.activeMicLabel) {
+            this.activeMicLabel = "Web Speech · Safe Mode";
+          }
+        }
+      }
+      if (message) {
+        this.errorMessage = message;
+      }
+      this.render();
+    } finally {
+      this.enteringSafeMode = false;
+    }
+  }
+
+  private async refreshDeviceLabel(options: { quiet?: boolean } = {}): Promise<void> {
+    try {
+      const inputs = await listAudioInputs();
+      this.devices = inputs;
+      const preferred = pickPreferredAudioInput(inputs);
+      if (preferred?.label) {
+        this.activeMicLabel = preferred.label;
+        this.preferredDeviceId = preferred.deviceId;
+        if (this.micStatus === "active" || looksLikeHeadsetLabel(preferred.label)) {
+          // Device plugged in while Safe/Blocked — nudge toward Active if permitted.
+          if (this.permissionState === "granted" && this.micStatus !== "active") {
+            this.micStatus = "active";
+            this.captureMode = "mediarecorder";
+          }
+        }
+      }
+      if (!options.quiet) this.render();
+      else this.render();
+    } catch {
+      // ignore — empty labels until permission
+    }
+  }
+
+  private async reconnectMic(options: { fromAutoRetry?: boolean } = {}): Promise<void> {
     if (this.reconnectBusy || this.phase !== "idle") return;
     this.reconnectBusy = true;
-    this.errorMessage = null;
+    this.errorMessage = options.fromAutoRetry
+      ? "A tentar permissão do microfone novamente…"
+      : null;
     this.capture.cancel();
     this.speech.cancel();
     this.speechInterim = "";
@@ -155,7 +298,8 @@ export class ControlApp {
       await this.probeMicStatus({ quiet: false });
       if (this.micStatus === "active") {
         this.errorMessage = null;
-        this.activeMicLabel = this.activeMicLabel ?? "entrada padrão do sistema";
+        this.activeMicLabel =
+          this.activeMicLabel ?? "entrada padrão do sistema";
       }
     } finally {
       this.reconnectBusy = false;
@@ -249,24 +393,39 @@ export class ControlApp {
 
   private async refreshDevices(): Promise<void> {
     try {
-      const probe = await probeMicrophoneAccess();
+      const probe = await probeMicrophoneAccess({
+        preferredDeviceId: this.preferredDeviceId,
+        timeoutMs: 8_000,
+      });
       if (!probe.ok) {
         throw probe.error ?? new CaptureError("unknown", "Falha ao listar microfones.");
       }
       this.devices = await listAudioInputs();
+      const preferred = pickPreferredAudioInput(this.devices);
       this.micStatus = "active";
       this.captureMode = "mediarecorder";
-      this.activeMicLabel = probe.label;
+      this.activeMicLabel = preferred?.label || probe.label;
+      this.preferredDeviceId = preferred?.deviceId ?? probe.deviceId;
+      this.permissionState = "granted";
       this.errorMessage = null;
     } catch (err) {
       const classified = err instanceof CaptureError ? err : classifySoft(err);
+      if (
+        (classified.kind === "permission_denied" || classified.kind === "timeout") &&
+        isSpeechRecognitionAvailable()
+      ) {
+        await this.enterSafeModeInstant(
+          `${classified.message} Clique em Falar (Safe Mode) ou Reconectar.`,
+        );
+        return;
+      }
       if (classified.kind === "permission_denied") {
         this.micStatus = "blocked";
+        this.permissionState = "denied";
         this.errorMessage = classified.message;
       } else if (isSpeechRecognitionAvailable()) {
-        this.micStatus = "safe";
-        this.captureMode = "webspeech";
-        this.errorMessage = `${classified.message} — Safe Mode disponível.`;
+        await this.enterSafeModeInstant(`${classified.message} — Safe Mode disponível.`);
+        return;
       } else {
         this.micStatus = "blocked";
         this.errorMessage = classified.message;
@@ -283,42 +442,65 @@ export class ControlApp {
     if (this.phase !== "idle") {
       return;
     }
+
+    // Blocked → try Safe Mode immediately (never freeze / dead-end).
     if (this.micStatus === "blocked") {
-      this.errorMessage =
-        "Microfone bloqueado. Autorize a permissão e clique em Reconectar.";
-      this.render();
-      return;
+      if (isSpeechRecognitionAvailable()) {
+        await this.enterSafeModeInstant(
+          "Microfone bloqueado — a iniciar Safe Mode agora.",
+        );
+      } else {
+        this.errorMessage =
+          "Microfone bloqueado. Autorize o site em Definições do browser e Reconectar.";
+        this.render();
+        return;
+      }
     }
+
     this.errorMessage = null;
     this.speechInterim = "";
 
     // Prefer MediaRecorder; fall back to Web Speech Safe Mode without reload.
     if (this.captureMode === "mediarecorder" && isMediaRecorderCaptureAvailable()) {
       try {
-        await this.capture.start();
+        await this.capture.start(this.preferredDeviceId);
         this.activeMicLabel = this.capture.getActiveLabel();
         this.micStatus = "active";
+        this.permissionState = "granted";
+        void this.refreshDeviceLabel({ quiet: true });
         this.setPhase("listening");
         return;
       } catch (err) {
         const classified = err instanceof CaptureError ? err : classifySoft(err);
         this.capture.cancel();
-        if (classified.kind === "permission_denied") {
+        // NotAllowedError / PermissionDenied → instant Safe Mode (no freeze).
+        if (
+          classified.kind === "permission_denied" ||
+          classified.kind === "timeout"
+        ) {
+          this.permissionState =
+            classified.kind === "permission_denied" ? "denied" : this.permissionState;
+          if (isSpeechRecognitionAvailable()) {
+            await this.enterSafeModeInstant(
+              "Permissão negada / timeout — Safe Mode (Web Speech) sem recarregar.",
+            );
+            // Fall through to start speech in the same click.
+          } else {
+            this.micStatus = "blocked";
+            this.errorMessage = classified.message;
+            this.setPhase("idle");
+            return;
+          }
+        } else if (!isSpeechRecognitionAvailable()) {
           this.micStatus = "blocked";
           this.errorMessage = classified.message;
           this.setPhase("idle");
           return;
+        } else {
+          await this.enterSafeModeInstant(
+            "MediaRecorder falhou — a usar Safe Mode (Web Speech).",
+          );
         }
-        if (!isSpeechRecognitionAvailable()) {
-          this.micStatus = "blocked";
-          this.errorMessage = classified.message;
-          this.setPhase("idle");
-          return;
-        }
-        this.micStatus = "safe";
-        this.captureMode = "webspeech";
-        this.errorMessage =
-          "MediaRecorder falhou — a usar Safe Mode (Web Speech).";
       }
     }
 
@@ -326,12 +508,15 @@ export class ControlApp {
       await this.speech.start({ lang: "pt-BR" });
       this.micStatus = "safe";
       this.captureMode = "webspeech";
-      this.activeMicLabel = "Web Speech · Safe Mode";
+      if (!this.activeMicLabel || this.activeMicLabel.startsWith("Web Speech")) {
+        this.activeMicLabel = this.activeMicLabel || "Web Speech · Safe Mode";
+      }
       this.setPhase("listening");
     } catch (err) {
       this.speech.cancel();
       if (err instanceof SpeechCaptureError && err.kind === "blocked") {
         this.micStatus = "blocked";
+        this.permissionState = "denied";
       }
       this.errorMessage =
         err instanceof Error
@@ -579,11 +764,11 @@ export class ControlApp {
         >
           <span class="flow-status__pulse" aria-hidden="true"></span>
           <strong>${escapeHtml(phaseLabel)}</strong>
-          ${micStatusBadge(this.micStatus)}
+          ${micStatusBadge(this.micStatus, this.activeMicLabel)}
           ${
             this.activeMicLabel
-              ? `<span class="flow-status__mic">mic: ${escapeHtml(this.activeMicLabel)}</span>`
-              : `<span class="flow-status__mic">mic: entrada padrão do sistema</span>`
+              ? `<span class="flow-status__mic" title="Dispositivo de entrada">mic: ${escapeHtml(this.activeMicLabel)}</span>`
+              : `<span class="flow-status__mic">mic: à espera de permissão…</span>`
           }
           ${
             this.captureMode === "webspeech"
@@ -598,21 +783,22 @@ export class ControlApp {
           ${toolHudBanner(result, this.phase)}
         </div>
 
+        ${micPermissionBanner(this.micStatus, this.permissionState, isSpeechRecognitionAvailable())}
+
         <section class="panel" aria-labelledby="capture-title">
           <h2 id="capture-title">Headset Bluetooth</h2>
           <p class="hint">
-            Pareie o fone no sistema operacional, selecione-o como entrada/saída padrão,
-            depois grave um comando curto. Preferência:
-            <code>MediaRecorder</code> → <code>POST /process-audio</code>.
-            Se falhar, Safe Mode usa Web Speech → <code>/api/cognitive/chat</code>
-            sem recarregar a página.
+            Pareie o fone (ex.: <strong>Headset M100</strong>) no SO e defina-o como
+            entrada/saída padrão. O HUD pede permissão de mic de forma limpa;
+            se o browser negar (<code>NotAllowedError</code>), entra em
+            <strong>Safe Mode</strong> na hora — sem freeze nem reload.
           </p>
           <div class="controls">
             <button
               type="button"
               class="btn-primary ${listening ? "is-recording" : ""}"
               data-action="record"
-              ${busy || this.micStatus === "blocked" ? "disabled" : ""}
+              ${busy ? "disabled" : ""}
             >
               ${
                 listening
@@ -623,7 +809,7 @@ export class ControlApp {
                     ? "Validando no Consenso Alfa..."
                     : this.phase === "responding"
                       ? "A responder..."
-                      : this.micStatus === "safe"
+                      : this.micStatus === "safe" || this.micStatus === "blocked"
                         ? "Falar (Safe Mode)"
                         : "Gravar com o headset"
               }
@@ -636,6 +822,14 @@ export class ControlApp {
             >
               ${this.reconnectBusy ? "A reconectar..." : "Reconectar / Retry"}
             </button>
+            <button
+              type="button"
+              class="btn-ghost"
+              data-action="safe-mode"
+              ${busy || !isSpeechRecognitionAvailable() ? "disabled" : ""}
+            >
+              Ativar Safe Mode
+            </button>
             <button type="button" class="btn-ghost" data-action="devices" ${busy ? "disabled" : ""}>
               Listar microfones
             </button>
@@ -646,7 +840,11 @@ export class ControlApp {
           ${
             this.devices.length
               ? `<ul class="device-list">${this.devices
-                  .map((d) => `<li>${escapeHtml(d.label || d.deviceId)}</li>`)
+                  .map((d) => {
+                    const label = d.label || d.deviceId;
+                    const hot = looksLikeHeadsetLabel(label) ? " is-headset" : "";
+                    return `<li class="device-list__item${hot}">${escapeHtml(label)}</li>`;
+                  })
                   .join("")}</ul>`
               : ""
           }
@@ -894,6 +1092,25 @@ export class ControlApp {
         void this.reconnectMic();
       },
     );
+    this.root.querySelector<HTMLButtonElement>('[data-action="safe-mode"]')?.addEventListener(
+      "click",
+      () => {
+        void this.enterSafeModeInstant(
+          "Safe Mode ativado manualmente — Web Speech sem MediaRecorder.",
+        );
+      },
+    );
+    this.root.querySelectorAll<HTMLButtonElement>("[data-mic-action]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const action = btn.dataset.micAction;
+        if (action === "retry") void this.reconnectMic();
+        if (action === "safe") {
+          void this.enterSafeModeInstant(
+            "Safe Mode a partir do aviso de permissão.",
+          );
+        }
+      });
+    });
     this.root.querySelector<HTMLButtonElement>('[data-action="devices"]')?.addEventListener(
       "click",
       () => {
@@ -973,11 +1190,49 @@ function processAudioFromCognitive(
   };
 }
 
-function micStatusBadge(status: MicStatus): string {
-  return `<span class="mic-badge mic-badge--${status}" title="Estado do microfone">
+function micStatusBadge(status: MicStatus, label: string | null): string {
+  const tip = label
+    ? `Estado: ${MIC_STATUS_LABEL[status]} · ${label}`
+    : `Estado do microfone: ${MIC_STATUS_LABEL[status]}`;
+  return `<span class="mic-badge mic-badge--${status}" title="${escapeHtml(tip)}">
     <i class="dot dot--${status === "active" ? "ok" : status === "blocked" ? "err" : "warn"}"></i>
     Mic ${escapeHtml(MIC_STATUS_LABEL[status])}
   </span>`;
+}
+
+function micPermissionBanner(
+  status: MicStatus,
+  permission: MicPermissionState,
+  speechOk: boolean,
+): string {
+  if (status === "active") return "";
+  if (status === "safe") {
+    return `<p class="mic-banner mic-banner--safe" role="status">
+      <strong>Safe Mode</strong> — Web Speech ativo (sem MediaRecorder).
+      O rótulo do mic acima com o dispositivo real quando o browser permitir.
+      ${
+        speechOk
+          ? `<button type="button" class="mic-banner__btn" data-mic-action="retry">Tentar mic de novo</button>`
+          : ""
+      }
+    </p>`;
+  }
+  // blocked
+  return `<p class="mic-banner mic-banner--blocked" role="alert">
+      <strong>Mic Blocked</strong>
+      ${
+        permission === "denied"
+          ? "O browser negou o microfone (<code>NotAllowedError</code>)."
+          : "À espera de permissão ou dispositivo."
+      }
+      ${
+        speechOk
+          ? `Pode continuar já em Safe Mode.
+             <button type="button" class="mic-banner__btn" data-mic-action="safe">Usar Safe Mode</button>
+             <button type="button" class="mic-banner__btn" data-mic-action="retry">Reconectar</button>`
+          : `<button type="button" class="mic-banner__btn" data-mic-action="retry">Reconectar</button>`
+      }
+    </p>`;
 }
 
 function extensionForMime(mimeType: string): string {
