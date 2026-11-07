@@ -88,6 +88,9 @@ export interface HealthResponse {
   consenso_enabled: boolean;
   depin_ready: boolean;
   web3_rpc_configured: boolean;
+  /** Presence only — never the secret value. */
+  openai_api_key_configured?: boolean;
+  api_port?: number;
 }
 
 export interface ApiErrorBody {

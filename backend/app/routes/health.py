@@ -25,4 +25,6 @@ async def health(settings: Settings = Depends(get_app_settings)) -> HealthRespon
         consenso_enabled=settings.consenso_enabled,
         depin_ready=depin_ready,
         web3_rpc_configured=bool(settings.resolved_solana_rpc()),
+        openai_api_key_configured=bool(settings.openai_api_key.strip()),
+        api_port=settings.port,
     )

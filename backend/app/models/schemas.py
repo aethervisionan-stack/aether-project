@@ -140,6 +140,9 @@ class HealthResponse(BaseModel):
     consenso_enabled: bool
     depin_ready: bool = False
     web3_rpc_configured: bool = False
+    # Presence flag only — never expose the secret value
+    openai_api_key_configured: bool = False
+    api_port: int = 8000
 
 
 class ErrorResponse(BaseModel):

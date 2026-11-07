@@ -129,3 +129,6 @@ def test_health_exposes_use_mock_audio() -> None:
     body = res.json()
     assert "use_mock_audio" in body
     assert body["stt_provider"] == "mock"
+    assert "openai_api_key_configured" in body
+    assert isinstance(body["openai_api_key_configured"], bool)
+    assert body.get("api_port") == 8000

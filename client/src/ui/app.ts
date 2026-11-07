@@ -23,6 +23,8 @@ export class ControlApp {
   private errorMessage: string | null = null;
   private devices: MediaDeviceInfo[] = [];
   private activeMicLabel: string | null = null;
+  private healthTimer: number | null = null;
+  private readonly healthPollMs = 4_000;
 
   constructor(root: HTMLElement) {
     this.root = root;
@@ -31,6 +33,16 @@ export class ControlApp {
   async mount(): Promise<void> {
     this.render();
     await this.refreshHealth();
+    this.startHealthPolling();
+  }
+
+  private startHealthPolling(): void {
+    if (this.healthTimer !== null) {
+      window.clearInterval(this.healthTimer);
+    }
+    this.healthTimer = window.setInterval(() => {
+      void this.refreshHealth({ quiet: true });
+    }, this.healthPollMs);
   }
 
   private setPhase(phase: UiPhase): void {
@@ -38,16 +50,20 @@ export class ControlApp {
     this.render();
   }
 
-  private async refreshHealth(): Promise<void> {
+  private async refreshHealth(options: { quiet?: boolean } = {}): Promise<void> {
     try {
       this.health = await voiceApi.health();
-      this.errorMessage = null;
+      if (!options.quiet) {
+        this.errorMessage = null;
+      }
     } catch (err) {
       this.health = null;
-      this.errorMessage =
-        err instanceof VoiceApiError
-          ? `${err.message} — ${err.detail}`
-          : "Backend indisponível. Inicie o FastAPI em :8000.";
+      if (!options.quiet) {
+        this.errorMessage =
+          err instanceof VoiceApiError
+            ? `${err.message} — ${err.detail}`
+            : "Backend indisponível. Inicie o FastAPI em :8000 (use start_app.bat).";
+      }
     }
     this.render();
   }
@@ -135,15 +151,15 @@ export class ControlApp {
         </header>
 
         <div class="status-row" aria-live="polite">
-          <span>
-            <i class="dot ${health ? "dot--ok" : "dot--err"}"></i>
-            API ${health ? `ok · v${health.version}` : "offline"}
-          </span>
+          ${apiConnectionBadge(health)}
           <span>áudio ${health?.use_mock_audio === false ? "real" : "mock"}</span>
           <span>STT ${health?.stt_provider ?? "—"}</span>
           <span>TTS ${health?.tts_provider ?? "—"}</span>
           <span>Consenso ${health?.consenso_enabled ? "ativo" : "off"}</span>
+          <span>v${health?.version ?? "—"}</span>
         </div>
+
+        ${openaiKeyWarning(health)}
 
         <div
           class="flow-status flow-status--${this.phase}"
@@ -310,6 +326,37 @@ function escapeHtml(value: string): string {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
+}
+
+function apiConnectionBadge(health: HealthResponse | null): string {
+  if (health) {
+    const port = health.api_port ?? 8000;
+    return `<span class="conn-badge conn-badge--online" title="GET /health ok">
+      <i class="dot dot--ok"></i>
+      API Online na porta ${port}
+    </span>`;
+  }
+  return `<span class="conn-badge conn-badge--offline" title="Backend não responde">
+    <i class="dot dot--err"></i>
+    Desconectada
+  </span>`;
+}
+
+function openaiKeyWarning(health: HealthResponse | null): string {
+  if (!health) {
+    return `<p class="warn-banner" role="status">
+      Backend desconectado. Execute <code>start_app.bat</code> ou
+      <code>start_app.ps1</code> na raiz do repositório.
+    </p>`;
+  }
+  if (health.openai_api_key_configured === false) {
+    return `<p class="warn-banner warn-banner--key" role="status">
+      <strong>OPENAI_API_KEY em falta.</strong>
+      Preencha a chave em <code>backend/.env</code> para Whisper, gpt-4o-mini e TTS reais.
+      Sem a chave, o pipeline usa fallback seguro (não há Whisper falso).
+    </p>`;
+  }
+  return "";
 }
 
 function toolHudBanner(result: ProcessAudioResponse | null, phase: UiPhase): string {

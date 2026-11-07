@@ -40,6 +40,8 @@ def test_health(client: TestClient) -> None:
     assert body["status"] == "ok"
     assert body["pipeline_mode"] == "mock"
     assert body["consenso_enabled"] is True
+    assert "openai_api_key_configured" in body
+    assert body["api_port"] == 8000
 
 
 def test_process_audio_mock(client: TestClient) -> None:
