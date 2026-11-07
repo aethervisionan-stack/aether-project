@@ -361,12 +361,26 @@ export class ControlApp {
         result.gemini_response ?? result.response_text,
       );
       this.setPhase("responding");
-      // Autoplay on OS default output / Bluetooth headset
-      await playResponseAudio({
-        audioUrl: result.audio_url ?? null,
-        audioBase64: result.audio_base64,
-        mimeType: result.audio_mime_type,
-      });
+      // Prefer server TTS; fall back to browser speechSynthesis (Gemini-only stack).
+      try {
+        if (result.audio_url || result.audio_base64) {
+          await playResponseAudio({
+            audioUrl: result.audio_url ?? null,
+            audioBase64: result.audio_base64,
+            mimeType: result.audio_mime_type,
+          });
+        } else {
+          await speakLocally(
+            result.gemini_response ?? result.response_text,
+            "pt-BR",
+          );
+        }
+      } catch {
+        await speakLocally(
+          result.gemini_response ?? result.response_text,
+          "pt-BR",
+        );
+      }
       this.setPhase("idle");
       // Refresh Session History + Metrics after each successful M100 / headset turn.
       void this.refreshAudit({ quiet: true });
@@ -546,7 +560,6 @@ export class ControlApp {
         <div class="status-row" aria-live="polite">
           ${apiConnectionBadge(health)}
           ${cognitiveBadge(health)}
-          ${openaiKeyBadge(health)}
           ${geminiKeyBadge(health)}
           <span>áudio ${health?.use_mock_audio === false ? "real" : "mock"}</span>
           <span>STT ${health?.stt_provider ?? "—"}</span>
@@ -556,7 +569,7 @@ export class ControlApp {
         </div>
 
         ${connectionBanner(health)}
-        ${openaiKeyWarning(health)}
+        ${geminiKeyWarning(health)}
 
         <div
           class="flow-status flow-status--${this.phase}"
@@ -652,7 +665,7 @@ export class ControlApp {
                     )}</p>
                     <div class="block__label" style="margin-top:1rem">
                       Resposta ${
-                        (result.meta.cognitive_provider ?? "openai") === "gemini"
+                        (result.meta.cognitive_provider ?? "gemini") === "gemini"
                           ? "Gemini"
                           : "agente"
                       }
@@ -992,9 +1005,8 @@ function connectionBanner(health: HealthResponse | null): string {
   if (health) {
     return `<p class="conn-banner conn-banner--ok" role="status">
       Ligado a <code>127.0.0.1:${health.api_port ?? 8001}</code>
-      · cognitive <strong>${escapeHtml(health.cognitive_provider ?? "—")}</strong>
+      · cognitive <strong>${escapeHtml(health.cognitive_provider ?? "gemini")}</strong>
       · Gemini key ${health.has_valid_gemini_key ? "ok" : "em falta"}
-      · OpenAI key ${health.has_valid_openai_key ? "ok" : "em falta"}
     </p>`;
   }
   return `<p class="conn-banner conn-banner--err" role="status">
@@ -1004,10 +1016,9 @@ function connectionBanner(health: HealthResponse | null): string {
 }
 
 function cognitiveBadge(health: HealthResponse | null): string {
-  const engine = health?.cognitive_provider ?? "—";
-  const cls =
-    engine === "gemini" ? "conn-badge--online" : engine === "openai" ? "conn-badge--online" : "conn-badge--offline";
-  return `<span class="conn-badge ${cls}" title="Motor cognitivo efetivo">
+  const engine = health?.cognitive_provider ?? "gemini";
+  const cls = engine === "gemini" ? "conn-badge--online" : "conn-badge--offline";
+  return `<span class="conn-badge ${cls}" title="Motor cognitivo efetivo (Gemini-only)">
     cognitive: ${escapeHtml(engine)}
   </span>`;
 }
@@ -1028,41 +1039,24 @@ function geminiKeyBadge(health: HealthResponse | null): string {
   </span>`;
 }
 
-function openaiKeyBadge(health: HealthResponse | null): string {
-  if (!health) {
-    return `<span class="conn-badge conn-badge--offline">OPENAI_API_KEY: —</span>`;
-  }
-  if (health.has_valid_openai_key) {
-    return `<span class="conn-badge conn-badge--online" title="Chave sk-… carregada de backend/.env">
-      <i class="dot dot--ok"></i>
-      OPENAI_API_KEY: ok
-    </span>`;
-  }
-  return `<span class="conn-badge conn-badge--offline" title="Cole sk-… em backend/.env e reinicie o Uvicorn">
-    <i class="dot dot--err"></i>
-    OPENAI_API_KEY: em falta
-  </span>`;
-}
-
-function openaiKeyWarning(health: HealthResponse | null): string {
+function geminiKeyWarning(health: HealthResponse | null): string {
   if (!health) {
     return `<p class="warn-banner" role="status">
       Backend desconectado. Execute <code>start_app.bat</code> ou
       <code>start_app.ps1</code> na raiz do repositório.
     </p>`;
   }
-  const keyOk = health.has_valid_openai_key === true;
-  if (keyOk) {
+  if (health.has_valid_gemini_key === true || health.use_mock_audio === true) {
     return "";
   }
   const envPath = health.env_file?.trim() || "backend/.env";
   return `<p class="warn-banner warn-banner--key" role="status">
-      <strong>OPENAI_API_KEY não carregada / inválida.</strong>
-      Cole a chave (deve começar com <code>sk-</code>) neste ficheiro e reinicie o Uvicorn:<br/>
+      <strong>GEMINI_API_KEY não carregada / inválida.</strong>
+      Cole a chave neste ficheiro e reinicie o Uvicorn:<br/>
       <code>${escapeHtml(envPath)}</code><br/>
-      Exemplo de linha: <code>OPENAI_API_KEY=sk-proj-…</code> (sem aspas).<br/>
-      Confirme com <code>GET /health</code> → <code>has_valid_openai_key: true</code>.
-      Enquanto estiver em falta, o pipeline usa fallback seguro (sem Whisper falso).
+      Exemplo: <code>GEMINI_API_KEY=…</code> (sem aspas).<br/>
+      Confirme com <code>GET /health</code> → <code>has_valid_gemini_key: true</code>.
+      Sem chave em modo real, o pipeline usa fallback seguro.
     </p>`;
 }
 

@@ -4,7 +4,7 @@ Camada multi-agente que valida o rascunho do assistente **antes** do TTS.
 
 ## Fluxo
 
-1. `ResponseAgent` gera `draft_response` a partir da transcrição STT.
+1. Gemini (ou agente local em mock) gera `draft_response` a partir da transcrição STT.
 2. `ConsensoAlfa` despacha o mesmo `ValidationContext` em paralelo para N `ValidatorAgent`.
 3. Quórum: `approvals >= CONSENSO_MIN_AGENTS` e `agreement_ratio >= CONSENSO_AGREEMENT_THRESHOLD`.
 4. Se rejeitado, a resposta falada é um fallback seguro (sem alucinação inventada).

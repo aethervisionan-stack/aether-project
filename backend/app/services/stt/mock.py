@@ -33,7 +33,7 @@ class MockWhisperStt:
         if size < 256:
             text = ""
         else:
-            lang = language or self._settings.whisper_language
+            lang = language or self._settings.default_language
             text = (
                 "Olá Aether Vision, confirme o status do assistente de voz "
                 f"para o headset Bluetooth ({lang})."
@@ -42,7 +42,7 @@ class MockWhisperStt:
         elapsed = int((time.perf_counter() - started) * 1000)
         return SttResult(
             text=text,
-            language=language or self._settings.whisper_language,
+            language=language or self._settings.default_language,
             confidence=0.92 if text else 0.0,
             provider=self.name,
             duration_ms=elapsed,

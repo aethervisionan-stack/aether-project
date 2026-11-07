@@ -63,7 +63,7 @@ export interface ProcessAudioMeta {
   depin_attestation: Record<string, unknown> | null;
   tools_invoked?: boolean;
   tools_executed_count?: number;
-  /** openai | gemini (from backend cognitive engine). */
+  /** Always gemini in Aether Vision (Gemini-only stack). */
   cognitive_provider?: string | null;
 }
 
@@ -106,10 +106,6 @@ export interface HealthResponse {
   consenso_enabled: boolean;
   depin_ready: boolean;
   web3_rpc_configured: boolean;
-  /** Presence only — never the secret value. */
-  openai_api_key_configured?: boolean;
-  /** True when key starts with sk- and passes length/charset checks. */
-  has_valid_openai_key?: boolean;
   gemini_api_key_configured?: boolean;
   has_valid_gemini_key?: boolean;
   cognitive_provider?: string;

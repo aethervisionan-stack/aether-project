@@ -1,4 +1,4 @@
-"""Real-provider mode: empty OPENAI_API_KEY must not silent-mock Whisper."""
+"""Real-provider mode: empty GEMINI_API_KEY must not silent-mock STT."""
 
 from __future__ import annotations
 
@@ -10,15 +10,14 @@ import wave
 import pytest
 
 from app.config import Settings
-from app.core.memory import AdaptiveMemory
-from app.services.agent import ResponseAgent
 from app.services.consenso_alfa import ConsensoAlfa
 from app.services.pipeline import AudioPipeline
-from app.services.stt.whisper import OpenAIWhisperStt
-from app.services.tts.provider import OpenAITts
+from app.services.stt.gemini import GeminiStt
+from app.services.tts.gemini import GeminiTts
+from app.services.tts.mock import MockTts
 
 
-def _tiny_wav(seconds: float = 0.15, sample_rate: int = 16000) -> bytes:
+def _tiny_wav(seconds: float = 0.2, sample_rate: int = 16000) -> bytes:
     n = int(sample_rate * seconds)
     buf = io.BytesIO()
     with wave.open(buf, "wb") as wf:
@@ -34,66 +33,52 @@ def _tiny_wav(seconds: float = 0.15, sample_rate: int = 16000) -> bytes:
 
 
 @pytest.mark.asyncio
-async def test_empty_openai_key_safe_fallback_no_mock_transcript(tmp_path) -> None:
+async def test_empty_gemini_key_safe_fallback_no_mock_transcript(tmp_path) -> None:
     settings = Settings(
         use_mock_audio=False,
-        openai_api_key="",
-        stt_provider="openai",
-        tts_provider="openai",
-        openai_tts_model="tts-1-hd",
-        openai_tts_voice="nova",
-        memory_enabled=True,
-        chroma_persist_dir=str(tmp_path / "chroma"),
+        gemini_api_key="",
+        stt_provider="gemini",
+        tts_provider="gemini",
+        gemini_tts_model="gemini-2.5-flash-preview-tts",
+        gemini_tts_voice="Kore",
         tts_audio_dir=str(tmp_path / "tts"),
+        memory_enabled=False,
+        consenso_enabled=True,
     )
-    memory = AdaptiveMemory(settings)
     pipeline = AudioPipeline(
         settings=settings,
-        stt=OpenAIWhisperStt(settings),
-        tts=OpenAITts(settings),
+        stt=GeminiStt(settings),
+        tts=GeminiTts(settings),
         consenso=ConsensoAlfa(settings),
-        agent=ResponseAgent(settings),
-        memory=memory,
     )
     result = await pipeline.process(
         _tiny_wav(),
         filename="t.wav",
         content_type="audio/wav",
-        client_id="test-client",
+        client_id="gemini-fallback",
     )
     assert result.meta.used_safe_fallback is True
     assert result.transcript == ""
-    assert result.audio_base64
-    assert "missing_openai" in " ".join(result.consenso.hallucination_flags) or (
-        result.meta.fallback_reason and "OPENAI_API_KEY" in result.meta.fallback_reason
+    assert "missing_gemini" in " ".join(result.consenso.hallucination_flags) or (
+        result.meta.fallback_reason and "GEMINI_API_KEY" in result.meta.fallback_reason
     )
+    assert result.audio_base64  # mock WAV fallback still speaks safe text
+    assert result.meta.cognitive_provider == "gemini"
 
 
 @pytest.mark.asyncio
-async def test_memory_roundtrip(tmp_path) -> None:
+async def test_gemini_tts_missing_key_raises_recoverable(tmp_path) -> None:
+    from app.services.resilience import RecoverableProviderError
+
     settings = Settings(
-        chroma_persist_dir=str(tmp_path / "chroma"),
-        memory_enabled=True,
+        gemini_api_key="",
+        tts_audio_dir=str(tmp_path / "tts"),
     )
-    memory = AdaptiveMemory(settings)
-    if not memory.available:
-        pytest.skip(f"chromadb unavailable: {memory.init_error}")
-    memory.remember_preference("Prefere respostas curtas.", client_id="dna-1", key="brevity")
-    memory.remember_interaction(
-        transcript="olá aether",
-        response="Olá! Em que posso ajudar?",
-        client_id="dna-1",
-        request_id="req-1",
-    )
-    hits = memory.search_context("olá", client_id="dna-1")
-    assert hits
-    block = memory.format_context_block(hits)
-    assert (
-        "Learned preferences" in block
-        or "Client DNA" in block
-        or "preferência" in block
-        or "past_interactions" in block
-        or "user_preferences" in block
-    )
-    prompt = memory.format_learned_preferences_prompt(hits)
-    assert "Learned preferences" in prompt
+    tts = GeminiTts(settings)
+    with pytest.raises(RecoverableProviderError):
+        await tts.synthesize("olá")
+    # Local mock still works without keys
+    mock = MockTts(settings)
+    out = await mock.synthesize("olá")
+    assert out.audio_base64
+    assert out.provider == "mock-tts"

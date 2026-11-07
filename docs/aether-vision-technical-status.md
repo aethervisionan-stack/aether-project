@@ -19,11 +19,12 @@ Pipeline de voz para headsets Bluetooth genéricos:
 
 1. Captura de áudio no browser (mic padrão do SO / headset)  
 2. `POST /process-audio` (multipart) → FastAPI  
-3. **STT** Whisper (OpenAI `whisper-1`, ou mock)  
+3. **STT** Gemini multimodal (`gemini-2.5-flash`, ou mock)  
 4. **Memória adaptativa** local (ChromaDB / RAG leve)  
-5. **Agente** GPT (`gpt-4o-mini`) + function calling / tools  
+5. **Cognitivo** Gemini Flash/Pro (`gemini_gateway` + `/api/cognitive/chat`)  
 6. **Consenso Alfa** (validação multi-agente da resposta + gate de tools)  
-7. **TTS** OpenAI (`tts-1-hd`, voz `nova` por defeito)  
+7. **TTS** Gemini (`gemini-2.5-flash-preview-tts`, voz `Kore`) + fallback WAV/browser  
+
 8. Persistência **SQLite** (`SessionLogs` + `AuditTrail`)  
 9. HUD Vite: playback + histórico/métricas
 
@@ -59,7 +60,7 @@ backend/
     config.py               # Settings (pydantic-settings)
     deps.py                 # DI pipeline
     agent/
-      tools.py              # ToolRegistry + schemas OpenAI
+      tools.py              # ToolRegistry + schemas JSON
     core/
       config.py             # BACKEND_DIR, dotenv absoluto, validação sk-
       memory.py             # AdaptiveMemory (Chroma)
@@ -77,11 +78,11 @@ backend/
       history.py            # GET /api/history, /api/metrics (+ aliases)
     services/
       pipeline.py           # Orquestração E2E
-      agent_service.py      # gpt-4o-mini + SYSTEM_PROMPT + tools
+      agent_service.py      # Gemini Flash/Pro + SYSTEM_PROMPT + tools
       agent.py              # draft legado (sem tools)
       consenso_alfa/        # orchestrator, agents, protocol, fallback
-      stt/                  # mock, whisper (OpenAI/local)
-      tts/                  # mock, provider (OpenAI), elevenlabs
+      stt/                  # mock, gemini multimodal
+      tts/                  # mock, gemini AUDIO modality
       web3/                 # stubs: helius, jupiter, pyth
       depin.py              # NullDepinAttestor
       resilience.py
@@ -118,7 +119,7 @@ client/
 ### 2.1 Runtime
 
 - Python **3.11.9** (`backend\.venv`)
-- Dependências-chave: FastAPI, Uvicorn, Pydantic v2, OpenAI SDK, ChromaDB, SQLAlchemy 2, psutil, pytest
+- Dependências-chave: FastAPI, Uvicorn, Pydantic v2, google-genai SDK, ChromaDB, SQLAlchemy 2, psutil, pytest
 
 ### 2.2 Entrypoint — `app/main.py`
 
@@ -149,15 +150,14 @@ Fallbacks seguros em falhas STT/agent/TTS (texto PT + mock TTS quando necessári
 ### 2.5 STT — `services/stt/`
 
 - `mock.py` — testes / `USE_MOCK_AUDIO=true`  
-- `whisper.py` — OpenAI Whisper API; caminho local opcional  
-- Modelo default settings: `whisper-1`
+- `gemini.py` — Gemini multimodal transcription (`GEMINI_STT_MODEL`)  
+- Modelo default: `gemini-2.5-flash`
 
-### 2.6 Agente — `services/agent_service.py`
+### 2.6 Cognitivo — `services/gemini_gateway.py` + `agent_service.py`
 
-- Modelo: `gpt-4o-mini` (`OPENAI_AGENT_MODEL`)  
-- Constante `SYSTEM_PROMPT`: copiloto Aether avançado (PT); proíbe clichés de IA; cita arquitetura real (Whisper → GPT → Consenso → tts-1-hd; Chroma RAG; SQLite latências)  
-- `temperature=0.4` no loop principal  
-- Tools Consenso-gated; `memory_write_note` / `memory_read_notes` só com intenção explícita salvar/anotar/lembrar (schemas + prompt)
+- Produção: Gemini Flash/Pro via `google-genai`  
+- Mock: `AgentService` local (tools Consenso-gated, sem cloud LLM)  
+- Chat: `POST /api/cognitive/chat` (`mode` flash|pro + history)
 
 ### 2.7 Consenso Alfa — `services/consenso_alfa/`
 
@@ -167,8 +167,8 @@ Fallbacks seguros em falhas STT/agent/TTS (texto PT + mock TTS quando necessári
 
 ### 2.8 TTS — `services/tts/`
 
-- Default: OpenAI **`tts-1-hd`**, voz **`nova`** (`config.py` + `.env.example`)  
-- Também: mock, stub ElevenLabs
+- Default real: Gemini **`gemini-2.5-flash-preview-tts`**, voz **`Kore`**  
+- Fallback: mock WAV local; HUD `speechSynthesis` se áudio vazio
 
 ### 2.9 Memória — `core/memory.py`
 
@@ -215,7 +215,7 @@ Ficheiros: `test_process_audio`, `test_agent_tools`, `test_consenso_*`, `test_mo
 ### 3.2 HUD funcional
 
 - Fluxo PT: Pronto → A escutar → Validando Consenso Alfa → A responder  
-- Badges: API online, `has_valid_openai_key`, STT/TTS/Consenso  
+- Badges: API online, `has_valid_gemini_key`, STT/TTS/Consenso  
 - Painel **Sessão & métricas**: tabs Histórico / Métricas; refresh após `/process-audio` OK  
 - URL local: `http://127.0.0.1:5173/`
 
@@ -244,25 +244,25 @@ Valores observados nesta máquina:
   "version": "0.1.0",
   "pipeline_mode": "production",
   "use_mock_audio": false,
-  "stt_provider": "openai",
-  "tts_provider": "openai",
+  "stt_provider": "gemini",
+  "tts_provider": "gemini",
   "consenso_enabled": true,
   "depin_ready": false,
   "web3_rpc_configured": false,
-  "openai_api_key_configured": true,
-  "has_valid_openai_key": true,
+  "gemini_api_key_configured": true,
+  "has_valid_gemini_key": true,
   "env_file": "C:\\Users\\Next\\aether-project\\backend\\.env",
   "api_port": 8001
 }
 ```
 
-**Nunca logar/imprimir o valor de `OPENAI_API_KEY`.**
+**Nunca logar/imprimir o valor de `GEMINI_API_KEY`.**
 
 ### 4.2 Variáveis de ambiente — **apenas NOMES**
 
 Documentadas em `backend/.env.example` (e presentes como chaves em `backend/.env`):
 
-`HOST`, `PORT`, `LOG_LEVEL`, `CORS_ORIGINS`, `USE_MOCK_AUDIO`, `PIPELINE_MODE`, `STT_PROVIDER`, `OPENAI_API_KEY`, `OPENAI_STT_MODEL`, `OPENAI_AGENT_MODEL`, `OPENAI_TTS_MODEL`, `OPENAI_TTS_VOICE`, `WHISPER_MODEL`, `WHISPER_DEVICE`, `WHISPER_LANGUAGE`, `CONSENSO_ENABLED`, `CONSENSO_MIN_AGENTS`, `CONSENSO_AGREEMENT_THRESHOLD`, `CONSENSO_TIMEOUT_MS`, `TTS_PROVIDER`, `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, `ELEVENLABS_MODEL_ID`, `ELEVENLABS_OUTPUT_FORMAT`, `TTS_SAMPLE_RATE`, `TTS_AUDIO_DIR`, `MEMORY_ENABLED`, `CHROMA_PERSIST_DIR`, `REQUEST_TIMEOUT_MS`, `MAX_AUDIO_BYTES`, `RETRY_ATTEMPTS`, `RETRY_BACKOFF_MS`, `DEPLOYMENT_NETWORK`, `HELIUS_RPC_URL`, `HELIUS_API_KEY`, `SOLANA_RPC_URL`, `PYTH_HERMES_URL`, `JUPITER_QUOTE_API_URL`, `AETHER_AGENT_WALLET`
+`HOST`, `PORT`, `LOG_LEVEL`, `CORS_ORIGINS`, `USE_MOCK_AUDIO`, `PIPELINE_MODE`, `STT_PROVIDER`, `TTS_PROVIDER`, `GEMINI_API_KEY`, `COGNITIVE_PROVIDER`, `GEMINI_MODEL`, `GEMINI_MODE`, `GEMINI_STT_MODEL`, `GEMINI_TTS_MODEL`, `GEMINI_TTS_VOICE`, `DEFAULT_LANGUAGE`, `CONSENSO_ENABLED`, `CONSENSO_MIN_AGENTS`, `CONSENSO_AGREEMENT_THRESHOLD`, `CONSENSO_TIMEOUT_MS`, `TTS_SAMPLE_RATE`, `TTS_AUDIO_DIR`, `MEMORY_ENABLED`, `CHROMA_PERSIST_DIR`, `REQUEST_TIMEOUT_MS`, `MAX_AUDIO_BYTES`, `RETRY_ATTEMPTS`, `RETRY_BACKOFF_MS`, `DEPLOYMENT_NETWORK`, `HELIUS_RPC_URL`, `HELIUS_API_KEY`, `SOLANA_RPC_URL`, `PYTH_HERMES_URL`, `JUPITER_QUOTE_API_URL`, `AETHER_AGENT_WALLET`
 
 Chaves adicionais vistas no `.env` local (legado / fora do example):  
 `VISION_TOKEN_MINT`, `TREASURY_PUBLIC_KEY`, `EXPO_WEB_URL`, `EMERGENT_LLM_KEY`

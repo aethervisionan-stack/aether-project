@@ -41,8 +41,8 @@ app = FastAPI(
     title="Aether Vision Voice API",
     description=(
         "Phase 1 MVP — ultra-fast voice assistant pipeline for generic "
-        "Bluetooth headphones. Whisper → gpt-4o-mini + DNA memory → "
-        "Consenso Alfa → OpenAI TTS."
+        "Bluetooth headphones. Gemini STT → Gemini cognitive (Flash/Pro) + DNA → "
+        "Consenso Alfa → Gemini TTS (local WAV fallback)."
     ),
     version=__version__,
     lifespan=lifespan,
@@ -71,11 +71,11 @@ app.include_router(history_router.router)
 app.include_router(cognitive_router.router)
 
 logger.info(
-    "pipeline use_mock_audio=%s stt=%s tts=%s openai_key_valid=%s env_file=%s memory=%s",
+    "pipeline use_mock_audio=%s stt=%s tts=%s gemini_key_valid=%s env_file=%s memory=%s",
     settings.use_mock_audio,
     settings.effective_stt_provider(),
     settings.effective_tts_provider(),
-    settings.has_valid_openai_key(),
+    settings.has_valid_gemini_key(),
     BACKEND_ENV_FILE,
     settings.memory_enabled,
 )

@@ -11,15 +11,14 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from app.core.config import (
     BACKEND_ENV_FILE,
     is_valid_gemini_api_key,
-    is_valid_openai_api_key,
     load_backend_dotenv,
     normalize_secret,
 )
 
 PipelineMode = Literal["mock", "hybrid", "production"]
-SttProvider = Literal["mock", "openai", "local"]
-TtsProvider = Literal["mock", "openai", "elevenlabs"]
-CognitiveProvider = Literal["auto", "gemini", "openai"]
+SttProvider = Literal["mock", "gemini"]
+TtsProvider = Literal["mock", "gemini"]
+CognitiveProvider = Literal["auto", "gemini"]
 
 # Always permitted for the Vite control client (local Bluetooth test).
 DEFAULT_VITE_CORS_ORIGINS: tuple[str, ...] = (
@@ -33,7 +32,7 @@ load_backend_dotenv(override=False)
 
 
 class Settings(BaseSettings):
-    """Typed settings for the FastAPI voice service."""
+    """Typed settings for the FastAPI voice service (Gemini-only)."""
 
     model_config = SettingsConfigDict(
         # Absolute path — never depend on process CWD
@@ -47,19 +46,16 @@ class Settings(BaseSettings):
     log_level: str = "info"
     cors_origins: str = ",".join(DEFAULT_VITE_CORS_ORIGINS)
 
-    # Primary audio switch (Phase 1+)
-    # true  → simulated STT/TTS (no paid APIs)
-    # false → OpenAI Whisper STT + ElevenLabs/OpenAI TTS
+    # Primary audio switch
+    # true  → local mock STT/TTS (no paid APIs) + deterministic cognitive draft
+    # false → Gemini STT + Gemini cognitive + Gemini TTS
     use_mock_audio: bool = True
 
-    # Legacy / fine-grained mode (honored when use_mock_audio=false)
     pipeline_mode: PipelineMode = "mock"
 
     stt_provider: SttProvider = "mock"
-    openai_api_key: str = ""
-    openai_stt_model: str = "whisper-1"
-    whisper_model: str = "base"
-    whisper_device: str = "cpu"
+    default_language: str = "pt"
+    # Back-compat alias used by older call sites / mock STT
     whisper_language: str = "pt"
 
     consenso_enabled: bool = True
@@ -68,25 +64,18 @@ class Settings(BaseSettings):
     consenso_timeout_ms: int = Field(default=2500, ge=100)
 
     tts_provider: TtsProvider = "mock"
-    openai_tts_model: str = "tts-1-hd"
-    openai_tts_voice: str = "nova"
-    openai_agent_model: str = "gpt-4o-mini"
+    tts_sample_rate: int = 24000
+    tts_audio_dir: str = "data/tts_audio"
 
-    # Cognitive engine (draft before Consenso Alfa)
-    # auto → Gemini when GEMINI_API_KEY valid, else OpenAI agent/tools
+    # Cognitive engine — Gemini only (Flash / Pro)
     cognitive_provider: CognitiveProvider = "auto"
     gemini_api_key: str = ""
     gemini_model: str = "gemini-2.5-flash"
-    # Default voice-path mode when cognitive engine is Gemini: flash | pro
     gemini_mode: str = "flash"
+    gemini_stt_model: str = "gemini-2.5-flash"
+    gemini_tts_model: str = "gemini-2.5-flash-preview-tts"
+    gemini_tts_voice: str = "Kore"
     gemini_inject_sqlite_context: bool = True
-
-    elevenlabs_api_key: str = ""
-    elevenlabs_voice_id: str = "21m00Tcm4TlvDq8ikWAM"
-    elevenlabs_model_id: str = "eleven_multilingual_v2"
-    elevenlabs_output_format: str = "mp3_44100_128"
-    tts_sample_rate: int = 24000
-    tts_audio_dir: str = "data/tts_audio"
 
     # Adaptive memory (local ChromaDB)
     chroma_persist_dir: str = "data/chroma"
@@ -115,8 +104,6 @@ class Settings(BaseSettings):
         return value
 
     @field_validator(
-        "openai_api_key",
-        "elevenlabs_api_key",
         "gemini_api_key",
         "helius_api_key",
         mode="before",
@@ -135,48 +122,27 @@ class Settings(BaseSettings):
                 merged.append(origin)
         return merged
 
-    def has_valid_openai_key(self) -> bool:
-        """True when OPENAI_API_KEY looks usable (sk-…); never expose the secret."""
-        return is_valid_openai_api_key(self.openai_api_key)
-
     def has_valid_gemini_key(self) -> bool:
         """True when GEMINI_API_KEY looks usable; never expose the secret."""
         return is_valid_gemini_api_key(self.gemini_api_key)
 
-    def effective_cognitive_provider(self) -> Literal["gemini", "openai"]:
-        """Resolve which draft engine the pipeline should call."""
-        if self.use_mock_audio:
-            return "openai"  # deterministic tool mock path
-        pref = self.cognitive_provider
-        if pref == "openai":
-            return "openai"
-        if pref == "gemini":
-            return "gemini"
-        # auto
-        if self.has_valid_gemini_key():
-            return "gemini"
-        return "openai"
+    def effective_cognitive_provider(self) -> Literal["gemini"]:
+        """Cognitive draft engine is always Gemini (mock path uses local draft)."""
+        return "gemini"
 
     def effective_stt_provider(self) -> SttProvider:
         if self.use_mock_audio:
             return "mock"
-        if self.pipeline_mode == "mock" and self.stt_provider == "mock":
-            # use_mock_audio=false wins over legacy PIPELINE_MODE=mock
-            pass
-        if self.stt_provider in ("openai", "local"):
-            return self.stt_provider
-        # Default real STT: OpenAI Whisper
-        return "openai"
+        if self.stt_provider == "gemini":
+            return "gemini"
+        return "gemini"
 
     def effective_tts_provider(self) -> TtsProvider:
         if self.use_mock_audio:
             return "mock"
-        if self.tts_provider in ("openai", "elevenlabs"):
-            return self.tts_provider
-        # Prefer ElevenLabs when key present, else OpenAI Audio
-        if self.elevenlabs_api_key:
-            return "elevenlabs"
-        return "openai"
+        if self.tts_provider == "gemini":
+            return "gemini"
+        return "gemini"
 
     def resolved_solana_rpc(self) -> str:
         """Prefer Helius RPC when configured."""

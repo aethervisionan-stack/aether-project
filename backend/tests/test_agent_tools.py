@@ -55,8 +55,8 @@ async def test_tool_names_and_env_status(settings: Settings) -> None:
     registry = ToolRegistry(settings=settings)
     result = await registry.execute("get_env_status", {})
     assert result.ok
-    assert "openai_api_key_configured" in result.output
-    assert "sk-" not in result.output.lower()
+    assert "gemini_api_key_configured" in result.output
+    assert "openai" not in result.output.lower()
 
 
 @pytest.mark.asyncio

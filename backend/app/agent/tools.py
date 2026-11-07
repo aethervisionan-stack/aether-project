@@ -64,8 +64,8 @@ ALLOWLISTED_BROWSER_HOSTS: frozenset[str] = frozenset(
         "docs.aethervision.app",
         "github.com",
         "www.github.com",
-        "openai.com",
-        "platform.openai.com",
+        "aistudio.google.com",
+        "ai.google.dev",
         "cursor.com",
         "www.cursor.com",
         "google.com",
@@ -137,7 +137,7 @@ def _safe_under_root(path: Path, root: Path = PROJECT_ROOT) -> Path | None:
         return None
 
 
-# --- OpenAI function schemas -------------------------------------------------
+# --- Tool function schemas (JSON schema for registries / docs) ---------------
 
 TOOL_DEFINITIONS: list[dict[str, Any]] = [
     {
@@ -228,7 +228,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "name": "open_browser_url",
             "description": (
                 "Open the default browser to an allowlisted https URL "
-                "(localhost, github.com, google.com, cursor.com, openai.com, …)."
+                "(localhost, github.com, google.com, cursor.com, aistudio.google.com, …)."
             ),
             "parameters": {
                 "type": "object",
@@ -351,7 +351,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
 ]
 
 
-def get_openai_tool_schemas() -> list[dict[str, Any]]:
+def get_tool_schemas() -> list[dict[str, Any]]:
     return TOOL_DEFINITIONS
 
 
@@ -578,8 +578,9 @@ class ToolRegistry:
                 "pipeline_mode": s.pipeline_mode,
                 "stt_provider": s.effective_stt_provider(),
                 "tts_provider": s.effective_tts_provider(),
-                "openai_api_key_configured": bool(s.openai_api_key.strip()),
-                "elevenlabs_api_key_configured": bool(s.elevenlabs_api_key.strip()),
+                "gemini_api_key_configured": bool(s.gemini_api_key.strip()),
+                "has_valid_gemini_key": s.has_valid_gemini_key(),
+                "cognitive_provider": s.effective_cognitive_provider(),
                 "consenso_enabled": s.consenso_enabled,
                 "memory_enabled": s.memory_enabled,
                 "chroma_persist_dir": s.chroma_persist_dir,

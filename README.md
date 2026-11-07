@@ -71,22 +71,22 @@ Abra [http://127.0.0.1:5173](http://127.0.0.1:5173).
 4. Clique em **Parar e enviar**.
 5. O client chama `POST /process-audio`; a resposta validada pelo Consenso Alfa toca nos fones (tom WAV em mock).
 
-### 4. Modo com Whisper / TTS reais (opcional)
+### 4. Modo Gemini real (opcional)
 
 Edite `backend/.env`:
 
 ```env
 USE_MOCK_AUDIO=false
-OPENAI_API_KEY=sk-...
-# STT default: openai Whisper. Override: STT_PROVIDER=local
-TTS_PROVIDER=elevenlabs       # ou openai
-ELEVENLABS_API_KEY=...
-ELEVENLABS_VOICE_ID=...
+GEMINI_API_KEY=...
+STT_PROVIDER=gemini
+TTS_PROVIDER=gemini
+COGNITIVE_PROVIDER=gemini
+GEMINI_MODE=flash
 ```
 
-Reinicie o uvicorn. Se a API real falhar (quota / chave inválida), o backend regista
-erro JSON (`audio.provider.error`) e devolve áudio de **fallback seguro** — o Uvicorn
-não cai. `STT_PROVIDER=local` exige `openai-whisper` e `ffmpeg` no PATH.
+Reinicie o uvicorn. Se a API Gemini falhar (quota / chave inválida), o backend regista
+erro JSON (`audio.provider.error`) e devolve áudio de **fallback seguro** (WAV local) —
+o Uvicorn não cai. O HUD também usa `speechSynthesis` se o TTS vier vazio.
 
 Durante o Consenso Alfa, o backend emite logs JSON com `duration_ms` por sub-agente
 (Grounding, Safety/Tone, Consistency) e espelha esses valores em
@@ -99,12 +99,11 @@ Web3 (stubs desacoplados em `backend/app/services/web3/`): `HELIUS_RPC_URL`,
 
 | Variável | Default | Descrição |
 | --- | --- | --- |
-| `USE_MOCK_AUDIO` | `true` | `true` = simulado; `false` = Whisper + ElevenLabs/OpenAI |
-| `STT_PROVIDER` | `mock` | `mock` \| `openai` \| `local` (com real: default openai) |
-| `TTS_PROVIDER` | `mock` | `mock` \| `openai` \| `elevenlabs` |
-| `OPENAI_API_KEY` | — | OpenAI Whisper STT + OpenAI TTS |
-| `ELEVENLABS_API_KEY` | — | ElevenLabs TTS |
-| `ELEVENLABS_VOICE_ID` | Rachel default | Voice id ElevenLabs |
+| `USE_MOCK_AUDIO` | `true` | `true` = mock local; `false` = Gemini STT/TTS/cognitive |
+| `STT_PROVIDER` | `mock` | `mock` \| `gemini` |
+| `TTS_PROVIDER` | `mock` | `mock` \| `gemini` |
+| `GEMINI_API_KEY` | — | Gemini STT + Flash/Pro cognitive + TTS |
+| `GEMINI_MODE` | `flash` | `flash` \| `pro` |
 | `HELIUS_RPC_URL` | — | Solana RPC via Helius (stub) |
 | `HELIUS_API_KEY` | — | Chave Helius (stub) |
 | `PYTH_HERMES_URL` | hermes.pyth.network | Oracle Pyth (stub) |

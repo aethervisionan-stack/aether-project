@@ -201,6 +201,6 @@ Write-Host "  API      $ApiBase/health"
 Write-Host "  History  $ApiBase/api/history"
 Write-Host "  Metrics  $ApiBase/api/metrics"
 Write-Host "  Client   $ViteBase/"
-Write-Host "  Fill OPENAI_API_KEY in backend\.env for real Whisper / gpt-4o-mini / TTS."
+Write-Host "  Fill GEMINI_API_KEY in backend\.env for real Gemini STT / Flash|Pro / TTS."
 Write-Host "Close the service windows (or re-run this script) to manage the stack."
 exit 0

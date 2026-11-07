@@ -89,7 +89,7 @@ def log_provider_error(
 
 
 def classify_provider_failure(stage: str, provider: str, exc: BaseException) -> RecoverableProviderError:
-    """Map OpenAI/ElevenLabs/httpx failures into a recoverable error."""
+    """Map Gemini/httpx failures into a recoverable error."""
     text = f"{type(exc).__name__}: {exc}".lower()
     error_type = "upstream_error"
     if any(k in text for k in ("401", "unauthorized", "invalid api key", "incorrect api key")):

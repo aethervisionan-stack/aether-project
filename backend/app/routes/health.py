@@ -16,7 +16,6 @@ router = APIRouter(tags=["health"])
 @router.get("/health", response_model=HealthResponse)
 async def health(settings: Settings = Depends(get_app_settings)) -> HealthResponse:
     depin_ready = bool(settings.resolved_solana_rpc() and settings.aether_agent_wallet)
-    key_ok = settings.has_valid_openai_key()
     return HealthResponse(
         status="ok",
         version=__version__,
@@ -27,8 +26,6 @@ async def health(settings: Settings = Depends(get_app_settings)) -> HealthRespon
         consenso_enabled=settings.consenso_enabled,
         depin_ready=depin_ready,
         web3_rpc_configured=bool(settings.resolved_solana_rpc()),
-        openai_api_key_configured=bool(settings.openai_api_key.strip()),
-        has_valid_openai_key=key_ok,
         gemini_api_key_configured=bool(settings.gemini_api_key.strip()),
         has_valid_gemini_key=settings.has_valid_gemini_key(),
         cognitive_provider=settings.effective_cognitive_provider(),

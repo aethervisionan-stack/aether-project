@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 
 from app.config import Settings
 from app.models.schemas import SttResult, TtsResult
-from app.services.agent import ResponseAgent
+from app.services.agent_service import AgentService
 from app.services.consenso_alfa import ConsensoAlfa
 from app.services.pipeline import AudioPipeline
 from app.services.resilience import RecoverableProviderError
@@ -35,23 +35,23 @@ def _tiny_wav(seconds: float = 0.2, sample_rate: int = 16000) -> bytes:
 
 
 def test_use_mock_audio_true_forces_mock_providers() -> None:
-    s = Settings(use_mock_audio=True, stt_provider="openai", tts_provider="elevenlabs")
+    s = Settings(use_mock_audio=True, stt_provider="gemini", tts_provider="gemini")
     assert s.effective_stt_provider() == "mock"
     assert s.effective_tts_provider() == "mock"
 
 
-def test_use_mock_audio_false_defaults_to_real_providers() -> None:
+def test_use_mock_audio_false_defaults_to_gemini() -> None:
     s = Settings(use_mock_audio=False, stt_provider="mock", tts_provider="mock")
-    assert s.effective_stt_provider() == "openai"
-    assert s.effective_tts_provider() == "openai"
+    assert s.effective_stt_provider() == "gemini"
+    assert s.effective_tts_provider() == "gemini"
 
     s2 = Settings(
         use_mock_audio=False,
-        stt_provider="mock",
-        tts_provider="mock",
-        elevenlabs_api_key="sk-test",
+        stt_provider="gemini",
+        tts_provider="gemini",
     )
-    assert s2.effective_tts_provider() == "elevenlabs"
+    assert s2.effective_stt_provider() == "gemini"
+    assert s2.effective_tts_provider() == "gemini"
 
 
 class BoomStt:
@@ -80,13 +80,14 @@ class BoomTts:
 
 @pytest.mark.asyncio
 async def test_stt_failure_returns_safe_spoken_fallback() -> None:
-    settings = Settings(use_mock_audio=False)
+    settings = Settings(use_mock_audio=False, gemini_api_key="")
+    consenso = ConsensoAlfa(settings)
     pipeline = AudioPipeline(
         settings=settings,
         stt=BoomStt(),
         tts=MockTts(settings),
-        consenso=ConsensoAlfa(settings),
-        agent=ResponseAgent(),
+        consenso=consenso,
+        agent_service=AgentService(settings=settings, consenso=consenso),
     )
     result = await pipeline.process(
         _tiny_wav(),
@@ -103,12 +104,13 @@ async def test_tts_failure_falls_back_to_mock_audio() -> None:
     settings = Settings(use_mock_audio=True)
     from app.services.stt.mock import MockWhisperStt
 
+    consenso = ConsensoAlfa(settings)
     pipeline = AudioPipeline(
         settings=settings,
         stt=MockWhisperStt(settings),
         tts=BoomTts(),
-        consenso=ConsensoAlfa(settings),
-        agent=ResponseAgent(),
+        consenso=consenso,
+        agent_service=AgentService(settings=settings, consenso=consenso),
     )
     result = await pipeline.process(
         _tiny_wav(),
@@ -129,10 +131,9 @@ def test_health_exposes_use_mock_audio() -> None:
     body = res.json()
     assert "use_mock_audio" in body
     assert body["stt_provider"] == "mock"
-    assert "openai_api_key_configured" in body
-    assert isinstance(body["openai_api_key_configured"], bool)
-    assert "has_valid_openai_key" in body
-    # Automated tests force empty key via conftest — mocks must still work.
-    assert body["has_valid_openai_key"] is False
+    assert "gemini_api_key_configured" in body
+    assert "has_valid_gemini_key" in body
+    assert "openai_api_key_configured" not in body
+    assert body["cognitive_provider"] == "gemini"
     assert body.get("api_port") == 8001
     assert str(body.get("env_file", "")).replace("\\", "/").endswith("backend/.env")

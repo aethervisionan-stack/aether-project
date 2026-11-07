@@ -124,7 +124,7 @@ class AudioPipeline:
             use_mock_audio=self._settings.use_mock_audio,
             stt=self._settings.effective_stt_provider(),
             tts=self._settings.effective_tts_provider(),
-            openai_key_configured=bool(self._settings.openai_api_key.strip()),
+            gemini_key_configured=self._settings.has_valid_gemini_key(),
         )
 
         if len(audio_bytes) > self._settings.max_audio_bytes:
@@ -142,28 +142,28 @@ class AudioPipeline:
                 detail="No bytes received from headset capture",
             )
 
-        # Real mode without key: fail clearly — never silent mock Whisper success.
+        # Real mode without Gemini key: fail clearly — never silent mock STT success.
         if (
             not self._settings.use_mock_audio
-            and not self._settings.has_valid_openai_key()
-            and self._settings.effective_stt_provider() == "openai"
+            and not self._settings.has_valid_gemini_key()
+            and self._settings.effective_stt_provider() == "gemini"
         ):
             log_provider_error(
                 stage="stt",
-                provider="openai-whisper",
-                detail="invalid_api_key: OPENAI_API_KEY missing/invalid — set sk-… in backend/.env",
+                provider="gemini-stt",
+                detail="invalid_api_key: GEMINI_API_KEY missing/invalid — set key in backend/.env",
                 request_id=request_id,
                 error_type="invalid_api_key",
             )
             used_safe_fallback = True
-            fallback_reason = "stt:invalid_api_key: OPENAI_API_KEY empty"
+            fallback_reason = "stt:invalid_api_key: GEMINI_API_KEY empty"
             stt = SttResult(
                 text="",
-                language=language or self._settings.whisper_language,
+                language=language or self._settings.default_language,
                 confidence=0.0,
-                provider="openai-whisper",
+                provider="gemini-stt",
                 duration_ms=0,
-                raw={"fallback": True, "detail": "OPENAI_API_KEY empty"},
+                raw={"fallback": True, "detail": "GEMINI_API_KEY empty"},
             )
             return await self._safe_response(
                 request_id=request_id,
@@ -175,7 +175,7 @@ class AudioPipeline:
                     agreement_ratio=0.0,
                     final_text=API_FAILURE_FALLBACK_PT,
                     votes=[],
-                    hallucination_flags=["missing_openai_api_key"],
+                    hallucination_flags=["missing_gemini_api_key"],
                     duration_ms=0,
                     skipped=True,
                     agent_latencies=[],
@@ -206,7 +206,7 @@ class AudioPipeline:
             fallback_reason = f"stt:{exc.detail}"
             stt = SttResult(
                 text="",
-                language=language or self._settings.whisper_language,
+                language=language or self._settings.default_language,
                 confidence=0.0,
                 provider=exc.provider or "stt-fallback",
                 duration_ms=0,
@@ -226,7 +226,7 @@ class AudioPipeline:
             fallback_reason = f"stt:{type(exc).__name__}: {exc}"
             stt = SttResult(
                 text="",
-                language=language or self._settings.whisper_language,
+                language=language or self._settings.default_language,
                 confidence=0.0,
                 provider="stt-fallback",
                 duration_ms=0,
@@ -265,12 +265,11 @@ class AudioPipeline:
                 client_id=client_id,
             )
 
-        # --- Adaptive memory / client DNA (before gpt-4o-mini) ---
+        # --- Adaptive memory / client DNA (before Gemini cognitive) ---
         memory = self._memory_or_none()
         memory_context = ""
         if memory and memory.available and stt.text:
             hits = memory.search_context(stt.text, client_id=client_id)
-            # Inject most relevant tagged notes as learned preferences for gpt-4o-mini
             memory_context = memory.format_learned_preferences_prompt(hits) or memory.format_context_block(
                 hits
             )
@@ -482,35 +481,36 @@ class AudioPipeline:
         cognitive: str,
     ) -> AgentTurnResult:
         """
-        Draft reply after STT: Gemini (cognitive engine) or OpenAI AgentService.
+        Draft reply after STT: local tool agent (mock) or Gemini Flash/Pro.
         Output always continues to Consenso Alfa in the caller.
         """
-        if cognitive == "gemini":
-            sqlite_ctx = ""
-            if self._settings.gemini_inject_sqlite_context:
-                sqlite_ctx = build_sqlite_context(client_id=client_id, limit=5)
-            gemini_turn = await self._gemini.generate(
+        _ = cognitive
+        if self._settings.use_mock_audio:
+            return await self._agent_service.run(
                 transcript,
                 locale=locale,
                 memory_context=memory_context,
-                sqlite_context=sqlite_ctx,
                 client_id=client_id,
                 request_id=request_id,
-                mode=self._settings.gemini_mode,
-            )
-            return AgentTurnResult(
-                text=gemini_turn.text,
-                duration_ms=gemini_turn.duration_ms,
-                provider=gemini_turn.provider,
-                tools=list(gemini_turn.tools),
             )
 
-        return await self._agent_service.run(
+        sqlite_ctx = ""
+        if self._settings.gemini_inject_sqlite_context:
+            sqlite_ctx = build_sqlite_context(client_id=client_id, limit=5)
+        gemini_turn = await self._gemini.generate(
             transcript,
             locale=locale,
             memory_context=memory_context,
+            sqlite_context=sqlite_ctx,
             client_id=client_id,
             request_id=request_id,
+            mode=self._settings.gemini_mode,
+        )
+        return AgentTurnResult(
+            text=gemini_turn.text,
+            duration_ms=gemini_turn.duration_ms,
+            provider=gemini_turn.provider,
+            tools=list(gemini_turn.tools),
         )
 
     async def _safe_response(

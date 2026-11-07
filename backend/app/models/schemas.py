@@ -142,11 +142,9 @@ class HealthResponse(BaseModel):
     depin_ready: bool = False
     web3_rpc_configured: bool = False
     # Presence / validity flags only — never expose the secret value
-    openai_api_key_configured: bool = False
-    has_valid_openai_key: bool = False
     gemini_api_key_configured: bool = False
     has_valid_gemini_key: bool = False
-    cognitive_provider: str = "openai"
+    cognitive_provider: str = "gemini"
     env_file: str = ""
     api_port: int = 8001
 
