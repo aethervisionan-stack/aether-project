@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import logging
 import re
 import time
 
 from app.models.schemas import AgentVote
 from app.services.consenso_alfa.protocol import ValidationContext
+
+logger = logging.getLogger("aether.consenso_alfa.agents")
 
 _HALLUCINATION_MARKERS = (
     "como ia generativa eu",
@@ -22,6 +26,16 @@ _UNSAFE_PATTERNS = (
 )
 
 
+def _agent_log(agent_id: str, role: str, stage: str, **fields: object) -> None:
+    payload = {
+        "event": f"consenso.subagent.{stage}",
+        "agent_id": agent_id,
+        "role": role,
+        **fields,
+    }
+    logger.info("%s", json.dumps(payload, ensure_ascii=False, default=str))
+
+
 class FactualGroundingAgent:
     """Checks that the draft stays anchored to the user transcript."""
 
@@ -30,6 +44,7 @@ class FactualGroundingAgent:
 
     async def validate(self, context: ValidationContext) -> AgentVote:
         started = time.perf_counter()
+        _agent_log(self.agent_id, self.role, "start", stage_label="grounding")
         await asyncio.sleep(0.01)
         draft = context.draft_response.strip()
         transcript = context.user_transcript.strip()
@@ -43,7 +58,6 @@ class FactualGroundingAgent:
             flags.append("generic_llm_disclaimer")
             score -= 0.35
         if transcript and len(draft) > 40 and transcript.lower()[:24] not in draft.lower():
-            # Soft preference: acknowledge the user ask without inventing unrelated claims.
             if "aether" not in draft.lower() and "assistente" not in draft.lower():
                 flags.append("weak_grounding")
                 score -= 0.15
@@ -51,6 +65,16 @@ class FactualGroundingAgent:
         score = max(0.0, min(1.0, score))
         approved = score >= 0.55 and "empty_response" not in flags
         elapsed = int((time.perf_counter() - started) * 1000)
+        _agent_log(
+            self.agent_id,
+            self.role,
+            "finish",
+            stage_label="grounding",
+            approved=approved,
+            score=score,
+            flags=flags,
+            duration_ms=elapsed,
+        )
         return AgentVote(
             agent_id=self.agent_id,
             agent_role=self.role,
@@ -70,6 +94,7 @@ class SafetyToneAgent:
 
     async def validate(self, context: ValidationContext) -> AgentVote:
         started = time.perf_counter()
+        _agent_log(self.agent_id, self.role, "start", stage_label="safety_tone")
         await asyncio.sleep(0.01)
         draft = context.draft_response
         flags: list[str] = []
@@ -84,7 +109,6 @@ class SafetyToneAgent:
             flags.append("verbose")
             score -= 0.1
 
-        # Prefer calm corporate phrasing for headset playback.
         revised = draft
         if draft and not draft.endswith((".", "!", "?")):
             revised = draft.rstrip() + "."
@@ -92,6 +116,16 @@ class SafetyToneAgent:
         score = max(0.0, min(1.0, score))
         approved = score >= 0.6
         elapsed = int((time.perf_counter() - started) * 1000)
+        _agent_log(
+            self.agent_id,
+            self.role,
+            "finish",
+            stage_label="safety_tone",
+            approved=approved,
+            score=score,
+            flags=flags,
+            duration_ms=elapsed,
+        )
         return AgentVote(
             agent_id=self.agent_id,
             agent_role=self.role,
@@ -111,6 +145,7 @@ class ConsistencyAgent:
 
     async def validate(self, context: ValidationContext) -> AgentVote:
         started = time.perf_counter()
+        _agent_log(self.agent_id, self.role, "start", stage_label="consistency")
         await asyncio.sleep(0.01)
         draft = context.draft_response.strip()
         transcript = context.user_transcript.strip()
@@ -134,6 +169,16 @@ class ConsistencyAgent:
             "Pode repetir o pedido pelo headset?"
         )
         elapsed = int((time.perf_counter() - started) * 1000)
+        _agent_log(
+            self.agent_id,
+            self.role,
+            "finish",
+            stage_label="consistency",
+            approved=approved,
+            score=score,
+            flags=flags,
+            duration_ms=elapsed,
+        )
         return AgentVote(
             agent_id=self.agent_id,
             agent_role=self.role,

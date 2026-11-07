@@ -4,7 +4,15 @@ import { VoiceApiError } from "../api/types";
 import { HeadsetCapture, listAudioInputs } from "../audio/capture";
 import { playBase64Audio } from "../audio/playback";
 
-type UiPhase = "idle" | "recording" | "processing" | "playing";
+/** Portuguese flow states for the Bluetooth headset control UI. */
+type UiPhase = "idle" | "listening" | "validating" | "responding";
+
+const PHASE_LABEL: Record<UiPhase, string> = {
+  idle: "Pronto",
+  listening: "A escutar...",
+  validating: "Validando no Consenso Alfa...",
+  responding: "A responder...",
+};
 
 export class ControlApp {
   private readonly root: HTMLElement;
@@ -14,6 +22,7 @@ export class ControlApp {
   private lastResult: ProcessAudioResponse | null = null;
   private errorMessage: string | null = null;
   private devices: MediaDeviceInfo[] = [];
+  private activeMicLabel: string | null = null;
 
   constructor(root: HTMLElement) {
     this.root = root;
@@ -45,7 +54,6 @@ export class ControlApp {
 
   private async refreshDevices(): Promise<void> {
     try {
-      // Permission prompt also unlocks device labels.
       const probe = await navigator.mediaDevices.getUserMedia({ audio: true });
       probe.getTracks().forEach((t) => t.stop());
       this.devices = await listAudioInputs();
@@ -58,7 +66,7 @@ export class ControlApp {
   }
 
   private async toggleRecord(): Promise<void> {
-    if (this.phase === "recording") {
+    if (this.phase === "listening") {
       await this.finishRecord();
       return;
     }
@@ -67,8 +75,10 @@ export class ControlApp {
     }
     this.errorMessage = null;
     try {
+      // Uses the OS default input (Bluetooth headset when set as system default).
       await this.capture.start();
-      this.setPhase("recording");
+      this.activeMicLabel = this.capture.getActiveLabel();
+      this.setPhase("listening");
     } catch {
       this.errorMessage =
         "Não foi possível abrir o microfone. Confirme o pareamento Bluetooth e a permissão do browser.";
@@ -77,15 +87,16 @@ export class ControlApp {
   }
 
   private async finishRecord(): Promise<void> {
-    this.setPhase("processing");
+    this.setPhase("validating");
     try {
       const captured = await this.capture.stop();
+      // Multipart/form-data via FormData (browser sets boundary) → POST /process-audio
       const result = await voiceApi.processAudio(captured.blob, {
-        filename: `headset-${Date.now()}.webm`,
+        filename: `headset-${Date.now()}.${extensionForMime(captured.mimeType)}`,
         locale: "pt-BR",
       });
       this.lastResult = result;
-      this.setPhase("playing");
+      this.setPhase("responding");
       await playBase64Audio(result.audio_base64, result.audio_mime_type);
       this.setPhase("idle");
     } catch (err) {
@@ -104,8 +115,9 @@ export class ControlApp {
   private render(): void {
     const health = this.health;
     const result = this.lastResult;
-    const recording = this.phase === "recording";
-    const busy = this.phase === "processing" || this.phase === "playing";
+    const listening = this.phase === "listening";
+    const busy = this.phase === "validating" || this.phase === "responding";
+    const phaseLabel = PHASE_LABEL[this.phase];
 
     this.root.innerHTML = `
       <main class="shell">
@@ -128,21 +140,44 @@ export class ControlApp {
           <span>Consenso ${health?.consenso_enabled ? "ativo" : "off"}</span>
         </div>
 
+        <div
+          class="flow-status flow-status--${this.phase}"
+          role="status"
+          aria-live="assertive"
+          data-phase="${this.phase}"
+        >
+          <span class="flow-status__pulse" aria-hidden="true"></span>
+          <strong>${escapeHtml(phaseLabel)}</strong>
+          ${
+            this.activeMicLabel
+              ? `<span class="flow-status__mic">mic: ${escapeHtml(this.activeMicLabel)}</span>`
+              : `<span class="flow-status__mic">mic: entrada padrão do sistema</span>`
+          }
+        </div>
+
         <section class="panel" aria-labelledby="capture-title">
           <h2 id="capture-title">Headset Bluetooth</h2>
           <p class="hint">
             Pareie o fone no sistema operacional, selecione-o como entrada/saída padrão,
-            depois grave um comando curto. O áudio sobe para
-            <code>POST /process-audio</code>.
+            depois grave um comando curto. O áudio sobe como
+            <code>multipart/form-data</code> em <code>POST /process-audio</code>.
           </p>
           <div class="controls">
             <button
               type="button"
-              class="btn-primary ${recording ? "is-recording" : ""}"
+              class="btn-primary ${listening ? "is-recording" : ""}"
               data-action="record"
               ${busy ? "disabled" : ""}
             >
-              ${recording ? "Parar e enviar" : busy ? "Processando…" : "Gravar com o headset"}
+              ${
+                listening
+                  ? "Parar e enviar"
+                  : this.phase === "validating"
+                    ? "Validando no Consenso Alfa..."
+                    : this.phase === "responding"
+                      ? "A responder..."
+                      : "Gravar com o headset"
+              }
             </button>
             <button type="button" class="btn-ghost" data-action="devices" ${busy ? "disabled" : ""}>
               Listar microfones
@@ -171,6 +206,13 @@ export class ControlApp {
                     <p class="block__body">${escapeHtml(result.transcript)}</p>
                     <div class="block__label" style="margin-top:1rem">Resposta validada</div>
                     <p class="block__body">${escapeHtml(result.response_text)}</p>
+                    ${
+                      result.consenso.approved
+                        ? ""
+                        : `<p class="hint" style="margin-top:0.75rem">
+                            Consenso Alfa rejeitou o rascunho — foi usada a resposta segura de fallback.
+                          </p>`
+                    }
                   </div>
                   <div class="block">
                     <div class="block__label">Consenso Alfa</div>
@@ -224,6 +266,13 @@ export class ControlApp {
       },
     );
   }
+}
+
+function extensionForMime(mimeType: string): string {
+  if (mimeType.includes("mp4")) return "mp4";
+  if (mimeType.includes("ogg")) return "ogg";
+  if (mimeType.includes("wav")) return "wav";
+  return "webm";
 }
 
 function escapeHtml(value: string): string {

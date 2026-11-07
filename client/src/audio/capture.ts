@@ -1,6 +1,9 @@
 /**
  * Microphone capture aimed at generic Bluetooth headsets.
- * Uses the browser MediaRecorder API — pair the headset at OS level first.
+ *
+ * Uses the browser default audio input (no deviceId constraint) so that when
+ * the user sets the BT headset as the OS default mic, MediaRecorder captures it.
+ * Pair the headset at OS level before pressing record.
  */
 
 export type CaptureState = "idle" | "requesting" | "recording" | "stopping" | "error";
@@ -9,6 +12,7 @@ export interface CaptureResult {
   blob: Blob;
   mimeType: string;
   durationMs: number;
+  trackLabel: string | null;
 }
 
 export interface HeadsetCaptureOptions {
@@ -42,11 +46,16 @@ export class HeadsetCapture {
   private chunks: BlobPart[] = [];
   private startedAt = 0;
   private state: CaptureState = "idle";
+  private activeLabel: string | null = null;
 
   constructor(private readonly options: HeadsetCaptureOptions = {}) {}
 
   getState(): CaptureState {
     return this.state;
+  }
+
+  getActiveLabel(): string | null {
+    return this.activeLabel;
   }
 
   async start(): Promise<void> {
@@ -55,6 +64,7 @@ export class HeadsetCapture {
     }
     this.state = "requesting";
     try {
+      // Omit deviceId → browser/OS default input (Bluetooth headset when default).
       this.mediaStream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
@@ -64,8 +74,11 @@ export class HeadsetCapture {
         },
         video: false,
       });
+      const track = this.mediaStream.getAudioTracks()[0];
+      this.activeLabel = track?.label || "entrada padrão do sistema";
     } catch (err) {
       this.state = "error";
+      this.activeLabel = null;
       throw err;
     }
 
@@ -99,6 +112,7 @@ export class HeadsetCapture {
     this.state = "stopping";
     const recorder = this.recorder;
     const mimeType = recorder.mimeType || "audio/webm";
+    const trackLabel = this.activeLabel;
 
     const blob = await new Promise<Blob>((resolve, reject) => {
       recorder.onerror = () => reject(new Error("MediaRecorder error"));
@@ -114,6 +128,7 @@ export class HeadsetCapture {
       blob,
       mimeType,
       durationMs: Math.round(performance.now() - this.startedAt),
+      trackLabel,
     };
   }
 

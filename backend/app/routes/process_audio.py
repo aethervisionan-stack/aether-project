@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 
 from fastapi import APIRouter, Depends, File, Form, UploadFile
@@ -56,10 +57,11 @@ async def process_audio(
         ) from exc
 
     logger.info(
-        "process-audio received filename=%s content_type=%s bytes=%s",
-        filename,
-        content_type,
+        '{"event":"http.process_audio.received","filename":%s,"content_type":%s,"bytes":%s,"locale":%s}',
+        json.dumps(filename),
+        json.dumps(content_type),
         len(audio_bytes),
+        json.dumps(locale),
     )
 
     try:

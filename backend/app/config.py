@@ -10,7 +10,13 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PipelineMode = Literal["mock", "hybrid", "production"]
 SttProvider = Literal["mock", "openai", "local"]
-TtsProvider = Literal["mock", "openai"]
+TtsProvider = Literal["mock", "openai", "elevenlabs"]
+
+# Always permitted for the Vite control client (local Bluetooth test).
+DEFAULT_VITE_CORS_ORIGINS: tuple[str, ...] = (
+    "http://127.0.0.1:5173",
+    "http://localhost:5173",
+)
 
 
 class Settings(BaseSettings):
@@ -25,7 +31,7 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8000
     log_level: str = "info"
-    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
+    cors_origins: str = ",".join(DEFAULT_VITE_CORS_ORIGINS)
 
     pipeline_mode: PipelineMode = "mock"
 
@@ -44,6 +50,10 @@ class Settings(BaseSettings):
     tts_provider: TtsProvider = "mock"
     openai_tts_model: str = "gpt-4o-mini-tts"
     openai_tts_voice: str = "alloy"
+    elevenlabs_api_key: str = ""
+    elevenlabs_voice_id: str = "21m00Tcm4TlvDq8ikWAM"
+    elevenlabs_model_id: str = "eleven_multilingual_v2"
+    elevenlabs_output_format: str = "mp3_44100_128"
     tts_sample_rate: int = 24000
 
     request_timeout_ms: int = Field(default=30_000, ge=1000)
@@ -63,7 +73,13 @@ class Settings(BaseSettings):
 
     @property
     def cors_origin_list(self) -> list[str]:
-        return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+        """Configured CORS origins plus Vite defaults (deduped, order preserved)."""
+        configured = [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+        merged: list[str] = []
+        for origin in [*configured, *DEFAULT_VITE_CORS_ORIGINS]:
+            if origin not in merged:
+                merged.append(origin)
+        return merged
 
     def effective_stt_provider(self) -> SttProvider:
         if self.pipeline_mode == "mock":
@@ -73,9 +89,10 @@ class Settings(BaseSettings):
     def effective_tts_provider(self) -> TtsProvider:
         if self.pipeline_mode == "mock":
             return "mock"
-        if self.pipeline_mode == "hybrid" and self.tts_provider != "mock":
-            # hybrid allows real STT with mock TTS when no TTS key is ready
-            if not self.openai_api_key and self.tts_provider == "openai":
+        if self.pipeline_mode == "hybrid":
+            if self.tts_provider == "openai" and not self.openai_api_key:
+                return "mock"
+            if self.tts_provider == "elevenlabs" and not self.elevenlabs_api_key:
                 return "mock"
         return self.tts_provider
 

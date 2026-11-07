@@ -14,7 +14,11 @@ from app.routes import health, process_audio
 from app.services.resilience import PipelineError
 
 settings = get_settings()
-logging.basicConfig(level=settings.log_level.upper())
+logging.basicConfig(
+    level=settings.log_level.upper(),
+    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+)
+logger = logging.getLogger("aether.main")
 
 app = FastAPI(
     title="Aether Vision Voice API",
@@ -25,12 +29,17 @@ app = FastAPI(
     version=__version__,
 )
 
+cors_origins = settings.cors_origin_list
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origin_list or ["*"],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+)
+logger.info(
+    "CORS allow_origins=%s (Vite client: http://127.0.0.1:5173 + localhost:5173)",
+    cors_origins,
 )
 
 app.add_exception_handler(PipelineError, pipeline_error_handler)

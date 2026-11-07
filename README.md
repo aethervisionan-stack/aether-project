@@ -78,11 +78,18 @@ Edite `backend/.env`:
 ```env
 PIPELINE_MODE=hybrid          # ou production
 STT_PROVIDER=openai           # ou local (pip install openai-whisper + ffmpeg)
-TTS_PROVIDER=openai           # ou mock
+TTS_PROVIDER=openai           # ou elevenlabs | mock
 OPENAI_API_KEY=sk-...
+# ELEVENLABS_API_KEY=...      # se TTS_PROVIDER=elevenlabs
+# ELEVENLABS_VOICE_ID=...
 ```
 
 Reinicie o uvicorn. `STT_PROVIDER=local` exige `openai-whisper` e `ffmpeg` no PATH.
+
+Durante o Consenso Alfa, o backend emite logs JSON estruturados
+(`consenso.agent.start` / `consenso.agent.done` / `consenso.done`) com latência por sub-agente
+(grounding, safety_tone, consistency). Se o quórum rejeitar, a TTS usa o fallback seguro —
+nunca o rascunho não validado.
 
 ### Variáveis de ambiente principais
 
@@ -90,8 +97,10 @@ Reinicie o uvicorn. `STT_PROVIDER=local` exige `openai-whisper` e `ffmpeg` no PA
 | --- | --- | --- |
 | `PIPELINE_MODE` | `mock` | `mock` \| `hybrid` \| `production` |
 | `STT_PROVIDER` | `mock` | `mock` \| `openai` \| `local` |
-| `TTS_PROVIDER` | `mock` | `mock` \| `openai` |
-| `OPENAI_API_KEY` | — | Necessária para providers OpenAI |
+| `TTS_PROVIDER` | `mock` | `mock` \| `openai` \| `elevenlabs` |
+| `OPENAI_API_KEY` | — | OpenAI Whisper STT + OpenAI TTS |
+| `ELEVENLABS_API_KEY` | — | ElevenLabs TTS (`TTS_PROVIDER=elevenlabs`) |
+| `ELEVENLABS_VOICE_ID` | Rachel default | Voice id ElevenLabs |
 | `WHISPER_MODEL` | `base` | Modelo local Whisper |
 | `WHISPER_LANGUAGE` | `pt` | Idioma STT |
 | `CONSENSO_ENABLED` | `true` | Liga Consenso Alfa |
@@ -99,7 +108,7 @@ Reinicie o uvicorn. `STT_PROVIDER=local` exige `openai-whisper` e `ffmpeg` no PA
 | `CONSENSO_TIMEOUT_MS` | `2500` | Timeout por agente |
 | `REQUEST_TIMEOUT_MS` | `30000` | Timeout do pipeline |
 | `MAX_AUDIO_BYTES` | `10485760` | Limite do upload |
-| `CORS_ORIGINS` | `http://localhost:5173,...` | Origens do client |
+| `CORS_ORIGINS` | `http://127.0.0.1:5173,http://localhost:5173` | Vite client (sempre mesclado) |
 
 Lista completa: `backend/.env.example`.
 

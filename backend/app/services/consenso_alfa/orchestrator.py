@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import time
 
@@ -13,9 +14,16 @@ from app.services.consenso_alfa.agents import (
     FactualGroundingAgent,
     SafetyToneAgent,
 )
+from app.services.consenso_alfa.fallback import QUORUM_REJECTED_FALLBACK_PT
 from app.services.consenso_alfa.protocol import ValidationContext, ValidatorAgent
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("aether.consenso_alfa")
+
+
+def _log_event(event: str, **fields: object) -> None:
+    """Structured single-line JSON logs for real-time flow inspection."""
+    payload = {"event": event, **fields}
+    logger.info("%s", json.dumps(payload, ensure_ascii=False, default=str))
 
 
 class ConsensoAlfa:
@@ -44,8 +52,14 @@ class ConsensoAlfa:
         user_transcript: str,
         draft_response: str,
         locale: str = "pt-BR",
+        request_id: str | None = None,
     ) -> ConsensoResult:
         if not self._settings.consenso_enabled:
+            _log_event(
+                "consenso.skipped",
+                request_id=request_id,
+                reason="CONSENSO_ENABLED=false",
+            )
             return ConsensoResult(
                 approved=True,
                 agreement_ratio=1.0,
@@ -64,8 +78,52 @@ class ConsensoAlfa:
         )
         timeout = self._settings.consenso_timeout_ms / 1000.0
 
+        _log_event(
+            "consenso.start",
+            request_id=request_id,
+            agents=[a.agent_id for a in self._agents],
+            roles=[a.role for a in self._agents],
+            transcript_chars=len(user_transcript),
+            draft_chars=len(draft_response),
+            timeout_ms=self._settings.consenso_timeout_ms,
+            min_agents=self._settings.consenso_min_agents,
+            agreement_threshold=self._settings.consenso_agreement_threshold,
+        )
+
         async def _run(agent: ValidatorAgent) -> AgentVote:
-            return await asyncio.wait_for(agent.validate(context), timeout=timeout)
+            agent_started = time.perf_counter()
+            _log_event(
+                "consenso.agent.start",
+                request_id=request_id,
+                agent_id=agent.agent_id,
+                role=agent.role,
+            )
+            try:
+                vote = await asyncio.wait_for(agent.validate(context), timeout=timeout)
+            except Exception as exc:  # noqa: BLE001
+                elapsed = int((time.perf_counter() - agent_started) * 1000)
+                _log_event(
+                    "consenso.agent.error",
+                    request_id=request_id,
+                    agent_id=agent.agent_id,
+                    role=agent.role,
+                    error=type(exc).__name__,
+                    detail=str(exc),
+                    duration_ms=elapsed,
+                )
+                raise
+            _log_event(
+                "consenso.agent.done",
+                request_id=request_id,
+                agent_id=vote.agent_id,
+                role=vote.agent_role,
+                approved=vote.approved,
+                score=vote.score,
+                rationale=vote.rationale,
+                has_revision=bool(vote.revised_text),
+                duration_ms=vote.duration_ms,
+            )
+            return vote
 
         results = await asyncio.gather(
             *[_run(agent) for agent in self._agents],
@@ -76,7 +134,6 @@ class ConsensoAlfa:
         flags: list[str] = []
         for agent, result in zip(self._agents, results, strict=True):
             if isinstance(result, Exception):
-                logger.warning("consenso agent %s failed: %s", agent.agent_id, result)
                 votes.append(
                     AgentVote(
                         agent_id=agent.agent_id,
@@ -100,7 +157,7 @@ class ConsensoAlfa:
             and ratio >= self._settings.consenso_agreement_threshold
         )
 
-        # Prefer a safety/consistency revision when present.
+        # Prefer a safety/consistency revision when present (only if quorum passes).
         final_text = draft_response
         for vote in votes:
             if vote.revised_text:
@@ -108,13 +165,23 @@ class ConsensoAlfa:
                 break
 
         if not approved:
-            final_text = (
-                "Consenso Alfa não validou a resposta com segurança suficiente. "
-                "Pode reformular o pedido pelo fone Bluetooth?"
-            )
+            # Safe fallback — never speak an unvalidated draft.
+            final_text = QUORUM_REJECTED_FALLBACK_PT
             flags.append("quorum_rejected")
 
         elapsed = int((time.perf_counter() - started) * 1000)
+        _log_event(
+            "consenso.done",
+            request_id=request_id,
+            approved=approved,
+            agreement_ratio=round(ratio, 3),
+            approvals=approvals,
+            agent_count=len(votes),
+            hallucination_flags=flags,
+            final_chars=len(final_text.strip()),
+            used_fallback=not approved,
+            duration_ms=elapsed,
+        )
         return ConsensoResult(
             approved=approved,
             agreement_ratio=round(ratio, 3),

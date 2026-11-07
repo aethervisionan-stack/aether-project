@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import time
 import uuid
@@ -14,7 +15,11 @@ from app.services.resilience import PipelineError
 from app.services.stt import SttProviderProtocol
 from app.services.tts import TtsProviderProtocol
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("aether.pipeline")
+
+
+def _plog(event: str, **fields: object) -> None:
+    logger.info("%s", json.dumps({"event": event, **fields}, ensure_ascii=False, default=str))
 
 
 class AudioPipeline:
@@ -43,6 +48,14 @@ class AudioPipeline:
     ) -> ProcessAudioResponse:
         request_id = str(uuid.uuid4())
         total_started = time.perf_counter()
+        _plog(
+            "pipeline.start",
+            request_id=request_id,
+            filename=filename,
+            content_type=content_type,
+            bytes=len(audio_bytes),
+            locale=locale,
+        )
 
         if len(audio_bytes) > self._settings.max_audio_bytes:
             raise PipelineError(
@@ -76,6 +89,15 @@ class AudioPipeline:
                 detail=str(exc),
             ) from exc
 
+        _plog(
+            "pipeline.stt.done",
+            request_id=request_id,
+            provider=stt.provider,
+            chars=len(stt.text),
+            confidence=stt.confidence,
+            duration_ms=stt.duration_ms,
+        )
+
         try:
             draft = await self._agent.draft(stt.text, locale=locale)
         except Exception as exc:  # noqa: BLE001
@@ -86,11 +108,20 @@ class AudioPipeline:
                 detail=str(exc),
             ) from exc
 
+        _plog(
+            "pipeline.agent.done",
+            request_id=request_id,
+            provider=draft.provider,
+            draft_chars=len(draft.text),
+            duration_ms=draft.duration_ms,
+        )
+
         try:
             consenso = await self._consenso.validate(
                 user_transcript=stt.text,
                 draft_response=draft.text,
                 locale=locale,
+                request_id=request_id,
             )
         except Exception as exc:  # noqa: BLE001
             raise PipelineError(
@@ -100,8 +131,19 @@ class AudioPipeline:
                 detail=str(exc),
             ) from exc
 
+        # Quorum reject → speak safe fallback (never the unvalidated draft).
+        speak_text = consenso.final_text
+        _plog(
+            "pipeline.consenso.done",
+            request_id=request_id,
+            approved=consenso.approved,
+            used_fallback=not consenso.approved and not consenso.skipped,
+            agreement_ratio=consenso.agreement_ratio,
+            duration_ms=consenso.duration_ms,
+        )
+
         try:
-            tts = await self._tts.synthesize(consenso.final_text)
+            tts = await self._tts.synthesize(speak_text)
         except PipelineError:
             raise
         except Exception as exc:  # noqa: BLE001
@@ -113,13 +155,14 @@ class AudioPipeline:
             ) from exc
 
         total_ms = int((time.perf_counter() - total_started) * 1000)
-        logger.info(
-            "process-audio ok request_id=%s total_ms=%s stt=%s consenso=%s tts=%s",
-            request_id,
-            total_ms,
-            stt.provider,
-            consenso.approved,
-            tts.provider,
+        _plog(
+            "pipeline.done",
+            request_id=request_id,
+            total_ms=total_ms,
+            stt_provider=stt.provider,
+            tts_provider=tts.provider,
+            consenso_approved=consenso.approved,
+            tts_ms=tts.duration_ms,
         )
 
         return ProcessAudioResponse(

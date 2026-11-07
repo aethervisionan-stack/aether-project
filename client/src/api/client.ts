@@ -63,8 +63,10 @@ export class VoiceApiClient {
     blob: Blob,
     options: { language?: string; locale?: string; filename?: string } = {},
   ): Promise<ProcessAudioResponse> {
+    // FormData → browser sets multipart/form-data + boundary (do not set Content-Type).
     const form = new FormData();
-    form.append("audio", blob, options.filename ?? "headset-capture.webm");
+    const filename = options.filename ?? "headset-capture.webm";
+    form.append("audio", blob, filename);
     if (options.language) {
       form.append("language", options.language);
     }

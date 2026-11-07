@@ -117,6 +117,58 @@ body {
   font-size: 0.9rem;
 }
 
+.flow-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: rgba(18, 19, 22, 0.72);
+  font-size: 0.95rem;
+  transition: border-color 200ms ease, background 200ms ease;
+}
+
+.flow-status__pulse {
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.flow-status--listening {
+  border-color: rgba(255, 90, 90, 0.45);
+}
+
+.flow-status--listening .flow-status__pulse {
+  background: #ff5a5a;
+  animation: pulse-ring 1.4s ease-out infinite;
+}
+
+.flow-status--validating {
+  border-color: rgba(0, 240, 255, 0.4);
+}
+
+.flow-status--validating .flow-status__pulse {
+  background: var(--ether);
+  animation: pulse-ring 1.2s ease-out infinite;
+}
+
+.flow-status--responding {
+  border-color: rgba(61, 220, 151, 0.45);
+}
+
+.flow-status--responding .flow-status__pulse {
+  background: var(--ok);
+  animation: pulse-ring 1.2s ease-out infinite;
+}
+
+.flow-status__mic {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
 .dot {
   width: 0.55rem;
   height: 0.55rem;
