@@ -18,3 +18,9 @@ android/.idea/
 android/*.iml
 android/captures/
 android/.cxx/
+
+# FastAPI voice backend
+backend/.venv/
+backend/**/__pycache__/
+backend/.pytest_cache/
+backend/.env
