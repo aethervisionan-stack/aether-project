@@ -158,6 +158,7 @@ export class ControlApp {
               ? `<span class="flow-status__mic">mic: ${escapeHtml(this.activeMicLabel)}</span>`
               : `<span class="flow-status__mic">mic: entrada padrão do sistema</span>`
           }
+          ${toolHudBanner(result, this.phase)}
         </div>
 
         <section class="panel" aria-labelledby="capture-title">
@@ -265,6 +266,7 @@ export class ControlApp {
                         Consistency ${result.latency.consenso_consistency_ms ?? 0} ms
                       </small>
                     </div>
+                    ${toolsPanelHtml(result)}
                   </div>
                 </div>`
               : `<p class="hint">Nenhuma captura ainda. Grave um teste com o headset.</p>`
@@ -308,4 +310,56 @@ function escapeHtml(value: string): string {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
+}
+
+function toolHudBanner(result: ProcessAudioResponse | null, phase: UiPhase): string {
+  const tools = result?.tools ?? [];
+  if (!tools.length) {
+    return "";
+  }
+  const executed = tools.filter((t) => t.executed).length;
+  const blocked = tools.filter((t) => !t.approved).length;
+  const names = tools.map((t) => t.name).join(", ");
+  const live =
+    phase === "validating" || phase === "responding"
+      ? `<span class="flow-status__tool">Tool: ${escapeHtml(names)}</span>`
+      : `<span class="flow-status__tool">Tools ${executed} ok${
+          blocked ? ` · ${blocked} bloqueada(s)` : ""
+        }</span>`;
+  return live;
+}
+
+function toolsPanelHtml(result: ProcessAudioResponse): string {
+  const tools = result.tools ?? [];
+  if (!tools.length && !result.meta.tools_invoked) {
+    return "";
+  }
+  if (!tools.length) {
+    return `<div class="block" style="margin-top:1rem">
+      <div class="block__label">Ferramentas</div>
+      <p class="hint">Nenhuma tool nesta volta.</p>
+    </div>`;
+  }
+  const rows = tools
+    .map((t) => {
+      const state = !t.approved
+        ? `bloqueada${t.blocked_reason ? ` (${escapeHtml(t.blocked_reason)})` : ""}`
+        : t.executed
+          ? "executada"
+          : "aprovada";
+      return `<div class="vote">
+        <span><strong>${escapeHtml(t.name)}</strong><br/>
+        <small>${escapeHtml(t.result_preview ?? t.blocked_reason ?? "")}</small></span>
+        <span>${state} · ${t.duration_ms} ms</span>
+      </div>`;
+    })
+    .join("");
+  return `<div class="block" style="margin-top:1rem">
+    <div class="block__label">Ferramentas (Consenso-gated)</div>
+    <p class="block__body">
+      ${result.meta.tools_executed_count ?? tools.filter((t) => t.executed).length}
+      executada(s) · ${tools.length} invocação(ões)
+    </p>
+    <div class="votes">${rows}</div>
+  </div>`;
 }

@@ -169,6 +169,16 @@ body {
   font-size: 0.85rem;
 }
 
+.flow-status__tool {
+  display: inline-block;
+  margin-left: 0.75rem;
+  padding: 0.15rem 0.55rem;
+  border: 1px solid color-mix(in srgb, var(--accent, #c4a35a) 55%, transparent);
+  color: var(--accent, #c4a35a);
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+}
+
 .dot {
   width: 0.55rem;
   height: 0.55rem;

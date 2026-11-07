@@ -5,7 +5,10 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import time
+from dataclasses import dataclass
+from typing import Any
 
 from app.config import Settings
 from app.models.schemas import AgentVote, ConsensoAgentLatency, ConsensoResult
@@ -24,6 +27,34 @@ _ROLE_LABELS: dict[str, str] = {
     "safety_tone": "Safety/Tone",
     "consistency": "Consistency",
 }
+
+_TOOL_DANGEROUS_RE = re.compile(
+    r"(rm\s+-rf|del\s+/[sf]|format\s+|shutdown|reboot|apaga\s+tudo|"
+    r"formatar\s+disco|Invoke-Expression|Remove-Item|reg\s+delete)",
+    re.IGNORECASE,
+)
+
+_SAFE_COMMAND_KEYS = frozenset(
+    {"python_version", "git_status", "git_branch", "list_backend"}
+)
+_SAFE_HELPERS = frozenset({"diagnostico_bluetooth.py"})
+_KNOWN_TOOLS = frozenset(
+    {
+        "run_allowlisted_command",
+        "get_env_status",
+        "list_project_dirs",
+        "read_project_logs",
+        "memory_read_notes",
+        "memory_write_note",
+    }
+)
+
+
+@dataclass(frozen=True)
+class ToolSafetyDecision:
+    approved: bool
+    reason: str
+    duration_ms: int = 0
 
 
 def _log_event(event: str, **fields: object) -> None:
@@ -212,3 +243,142 @@ class ConsensoAlfa:
             skipped=False,
             agent_latencies=agent_latencies,
         )
+
+    async def validate_tool_call(
+        self,
+        *,
+        tool_name: str,
+        arguments: dict[str, Any],
+        user_transcript: str = "",
+        locale: str = "pt-BR",
+        request_id: str | None = None,
+    ) -> ToolSafetyDecision:
+        """
+        Gate tool execution — blocks unknown tools and undesired OS actions.
+
+        Runs before ToolRegistry.execute. When CONSENSO_ENABLED=false, still
+        enforces the hard allowlist (never free-form shell).
+        """
+        _ = locale
+        started = time.perf_counter()
+        blob = json.dumps(arguments, ensure_ascii=False)
+        combined = f"{user_transcript}\n{tool_name}\n{blob}"
+
+        if tool_name not in _KNOWN_TOOLS:
+            decision = ToolSafetyDecision(
+                approved=False,
+                reason=f"unknown_tool:{tool_name}",
+                duration_ms=int((time.perf_counter() - started) * 1000),
+            )
+            _log_event(
+                "consenso.tool.blocked",
+                request_id=request_id,
+                tool=tool_name,
+                reason=decision.reason,
+            )
+            return decision
+
+        if _TOOL_DANGEROUS_RE.search(combined):
+            decision = ToolSafetyDecision(
+                approved=False,
+                reason="dangerous_os_intent",
+                duration_ms=int((time.perf_counter() - started) * 1000),
+            )
+            _log_event(
+                "consenso.tool.blocked",
+                request_id=request_id,
+                tool=tool_name,
+                reason=decision.reason,
+            )
+            return decision
+
+        if tool_name == "run_allowlisted_command":
+            command_key = str(arguments.get("command_key") or "").strip()
+            helper_name = str(arguments.get("helper_name") or "").strip()
+            if command_key and command_key not in _SAFE_COMMAND_KEYS:
+                decision = ToolSafetyDecision(
+                    approved=False,
+                    reason=f"command_key_not_allowlisted:{command_key}",
+                    duration_ms=int((time.perf_counter() - started) * 1000),
+                )
+                _log_event(
+                    "consenso.tool.blocked",
+                    request_id=request_id,
+                    tool=tool_name,
+                    reason=decision.reason,
+                )
+                return decision
+            if helper_name:
+                base = helper_name.split("/")[-1].split("\\")[-1]
+                if base not in _SAFE_HELPERS:
+                    decision = ToolSafetyDecision(
+                        approved=False,
+                        reason=f"helper_not_allowlisted:{helper_name}",
+                        duration_ms=int((time.perf_counter() - started) * 1000),
+                    )
+                    _log_event(
+                        "consenso.tool.blocked",
+                        request_id=request_id,
+                        tool=tool_name,
+                        reason=decision.reason,
+                    )
+                    return decision
+            if not command_key and not helper_name:
+                decision = ToolSafetyDecision(
+                    approved=False,
+                    reason="missing_command_or_helper",
+                    duration_ms=int((time.perf_counter() - started) * 1000),
+                )
+                _log_event(
+                    "consenso.tool.blocked",
+                    request_id=request_id,
+                    tool=tool_name,
+                    reason=decision.reason,
+                )
+                return decision
+
+        if tool_name == "read_project_logs":
+            rel = str(arguments.get("relative_path") or "")
+            if ".." in rel or rel.startswith(("/", "\\")):
+                decision = ToolSafetyDecision(
+                    approved=False,
+                    reason="path_escape",
+                    duration_ms=int((time.perf_counter() - started) * 1000),
+                )
+                _log_event(
+                    "consenso.tool.blocked",
+                    request_id=request_id,
+                    tool=tool_name,
+                    reason=decision.reason,
+                )
+                return decision
+
+        # Soft path: when consenso disabled, allowlist checks above still apply.
+        if not self._settings.consenso_enabled:
+            decision = ToolSafetyDecision(
+                approved=True,
+                reason="consenso_disabled_allowlist_ok",
+                duration_ms=int((time.perf_counter() - started) * 1000),
+            )
+            _log_event(
+                "consenso.tool.approved",
+                request_id=request_id,
+                tool=tool_name,
+                reason=decision.reason,
+            )
+            return decision
+
+        # Heuristic safety vote (SafetyTone-aligned): approve known safe tools.
+        decision = ToolSafetyDecision(
+            approved=True,
+            reason="tool_safety_ok",
+            duration_ms=int((time.perf_counter() - started) * 1000),
+        )
+        _log_event(
+            "consenso.tool.approved",
+            request_id=request_id,
+            tool=tool_name,
+            reason=decision.reason,
+            duration_ms=decision.duration_ms,
+        )
+        return decision

@@ -88,6 +88,18 @@ class LatencyBreakdown(BaseModel):
     consenso_agents_ms: dict[str, int] = Field(default_factory=dict)
 
 
+class ToolInvocation(BaseModel):
+    """Telemetry for a Consenso-gated tool call during the agent loop."""
+
+    name: str
+    arguments: dict[str, Any] = Field(default_factory=dict)
+    approved: bool = False
+    executed: bool = False
+    blocked_reason: str | None = None
+    result_preview: str | None = None
+    duration_ms: int = 0
+
+
 class ProcessAudioMeta(BaseModel):
     request_id: str
     pipeline_mode: str
@@ -100,6 +112,8 @@ class ProcessAudioMeta(BaseModel):
     created_at: datetime = Field(default_factory=utc_now)
     # Seam for Phase 2+ DePIN/Solana attestation (null in Phase 1)
     depin_attestation: dict[str, Any] | None = None
+    tools_invoked: bool = False
+    tools_executed_count: int = 0
 
 
 class ProcessAudioResponse(BaseModel):
@@ -111,6 +125,7 @@ class ProcessAudioResponse(BaseModel):
     audio_base64: str
     audio_mime_type: str = "audio/wav"
     audio_url: str | None = None
+    tools: list[ToolInvocation] = Field(default_factory=list)
     latency: LatencyBreakdown
     meta: ProcessAudioMeta
 

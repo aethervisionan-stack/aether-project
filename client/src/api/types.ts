@@ -40,6 +40,16 @@ export interface LatencyBreakdown {
   consenso_agents_ms: Record<string, number>;
 }
 
+export interface ToolInvocation {
+  name: string;
+  arguments: Record<string, unknown>;
+  approved: boolean;
+  executed: boolean;
+  blocked_reason: string | null;
+  result_preview: string | null;
+  duration_ms: number;
+}
+
 export interface ProcessAudioMeta {
   request_id: string;
   pipeline_mode: string;
@@ -51,6 +61,8 @@ export interface ProcessAudioMeta {
   fallback_reason: string | null;
   created_at: string;
   depin_attestation: Record<string, unknown> | null;
+  tools_invoked?: boolean;
+  tools_executed_count?: number;
 }
 
 export interface ProcessAudioResponse {
@@ -61,6 +73,7 @@ export interface ProcessAudioResponse {
   audio_mime_type: string;
   /** Relative or absolute URL for GET /audio/{filename} (preferred for autoplay). */
   audio_url?: string | null;
+  tools?: ToolInvocation[];
   latency: LatencyBreakdown;
   meta: ProcessAudioMeta;
 }

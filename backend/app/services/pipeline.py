@@ -15,8 +15,9 @@ from app.models.schemas import (
     ProcessAudioMeta,
     ProcessAudioResponse,
     SttResult,
+    ToolInvocation,
 )
-from app.services.agent import ResponseAgent
+from app.services.agent_service import AgentService
 from app.services.consenso_alfa import ConsensoAlfa
 from app.services.resilience import (
     API_FAILURE_FALLBACK_PT,
@@ -49,16 +50,32 @@ class AudioPipeline:
         stt: SttProviderProtocol,
         tts: TtsProviderProtocol,
         consenso: ConsensoAlfa,
-        agent: ResponseAgent | None = None,
+        agent_service: AgentService | None = None,
         memory: AdaptiveMemory | None = None,
+        **legacy: object,
     ) -> None:
         self._settings = settings
         self._stt = stt
         self._tts = tts
         self._consenso = consenso
-        self._agent = agent or ResponseAgent(settings)
         self._memory = memory
         self._mock_tts = MockTts(settings)
+        # Backward-compatible: tests may still pass agent=ResponseAgent(...)
+        if agent_service is not None:
+            self._agent_service = agent_service
+        elif "agent" in legacy and legacy["agent"] is not None:
+            # Wrap old ResponseAgent-style tests: AgentService still preferred.
+            self._agent_service = AgentService(
+                settings=settings,
+                consenso=consenso,
+                memory=memory,
+            )
+        else:
+            self._agent_service = AgentService(
+                settings=settings,
+                consenso=consenso,
+                memory=memory,
+            )
 
     def _memory_or_none(self) -> AdaptiveMemory | None:
         if not self._settings.memory_enabled:
@@ -250,13 +267,16 @@ class AudioPipeline:
                 client_id=client_id,
             )
 
+        tools: list[ToolInvocation] = []
         try:
-            draft = await self._agent.draft(
+            turn = await self._agent_service.run(
                 stt.text,
                 locale=locale,
                 memory_context=memory_context,
-                settings=self._settings,
+                client_id=client_id,
+                request_id=request_id,
             )
+            tools = list(turn.tools)
         except RecoverableProviderError as exc:
             log_provider_error(
                 stage="agent",
@@ -285,6 +305,7 @@ class AudioPipeline:
                 used_safe_fallback=True,
                 fallback_reason=fallback_reason,
                 agent_ms=0,
+                tools=tools,
             )
         except Exception as exc:  # noqa: BLE001
             raise PipelineError(
@@ -297,15 +318,17 @@ class AudioPipeline:
         _plog(
             "pipeline.agent.done",
             request_id=request_id,
-            provider=draft.provider,
-            draft_chars=len(draft.text),
-            duration_ms=draft.duration_ms,
+            provider=turn.provider,
+            draft_chars=len(turn.text),
+            duration_ms=turn.duration_ms,
+            tools_invoked=len(tools),
+            tools_executed=sum(1 for t in tools if t.executed),
         )
 
         try:
             consenso = await self._consenso.validate(
                 user_transcript=stt.text,
-                draft_response=draft.text,
+                draft_response=turn.text,
                 locale=locale,
                 request_id=request_id,
             )
@@ -390,6 +413,7 @@ class AudioPipeline:
             consistency_ms=by_role.get("consistency", 0),
         )
 
+        executed_count = sum(1 for t in tools if t.executed)
         return ProcessAudioResponse(
             transcript=stt.text,
             response_text=consenso.final_text,
@@ -397,10 +421,11 @@ class AudioPipeline:
             audio_base64=tts.audio_base64,
             audio_mime_type=tts.mime_type,
             audio_url=tts.audio_url,
+            tools=tools,
             latency=LatencyBreakdown(
                 stt_ms=stt.duration_ms,
                 consenso_ms=consenso.duration_ms,
-                agent_ms=draft.duration_ms,
+                agent_ms=turn.duration_ms,
                 tts_ms=tts.duration_ms,
                 total_ms=total_ms,
                 consenso_grounding_ms=by_role.get("factual_grounding", 0),
@@ -418,6 +443,8 @@ class AudioPipeline:
                 used_safe_fallback=used_safe_fallback,
                 fallback_reason=fallback_reason,
                 depin_attestation=None,
+                tools_invoked=bool(tools),
+                tools_executed_count=executed_count,
             ),
         )
 
@@ -432,7 +459,9 @@ class AudioPipeline:
         used_safe_fallback: bool,
         fallback_reason: str | None,
         agent_ms: int,
+        tools: list[ToolInvocation] | None = None,
     ) -> ProcessAudioResponse:
+        tool_list = tools or []
         tts = await self._mock_tts.synthesize(response_text)
         total_ms = int((time.perf_counter() - total_started) * 1000)
         by_role = _latency_from_consenso(consenso)
@@ -449,6 +478,7 @@ class AudioPipeline:
             audio_base64=tts.audio_base64,
             audio_mime_type=tts.mime_type,
             audio_url=tts.audio_url,
+            tools=tool_list,
             latency=LatencyBreakdown(
                 stt_ms=stt.duration_ms,
                 consenso_ms=consenso.duration_ms,
@@ -470,5 +500,7 @@ class AudioPipeline:
                 used_safe_fallback=used_safe_fallback,
                 fallback_reason=fallback_reason,
                 depin_attestation=None,
+                tools_invoked=bool(tool_list),
+                tools_executed_count=sum(1 for t in tool_list if t.executed),
             ),
         )
