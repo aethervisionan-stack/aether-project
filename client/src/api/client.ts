@@ -1,4 +1,9 @@
-import type { HealthResponse, ProcessAudioResponse } from "./types";
+import type {
+  HealthResponse,
+  HistoryResponse,
+  MetricsResponse,
+  ProcessAudioResponse,
+} from "./types";
 import { VoiceApiError, type ApiErrorBody } from "./types";
 
 export interface VoiceApiConfig {
@@ -61,7 +66,12 @@ export class VoiceApiClient {
    */
   async processAudio(
     blob: Blob,
-    options: { language?: string; locale?: string; filename?: string } = {},
+    options: {
+      language?: string;
+      locale?: string;
+      filename?: string;
+      clientId?: string;
+    } = {},
   ): Promise<ProcessAudioResponse> {
     // FormData → browser sets multipart/form-data + boundary (do not set Content-Type).
     const form = new FormData();
@@ -71,6 +81,7 @@ export class VoiceApiClient {
       form.append("language", options.language);
     }
     form.append("locale", options.locale ?? "pt-BR");
+    form.append("client_id", options.clientId ?? "default");
 
     const controller = new AbortController();
     const timer = window.setTimeout(() => controller.abort(), this.config.timeoutMs);
@@ -103,6 +114,46 @@ export class VoiceApiClient {
         });
       }
       throw err;
+    } finally {
+      window.clearTimeout(timer);
+    }
+  }
+
+  /** Recent SessionLogs — Vite proxy: `/api/history` → backend `/history` or `/api/history`. */
+  async history(options: { limit?: number; clientId?: string } = {}): Promise<HistoryResponse> {
+    const params = new URLSearchParams();
+    params.set("limit", String(options.limit ?? 50));
+    if (options.clientId) {
+      params.set("client_id", options.clientId);
+    }
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), this.config.timeoutMs);
+    try {
+      const res = await fetch(
+        `${resolveUrl("/history", this.config.baseUrl)}?${params.toString()}`,
+        { signal: controller.signal },
+      );
+      if (!res.ok) {
+        throw await parseError(res);
+      }
+      return (await res.json()) as HistoryResponse;
+    } finally {
+      window.clearTimeout(timer);
+    }
+  }
+
+  /** Consolidated latency / token metrics. */
+  async metrics(): Promise<MetricsResponse> {
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), this.config.timeoutMs);
+    try {
+      const res = await fetch(resolveUrl("/metrics", this.config.baseUrl), {
+        signal: controller.signal,
+      });
+      if (!res.ok) {
+        throw await parseError(res);
+      }
+      return (await res.json()) as MetricsResponse;
     } finally {
       window.clearTimeout(timer);
     }

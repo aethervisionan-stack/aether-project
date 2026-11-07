@@ -1,11 +1,20 @@
 import { voiceApi } from "../api/client";
-import type { HealthResponse, ProcessAudioResponse } from "../api/types";
+import type {
+  HealthResponse,
+  MetricsResponse,
+  ProcessAudioResponse,
+  SessionHistoryItem,
+} from "../api/types";
 import { VoiceApiError } from "../api/types";
 import { HeadsetCapture, listAudioInputs } from "../audio/capture";
 import { playResponseAudio } from "../audio/playback";
+import { renderMetricsPanel } from "./components/MetricsPanel";
+import { renderSessionHistory } from "./components/SessionHistory";
+import { escapeHtml } from "./html";
 
 /** Portuguese flow states for the Bluetooth headset control UI. */
 type UiPhase = "idle" | "listening" | "validating" | "responding";
+type AuditTab = "history" | "metrics";
 
 const PHASE_LABEL: Record<UiPhase, string> = {
   idle: "Pronto",
@@ -13,6 +22,8 @@ const PHASE_LABEL: Record<UiPhase, string> = {
   validating: "Validando no Consenso Alfa...",
   responding: "A responder...",
 };
+
+const HUD_CLIENT_ID = "default";
 
 export class ControlApp {
   private readonly root: HTMLElement;
@@ -26,6 +37,14 @@ export class ControlApp {
   private healthTimer: number | null = null;
   private readonly healthPollMs = 4_000;
 
+  /** Collapsible audit panel (history + metrics). */
+  private auditOpen = true;
+  private auditTab: AuditTab = "history";
+  private historyItems: SessionHistoryItem[] = [];
+  private metrics: MetricsResponse | null = null;
+  private auditLoading = false;
+  private auditError: string | null = null;
+
   constructor(root: HTMLElement) {
     this.root = root;
   }
@@ -33,6 +52,7 @@ export class ControlApp {
   async mount(): Promise<void> {
     this.render();
     await this.refreshHealth();
+    await this.refreshAudit({ quiet: true });
     this.startHealthPolling();
   }
 
@@ -66,6 +86,34 @@ export class ControlApp {
       }
     }
     this.render();
+  }
+
+  /** Pull SessionLogs + consolidated metrics for the HUD panels. */
+  private async refreshAudit(options: { quiet?: boolean } = {}): Promise<void> {
+    this.auditLoading = true;
+    if (!options.quiet) {
+      this.auditError = null;
+    }
+    this.render();
+    try {
+      const [history, metrics] = await Promise.all([
+        voiceApi.history({ limit: 40, clientId: HUD_CLIENT_ID }),
+        voiceApi.metrics(),
+      ]);
+      this.historyItems = history.items;
+      this.metrics = metrics;
+      this.auditError = null;
+    } catch (err) {
+      if (!options.quiet) {
+        this.auditError =
+          err instanceof VoiceApiError
+            ? `${err.message}${err.detail ? ` — ${err.detail}` : ""}`
+            : "Falha ao carregar histórico / métricas.";
+      }
+    } finally {
+      this.auditLoading = false;
+      this.render();
+    }
   }
 
   private async refreshDevices(): Promise<void> {
@@ -110,16 +158,19 @@ export class ControlApp {
       const result = await voiceApi.processAudio(captured.blob, {
         filename: `headset-${Date.now()}.${extensionForMime(captured.mimeType)}`,
         locale: "pt-BR",
+        clientId: HUD_CLIENT_ID,
       });
       this.lastResult = result;
       this.setPhase("responding");
       // Autoplay on OS default output / Bluetooth headset
       await playResponseAudio({
-        audioUrl: result.audio_url,
+        audioUrl: result.audio_url ?? null,
         audioBase64: result.audio_base64,
         mimeType: result.audio_mime_type,
       });
       this.setPhase("idle");
+      // Refresh Session History + Metrics after each successful M100 / headset turn.
+      void this.refreshAudit({ quiet: true });
     } catch (err) {
       this.capture.cancel();
       if (err instanceof VoiceApiError) {
@@ -133,12 +184,48 @@ export class ControlApp {
     }
   }
 
+  private bindAuditControls(): void {
+    this.root.querySelector<HTMLButtonElement>('[data-action="audit-toggle"]')?.addEventListener(
+      "click",
+      () => {
+        this.auditOpen = !this.auditOpen;
+        this.render();
+      },
+    );
+    this.root.querySelectorAll<HTMLButtonElement>("[data-audit-tab]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const tab = btn.dataset.auditTab;
+        if (tab === "history" || tab === "metrics") {
+          this.auditTab = tab;
+          this.render();
+        }
+      });
+    });
+    this.root.querySelector<HTMLButtonElement>('[data-action="audit-refresh"]')?.addEventListener(
+      "click",
+      () => {
+        void this.refreshAudit();
+      },
+    );
+  }
+
   private render(): void {
     const health = this.health;
     const result = this.lastResult;
     const listening = this.phase === "listening";
     const busy = this.phase === "validating" || this.phase === "responding";
     const phaseLabel = PHASE_LABEL[this.phase];
+
+    const historyHtml = renderSessionHistory({
+      items: this.historyItems,
+      loading: this.auditLoading,
+      error: this.auditTab === "history" ? this.auditError : null,
+    });
+    const metricsHtml = renderMetricsPanel({
+      metrics: this.metrics,
+      loading: this.auditLoading,
+      error: this.auditTab === "metrics" ? this.auditError : null,
+    });
 
     this.root.innerHTML = `
       <main class="shell">
@@ -289,6 +376,58 @@ export class ControlApp {
               : `<p class="hint">Nenhuma captura ainda. Grave um teste com o headset.</p>`
           }
         </section>
+
+        <section class="panel audit-panel" aria-labelledby="audit-title">
+          <div class="audit-panel__head">
+            <h2 id="audit-title">Sessão &amp; métricas</h2>
+            <div class="controls">
+              <button
+                type="button"
+                class="btn-ghost"
+                data-action="audit-toggle"
+                aria-expanded="${this.auditOpen ? "true" : "false"}"
+              >
+                ${this.auditOpen ? "Recolher" : "Expandir"}
+              </button>
+              <button
+                type="button"
+                class="btn-ghost"
+                data-action="audit-refresh"
+                ${busy || this.auditLoading ? "disabled" : ""}
+              >
+                Atualizar
+              </button>
+            </div>
+          </div>
+          <p class="hint">
+            Histórico SQLite (<code>GET /api/history</code>) e médias
+            (<code>GET /api/metrics</code>. Atualiza automaticamente após cada
+            <code>/process-audio</code> bem-sucedido.
+          </p>
+          ${
+            this.auditOpen
+              ? `<div class="audit-tabs" role="tablist" aria-label="Painéis de auditoria">
+                  <button
+                    type="button"
+                    role="tab"
+                    class="audit-tab ${this.auditTab === "history" ? "is-active" : ""}"
+                    data-audit-tab="history"
+                    aria-selected="${this.auditTab === "history"}"
+                  >Histórico</button>
+                  <button
+                    type="button"
+                    role="tab"
+                    class="audit-tab ${this.auditTab === "metrics" ? "is-active" : ""}"
+                    data-audit-tab="metrics"
+                    aria-selected="${this.auditTab === "metrics"}"
+                  >Métricas</button>
+                </div>
+                <div class="audit-panel__body" role="tabpanel">
+                  ${this.auditTab === "history" ? historyHtml : metricsHtml}
+                </div>`
+              : `<p class="hint">Painel recolhido — clique em Expandir para ver histórico e métricas.</p>`
+          }
+        </section>
       </main>
     `;
 
@@ -310,6 +449,7 @@ export class ControlApp {
         void this.refreshHealth();
       },
     );
+    this.bindAuditControls();
   }
 }
 
@@ -318,15 +458,6 @@ function extensionForMime(mimeType: string): string {
   if (mimeType.includes("ogg")) return "ogg";
   if (mimeType.includes("wav")) return "wav";
   return "webm";
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
 }
 
 function apiConnectionBadge(health: HealthResponse | null): string {

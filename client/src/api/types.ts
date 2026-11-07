@@ -120,3 +120,58 @@ export class VoiceApiError extends Error {
     this.detail = body.detail;
   }
 }
+
+/** GET /api/history item (SessionLogs row). */
+export interface SessionHistoryItem {
+  id: number;
+  timestamp: string | null;
+  request_id: string;
+  client_id: string;
+  transcription: string;
+  agent_response: string;
+  tools_invoked: ToolInvocation[] | Record<string, unknown>[];
+  latency_ms: {
+    stt: number;
+    agent: number;
+    consenso: number;
+    tts: number;
+    total: number;
+  };
+  consensus_score: number;
+  tokens: {
+    prompt: number;
+    completion: number;
+    total: number;
+  };
+}
+
+export interface HistoryResponse {
+  count: number;
+  items: SessionHistoryItem[];
+}
+
+/** GET /api/metrics consolidated payload. */
+export interface MetricsResponse {
+  session_count: number;
+  latency_ms: {
+    avg_stt: number;
+    avg_agent: number;
+    avg_consenso: number;
+    avg_tts: number;
+    avg_total: number;
+  };
+  tokens: {
+    tracked: boolean;
+    total_prompt: number;
+    total_completion: number;
+    total: number;
+    avg_total: number;
+  };
+  consensus: {
+    avg_score: number;
+  };
+  audit: {
+    approve: number;
+    reject: number;
+  };
+}
