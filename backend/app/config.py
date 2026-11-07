@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     )
 
     host: str = "0.0.0.0"
-    port: int = 8000
+    port: int = 8001
     log_level: str = "info"
     cors_origins: str = ",".join(DEFAULT_VITE_CORS_ORIGINS)
 

@@ -4,11 +4,11 @@
   Start Aether Vision voice stack for local Bluetooth tests (Windows).
 
 .DESCRIPTION
-  1) FastAPI/Uvicorn on http://127.0.0.1:8000  (backend\.venv, Python 3.11.9)
+  1) FastAPI/Uvicorn on http://127.0.0.1:8001  (backend\.venv, Python 3.11.9)
   2) Vite client on http://127.0.0.1:5173 (strictPort — no silent hop)
   3) Opens the control UI once both endpoints respond
 
-  Reuses healthy listeners already on :8000 / :5173 instead of spawning duplicates.
+  Reuses healthy listeners already on :8001 / :5173 instead of spawning duplicates.
   Each newly started service runs in its own PowerShell window.
 #>
 
@@ -17,7 +17,7 @@ $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $Root
 
 $ApiHost = "127.0.0.1"
-$ApiPort = 8000
+$ApiPort = 8001
 $VitePort = 5173
 $ApiBase = "http://${ApiHost}:${ApiPort}"
 $ViteBase = "http://${ApiHost}:${VitePort}"
@@ -124,7 +124,7 @@ try {
     Pop-Location
 }
 
-# --- Backend :8000 ---
+# --- Backend :8001 ---
 $apiHealthy = Test-ApiStackHealthy
 if ($apiHealthy) {
     Write-Host "Reusing current API stack already on $ApiBase" -ForegroundColor Green

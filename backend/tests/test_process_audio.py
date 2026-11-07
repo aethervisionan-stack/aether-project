@@ -46,7 +46,7 @@ def test_health(client: TestClient) -> None:
     assert "gemini_api_key_configured" in body
     assert "has_valid_gemini_key" in body
     assert "cognitive_provider" in body
-    assert body["api_port"] == 8000
+    assert body["api_port"] == 8001
     assert "env_file" in body
     assert body["env_file"].replace("\\", "/").endswith("backend/.env")
 

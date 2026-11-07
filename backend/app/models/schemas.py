@@ -148,7 +148,7 @@ class HealthResponse(BaseModel):
     has_valid_gemini_key: bool = False
     cognitive_provider: str = "openai"
     env_file: str = ""
-    api_port: int = 8000
+    api_port: int = 8001
 
 
 class ErrorResponse(BaseModel):

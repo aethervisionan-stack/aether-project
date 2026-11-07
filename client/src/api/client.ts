@@ -14,8 +14,8 @@ import {
 
 export interface VoiceApiConfig {
   /**
-   * FastAPI origin. Empty string → Vite `/api` proxy → http://127.0.0.1:8000.
-   * Set `VITE_API_BASE_URL=http://127.0.0.1:8000` to call the API directly.
+   * FastAPI origin. Empty string → Vite `/api` proxy → http://127.0.0.1:8001.
+   * Set `VITE_API_BASE_URL=http://127.0.0.1:8001` to call the API directly.
    */
   baseUrl: string;
   timeoutMs: number;

@@ -134,5 +134,5 @@ def test_health_exposes_use_mock_audio() -> None:
     assert "has_valid_openai_key" in body
     # Automated tests force empty key via conftest — mocks must still work.
     assert body["has_valid_openai_key"] is False
-    assert body.get("api_port") == 8000
+    assert body.get("api_port") == 8001
     assert str(body.get("env_file", "")).replace("\\", "/").endswith("backend/.env")

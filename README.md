@@ -45,10 +45,10 @@ python -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 cp .env.example .env               # USE_MOCK_AUDIO=true por padrão
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8001
 ```
 
-Confira: [http://127.0.0.1:8000/health](http://127.0.0.1:8000/health) e docs em [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs).
+Confira: [http://127.0.0.1:8001/health](http://127.0.0.1:8001/health) e docs em [http://127.0.0.1:8001/docs](http://127.0.0.1:8001/docs).
 
 ### 2. Client de controle
 
@@ -57,7 +57,7 @@ Em outro terminal:
 ```bash
 cd client
 npm install
-cp .env.example .env               # VITE_API_BASE_URL vazio → proxy /api → :8000
+cp .env.example .env               # VITE_API_BASE_URL vazio → proxy /api → :8001
 npm run dev
 ```
 

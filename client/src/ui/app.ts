@@ -93,7 +93,7 @@ export class ControlApp {
         this.errorMessage =
           err instanceof VoiceApiError
             ? `${err.message} — ${err.detail}`
-            : "Backend indisponível. Inicie o FastAPI em :8000 (use start_app.bat).";
+            : "Backend indisponível. Inicie o FastAPI em :8001 (use start_app.bat).";
       }
     }
     this.render();
@@ -656,13 +656,13 @@ function extensionForMime(mimeType: string): string {
 
 function apiConnectionBadge(health: HealthResponse | null): string {
   if (health) {
-    const port = health.api_port ?? 8000;
+    const port = health.api_port ?? 8001;
     return `<span class="conn-badge conn-badge--online" title="GET /health ok → 127.0.0.1:${port}">
       <i class="dot dot--ok"></i>
       Backend ligado · :${port}
     </span>`;
   }
-  return `<span class="conn-badge conn-badge--offline" title="Backend não responde em 127.0.0.1:8000">
+  return `<span class="conn-badge conn-badge--offline" title="Backend não responde em 127.0.0.1:8001">
     <i class="dot dot--err"></i>
     Backend desligado
   </span>`;
@@ -671,15 +671,15 @@ function apiConnectionBadge(health: HealthResponse | null): string {
 function connectionBanner(health: HealthResponse | null): string {
   if (health) {
     return `<p class="conn-banner conn-banner--ok" role="status">
-      Ligado a <code>127.0.0.1:${health.api_port ?? 8000}</code>
+      Ligado a <code>127.0.0.1:${health.api_port ?? 8001}</code>
       · cognitive <strong>${escapeHtml(health.cognitive_provider ?? "—")}</strong>
       · Gemini key ${health.has_valid_gemini_key ? "ok" : "em falta"}
       · OpenAI key ${health.has_valid_openai_key ? "ok" : "em falta"}
     </p>`;
   }
   return `<p class="conn-banner conn-banner--err" role="status">
-      Sem ligação ao FastAPI. Arranque o backend em <code>127.0.0.1:8000</code>
-      (ex.: <code>backend\\.venv\\Scripts\\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload</code>).
+      Sem ligação ao FastAPI. Arranque o backend em <code>127.0.0.1:8001</code>
+      (ex.: <code>backend\\.venv\\Scripts\\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8001 --reload</code>).
     </p>`;
 }
 
