@@ -258,13 +258,17 @@ class AudioPipeline:
         memory_context = ""
         if memory and memory.available and stt.text:
             hits = memory.search_context(stt.text, client_id=client_id)
-            memory_context = memory.format_context_block(hits)
+            # Inject most relevant tagged notes as learned preferences for gpt-4o-mini
+            memory_context = memory.format_learned_preferences_prompt(hits) or memory.format_context_block(
+                hits
+            )
             memory.extract_and_store_preferences(stt.text, client_id=client_id)
             _plog(
                 "pipeline.memory.loaded",
                 request_id=request_id,
                 hits=len(hits),
                 client_id=client_id,
+                tags=[h.metadata.get("tag") for h in hits if h.metadata.get("tag")],
             )
 
         tools: list[ToolInvocation] = []

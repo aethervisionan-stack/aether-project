@@ -42,6 +42,9 @@ _KNOWN_TOOLS = frozenset(
     {
         "run_allowlisted_command",
         "get_env_status",
+        "get_system_metrics",
+        "list_active_processes",
+        "open_browser_url",
         "list_project_dirs",
         "read_project_logs",
         "memory_read_notes",
@@ -343,6 +346,25 @@ class ConsensoAlfa:
                 decision = ToolSafetyDecision(
                     approved=False,
                     reason="path_escape",
+                    duration_ms=int((time.perf_counter() - started) * 1000),
+                )
+                _log_event(
+                    "consenso.tool.blocked",
+                    request_id=request_id,
+                    tool=tool_name,
+                    reason=decision.reason,
+                )
+                return decision
+
+        if tool_name == "open_browser_url":
+            from app.agent.tools import is_allowlisted_browser_url
+
+            url = str(arguments.get("url") or "")
+            ok, reason = is_allowlisted_browser_url(url)
+            if not ok:
+                decision = ToolSafetyDecision(
+                    approved=False,
+                    reason=f"browser_url_blocked:{reason}",
                     duration_ms=int((time.perf_counter() - started) * 1000),
                 )
                 _log_event(

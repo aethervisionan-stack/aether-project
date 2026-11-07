@@ -100,10 +100,11 @@ class AgentService:
         system = (
             "You are Aether Vision, a concise voice assistant for Bluetooth headsets. "
             "Reply in the user's language (default Portuguese pt-BR). "
-            "Keep answers short and speakable (1–3 sentences). "
-            "Use tools when the user asks for system status, project folders, logs, "
-            "or to save/recall preferences. Prefer get_env_status / list_project_dirs / "
-            "memory_* over shell. Never invent secrets. Never request destructive OS actions."
+            "Keep answers short and speakable — ideally ONE sentence after tools (cuts TTS latency). "
+            "Honor [Learned preferences] tags (rotina / preferência / tarefa) when present. "
+            "Use tools for: env status, CPU/RAM (get_system_metrics), process list, "
+            "open_browser_url (allowlisted https only), project dirs/logs, memory notes. "
+            "Never invent secrets. Never request destructive OS actions."
         )
         user_parts = []
         if memory_context.strip():
@@ -139,6 +140,8 @@ class AgentService:
                             "Aether Vision online. Recebi o pedido, "
                             "mas não formulei uma resposta clara. Pode repetir?"
                         )
+                    if any(t.executed and t.approved for t in tools_log):
+                        text = _concise_spoken_summary(text, tools_log)
                     elapsed = int((time.perf_counter() - started) * 1000)
                     return AgentTurnResult(
                         text=text,
@@ -203,22 +206,26 @@ class AgentService:
                         }
                     )
 
-            # Exhausted rounds — ask for a plain summary
+            # Exhausted rounds — ask for a plain short summary (TTS latency)
             completion = await client.chat.completions.create(
                 model=self._settings.openai_agent_model,
                 messages=[
                     *messages,
                     {
                         "role": "user",
-                        "content": "Summarize tool results in one short spoken reply.",
+                        "content": (
+                            "Reply in ONE short spoken sentence summarizing the tool results. "
+                            "No lists, no preamble."
+                        ),
                     },
                 ],
-                temperature=0.3,
-                max_tokens=220,
+                temperature=0.2,
+                max_tokens=80,
             )
             text = (completion.choices[0].message.content or "").strip() or (
-                "Concluí as ações disponíveis. Posso ajudar com mais alguma coisa?"
+                "Pronto."
             )
+            text = _concise_spoken_summary(text, tools_log)
         except RecoverableProviderError:
             raise
         except Exception as exc:  # noqa: BLE001
@@ -303,9 +310,12 @@ class AgentService:
         lower = cleaned.lower()
         tools_log: list[ToolInvocation] = []
 
-        want_status = any(k in lower for k in ("status", "ambiente", "env", "sistema"))
+        want_status = any(k in lower for k in ("status", "ambiente", "env")) and "cpu" not in lower
+        want_metrics = any(k in lower for k in ("cpu", "ram", "memória", "memoria", "métrica", "metrica"))
+        want_procs = any(k in lower for k in ("processo", "processos", "processes"))
+        want_browser = any(k in lower for k in ("abre o browser", "abrir o navegador", "open browser", "abre https"))
         want_dirs = any(k in lower for k in ("pasta", "diretório", "diretorio", "folders", "dirs"))
-        want_save = any(k in lower for k in ("lembra", "prefer", "nota", "guarde", "salva"))
+        want_save = any(k in lower for k in ("lembra", "prefer", "nota", "guarde", "salva", "rotina", "tarefa"))
         want_shell = any(k in lower for k in ("apaga tudo", "formatar disco", "rm -rf", "shutdown"))
 
         if want_shell:
@@ -332,6 +342,36 @@ class AgentService:
                 "Consenso Alfa bloqueou a ação pedida — "
                 "não executo comandos destrutivos no sistema."
             )
+        elif want_metrics:
+            inv = await self._gated_execute(
+                name="get_system_metrics",
+                arguments={},
+                user_transcript=cleaned,
+                locale=locale,
+                request_id=request_id,
+            )
+            tools_log.append(inv)
+            text = _mock_metrics_speech(inv.result_preview)
+        elif want_procs:
+            inv = await self._gated_execute(
+                name="list_active_processes",
+                arguments={"limit": 8},
+                user_transcript=cleaned,
+                locale=locale,
+                request_id=request_id,
+            )
+            tools_log.append(inv)
+            text = "Listei os processos ativos."
+        elif want_browser:
+            inv = await self._gated_execute(
+                name="open_browser_url",
+                arguments={"url": "https://www.google.com"},
+                user_transcript=cleaned,
+                locale=locale,
+                request_id=request_id,
+            )
+            tools_log.append(inv)
+            text = "Abri o navegador."
         elif want_status:
             inv = await self._gated_execute(
                 name="get_env_status",
@@ -341,10 +381,7 @@ class AgentService:
                 request_id=request_id,
             )
             tools_log.append(inv)
-            text = (
-                "Consultei o estado do ambiente Aether Vision. "
-                "API e pipeline estão reportados no painel de ferramentas."
-            )
+            text = "Ambiente Aether Vision consultado."
         elif want_dirs:
             inv = await self._gated_execute(
                 name="list_project_dirs",
@@ -354,13 +391,17 @@ class AgentService:
                 request_id=request_id,
             )
             tools_log.append(inv)
-            text = "Listei as pastas do projeto. Detalhes estão no HUD de ferramentas."
+            text = "Pastas do projeto listadas."
         elif want_save:
+            from app.core.memory import infer_semantic_tag
+
+            tag = infer_semantic_tag(cleaned)
             inv = await self._gated_execute(
                 name="memory_write_note",
                 arguments={
-                    "text": f"Preferência capturada da voz: {cleaned[:180]}",
+                    "text": cleaned[:180],
                     "key": "voice_note",
+                    "tag": tag,
                     "client_id": client_id,
                 },
                 user_transcript=cleaned,
@@ -368,13 +409,16 @@ class AgentService:
                 request_id=request_id,
             )
             tools_log.append(inv)
-            text = "Guardei a sua preferência na memória adaptativa."
+            text = f"Nota {tag} guardada."
         else:
             text = (
                 "Aether Vision online. Ouvi: "
                 f"«{cleaned[:220]}». "
                 "Consenso Alfa está validando a resposta antes da síntese de voz."
             )
+
+        if tools_log and any(t.executed and t.approved for t in tools_log):
+            text = _concise_spoken_summary(text, tools_log)
 
         elapsed = int((time.perf_counter() - started) * 1000)
         return AgentTurnResult(
@@ -383,3 +427,32 @@ class AgentService:
             provider="aether-mvp-agent",
             tools=tools_log,
         )
+
+
+def _concise_spoken_summary(text: str, tools: list[ToolInvocation]) -> str:
+    """Keep headset TTS short after successful tools."""
+    cleaned = " ".join((text or "").split())
+    if not cleaned:
+        names = ", ".join(t.name for t in tools if t.executed) or "ação"
+        return f"Pronto: {names}."
+    # Soft cap ~180 chars / ~1–2 sentences for TTS latency
+    if len(cleaned) <= 180:
+        return cleaned
+    cut = cleaned[:177]
+    if " " in cut:
+        cut = cut.rsplit(" ", 1)[0]
+    return cut.rstrip(".,;:") + "."
+
+
+def _mock_metrics_speech(preview: str | None) -> str:
+    if not preview:
+        return "Métricas do sistema lidas."
+    try:
+        data = json.loads(preview)
+        cpu = data.get("cpu_percent")
+        ram = data.get("ram_percent")
+        if cpu is not None and ram is not None:
+            return f"CPU {cpu}% e RAM {ram}%."
+    except (json.JSONDecodeError, TypeError):
+        pass
+    return "Métricas do sistema lidas."

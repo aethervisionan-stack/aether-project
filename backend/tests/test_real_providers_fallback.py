@@ -87,4 +87,12 @@ async def test_memory_roundtrip(tmp_path) -> None:
     hits = memory.search_context("olá", client_id="dna-1")
     assert hits
     block = memory.format_context_block(hits)
-    assert "Client DNA" in block or "past_interactions" in block or "user_preferences" in block
+    assert (
+        "Learned preferences" in block
+        or "Client DNA" in block
+        or "preferência" in block
+        or "past_interactions" in block
+        or "user_preferences" in block
+    )
+    prompt = memory.format_learned_preferences_prompt(hits)
+    assert "Learned preferences" in prompt
