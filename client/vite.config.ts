@@ -18,8 +18,10 @@ export default defineConfig({
     proxy: {
       "/api": {
         // Always hit the local FastAPI; phone → tunnel/LAN → Vite → this target.
+        // ws: true — Gemini Live ``/api/ws/live`` → FastAPI ``/ws/live``.
         target: "http://127.0.0.1:8001",
         changeOrigin: true,
+        ws: true,
         rewrite: (p) => p.replace(/^\/api/, ""),
       },
     },

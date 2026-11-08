@@ -16,7 +16,7 @@ from app.db import init_db
 from app.middleware.errors import pipeline_error_handler, unhandled_error_handler
 from app.routers import cognitive as cognitive_router
 from app.routers import history as history_router
-from app.routes import audio, health, process_audio
+from app.routes import audio, health, live_stream, process_audio
 from app.services.resilience import PipelineError
 
 # Absolute-path dotenv BEFORE settings cache (CWD-independent).
@@ -76,6 +76,7 @@ app.add_exception_handler(Exception, unhandled_error_handler)
 app.include_router(health.router)
 app.include_router(process_audio.router)
 app.include_router(audio.router)
+app.include_router(live_stream.router)
 app.include_router(history_router.router)
 app.include_router(cognitive_router.router)
 
@@ -107,4 +108,5 @@ async def root() -> dict[str, str]:
         "history": "GET /api/history",
         "metrics": "GET /api/metrics",
         "cognitive_chat": "POST /api/cognitive/chat",
+        "live_ws": "WS /ws/live (Vite proxy: /api/ws/live)",
     }

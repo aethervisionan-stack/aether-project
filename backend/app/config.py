@@ -78,6 +78,8 @@ class Settings(BaseSettings):
     # Native TTS may reject speechConfig on this SDK — pipeline falls back to mock WAV.
     gemini_tts_model: str = "gemini-3.8-flash-tts"
     gemini_tts_voice: str = "Kore"
+    # Live WebSocket model (AUDIO). Pinned separately from turn-based 3.x IDs.
+    gemini_live_model: str = "gemini-2.5-flash"
     gemini_inject_sqlite_context: bool = True
 
     # Adaptive memory (local ChromaDB)
