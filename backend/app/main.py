@@ -52,7 +52,8 @@ cors_origins = settings.cors_origin_list
 # Prefer same-origin /api via Vite proxy (no CORS). Regex covers direct API
 # calls from phone LAN (http://192.168.x.x:5173) or HTTPS tunnels.
 CORS_ORIGIN_REGEX = (
-    r"https://.*\.(loca\.lt|ngrok-free\.app|ngrok\.io|ngrok\.app)"
+    r"https://.*\.(loca\.lt|ngrok-free\.app|ngrok\.io|ngrok\.app|"
+    r"trycloudflare\.com|cfargotunnel\.com)"
     r"|http://(localhost|127\.0\.0\.1|192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}"
     r"|172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}):5173"
 )

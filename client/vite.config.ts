@@ -13,7 +13,7 @@ export default defineConfig({
     // Bind all interfaces so LAN / phone testing works; start_dev.ps1 can still
     // override with --host 127.0.0.1 for desktop-only sessions.
     host: true,
-    // localtunnel / ngrok / LAN hostnames must not be blocked by Vite 6 DNS rebinding checks
+    // cloudflare / ngrok / localtunnel / LAN hostnames must not be blocked by Vite 6 DNS rebinding checks
     allowedHosts: true,
     proxy: {
       "/api": {

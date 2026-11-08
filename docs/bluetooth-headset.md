@@ -13,7 +13,7 @@ Se o painel de diagnóstico mostrar saída A2DP e nenhuma entrada Hands-Free, o 
 
 ## HUD
 
-1. Abra o client em `localhost` (contexto seguro) ou no telemóvel via `.\start_mobile_test.ps1` (túnel HTTPS).
+1. Abra o client em `localhost` (contexto seguro) ou no telemóvel via `.\start_mobile_test.ps1` (túnel HTTPS + QR; prefere cloudflared).
 2. No painel **Diagnóstico de áudio**, confira `label`, `deviceId`, `groupId` e o perfil.
 3. A entrada e a saída do mesmo fone partilham o `groupId`. A linha que interessa para gravar é **Entrada** + **Hands-Free / AG Audio (HFP/HSP)**.
 4. Labels vazios significam que o site ainda não tem permissão de microfone. Conceda e volte a enumerar.

@@ -1,19 +1,24 @@
 ﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
-  Arranca API + HUD Vite em 0.0.0.0 e abre um túnel HTTPS temporário para teste no telemóvel.
+  Arranca API + HUD Vite em 0.0.0.0, abre túnel HTTPS e imprime QR ASCII colorido.
 
 .DESCRIPTION
   Pré-requisitos (iguais a start_dev.ps1):
     - backend\.venv  (Python 3.11+)
     - backend\.env com GEMINI_API_KEY preenchida (valor nunca é impresso)
     - client\ com dependências npm
-    - Node.js / npx (localtunnel) — ou ngrok no PATH
+    - Node.js / npx (Vite + QR; localtunnel só como fallback)
 
   Serviços:
     1) FastAPI/Uvicorn  → http://127.0.0.1:8001  (só local; proxy Vite)
     2) Vite HUD         → http://0.0.0.0:5173    (LAN Wi-Fi)
-    3) Túnel HTTPS      → localtunnel (preferido) ou ngrok → porta 5173
+    3) Túnel HTTPS      → cloudflared (preferido) → ngrok → localtunnel
+
+  Ordem do túnel (máximo fricção-zero para mic no telemóvel):
+    - cloudflared quick tunnel → geralmente sem “Click to Continue”
+    - ngrok http (PATH / tools\ngrok.exe + authtoken) → free tier pode ter interstitial
+    - localtunnel → imprime IP público como password helper; residual friction possível
 
   No telemóvel use o URL HTTPS do túnel (getUserMedia exige contexto seguro).
   Em Wi-Fi local, http://<ip-lan>:5173 NÃO permite microfone (exceto localhost).
@@ -38,6 +43,7 @@ $BackendDir = Join-Path $Root "backend"
 $BackendEnv = Join-Path $BackendDir ".env"
 $ClientDir = Join-Path $Root "client"
 $TunnelLog = Join-Path $env:TEMP "aether-mobile-tunnel-$VitePort.log"
+$ToolsDir = Join-Path $Root "tools"
 
 function Test-TcpListen {
     param([int]$Port)
@@ -124,6 +130,41 @@ function Stop-ListenersOnPort {
     Start-Sleep -Seconds 1
 }
 
+function Stop-StaleTunnelProcesses {
+    $names = @("cloudflared", "ngrok", "lt")
+    foreach ($name in $names) {
+        $procs = Get-Process -Name $name -ErrorAction SilentlyContinue
+        foreach ($proc in $procs) {
+            try {
+                Write-Host "Parando túnel stale PID $($proc.Id) ($($proc.ProcessName))..." -ForegroundColor Yellow
+                Stop-Process -Id $proc.Id -Force -ErrorAction Stop
+            } catch {
+                Write-Host "Não foi possível parar $($proc.ProcessName) PID $($proc.Id): $($_.Exception.Message)" -ForegroundColor Yellow
+            }
+        }
+    }
+    # node localtunnel children often show as node.exe — best-effort via command line
+    try {
+        $nodes = Get-CimInstance Win32_Process -Filter "Name = 'node.exe'" -ErrorAction SilentlyContinue |
+            Where-Object {
+                $_.CommandLine -and (
+                    $_.CommandLine -match 'localtunnel' -or
+                    $_.CommandLine -match '[\\/]lt(\.js|")' -or
+                    $_.CommandLine -match 'qrcode-terminal'
+                )
+            }
+        foreach ($n in $nodes) {
+            if ($n.CommandLine -match 'qrcode-terminal') { continue }
+            if ($n.CommandLine -match 'localtunnel' -or $n.CommandLine -match '[\\/]lt(\.js|")') {
+                try {
+                    Write-Host "Parando localtunnel node PID $($n.ProcessId)..." -ForegroundColor Yellow
+                    Stop-Process -Id $n.ProcessId -Force -ErrorAction Stop
+                } catch { }
+            }
+        }
+    } catch { }
+}
+
 function Get-LanIPv4 {
     try {
         $candidates = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
@@ -144,6 +185,24 @@ function Get-LanIPv4 {
             Select-Object -First 1
         if ($ipv4) { return $ipv4.ToString() }
     } catch { }
+    return $null
+}
+
+function Get-PublicIPv4 {
+    $urls = @(
+        "https://api.ipify.org",
+        "https://ifconfig.me/ip",
+        "https://icanhazip.com"
+    )
+    foreach ($url in $urls) {
+        try {
+            $resp = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 5
+            $ip = ($resp.Content | Out-String).Trim()
+            if ($ip -match '^\d{1,3}(\.\d{1,3}){3}$') {
+                return $ip
+            }
+        } catch { }
+    }
     return $null
 }
 
@@ -185,19 +244,65 @@ function Test-GeminiApiKeyInEnvFile {
 function Find-NgrokCommand {
     $cmd = Get-Command ngrok -ErrorAction SilentlyContinue
     if ($cmd) { return $cmd.Source }
-    $local = Join-Path $Root "tools\ngrok.exe"
+    $local = Join-Path $ToolsDir "ngrok.exe"
     if (Test-Path $local) { return $local }
     return $null
 }
 
-function Start-LocalTunnelWindow {
+function Find-CloudflaredCommand {
+    $cmd = Get-Command cloudflared -ErrorAction SilentlyContinue
+    if ($cmd) { return $cmd.Source }
+    $local = Join-Path $ToolsDir "cloudflared.exe"
+    if (Test-Path $local) { return $local }
+    return $null
+}
+
+function Ensure-Cloudflared {
+    $existing = Find-CloudflaredCommand
+    if ($existing) { return $existing }
+
+    if (-not (Test-Path $ToolsDir)) {
+        New-Item -ItemType Directory -Path $ToolsDir -Force | Out-Null
+    }
+    $dest = Join-Path $ToolsDir "cloudflared.exe"
+    $url = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe"
+    Write-Host "cloudflared não encontrado — a descarregar portable para tools\ ..." -ForegroundColor Yellow
+    try {
+        Invoke-WebRequest -Uri $url -OutFile $dest -UseBasicParsing
+        if (Test-Path $dest) {
+            Write-Host "  OK  cloudflared em $dest" -ForegroundColor Green
+            return $dest
+        }
+    } catch {
+        Write-Host "  FAIL  download cloudflared: $($_.Exception.Message)" -ForegroundColor Yellow
+    }
+    return $null
+}
+
+function Start-HttpsTunnelWindow {
     param([int]$Port, [string]$LogPath)
 
     if (Test-Path $LogPath) { Remove-Item $LogPath -Force -ErrorAction SilentlyContinue }
 
+    $cloudflared = Ensure-Cloudflared
+    if ($cloudflared) {
+        Write-Host "Túnel: cloudflared quick tunnel — a expor :$Port (sem interstitial típico)..." -ForegroundColor Cyan
+        $tunnelCmd = @"
+`$ErrorActionPreference = 'Continue'
+Set-Location '$Root'
+Write-Host 'Aether Vision túnel cloudflared — porta $Port (Ctrl+C para parar)' -ForegroundColor Cyan
+& '$cloudflared' tunnel --url http://127.0.0.1:$Port 2>&1 | Tee-Object -FilePath '$LogPath'
+"@
+        Start-Process -FilePath "powershell.exe" -ArgumentList @(
+            "-NoExit", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", $tunnelCmd
+        ) | Out-Null
+        return "cloudflared"
+    }
+
     $ngrok = Find-NgrokCommand
     if ($ngrok) {
         Write-Host "Túnel: ngrok encontrado — a expor :$Port ..." -ForegroundColor Cyan
+        Write-Host "  Nota: free ngrok pode mostrar página 'Visit Site' antes do HUD." -ForegroundColor Yellow
         $tunnelCmd = @"
 `$ErrorActionPreference = 'Continue'
 Set-Location '$Root'
@@ -211,6 +316,7 @@ Write-Host 'Aether Vision túnel ngrok — porta $Port (Ctrl+C para parar)' -For
     }
 
     Write-Host "Túnel: localtunnel via npx — a expor :$Port ..." -ForegroundColor Cyan
+    Write-Host "  Fallback: localtunnel pode pedir password (IP público do PC)." -ForegroundColor Yellow
     $tunnelCmd = @"
 `$ErrorActionPreference = 'Continue'
 Set-Location '$Root'
@@ -227,14 +333,22 @@ function Wait-TunnelHttpsUrl {
     param(
         [string]$LogPath,
         [string]$Tool,
-        [int]$TimeoutSec = 75
+        [int]$TimeoutSec = 90
     )
     $deadline = (Get-Date).AddSeconds($TimeoutSec)
     while ((Get-Date) -lt $deadline) {
         if (Test-Path $LogPath) {
             $text = Get-Content -Path $LogPath -Raw -ErrorAction SilentlyContinue
             if ($text) {
-                if ($Tool -eq "ngrok") {
+                if ($Tool -eq "cloudflared") {
+                    # "https://xxxx.trycloudflare.com" or "Your quick Tunnel has been created! Visit it at ..."
+                    if ($text -match '(https://[a-zA-Z0-9-]+\.trycloudflare\.com)') {
+                        return $Matches[1]
+                    }
+                    if ($text -match '(https://[a-zA-Z0-9.-]+\.cfargotunnel\.com)') {
+                        return $Matches[1]
+                    }
+                } elseif ($Tool -eq "ngrok") {
                     # ngrok v3 log: url=https://....ngrok-free.app
                     if ($text -match 'url=(https://[a-zA-Z0-9.-]+\.ngrok[^\s"'']*)') {
                         return $Matches[1].TrimEnd("/", ",", '"', "'")
@@ -243,6 +357,9 @@ function Wait-TunnelHttpsUrl {
                         return $Matches[1]
                     }
                     if ($text -match '(https://[a-zA-Z0-9-]+\.ngrok\.io)') {
+                        return $Matches[1]
+                    }
+                    if ($text -match '(https://[a-zA-Z0-9-]+\.ngrok\.app)') {
                         return $Matches[1]
                     }
                 } else {
@@ -261,10 +378,40 @@ function Wait-TunnelHttpsUrl {
     return $null
 }
 
+function Show-AsciiQr {
+    param([string]$Url)
+
+    Write-Host ""
+    Write-Host "QR ASCII colorido (câmera do telemóvel → HUD / ):" -ForegroundColor Cyan
+    Write-Host ""
+
+    $printed = $false
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        # Pipe URL: PowerShell stdin is often not a TTY, so argv-only CLI prints nothing.
+        # qrcode-terminal then emits ANSI black/white cell QR (colored blocks).
+        $Url | npx --yes qrcode-terminal
+        if ($LASTEXITCODE -eq 0) {
+            $printed = $true
+        }
+    } catch {
+        $printed = $false
+    } finally {
+        $ErrorActionPreference = $prev
+    }
+
+    if (-not $printed) {
+        Write-Host "  (QR ASCII falhou — copie o URL HTTPS manualmente)" -ForegroundColor Yellow
+        Write-Host "  $Url" -ForegroundColor Green
+    }
+    Write-Host ""
+}
+
 # --- Pré-checagens -----------------------------------------------------------
 
 Write-Host ""
-Write-Host "Aether Vision — teste mobile (LAN + túnel HTTPS)" -ForegroundColor Cyan
+Write-Host "Aether Vision — teste mobile (LAN + túnel HTTPS + QR)" -ForegroundColor Cyan
 Write-Host ""
 
 if (-not (Test-Path $VenvPython)) {
@@ -281,7 +428,7 @@ if (-not (Test-GeminiApiKeyInEnvFile -EnvPath $BackendEnv)) {
 $node = Get-Command node -ErrorAction SilentlyContinue
 $npx = Get-Command npx -ErrorAction SilentlyContinue
 if (-not $node -or -not $npx) {
-    Write-Host "ERROR: Node.js / npx necessários para Vite e localtunnel." -ForegroundColor Red
+    Write-Host "ERROR: Node.js / npx necessários para Vite e QR ASCII." -ForegroundColor Red
     Write-Host "  Instale Node LTS e reabra o terminal." -ForegroundColor Yellow
     exit 1
 }
@@ -307,6 +454,9 @@ try {
 } finally {
     Pop-Location
 }
+
+# --- Limpar túneis stale (não mata API/Vite saudáveis) -----------------------
+Stop-StaleTunnelProcesses
 
 # --- Backend :8001 (loopback — Vite faz proxy /api) --------------------------
 $apiHealthy = Test-ApiStackHealthy
@@ -385,30 +535,56 @@ $lanIp = Get-LanIPv4
 $lanUrl = if ($lanIp) { "http://${lanIp}:${VitePort}" } else { "(IP LAN não detetado):${VitePort}" }
 
 # --- Túnel HTTPS -------------------------------------------------------------
-$tunnelTool = Start-LocalTunnelWindow -Port $VitePort -LogPath $TunnelLog
+$tunnelTool = Start-HttpsTunnelWindow -Port $VitePort -LogPath $TunnelLog
 Write-Host "Aguardando URL HTTPS do túnel ($tunnelTool)..." -ForegroundColor Yellow
 $tunnelUrl = Wait-TunnelHttpsUrl -LogPath $TunnelLog -Tool $tunnelTool -TimeoutSec 90
+
+# Normalize to HUD root /
+$hudUrl = $null
+if ($tunnelUrl) {
+    $hudUrl = $tunnelUrl.TrimEnd("/") + "/"
+}
+
+$publicIp = $null
+if ($tunnelTool -eq "localtunnel") {
+    Write-Host "A obter IP público (password localtunnel)..." -ForegroundColor Yellow
+    $publicIp = Get-PublicIPv4
+}
 
 Write-Host ""
 Write-Host "Pronto para telemóvel:" -ForegroundColor Green
 Write-Host "  API (PC)     $ApiBase/health"
 Write-Host "  HUD loopback $ViteLoopback/"
 Write-Host "  HUD LAN      $lanUrl"
-if ($tunnelUrl) {
-    Write-Host "  Túnel HTTPS  $tunnelUrl/" -ForegroundColor Green
+Write-Host "  Túnel tool   $tunnelTool"
+if ($hudUrl) {
+    Write-Host "  Túnel HTTPS  $hudUrl" -ForegroundColor Green
+    Show-AsciiQr -Url $hudUrl
 } else {
     Write-Host "  Túnel HTTPS  (ainda não detetado — veja a janela do túnel / $TunnelLog)" -ForegroundColor Yellow
 }
-Write-Host ""
+
 Write-Host "Microfone no telemóvel:" -ForegroundColor Cyan
-Write-Host "  Use o URL HTTPS do túnel (getUserMedia exige HTTPS ou localhost)."
+Write-Host "  Escaneie o QR ou abra o URL HTTPS do túnel (getUserMedia exige HTTPS)."
 Write-Host "  O URL LAN http://... NÃO abre o microfone no browser do telemóvel."
-if ($tunnelTool -eq "localtunnel") {
-    Write-Host "  Nota localtunnel: a página de password pede o IP público do PC (não o IP LAN)."
+if ($tunnelTool -eq "cloudflared") {
+    Write-Host "  cloudflared quick tunnel: normalmente sem página de password / Click to Continue." -ForegroundColor Green
+} elseif ($tunnelTool -eq "ngrok") {
+    Write-Host "  ngrok free: pode aparecer interstitial 'Visit Site' antes do HUD (fricção residual)." -ForegroundColor Yellow
+} elseif ($tunnelTool -eq "localtunnel") {
+    Write-Host "  localtunnel: página de password pede o IP PÚBLICO do PC (não o IP LAN)." -ForegroundColor Yellow
+    if ($publicIp) {
+        Write-Host "  Password helper (IP público): $publicIp" -ForegroundColor Magenta
+        Write-Host "  Workaround: se o browser aceitar, tente header Bypass-Tunnel-Reminder: true" -ForegroundColor DarkYellow
+        Write-Host "  Residual: a câmara / QR não contorna sozinha o gate loca.lt — digite o IP se aparecer." -ForegroundColor Yellow
+    } else {
+        Write-Host "  Não foi possível detetar IP público automaticamente — veja https://api.ipify.org" -ForegroundColor Yellow
+    }
 }
 Write-Host "  API no telemóvel vai por /api no Vite (proxy → 127.0.0.1:8001) — sem CORS no telemóvel."
 Write-Host ""
 Write-Host "Uso:" -ForegroundColor Cyan
 Write-Host "  powershell -ExecutionPolicy Bypass -File .\start_mobile_test.ps1"
 Write-Host "Feche as janelas API / Vite / túnel para parar o stack."
+Write-Host "Stack + túnel ficam a correr após este script."
 exit 0

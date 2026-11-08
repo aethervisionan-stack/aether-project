@@ -32,3 +32,7 @@ client/.vite/
 # Stale incremental TS build info (root / IDE)
 *.tsbuildinfo
 tsconfig.tsbuildinfo
+
+# Portable tunnel binaries (start_mobile_test.ps1 downloads cloudflared on demand)
+tools/cloudflared.exe
+tools/ngrok.exe
