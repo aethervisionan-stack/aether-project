@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 
@@ -17,6 +18,48 @@ from app.services.resilience import PipelineError
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["audio"])
+
+# Mobile MediaRecorder (iOS Safari → audio/mp4 / AAC; Android → webm/opus).
+_EXT_TO_MIME: dict[str, str] = {
+    ".webm": "audio/webm",
+    ".mp4": "audio/mp4",
+    ".m4a": "audio/mp4",
+    ".aac": "audio/mp4",  # Gemini multimodal prefers container MIME
+    ".ogg": "audio/ogg",
+    ".oga": "audio/ogg",
+    ".wav": "audio/wav",
+    ".mp3": "audio/mpeg",
+    ".mpeg": "audio/mpeg",
+}
+
+_ACCEPTED_AUDIO_MIMES = frozenset(
+    {
+        "audio/webm",
+        "audio/mp4",
+        "audio/aac",
+        "audio/ogg",
+        "audio/wav",
+        "audio/mpeg",
+        "audio/mp3",
+        "audio/x-m4a",
+        "audio/m4a",
+    }
+)
+
+
+def normalize_upload_content_type(content_type: str | None, filename: str) -> str:
+    """Map mobile recorder MIME / extension → Gemini-friendly audio/* type."""
+    raw = (content_type or "").split(";")[0].strip().lower()
+    if raw in ("audio/aac", "audio/x-m4a", "audio/m4a"):
+        return "audio/mp4"
+    if raw in _ACCEPTED_AUDIO_MIMES:
+        return "audio/mpeg" if raw == "audio/mp3" else raw
+    if raw and raw not in ("application/octet-stream", "binary/octet-stream", ""):
+        # Pass through unknown audio/* so Gemini can try; drop non-audio junk.
+        if raw.startswith("audio/"):
+            return raw
+    ext = Path(filename or "").suffix.lower()
+    return _EXT_TO_MIME.get(ext, "audio/webm")
 
 
 @router.post(
@@ -41,8 +84,8 @@ async def process_audio(
     runs STT → adaptive memory → Gemini → Consenso Alfa → TTS, and returns
     transcript + validated text + base64 /audio URL for headphone autoplay.
     """
-    content_type = audio.content_type or "application/octet-stream"
     filename = audio.filename or "headset-capture.webm"
+    content_type = normalize_upload_content_type(audio.content_type, filename)
 
     try:
         audio_bytes = await asyncio.wait_for(

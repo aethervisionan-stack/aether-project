@@ -77,3 +77,28 @@ def test_process_audio_empty(client: TestClient) -> None:
     assert res.status_code == 400
     body = res.json()
     assert body["retryable"] is False
+
+
+def test_normalize_upload_content_type_mobile_mimes() -> None:
+    from app.routes.process_audio import normalize_upload_content_type
+
+    assert normalize_upload_content_type("audio/mp4", "headset.mp4") == "audio/mp4"
+    assert normalize_upload_content_type("audio/aac", "headset.aac") == "audio/mp4"
+    assert normalize_upload_content_type("audio/webm;codecs=opus", "a.webm") == "audio/webm"
+    assert normalize_upload_content_type("audio/ogg", "a.ogg") == "audio/ogg"
+    assert normalize_upload_content_type("application/octet-stream", "phone.m4a") == "audio/mp4"
+    assert normalize_upload_content_type(None, "capture.mp4") == "audio/mp4"
+
+
+def test_process_audio_accepts_mp4_mime(client: TestClient) -> None:
+    """iOS MediaRecorder sends audio/mp4 — pipeline must accept it (mock STT)."""
+    audio = _tiny_wav()
+    res = client.post(
+        "/process-audio",
+        files={"audio": ("headset.mp4", audio, "audio/mp4")},
+        data={"locale": "pt-BR"},
+    )
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["transcript"]
+    assert body["response_text"]

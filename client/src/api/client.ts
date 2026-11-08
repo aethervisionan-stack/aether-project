@@ -22,17 +22,36 @@ export interface VoiceApiConfig {
   timeoutMs: number;
 }
 
+/**
+ * Phone / Cloudflare tunnel MUST use relative `/api…` (Vite proxy).
+ * Absolute `http://127.0.0.1:8001` from the phone hits the handset loopback
+ * and forces network failure → Safe Mode. Strip those values.
+ */
+export function sanitizeApiBaseUrl(raw: string | undefined | null): string {
+  const value = (raw ?? "").trim().replace(/\/$/, "");
+  if (!value) return "";
+  if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$)/i.test(value)) {
+    console.warn(
+      "[aether:api] ignoring localhost VITE_API_BASE_URL — using same-origin /api proxy",
+      value,
+    );
+    return "";
+  }
+  return value;
+}
+
 const DEFAULT_CONFIG: VoiceApiConfig = {
-  baseUrl: import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") ?? "",
+  baseUrl: sanitizeApiBaseUrl(import.meta.env.VITE_API_BASE_URL),
   // Tunnel + Gemini 3.x STT/cognitive routinely exceed 60s on phone networks.
   timeoutMs: 120_000,
 };
 
 function resolveUrl(path: string, baseUrl: string): string {
+  const normalized = path.startsWith("/") ? path : `/${path}`;
   if (!baseUrl) {
-    return `/api${path}`;
+    return `/api${normalized}`;
   }
-  return `${baseUrl}${path}`;
+  return `${baseUrl}${normalized}`;
 }
 
 async function parseError(res: Response): Promise<VoiceApiError> {
@@ -82,12 +101,20 @@ export class VoiceApiClient {
       locale?: string;
       filename?: string;
       clientId?: string;
+      mimeType?: string;
     } = {},
   ): Promise<ProcessAudioResponse> {
     // FormData → browser sets multipart/form-data + boundary (do not set Content-Type).
     const form = new FormData();
-    const filename = options.filename ?? "headset-capture.webm";
-    form.append("audio", blob, filename);
+    const mimeType =
+      (options.mimeType || blob.type || "audio/webm").split(";")[0].trim() ||
+      "audio/webm";
+    const filename = options.filename ?? defaultFilenameForMime(mimeType);
+    const uploadBlob =
+      blob.type && blob.type.startsWith("audio/")
+        ? blob
+        : new Blob([blob], { type: mimeType });
+    form.append("audio", uploadBlob, filename);
     if (options.language) {
       form.append("language", options.language);
     }
@@ -236,6 +263,17 @@ export class VoiceApiClient {
       window.clearTimeout(timer);
     }
   }
+}
+
+function defaultFilenameForMime(mimeType: string): string {
+  const mime = mimeType.toLowerCase();
+  if (mime.includes("mp4") || mime.includes("aac") || mime.includes("m4a")) {
+    return "headset-capture.mp4";
+  }
+  if (mime.includes("ogg")) return "headset-capture.ogg";
+  if (mime.includes("wav")) return "headset-capture.wav";
+  if (mime.includes("mpeg") || mime.includes("mp3")) return "headset-capture.mp3";
+  return "headset-capture.webm";
 }
 
 export const voiceApi = new VoiceApiClient();

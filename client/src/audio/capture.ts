@@ -88,11 +88,20 @@ export interface CaptureCapabilities {
 
 export type MicPermissionState = "prompt" | "granted" | "denied" | "unknown";
 
+/**
+ * Mobile-first MediaRecorder MIME ladder:
+ * - Chromium Android → webm/opus
+ * - iOS Safari → audio/mp4 (AAC in MP4) / audio/aac
+ * - Firefox → ogg/opus
+ */
 const DEFAULT_MIME_CANDIDATES = [
   "audio/webm;codecs=opus",
   "audio/webm",
+  "audio/mp4;codecs=mp4a.40.2",
   "audio/mp4",
+  "audio/aac",
   "audio/ogg;codecs=opus",
+  "audio/ogg",
 ];
 
 const HEADSET_LABEL_HINTS = [

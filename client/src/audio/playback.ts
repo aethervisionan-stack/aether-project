@@ -1,3 +1,4 @@
+import { sanitizeApiBaseUrl } from "../api/client";
 import { ensureAudioContextRunning } from "./diagnostics";
 
 /** Decode base64 / remote TTS URL and play through the default output (BT headphones). */
@@ -17,13 +18,22 @@ export function base64ToBlob(base64: string, mimeType: string): Blob {
 
 function resolvePlayableUrl(audioUrl: string): string {
   if (/^https?:\/\//i.test(audioUrl) || audioUrl.startsWith("blob:")) {
+    // Absolute localhost TTS URLs break phone / Cloudflare tunnel clients.
+    if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i.test(audioUrl)) {
+      try {
+        const parsed = new URL(audioUrl);
+        return `/api${parsed.pathname}${parsed.search}`;
+      } catch {
+        return audioUrl.replace(/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i, "/api");
+      }
+    }
     return audioUrl;
   }
-  const base = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") ?? "";
+  const base = sanitizeApiBaseUrl(import.meta.env.VITE_API_BASE_URL);
   if (base) {
     return `${base}${audioUrl.startsWith("/") ? audioUrl : `/${audioUrl}`}`;
   }
-  // Vite /api proxy in development
+  // Vite /api proxy in development (and tunnel HTTPS same-origin)
   return `/api${audioUrl.startsWith("/") ? audioUrl : `/${audioUrl}`}`;
 }
 

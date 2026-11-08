@@ -98,7 +98,8 @@ export class ControlApp {
   private activeMicLabel: string | null = null;
   private healthTimer: number | null = null;
   private readonly healthPollMs = 4_000;
-  private micStatus: MicStatus = "safe";
+  /** Start blocked until probe — never default into Web Speech Safe Mode. */
+  private micStatus: MicStatus = "blocked";
   private captureMode: CaptureMode = "mediarecorder";
   private reconnectBusy = false;
   private speechInterim = "";
@@ -176,26 +177,28 @@ export class ControlApp {
     });
   }
 
-  /** Soft mic probe — no full page reload. Updates Active / Blocked / Safe Mode. */
+  /** Soft mic probe — no full page reload. Prefer MediaRecorder; Safe Mode only on true mic deny. */
   private async probeMicStatus(options: { quiet?: boolean; silent?: boolean } = {}): Promise<void> {
     this.permissionState = await queryMicPermissionState();
     await this.refreshAudioInspect();
     const caps = probeCaptureCapabilities();
     if (!isMediaRecorderCaptureAvailable()) {
-      if (caps.speechRecognition) {
-        await this.enterSafeModeInstant(
-          options.quiet
-            ? null
-            : "MediaRecorder indisponível — Safe Mode (Web Speech) ativo.",
-        );
-      } else {
-        this.micStatus = "blocked";
-        this.captureMode = "mediarecorder";
-        if (!options.quiet) {
-          this.errorMessage = "Microfone e Web Speech indisponíveis neste browser.";
-        }
-        this.render();
+      // Keep Gemini path preferred on phone HTTPS — do NOT auto-drop to Web Speech.
+      this.micStatus = "blocked";
+      this.captureMode = "mediarecorder";
+      const detail = !caps.secureContext
+        ? "Contexto inseguro — abra o túnel HTTPS (start_mobile_test.ps1)."
+        : !caps.getUserMedia
+          ? "getUserMedia indisponível neste browser."
+          : "MediaRecorder indisponível — use HTTPS / browser atualizado.";
+      console.error("[aether:stage] mic.probe.mediarecorder_unavailable", {
+        caps,
+        detail,
+      });
+      if (!options.quiet) {
+        this.errorMessage = `${detail} Safe Mode manual disponível se a permissão estiver bloqueada.`;
       }
+      this.render();
       return;
     }
 
@@ -235,42 +238,37 @@ export class ControlApp {
       return;
     }
 
-    // NotAllowed / timeout / missing → prefer Safe Mode instantly (no UI freeze).
     const kind = probe.error?.kind;
-    if (
-      (kind === "permission_denied" || kind === "timeout" || kind === "unsupported") &&
-      isSpeechRecognitionAvailable()
-    ) {
-      this.permissionState = kind === "permission_denied" ? "denied" : this.permissionState;
+    const realError =
+      probe.error?.message ?? "Falha ao abrir o microfone (MediaRecorder).";
+    console.error("[aether:stage] mic.probe.failed", {
+      kind: kind ?? "unknown",
+      message: realError,
+      permissionState: this.permissionState,
+    });
+
+    // Safe Mode ONLY for true mic permission block — never for network/API/device glitches.
+    if (kind === "permission_denied" && isSpeechRecognitionAvailable()) {
+      this.permissionState = "denied";
       await this.enterSafeModeInstant(
         options.quiet
           ? null
-          : probe.error?.message ?? "A entrar em Safe Mode (Web Speech).",
+          : `${realError} — Safe Mode (Web Speech) só por bloqueio de permissão.`,
       );
       return;
     }
 
+    this.micStatus = "blocked";
+    this.captureMode = "mediarecorder";
     if (kind === "permission_denied") {
-      this.micStatus = "blocked";
       this.permissionState = "denied";
       this.activeMicLabel = null;
-      if (!options.quiet) {
-        this.errorMessage =
-          "Microfone bloqueado. Autorize o site ou use Safe Mode / Reconectar.";
-      }
-    } else if (isSpeechRecognitionAvailable()) {
-      await this.enterSafeModeInstant(
-        options.quiet
-          ? null
-          : probe.error?.message ?? "Captura falhou — Safe Mode ativo.",
-      );
-      return;
-    } else {
-      this.micStatus = "blocked";
-      if (!options.quiet) {
-        this.errorMessage =
-          probe.error?.message ?? "Microfone indisponível neste browser.";
-      }
+    }
+    if (!options.quiet) {
+      this.errorMessage =
+        kind === "permission_denied"
+          ? "Microfone bloqueado. Autorize o site ou use Safe Mode / Reconectar."
+          : realError;
     }
     this.render();
   }
@@ -632,26 +630,24 @@ export class ControlApp {
       this.errorMessage = null;
     } catch (err) {
       const classified = err instanceof CaptureError ? err : classifySoft(err);
-      if (
-        (classified.kind === "permission_denied" || classified.kind === "timeout") &&
-        isSpeechRecognitionAvailable()
-      ) {
+      console.error("[aether:stage] refreshDevices.failed", {
+        kind: classified.kind,
+        message: classified.message,
+      });
+      // Permission deny → optional Safe Mode. All other errors stay on MediaRecorder/Gemini.
+      if (classified.kind === "permission_denied" && isSpeechRecognitionAvailable()) {
+        this.permissionState = "denied";
         await this.enterSafeModeInstant(
           `${classified.message} Clique em Falar (Safe Mode) ou Reconectar.`,
         );
         return;
       }
+      this.micStatus = "blocked";
+      this.captureMode = "mediarecorder";
       if (classified.kind === "permission_denied") {
-        this.micStatus = "blocked";
         this.permissionState = "denied";
-        this.errorMessage = classified.message;
-      } else if (isSpeechRecognitionAvailable()) {
-        await this.enterSafeModeInstant(`${classified.message} — Safe Mode disponível.`);
-        return;
-      } else {
-        this.micStatus = "blocked";
-        this.errorMessage = classified.message;
       }
+      this.errorMessage = classified.message;
     }
     this.render();
   }
@@ -672,11 +668,12 @@ export class ControlApp {
       return;
     }
 
-    // Blocked → try Safe Mode immediately (never freeze / dead-end).
-    if (this.micStatus === "blocked") {
+    // Blocked + permission denied → Safe Mode only when Web Speech exists.
+    // Otherwise keep trying MediaRecorder → Gemini (phone field path).
+    if (this.micStatus === "blocked" && this.permissionState === "denied") {
       if (isSpeechRecognitionAvailable()) {
         await this.enterSafeModeInstant(
-          "Microfone bloqueado — a iniciar Safe Mode agora.",
+          "Microfone bloqueado (permissão) — Safe Mode (Web Speech).",
         );
       } else {
         this.errorMessage =
@@ -689,12 +686,13 @@ export class ControlApp {
     this.errorMessage = null;
     this.speechInterim = "";
 
-    // Prefer MediaRecorder; fall back to Web Speech Safe Mode without reload.
-    if (this.captureMode === "mediarecorder" && isMediaRecorderCaptureAvailable()) {
+    // Prefer MediaRecorder → POST /api/process-audio → Gemini. Never silent Safe Mode.
+    if (this.captureMode !== "webspeech" && isMediaRecorderCaptureAvailable()) {
       try {
         await this.capture.start(this.preferredDeviceId);
         this.activeMicLabel = this.capture.getActiveLabel();
         this.micStatus = "active";
+        this.captureMode = "mediarecorder";
         this.permissionState = "granted";
         void this.refreshDeviceLabel({ quiet: true });
         this.setPhase("listening");
@@ -702,16 +700,17 @@ export class ControlApp {
       } catch (err) {
         const classified = err instanceof CaptureError ? err : classifySoft(err);
         this.capture.cancel();
-        // NotAllowedError / PermissionDenied → instant Safe Mode (no freeze).
-        if (
-          classified.kind === "permission_denied" ||
-          classified.kind === "timeout"
-        ) {
-          this.permissionState =
-            classified.kind === "permission_denied" ? "denied" : this.permissionState;
+        console.error("[aether:stage] capture.start.failed", {
+          kind: classified.kind,
+          message: classified.message,
+          domName: classified.domName,
+        });
+        // True mic permission deny → Safe Mode. Everything else stays on Gemini path.
+        if (classified.kind === "permission_denied") {
+          this.permissionState = "denied";
           if (isSpeechRecognitionAvailable()) {
             await this.enterSafeModeInstant(
-              "Permissão negada / timeout — Safe Mode (Web Speech) sem recarregar.",
+              `${classified.message} — Safe Mode só por bloqueio de permissão.`,
             );
             // Fall through to start speech in the same click.
           } else {
@@ -720,15 +719,22 @@ export class ControlApp {
             this.setPhase("idle");
             return;
           }
-        } else if (!isSpeechRecognitionAvailable()) {
+        } else {
           this.micStatus = "blocked";
+          this.captureMode = "mediarecorder";
           this.errorMessage = classified.message;
           this.setPhase("idle");
           return;
-        } else {
-          await this.enterSafeModeInstant(classified.message);
         }
       }
+    }
+
+    // Web Speech path — only when already in Safe Mode (permission deny / manual).
+    if (this.captureMode !== "webspeech") {
+      this.errorMessage =
+        "MediaRecorder indisponível neste browser. Ative Safe Mode manualmente ou use HTTPS.";
+      this.setPhase("idle");
+      return;
     }
 
     try {
@@ -749,6 +755,7 @@ export class ControlApp {
         err instanceof Error
           ? err.message
           : "Não foi possível iniciar a captura de voz.";
+      console.error("[aether:stage] webspeech.start.failed", err);
       this.setPhase("idle");
     }
   }
@@ -777,9 +784,11 @@ export class ControlApp {
         this.setPhase("idle");
         return;
       }
-      // Multipart/form-data via FormData (browser sets boundary) → POST /process-audio
+      // Multipart/form-data via FormData → relative /api/process-audio → Gemini pipeline
+      const mimeType = captured.mimeType || captured.blob.type || "audio/webm";
       const result = await voiceApi.processAudio(captured.blob, {
-        filename: `headset-${Date.now()}.${extensionForMime(captured.mimeType)}`,
+        filename: `headset-${Date.now()}.${extensionForMime(mimeType)}`,
+        mimeType,
         locale: "pt-BR",
         clientId: HUD_CLIENT_ID,
       });
@@ -817,17 +826,36 @@ export class ControlApp {
       // Refresh Session History + Metrics after each successful M100 / headset turn.
       void this.refreshAudit({ quiet: true });
     } catch (err) {
+      // API / network failures must surface — NEVER silent Safe Mode drop.
       console.error("[aether:stage] finishRecord.error", err);
       if (err instanceof Error && err.stack) {
         console.error("[aether:stage] finishRecord.error.stack", err.stack);
       }
       this.capture.cancel();
+      this.captureMode = "mediarecorder";
+      if (this.micStatus === "safe") {
+        this.micStatus = "active";
+      }
       if (err instanceof VoiceApiError) {
-        this.errorMessage = `${err.message}${err.detail ? ` — ${err.detail}` : ""}${
-          err.retryable ? " (pode tentar de novo)" : ""
-        }`;
+        const detail = [
+          err.message,
+          err.detail,
+          err.stage ? `stage=${err.stage}` : "",
+          err.retryable ? "(pode tentar de novo)" : "",
+        ]
+          .filter(Boolean)
+          .join(" — ");
+        this.errorMessage = `API /process-audio: ${detail}`;
+        console.error("[aether:stage] finishRecord.api_error", {
+          status: err.status,
+          message: err.message,
+          detail: err.detail,
+          stage: err.stage,
+          retryable: err.retryable,
+        });
       } else {
-        this.errorMessage = "Falha ao processar o áudio.";
+        const msg = err instanceof Error ? err.message : "Falha ao processar o áudio.";
+        this.errorMessage = `Falha no upload/API Gemini: ${msg}`;
       }
       this.setPhase("idle");
     }
@@ -1654,9 +1682,11 @@ function micPermissionBanner(
 }
 
 function extensionForMime(mimeType: string): string {
-  if (mimeType.includes("mp4")) return "mp4";
-  if (mimeType.includes("ogg")) return "ogg";
-  if (mimeType.includes("wav")) return "wav";
+  const mime = mimeType.toLowerCase();
+  if (mime.includes("mp4") || mime.includes("aac") || mime.includes("m4a")) return "mp4";
+  if (mime.includes("ogg")) return "ogg";
+  if (mime.includes("wav")) return "wav";
+  if (mime.includes("mpeg") || mime.includes("mp3")) return "mp3";
   return "webm";
 }
 
