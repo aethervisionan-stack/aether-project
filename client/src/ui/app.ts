@@ -768,6 +768,15 @@ export class ControlApp {
         durationMs: captured.durationMs,
         trackLabel: captured.trackLabel,
       });
+      if (!captured.blob || captured.blob.size < 64) {
+        console.error("[aether:stage] capture.blob_empty", {
+          size: captured.blob?.size ?? 0,
+        });
+        this.errorMessage =
+          "Captura vazia — nenhum áudio gravado. Segure o botão mais tempo ou use Safe Mode.";
+        this.setPhase("idle");
+        return;
+      }
       // Multipart/form-data via FormData (browser sets boundary) → POST /process-audio
       const result = await voiceApi.processAudio(captured.blob, {
         filename: `headset-${Date.now()}.${extensionForMime(captured.mimeType)}`,
@@ -775,13 +784,29 @@ export class ControlApp {
         clientId: HUD_CLIENT_ID,
       });
       this.lastResult = result;
+      const replyText = (
+        result.gemini_response ??
+        result.response_text ??
+        ""
+      ).trim();
+      if (!replyText) {
+        console.error("[aether:stage] process_audio.empty_reply", {
+          status: result.status,
+          hasAudioUrl: !!result.audio_url,
+        });
+        this.errorMessage =
+          "Pipeline respondeu sem texto. Tente de novo — a captura chegou ao servidor.";
+        this.setPhase("idle");
+        void this.refreshAudit({ quiet: true });
+        return;
+      }
       this.pushChatTurn(
         result.transcription ?? result.transcript,
-        result.gemini_response ?? result.response_text,
+        replyText,
       );
       this.setPhase("responding");
       await this.deliverSpokenReply({
-        text: result.gemini_response ?? result.response_text,
+        text: replyText,
         audioUrl: result.audio_url ?? null,
         audioBase64: result.audio_base64,
         mimeType: result.audio_mime_type,
@@ -835,6 +860,14 @@ export class ControlApp {
       preferBrowserSpeech,
       spokenChars: spokenText.length,
     });
+
+    if (!spokenText && !hasRealTtsUrl && !options.audioBase64) {
+      this.pendingSpeakText = null;
+      this.errorMessage =
+        "Sem texto nem áudio TTS para reproduzir. Verifique o backend /process-audio.";
+      console.error("[aether:stage] tts.nothing_to_play");
+      return;
+    }
 
     let serverOk = false;
     let localOk = false;

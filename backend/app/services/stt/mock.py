@@ -12,7 +12,7 @@ from app.models.schemas import SttResult
 class MockWhisperStt:
     """Deterministic STT used when PIPELINE_MODE=mock or STT_PROVIDER=mock."""
 
-    name = "mock-whisper"
+    name = "mock-stt"
 
     def __init__(self, settings: Settings) -> None:
         self._settings = settings

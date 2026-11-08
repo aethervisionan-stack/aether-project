@@ -255,6 +255,19 @@ export async function unlockAudioForGesture(): Promise<string> {
   } catch (err) {
     console.warn("[aether:stage] audio.unlock_speech_warm", err);
   }
+  // Silent <audio> play inside the gesture — unlocks HTMLMediaElement autoplay on mobile.
+  try {
+    if (typeof window !== "undefined" && typeof Audio !== "undefined") {
+      const silent = new Audio(
+        "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=",
+      );
+      silent.volume = 0.01;
+      await silent.play().catch(() => undefined);
+      silent.pause();
+    }
+  } catch (err) {
+    console.warn("[aether:stage] audio.unlock_html_audio", err);
+  }
   return state;
 }
 

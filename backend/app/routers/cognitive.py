@@ -15,6 +15,7 @@ from app.services.consenso_alfa import ConsensoAlfa
 from app.services.gemini_gateway import (
     GeminiGateway,
     build_sqlite_context,
+    default_system_instruction,
     resolve_gemini_mode,
 )
 from app.services.resilience import API_FAILURE_FALLBACK_PT, RecoverableProviderError
@@ -98,6 +99,7 @@ async def cognitive_chat(body: CognitiveChatRequest) -> CognitiveChatResponse:
             sqlite_context=sqlite_ctx,
             client_id=body.client_id,
             request_id=request_id,
+            system_instruction=default_system_instruction(speakable=False),
             speakable=False,
             enable_tools=True,
         )

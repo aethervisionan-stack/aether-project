@@ -20,7 +20,11 @@ from app.models.schemas import (
 from app.db.store import persist_process_audio
 from app.services.agent_service import AgentService, AgentTurnResult
 from app.services.consenso_alfa import ConsensoAlfa
-from app.services.gemini_gateway import GeminiGateway, build_sqlite_context
+from app.services.gemini_gateway import (
+    GeminiGateway,
+    build_sqlite_context,
+    default_system_instruction,
+)
 from app.services.resilience import (
     API_FAILURE_FALLBACK_PT,
     PipelineError,
@@ -504,6 +508,7 @@ class AudioPipeline:
             sqlite_context=sqlite_ctx,
             client_id=client_id,
             request_id=request_id,
+            system_instruction=default_system_instruction(speakable=True),
             mode=self._settings.gemini_mode,
         )
         return AgentTurnResult(

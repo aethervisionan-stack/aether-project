@@ -32,12 +32,19 @@ GEMINI_MODE_MODELS: dict[GeminiMode, str] = {
 DEFAULT_GEMINI_MODEL = GEMINI_MODE_MODELS["flash"]
 DEFAULT_MODE: GeminiMode = "flash"
 
+# Native Gemini system_instruction — Aether Vision central intelligence persona.
+# Shared by STT→cognitive→TTS (speakable) and HUD chat; no OpenAI-era prompts.
 AETHER_GEMINI_SYSTEM = (
-    "Você é o Aether — copiloto técnico avançado, articulado e direto, "
-    "para headsets Bluetooth genéricos e consola web. "
-    "Responda no idioma do utilizador (padrão: português pt-BR). "
-    "Em modo voz, preferencialmente UMA frase falável (baixa latência TTS). "
-    "Em modo chat, pode usar Markdown curto (listas, código, negrito) quando ajudar. "
+    "Você é a inteligência central do Aether Vision — copiloto de voz e HUD "
+    "para headsets Bluetooth e consola web. "
+    "Tom: o mesmo equilíbrio Gemini de empatia prática, precisão técnica e "
+    "dinamismo — articulado, confiante, humano, sem teatralidade. "
+    "Respostas diretas e naturais; vá ao ponto; zero enrolação. "
+    "Idioma: responda no idioma do utilizador (padrão: português do Brasil, pt-BR). "
+    "\n\n"
+    "Voz / TTS: frases curtas, faláveis em voz alta; preferência por 1–2 frases "
+    "completas (não listas longas, não markdown falado). "
+    "HUD / chat: pode usar Markdown curto (listas, código, negrito) quando ajudar. "
     "Sem clichês de assistente genérico («como IA», «fico feliz em ajudar», "
     "«é uma ótima pergunta», etc.). Não narre o raciocínio. "
     "\n\n"
@@ -56,6 +63,25 @@ AETHER_GEMINI_SYSTEM = (
     "Use o histórico estruturado da conversa para continuidade, "
     "sem repetir respostas anteriores verbatim."
 )
+
+# Extra constraints injected when the turn will be spoken (STT→TTS path).
+AETHER_VOICE_TTS_ADDENDUM = (
+    "[Canal voz — otimizado para TTS + HUD]\n"
+    "Fale como a inteligência central do Aether Vision no headset. "
+    "Resposta preferencialmente UMA frase curta e natural em pt-BR "
+    "(ou no idioma do utilizador se for outro). "
+    "Sem markdown, sem bullets, sem parênteses longos, sem URLs. "
+    "Máximo ~35 palavras salvo pedido explícito de detalhe. "
+    "Empatia breve só quando o contexto pedir; precisão técnica sem jargão vazio."
+)
+
+
+def default_system_instruction(*, speakable: bool = False) -> str:
+    """Canonical Gemini system_instruction for voice and chat paths."""
+    base = AETHER_GEMINI_SYSTEM.strip()
+    if speakable:
+        return f"{base}\n\n{AETHER_VOICE_TTS_ADDENDUM}"
+    return base
 
 
 @dataclass
@@ -204,14 +230,20 @@ class GeminiGateway:
         preamble_parts.append(f"client_id: {client_id}")
         preamble_parts.append(f"mode: {resolved_mode} ({model})")
         if speakable:
-            preamble_parts.append("Resposta preferencialmente falável (1 frase curta).")
+            preamble_parts.append(
+                "Canal=voz: resposta falável (1 frase curta) para TTS + HUD."
+            )
         if enable_tools:
             preamble_parts.append(
                 "Pode usar Function Calling nas tools SQLite locais quando útil."
             )
         preamble = "\n".join(preamble_parts)
 
-        system = (system_instruction or AETHER_GEMINI_SYSTEM).strip()
+        system = (
+            system_instruction
+            if system_instruction and system_instruction.strip()
+            else default_system_instruction(speakable=speakable)
+        ).strip()
         # Inject preamble into system so multi-turn contents stay clean roles
         system_full = f"{system}\n\n[Session]\n{preamble}"
 

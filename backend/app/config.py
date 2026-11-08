@@ -55,7 +55,7 @@ class Settings(BaseSettings):
 
     stt_provider: SttProvider = "mock"
     default_language: str = "pt"
-    # Back-compat alias used by older call sites / mock STT
+    # Legacy env alias (WHISPER_LANGUAGE) → STT language; Gemini-only, no Whisper.
     whisper_language: str = "pt"
 
     consenso_enabled: bool = True

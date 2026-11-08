@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from app.config import Settings
 from app.services.gemini_gateway import (
+    AETHER_GEMINI_SYSTEM,
+    AETHER_VOICE_TTS_ADDENDUM,
     GeminiGateway,
+    default_system_instruction,
     resolve_gemini_mode,
     resolve_gemini_model,
 )
@@ -43,6 +46,21 @@ def test_resolve_models() -> None:
     assert resolve_gemini_mode("pro") == "pro"
     assert resolve_gemini_model("flash") == "gemini-3.8-flash"
     assert resolve_gemini_model("pro") == "gemini-3.8-flash"
+
+
+def test_aether_persona_system_instruction() -> None:
+    """Native Gemini persona — central intelligence, TTS-ready, no OpenAI leftovers."""
+    chat = default_system_instruction(speakable=False)
+    voice = default_system_instruction(speakable=True)
+    assert "Aether Vision" in chat
+    assert "inteligência central" in chat.lower() or "inteligencia central" in chat.lower()
+    assert "pt-BR" in chat or "português" in chat.lower()
+    assert "openai" not in chat.lower()
+    assert "gpt-" not in chat.lower()
+    assert chat == AETHER_GEMINI_SYSTEM.strip()
+    assert AETHER_VOICE_TTS_ADDENDUM in voice
+    assert "TTS" in voice
+    assert len(voice) > len(chat)
 
 
 @pytest.mark.asyncio
