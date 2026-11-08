@@ -13,7 +13,7 @@ from app.services.resilience import RecoverableProviderError, classify_provider_
 
 logger = logging.getLogger("aether.stt.gemini")
 
-DEFAULT_STT_MODEL = "gemini-2.5-flash"
+DEFAULT_STT_MODEL = "gemini-3.5-flash-lite"
 
 
 class GeminiStt:
@@ -62,6 +62,10 @@ class GeminiStt:
 
         client = genai.Client(api_key=key)
 
+        # google-genai 3.x enables Automatic Function Calling by default; AFC can
+        # spin for minutes on multimodal STT and starve the HUD reply path.
+        stt_timeout_s = min(45.0, max(8.0, self._settings.request_timeout_ms / 1000.0))
+
         async def _once() -> str:
             response = await client.aio.models.generate_content(
                 model=model,
@@ -77,14 +81,24 @@ class GeminiStt:
                 config=types.GenerateContentConfig(
                     temperature=0.1,
                     max_output_tokens=1024,
+                    automatic_function_calling=types.AutomaticFunctionCallingConfig(
+                        disable=True
+                    ),
                 ),
             )
             return (getattr(response, "text", None) or "").strip()
 
+        logger.info(
+            "[aether:stage] gemini.stt.start model=%s bytes=%s mime=%s timeout_s=%.1f",
+            model,
+            len(audio_bytes),
+            mime,
+            stt_timeout_s,
+        )
         try:
             text = await asyncio.wait_for(
                 _once(),
-                timeout=max(5.0, self._settings.request_timeout_ms / 1000.0),
+                timeout=stt_timeout_s,
             )
         except TimeoutError as exc:
             raise RecoverableProviderError(

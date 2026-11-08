@@ -2,7 +2,7 @@
 Gemini cognitive engine — modular draft generator for the voice + chat paths.
 
 Uses the official `google-genai` async client (`Client.aio`).
-Modes: flash → gemini-2.5-flash | pro → gemini-2.5-pro.
+Modes: flash → gemini-3.8-flash | pro → gemini-3.8-flash (3.x; 2.5 IDs 404 for new keys).
 Missing/invalid GEMINI_API_KEY → RecoverableProviderError (safe path).
 Never log the API key value.
 """
@@ -25,8 +25,9 @@ logger = logging.getLogger("aether.gemini")
 GeminiMode = Literal["flash", "pro"]
 
 GEMINI_MODE_MODELS: dict[GeminiMode, str] = {
-    "flash": "gemini-2.5-flash",
-    "pro": "gemini-2.5-pro",
+    "flash": "gemini-3.8-flash",
+    # Dedicated Pro ID unavailable for this key set; use the same verified 3.8 Flash.
+    "pro": "gemini-3.8-flash",
 }
 DEFAULT_GEMINI_MODEL = GEMINI_MODE_MODELS["flash"]
 DEFAULT_MODE: GeminiMode = "flash"
@@ -42,7 +43,7 @@ AETHER_GEMINI_SYSTEM = (
     "\n\n"
     "Arquitetura real deste produto (cite só o que for verdade): "
     "STT Gemini multimodal → motor cognitivo Gemini "
-    "(gemini-2.5-flash ou gemini-2.5-pro) → Consenso Alfa → "
+    "(gemini-3.8-flash) → Consenso Alfa → "
     "TTS Gemini (com fallback local/browser); "
     "memória adaptativa local (Chroma/RAG); auditoria SQLite "
     "(SessionLogs + latências STT·Agent·Consenso·TTS). "
@@ -78,7 +79,7 @@ class GeminiTurnResult:
 
 def resolve_gemini_mode(raw: str | None) -> GeminiMode:
     key = (raw or DEFAULT_MODE).strip().lower()
-    if key in ("pro", "gemini-2.5-pro", "2.5-pro"):
+    if key in ("pro", "gemini-2.5-pro", "2.5-pro", "gemini-3.8-flash-pro", "3.8-pro"):
         return "pro"
     return "flash"
 
@@ -292,11 +293,16 @@ class GeminiGateway:
 
         client = genai.Client(api_key=api_key)
         tools_cfg = [build_genai_tool(types)] if enable_tools else None
+        # Always disable SDK AFC — tool rounds are handled manually below.
+        # Default AFC in google-genai 3.x can stall voice/chat turns for minutes.
         config = types.GenerateContentConfig(
             system_instruction=system,
             temperature=temperature,
             max_output_tokens=max_output_tokens,
             tools=tools_cfg,
+            automatic_function_calling=types.AutomaticFunctionCallingConfig(
+                disable=True
+            ),
         )
 
         contents: list[Any] = []

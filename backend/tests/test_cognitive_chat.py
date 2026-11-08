@@ -20,8 +20,8 @@ def test_resolve_gemini_mode_and_model() -> None:
     assert resolve_gemini_mode("flash") == "flash"
     assert resolve_gemini_mode("pro") == "pro"
     assert resolve_gemini_mode("gemini-2.5-pro") == "pro"
-    assert resolve_gemini_model("flash") == "gemini-2.5-flash"
-    assert resolve_gemini_model("pro") == "gemini-2.5-pro"
+    assert resolve_gemini_model("flash") == "gemini-3.8-flash"
+    assert resolve_gemini_model("pro") == "gemini-3.8-flash"
 
 
 def test_cognitive_chat_missing_key_safe_fallback() -> None:
@@ -49,7 +49,7 @@ def test_cognitive_chat_mocked_gemini_ok() -> None:
     fake = GeminiTurnResult(
         text="STT → Gemini → Consenso → TTS.",
         duration_ms=12,
-        provider="gemini-2.5-pro",
+        provider="gemini-3.8-flash",
         mode="pro",
     )
     consenso = ConsensoResult(
@@ -85,7 +85,7 @@ def test_cognitive_chat_mocked_gemini_ok() -> None:
         body = res.json()
         assert body["status"] == "ok"
         assert body["mode"] == "pro"
-        assert body["model"] == "gemini-2.5-pro"
+        assert body["model"] == "gemini-3.8-flash"
         assert body["gemini_response"] == fake.text
         assert body["consensus_confidence"] == pytest.approx(0.9)
         assert body["used_safe_fallback"] is False

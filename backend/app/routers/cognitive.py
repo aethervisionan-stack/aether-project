@@ -115,7 +115,7 @@ async def cognitive_chat(body: CognitiveChatRequest) -> CognitiveChatResponse:
         draft = API_FAILURE_FALLBACK_PT
         used_fallback = True
         fallback_reason = exc.detail
-        turn_provider = "gemini-2.5-pro" if mode == "pro" else "gemini-2.5-flash"
+        turn_provider = "gemini-3.8-flash"
         turn = type(
             "T",
             (),
@@ -150,7 +150,7 @@ async def cognitive_chat(body: CognitiveChatRequest) -> CognitiveChatResponse:
         response_text=final_text,
         consensus_confidence=float(consenso.agreement_ratio),
         consenso=consenso.model_dump(),
-        model=getattr(turn, "provider", "gemini-2.5-flash"),
+        model=getattr(turn, "provider", "gemini-3.8-flash"),
         mode=mode,
         duration_ms=int(getattr(turn, "duration_ms", 0)) + int(consenso.duration_ms),
         cognitive_provider="gemini",

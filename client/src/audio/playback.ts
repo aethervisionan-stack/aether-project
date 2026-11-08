@@ -1,3 +1,5 @@
+import { ensureAudioContextRunning } from "./diagnostics";
+
 /** Decode base64 / remote TTS URL and play through the default output (BT headphones). */
 
 export interface PlaybackHandle {
@@ -48,6 +50,14 @@ export async function playResponseAudio(options: {
     throw new Error("No TTS audio_url or audio_base64 to play");
   }
 
+  console.log("[aether:stage] playback.start", {
+    hasAudioUrl: !!options.audioUrl,
+    hasAudioBase64: !!options.audioBase64,
+    mimeType,
+    srcKind: src.startsWith("blob:") ? "blob" : src.startsWith("/api") ? "proxy" : "remote",
+    srcPreview: src.slice(0, 120),
+  });
+
   const audio = new Audio(src);
   audio.preload = "auto";
 
@@ -61,7 +71,24 @@ export async function playResponseAudio(options: {
   audio.addEventListener("ended", cleanup, { once: true });
   audio.addEventListener("error", cleanup, { once: true });
 
-  await audio.play();
+  try {
+    await ensureAudioContextRunning();
+  } catch (err) {
+    console.warn("[aether:stage] playback.audiocontext", err);
+    // O elemento <audio> ainda tenta tocar; o reset manual do HUD recupera o grafo.
+  }
+
+  try {
+    await audio.play();
+    console.log("[aether:stage] playback.playing");
+  } catch (err) {
+    console.error("[aether:stage] playback.error", err);
+    if (err instanceof Error && err.stack) {
+      console.error("[aether:stage] playback.error.stack", err.stack);
+    }
+    cleanup();
+    throw err;
+  }
 
   return {
     stop: () => {

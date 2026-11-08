@@ -11,20 +11,53 @@ export type CaptureState = "idle" | "requesting" | "recording" | "stopping" | "e
 export type CaptureFailureKind =
   | "permission_denied"
   | "device_missing"
+  | "device_busy"
+  | "overconstrained"
   | "unsupported"
   | "secure_context"
   | "timeout"
   | "unknown";
 
+export interface CaptureErrorDetail {
+  domName?: string;
+  constraint?: string;
+  reason?: string;
+}
+
+export interface CaptureFailureRecord {
+  at: string;
+  context: string;
+  domName: string;
+  kind: CaptureFailureKind;
+  message: string;
+  reason: string;
+  constraint: string | null;
+  browserMessage: string;
+}
+
+const captureFailureLog: CaptureFailureRecord[] = [];
+const CAPTURE_LOG_LIMIT = 8;
+
 export class CaptureError extends Error {
   readonly kind: CaptureFailureKind;
   readonly recoverable: boolean;
+  readonly domName: string | null;
+  readonly constraint: string | null;
+  readonly reason: string;
 
-  constructor(kind: CaptureFailureKind, message: string, recoverable = true) {
+  constructor(
+    kind: CaptureFailureKind,
+    message: string,
+    recoverable = true,
+    detail?: CaptureErrorDetail,
+  ) {
     super(message);
     this.name = "CaptureError";
     this.kind = kind;
     this.recoverable = recoverable;
+    this.domName = detail?.domName ?? null;
+    this.constraint = detail?.constraint ?? null;
+    this.reason = detail?.reason ?? message;
   }
 }
 
@@ -41,6 +74,8 @@ export interface HeadsetCaptureOptions {
   audioBitsPerSecond?: number;
   /** Soft timeout for getUserMedia so the HUD never freezes. */
   permissionTimeoutMs?: number;
+  /** Fluxo caiu (mute prolongado ou track ended) — o HUD volta a procurar o Hands-Free. */
+  onStreamInterrupted?: (info: { reason: "mute" | "ended"; label: string }) => void;
 }
 
 export interface CaptureCapabilities {
@@ -105,24 +140,139 @@ export function isMediaRecorderCaptureAvailable(): boolean {
   return caps.secureContext && caps.getUserMedia && caps.mediaRecorder;
 }
 
+/** Captura Bluetooth do M100: o endpoint que o Windows chama Hands-Free / AG Audio. */
+export function isM100HandsFreeLabel(label: string | null | undefined): boolean {
+  const lower = (label || "").toLowerCase();
+  if (!lower.includes("m100")) return false;
+  return (
+    lower.includes("hands-free") ||
+    lower.includes("handsfree") ||
+    lower.includes("hands free") ||
+    lower.includes("ag audio") ||
+    lower.includes("áudio ag") ||
+    lower.includes("audio ag")
+  );
+}
+
 export function looksLikeHeadsetLabel(label: string | null | undefined): boolean {
   const lower = (label || "").toLowerCase();
   if (!lower) return false;
   return HEADSET_LABEL_HINTS.some((hint) => lower.includes(hint));
 }
 
-/** Prefer Bluetooth / Headset M100-style labels when enumerating inputs. */
+/** Prefer Hands-Free, AG Audio, then any M100 capture. Never a list index. */
+export function selectHandsFreeInput(
+  devices: MediaDeviceInfo[],
+): MediaDeviceInfo | null {
+  const inputs = devices.filter((device) => {
+    if (device.kind !== "audioinput") return false;
+    if (!device.deviceId || device.deviceId === "default" || device.deviceId === "communications") {
+      return false;
+    }
+    return true;
+  });
+  let best: MediaDeviceInfo | null = null;
+  let bestScore = 0;
+  for (const device of inputs) {
+    const score = handsFreeLabelScore(device.label);
+    if (score > bestScore) {
+      best = device;
+      bestScore = score;
+    }
+  }
+  return best;
+}
+
+function handsFreeLabelScore(label: string | null | undefined): number {
+  const lower = (label || "").toLowerCase();
+  if (!lower) return 0;
+  const handsFree = isHandsFreeAgLabel(lower);
+  const m100 = lower.includes("m100");
+  if (m100 && handsFree) return 3;
+  if (handsFree) return 2;
+  if (m100) return 1;
+  return 0;
+}
+
+export function isHandsFreeAgLabel(label: string | null | undefined): boolean {
+  const lower = (label || "").toLowerCase();
+  return (
+    lower.includes("hands-free") ||
+    lower.includes("handsfree") ||
+    lower.includes("hands free") ||
+    lower.includes("ag audio") ||
+    lower.includes("áudio ag") ||
+    lower.includes("audio ag")
+  );
+}
+
 export function pickPreferredAudioInput(
   devices: MediaDeviceInfo[],
 ): MediaDeviceInfo | null {
-  const inputs = devices.filter((d) => d.kind === "audioinput");
-  if (!inputs.length) return null;
-  const labeled = inputs.find((d) => looksLikeHeadsetLabel(d.label));
-  if (labeled) return labeled;
-  const withLabel = inputs.find((d) => (d.label || "").trim().length > 0);
-  return withLabel ?? inputs[0] ?? null;
+  return selectHandsFreeInput(devices);
 }
 
+/**
+ * Resolve o microfone pelo label atual. O deviceId de um adaptador USB anterior
+ * deixa de ser usado quando o Hands-Free volta com outro id.
+ */
+export async function resolveHandsFreeDeviceId(
+  previousDeviceId?: string | null,
+): Promise<string | null> {
+  let inputs: MediaDeviceInfo[] = [];
+  try {
+    inputs = await listAudioInputs();
+  } catch (err) {
+    console.warn("[aether:audio] enumerateDevices falhou ao resolver Hands-Free", err);
+    return null;
+  }
+  const selected = selectHandsFreeInput(inputs);
+  if (!selected) {
+    console.warn(
+      "[aether:audio] nenhum audioinput Hands-Free / AG Audio. O id anterior não é reutilizado.",
+      {
+        previousDeviceId: previousDeviceId ?? null,
+        inputs: inputs.map((device) => device.label || "(sem label)"),
+      },
+    );
+    return null;
+  }
+  if (previousDeviceId && previousDeviceId !== selected.deviceId) {
+    console.info("[aether:audio] endpoint Hands-Free mudou após troca de adaptador", {
+      previousDeviceId,
+      deviceId: selected.deviceId,
+      label: selected.label,
+    });
+  } else {
+    console.info("[aether:audio] Hands-Free AG Audio selecionado pelo label", {
+      deviceId: selected.deviceId,
+      label: selected.label,
+    });
+  }
+  return selected.deviceId;
+}
+
+function readConstraint(err: unknown): string | null {
+  if (!err || typeof err !== "object" || !("constraint" in err)) return null;
+  const constraint = (err as { constraint?: unknown }).constraint;
+  return typeof constraint === "string" && constraint.length > 0 ? constraint : null;
+}
+
+function failureDetail(
+  domName: string,
+  reason: string,
+  constraint: string | null,
+): CaptureErrorDetail {
+  const detail: CaptureErrorDetail = { domName, reason };
+  if (constraint) detail.constraint = constraint;
+  return detail;
+}
+
+/**
+ * Traduz o DOMException de getUserMedia para uma causa acionável.
+ * NotFound / NotReadable / Overconstrained são as recusas típicas do
+ * perfil Hands-Free quando o Windows só expõe A2DP ou segura o HFP.
+ */
 export function classifyMediaError(err: unknown): CaptureError {
   if (err instanceof CaptureError) {
     return err;
@@ -133,47 +283,115 @@ export function classifyMediaError(err: unknown): CaptureError {
       : "";
   const message =
     err instanceof Error ? err.message : "Falha desconhecida na captura de áudio.";
+  const constraint = readConstraint(err);
+  const browserNote = message && message !== name ? ` Mensagem do browser: ${message}` : "";
 
   if (
     name === "NotAllowedError" ||
     name === "PermissionDeniedError" ||
     /permission|notallowed|denied/i.test(message)
   ) {
+    const reason =
+      "Permissão de microfone negada ou o prompt foi fechado. O site precisa de acesso em localhost/HTTPS. Safe Mode (Web Speech) continua disponível.";
     return new CaptureError(
       "permission_denied",
-      "Permissão de microfone negada. Safe Mode disponível sem recarregar.",
+      `${name || "NotAllowedError"}: ${reason}`,
       true,
+      failureDetail(name || "NotAllowedError", reason, constraint),
     );
   }
   if (name === "NotFoundError" || name === "DevicesNotFoundError") {
+    const reason =
+      "Nenhum audioinput satisfaz o pedido. No Bluetooth, A2DP Stereo não tem microfone — a captura só existe no endpoint Hands-Free / AG Audio (HFP/HSP). Pareie o M100, confirme esse dispositivo em Som → Gravação e re-enumere.";
     return new CaptureError(
       "device_missing",
-      "Nenhum microfone encontrado. Pareie o headset Bluetooth (ex.: M100) e tente de novo.",
+      `${name}: ${reason}${browserNote}`,
       true,
+      failureDetail(name, reason, constraint),
+    );
+  }
+  if (name === "NotReadableError" || name === "TrackStartError") {
+    const reason =
+      "O sistema recusou abrir o microfone. Causas habituais: outro processo (Teams, Discord, Zoom) está com o HFP em modo exclusivo, o perfil Bluetooth ficou preso, ou o driver devolveu o device mas não inicia a captura. Feche essas apps, desmarque o controlo exclusivo do microfone e force o reset do AudioContext.";
+    return new CaptureError(
+      "device_busy",
+      `${name}: ${reason}${browserNote}`,
+      true,
+      failureDetail(name, reason, constraint),
+    );
+  }
+  if (name === "OverconstrainedError") {
+    const constraintNote = constraint ? ` Constraint recusada: ${constraint}.` : "";
+    const reason =
+      `As constraints não cabem neste endpoint.${constraintNote} deviceId exact pode apontar para um id que o Bluetooth já invalidou; channelCount, echoCancellation, noiseSuppression ou autoGainControl por vezes são recusados no HFP mono. A captura tenta de novo sem deviceId exact.`;
+    return new CaptureError(
+      "overconstrained",
+      `${name}: ${reason}${browserNote}`,
+      true,
+      failureDetail(name, reason, constraint),
     );
   }
   if (name === "NotSupportedError" || name === "TypeError") {
+    const reason =
+      "MediaRecorder ou getUserMedia indisponível neste browser. Entrando em Safe Mode (Web Speech).";
     return new CaptureError(
       "unsupported",
-      "MediaRecorder indisponível neste browser. Entrando em Safe Mode (Web Speech).",
+      `${name || "NotSupportedError"}: ${reason}`,
       true,
+      failureDetail(name || "NotSupportedError", reason, constraint),
     );
   }
   if (name === "SecurityError") {
+    const reason = "Microfone exige contexto seguro (localhost ou HTTPS).";
     return new CaptureError(
       "secure_context",
-      "Microfone exige contexto seguro (localhost/HTTPS).",
+      `${name}: ${reason}`,
       true,
+      failureDetail(name, reason, constraint),
     );
   }
   if (name === "AbortError" || /timeout/i.test(message)) {
+    const reason = "O pedido de captura foi abortado ou a permissão demorou demais.";
     return new CaptureError(
       "timeout",
-      "Pedido de permissão demorou demais — a tentar Safe Mode.",
+      `${name || "AbortError"}: ${reason}`,
       true,
+      failureDetail(name || "AbortError", reason, constraint),
     );
   }
-  return new CaptureError("unknown", message, true);
+  const reason = message || "Falha desconhecida na captura de áudio.";
+  return new CaptureError(
+    "unknown",
+    name ? `${name}: ${reason}` : reason,
+    true,
+    failureDetail(name || "Error", reason, constraint),
+  );
+}
+
+/** Registo da sessão + console, para o HUD mostrar a recusa exacta do getUserMedia. */
+export function recordCaptureFailure(err: unknown, context: string): CaptureError {
+  const browserMessage = err instanceof Error ? err.message : "";
+  const classified = classifyMediaError(err);
+  const entry: CaptureFailureRecord = {
+    at: new Date().toISOString(),
+    context,
+    domName: classified.domName ?? "Error",
+    kind: classified.kind,
+    message: classified.message,
+    reason: classified.reason,
+    constraint: classified.constraint,
+    browserMessage,
+  };
+  captureFailureLog.unshift(entry);
+  if (captureFailureLog.length > CAPTURE_LOG_LIMIT) {
+    captureFailureLog.length = CAPTURE_LOG_LIMIT;
+  }
+  console.error("[aether:audio] captura recusada", entry);
+  return classified;
+}
+
+export function recentCaptureFailures(): CaptureFailureRecord[] {
+  return captureFailureLog.slice();
 }
 
 async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
@@ -216,6 +434,8 @@ export async function requestMicrophoneStream(options: {
   deviceId?: string | null;
   timeoutMs?: number;
   keepStream?: boolean;
+  /** Falha fica no console e não altera o estado visível da aplicação. */
+  silent?: boolean;
 } = {}): Promise<{ stream: MediaStream; label: string }> {
   const caps = probeCaptureCapabilities();
   if (!caps.secureContext) {
@@ -242,7 +462,15 @@ export async function requestMicrophoneStream(options: {
     }
     return { stream, label };
   } catch (err) {
-    throw classifyMediaError(err);
+    if (options.silent) {
+      const classified = classifyMediaError(err);
+      console.info("[aether:audio] getUserMedia silencioso", {
+        kind: classified.kind,
+        deviceId: options.deviceId ?? null,
+      });
+      throw classified;
+    }
+    throw recordCaptureFailure(err, "getUserMedia");
   }
 }
 
@@ -292,21 +520,24 @@ export class HeadsetCapture {
     }
 
     this.state = "requesting";
+    const resolvedId = await resolveHandsFreeDeviceId(preferredDeviceId);
     try {
-      // Prefer a known headset deviceId when provided; else OS default.
       const { stream, label } = await requestMicrophoneStream({
-        deviceId: preferredDeviceId ?? null,
+        deviceId: resolvedId,
         timeoutMs: this.options.permissionTimeoutMs ?? DEFAULT_PERMISSION_TIMEOUT_MS,
         keepStream: true,
       });
       this.mediaStream = stream;
       this.activeLabel = label;
     } catch (err) {
-      // Retry once without exact deviceId if preferred device vanished.
-      if (preferredDeviceId) {
+      const retryId = await resolveHandsFreeDeviceId(null);
+      if (retryId && retryId !== resolvedId) {
         try {
+          console.info("[aether:audio] nova tentativa no Hands-Free recém-enumerado", {
+            deviceId: retryId,
+          });
           const { stream, label } = await requestMicrophoneStream({
-            deviceId: null,
+            deviceId: retryId,
             timeoutMs: this.options.permissionTimeoutMs ?? DEFAULT_PERMISSION_TIMEOUT_MS,
             keepStream: true,
           });
@@ -323,6 +554,9 @@ export class HeadsetCapture {
         throw classifyMediaError(err);
       }
     }
+
+    const track = this.mediaStream?.getAudioTracks()[0];
+    if (track) this.armTrackWatch(track);
 
     const mimeType = pickMimeType(
       this.options.preferredMimeTypes ?? DEFAULT_MIME_CANDIDATES,
@@ -352,6 +586,11 @@ export class HeadsetCapture {
     this.startedAt = performance.now();
     this.recorder.start(100);
     this.state = "recording";
+    console.log("[aether:stage] capture.start", {
+      mimeType: this.recorder.mimeType || mimeType || "(default)",
+      label: this.activeLabel,
+      tracks: this.mediaStream?.getAudioTracks().length ?? 0,
+    });
   }
 
   async stop(): Promise<CaptureResult> {
@@ -362,6 +601,11 @@ export class HeadsetCapture {
     const recorder = this.recorder;
     const mimeType = recorder.mimeType || "audio/webm";
     const trackLabel = this.activeLabel;
+    console.log("[aether:stage] capture.stopping", {
+      mimeType,
+      chunks: this.chunks.length,
+      label: trackLabel,
+    });
 
     const blob = await new Promise<Blob>((resolve, reject) => {
       recorder.onerror = () =>
@@ -374,12 +618,19 @@ export class HeadsetCapture {
 
     this.teardownStream();
     this.state = "idle";
-    return {
+    const result = {
       blob,
       mimeType,
       durationMs: Math.round(performance.now() - this.startedAt),
       trackLabel,
     };
+    console.log("[aether:stage] capture.stopped", {
+      size: result.blob.size,
+      type: result.mimeType,
+      durationMs: result.durationMs,
+      label: result.trackLabel,
+    });
+    return result;
   }
 
   cancel(): void {
@@ -395,6 +646,38 @@ export class HeadsetCapture {
     this.state = "idle";
   }
 
+  private armTrackWatch(track: MediaStreamTrack): void {
+    let muteTimer: number | undefined;
+    const report = (reason: "mute" | "ended") => {
+      const label = track.label || this.activeLabel || "";
+      console.warn("[aether:audio] fluxo de áudio caiu por perda de pacote Bluetooth", {
+        reason,
+        label,
+        readyState: track.readyState,
+        muted: track.muted,
+      });
+      console.info(
+        "[aether:audio] reconexão automática: a procurar Hands-Free AG Audio / M100 pelo label",
+      );
+      this.options.onStreamInterrupted?.({ reason, label });
+    };
+    track.addEventListener("mute", () => {
+      if (muteTimer !== undefined) window.clearTimeout(muteTimer);
+      muteTimer = window.setTimeout(() => {
+        if (track.muted || track.readyState === "ended") report("mute");
+      }, 700);
+    });
+    track.addEventListener("unmute", () => {
+      if (muteTimer !== undefined) window.clearTimeout(muteTimer);
+      muteTimer = undefined;
+      console.info("[aether:audio] fluxo Bluetooth retomado", { label: track.label });
+    });
+    track.addEventListener("ended", () => {
+      if (muteTimer !== undefined) window.clearTimeout(muteTimer);
+      report("ended");
+    });
+  }
+
   private teardownStream(): void {
     this.mediaStream?.getTracks().forEach((t) => t.stop());
     this.mediaStream = null;
@@ -406,6 +689,7 @@ export class HeadsetCapture {
 export async function probeMicrophoneAccess(options: {
   timeoutMs?: number;
   preferredDeviceId?: string | null;
+  silent?: boolean;
 } = {}): Promise<{
   ok: boolean;
   label: string | null;
@@ -413,15 +697,16 @@ export async function probeMicrophoneAccess(options: {
   error: CaptureError | null;
 }> {
   try {
-    // Try preferred headset first when we already know a deviceId.
-    const { label } = await requestMicrophoneStream({
-      deviceId: options.preferredDeviceId ?? null,
+    const deviceId = await resolveHandsFreeDeviceId(options.preferredDeviceId);
+    const opened = await requestMicrophoneStream({
+      deviceId,
       timeoutMs: options.timeoutMs ?? DEFAULT_PERMISSION_TIMEOUT_MS,
       keepStream: false,
+      ...(options.silent ? { silent: true } : {}),
     });
-    // After grant, enumerate to resolve stable deviceId + nicer label.
+    const label = opened.label;
     const inputs = await listAudioInputs();
-    const preferred = pickPreferredAudioInput(inputs);
+    const preferred = selectHandsFreeInput(inputs);
     return {
       ok: true,
       label: preferred?.label || label,
@@ -486,7 +771,6 @@ export function watchMicrophoneEnvironment(handlers: {
       };
       status.addEventListener("change", onChange);
       cleanups.push(() => status.removeEventListener("change", onChange));
-      onChange();
     } catch {
       // Safari / Firefox may reject microphone PermissionName — ignore.
     }

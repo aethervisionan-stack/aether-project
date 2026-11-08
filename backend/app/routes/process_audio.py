@@ -58,6 +58,14 @@ async def process_audio(
         ) from exc
 
     logger.info(
+        "[aether:stage] http.process_audio.received filename=%s content_type=%s bytes=%s locale=%s client_id=%s",
+        filename,
+        content_type,
+        len(audio_bytes),
+        locale,
+        client_id,
+    )
+    logger.info(
         '{"event":"http.process_audio.received","filename":%s,"content_type":%s,"bytes":%s,"locale":%s,"client_id":%s}',
         json.dumps(filename),
         json.dumps(content_type),
@@ -67,7 +75,7 @@ async def process_audio(
     )
 
     try:
-        return await asyncio.wait_for(
+        response = await asyncio.wait_for(
             pipeline.process(
                 audio_bytes,
                 filename=filename,
@@ -78,10 +86,26 @@ async def process_audio(
             ),
             timeout=settings.request_timeout_ms / 1000.0,
         )
+        logger.info(
+            "[aether:stage] http.process_audio.done transcript_chars=%s response_chars=%s "
+            "tts=%s audio_url=%s fallback=%s reason=%s total_ms=%s",
+            len(response.transcript or ""),
+            len(response.response_text or ""),
+            response.meta.tts_provider,
+            bool(response.audio_url),
+            response.meta.used_safe_fallback,
+            response.meta.fallback_reason,
+            response.latency.total_ms,
+        )
+        return response
     except TimeoutError as exc:
+        logger.error("[aether:stage] http.process_audio.timeout detail=%s", exc)
         raise PipelineError(
             "Pipeline timed out",
             stage="total",
             retryable=True,
             detail=str(exc),
         ) from exc
+    except Exception:
+        logger.exception("[aether:stage] http.process_audio.error")
+        raise

@@ -41,8 +41,8 @@ def test_effective_cognitive_always_gemini() -> None:
 def test_resolve_models() -> None:
     assert resolve_gemini_mode("flash") == "flash"
     assert resolve_gemini_mode("pro") == "pro"
-    assert resolve_gemini_model("flash") == "gemini-2.5-flash"
-    assert resolve_gemini_model("pro") == "gemini-2.5-pro"
+    assert resolve_gemini_model("flash") == "gemini-3.8-flash"
+    assert resolve_gemini_model("pro") == "gemini-3.8-flash"
 
 
 @pytest.mark.asyncio

@@ -15,7 +15,7 @@ from app.services.resilience import RecoverableProviderError, classify_provider_
 
 logger = logging.getLogger("aether.tts.gemini")
 
-DEFAULT_TTS_MODEL = "gemini-2.5-flash-preview-tts"
+DEFAULT_TTS_MODEL = "gemini-3.8-flash-tts"
 DEFAULT_VOICE = "Kore"
 
 
@@ -62,6 +62,7 @@ class GeminiTts:
                     prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=voice)
                 )
             ),
+            automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
         )
 
         async def _once() -> bytes:

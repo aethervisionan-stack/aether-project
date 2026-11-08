@@ -24,7 +24,8 @@ export interface VoiceApiConfig {
 
 const DEFAULT_CONFIG: VoiceApiConfig = {
   baseUrl: import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") ?? "",
-  timeoutMs: 35_000,
+  // Tunnel + Gemini 3.x STT/cognitive routinely exceed 60s on phone networks.
+  timeoutMs: 120_000,
 };
 
 function resolveUrl(path: string, baseUrl: string): string {
@@ -93,22 +94,61 @@ export class VoiceApiClient {
     form.append("locale", options.locale ?? "pt-BR");
     form.append("client_id", options.clientId ?? "default");
 
+    const url = resolveUrl("/process-audio", this.config.baseUrl);
+    console.log("[aether:stage] request.prepare", {
+      method: "POST",
+      url,
+      baseUrl: this.config.baseUrl || "(same-origin /api proxy)",
+      blobSize: blob.size,
+      blobType: blob.type || "(empty)",
+      filename,
+      locale: options.locale ?? "pt-BR",
+      clientId: options.clientId ?? "default",
+      timeoutMs: this.config.timeoutMs,
+    });
+
     const controller = new AbortController();
     const timer = window.setTimeout(() => controller.abort(), this.config.timeoutMs);
 
     try {
-      const res = await fetch(resolveUrl("/process-audio", this.config.baseUrl), {
+      console.log("[aether:stage] request.sent", { method: "POST", url });
+      const res = await fetch(url, {
         method: "POST",
         body: form,
         signal: controller.signal,
       });
+      const bodyPreview = await res.clone().text().catch(() => "");
+      console.log("[aether:stage] response.status", {
+        url,
+        status: res.status,
+        ok: res.ok,
+        contentType: res.headers.get("content-type"),
+        bodyChars: bodyPreview.length,
+        bodySummary: bodyPreview.slice(0, 240),
+      });
       if (!res.ok) {
         throw await parseError(res);
       }
-      const raw = (await res.json()) as ProcessAudioResponse;
+      const raw = JSON.parse(bodyPreview || "{}") as ProcessAudioResponse;
       // Map transcript/response_text/consenso/audio_url → HUD Gemini aliases.
-      return normalizeProcessAudioResponse(raw);
+      const normalized = normalizeProcessAudioResponse(raw);
+      console.log("[aether:stage] response.parsed", {
+        transcriptChars: (normalized.transcript || "").length,
+        responseChars: (normalized.response_text || "").length,
+        hasAudioUrl: !!normalized.audio_url,
+        hasAudioBase64: !!normalized.audio_base64,
+        audioMime: normalized.audio_mime_type,
+        ttsProvider: normalized.meta?.tts_provider,
+        fallback: normalized.meta?.used_safe_fallback,
+        fallbackReason: normalized.meta?.fallback_reason,
+        status: normalized.status,
+      });
+      return normalized;
     } catch (err) {
+      console.error("[aether:stage] request.error", err);
+      if (err instanceof Error && err.stack) {
+        console.error("[aether:stage] request.error.stack", err.stack);
+      }
       if (err instanceof DOMException && err.name === "AbortError") {
         throw new VoiceApiError(408, {
           error: "Timeout de rede",

@@ -13,6 +13,7 @@ import type { ConsensoResult } from "../api/types";
 import {
   CaptureError,
   HeadsetCapture,
+  isM100HandsFreeLabel,
   isMediaRecorderCaptureAvailable,
   listAudioInputs,
   looksLikeHeadsetLabel,
@@ -20,9 +21,20 @@ import {
   probeCaptureCapabilities,
   probeMicrophoneAccess,
   queryMicPermissionState,
+  selectHandsFreeInput,
+  recentCaptureFailures,
   watchMicrophoneEnvironment,
   type MicPermissionState,
 } from "../audio/capture";
+import {
+  ensureAudioContextRunning,
+  isBluetoothRadioMissing,
+  inspectAudioDevices,
+  readAudioContextState,
+  resetAudioContext,
+  unlockAudioForGesture,
+  type AudioDeviceInspection,
+} from "../audio/diagnostics";
 import { playResponseAudio } from "../audio/playback";
 import {
   SpeechCaptureError,
@@ -30,6 +42,7 @@ import {
   isSpeechRecognitionAvailable,
   speakLocally,
 } from "../audio/speech";
+import { renderAudioDiagnosticsPanel } from "./components/AudioDiagnosticsPanel";
 import { renderMetricsPanel } from "./components/MetricsPanel";
 import { renderSessionHistory } from "./components/SessionHistory";
 import { escapeHtml, formatMs, formatPercent } from "./html";
@@ -59,13 +72,29 @@ const HUD_CLIENT_ID = "default";
 
 export class ControlApp {
   private readonly root: HTMLElement;
-  private readonly capture = new HeadsetCapture();
+  private lastBluetoothDropAt = 0;
+  private readonly capture = new HeadsetCapture({
+    onStreamInterrupted: (info) => {
+      const now = Date.now();
+      if (now - this.lastBluetoothDropAt < 4_000) {
+        console.info("[aether:audio] reconexão silenciosa adiada", info);
+        return;
+      }
+      this.lastBluetoothDropAt = now;
+      console.info("[aether:audio] reconexão silenciosa do microfone Hands-Free", info);
+      void this.reconnectMic({ silent: true });
+    },
+  });
   private readonly speech = new WebSpeechCapture();
   private phase: UiPhase = "idle";
   private health: HealthResponse | null = null;
   private lastResult: ProcessAudioResponse | null = null;
   private errorMessage: string | null = null;
   private devices: MediaDeviceInfo[] = [];
+  private audioInspect: AudioDeviceInspection[] = [];
+  private audioContextState = "none";
+  private diagBusy = false;
+  private diagNote: string | null = null;
   private activeMicLabel: string | null = null;
   private healthTimer: number | null = null;
   private readonly healthPollMs = 4_000;
@@ -79,6 +108,11 @@ export class ControlApp {
   private autoRetryDone = false;
   private micWatchStop: (() => void) | null = null;
   private enteringSafeMode = false;
+  /** deviceIds de audioinput já vistos — chegadas novas disparam o reconnect. */
+  private knownInputIds = new Set<string>();
+  private inputBaselineReady = false;
+  private m100ActivatedLogged = false;
+  private deviceChangeTimer: number | null = null;
 
   /** Collapsible audit panel (history + metrics). */
   private auditOpen = true;
@@ -94,6 +128,8 @@ export class ControlApp {
   private lastChat: CognitiveChatResponse | null = null;
   private chatBusy = false;
   private chatDraft = "";
+  /** Text kept when autoplay + speechSynthesis both fail — tap «Ouvir resposta». */
+  private pendingSpeakText: string | null = null;
 
   constructor(root: HTMLElement) {
     this.root = root;
@@ -103,6 +139,7 @@ export class ControlApp {
     this.render();
     await this.refreshHealth();
     await this.probeMicStatus({ quiet: true });
+    await this.captureInputBaseline();
     this.bindMicEnvironmentWatch();
     // One soft auto-retry if still blocked (permission prompt may have been missed).
     if (this.micStatus === "blocked" && !this.autoRetryDone) {
@@ -115,13 +152,14 @@ export class ControlApp {
     }
     await this.refreshAudit({ quiet: true });
     this.startHealthPolling();
+    this.startHandsFreeWatch();
   }
 
   private bindMicEnvironmentWatch(): void {
     this.micWatchStop?.();
     this.micWatchStop = watchMicrophoneEnvironment({
       onDevicesChanged: () => {
-        void this.refreshDeviceLabel({ quiet: true });
+        this.scheduleAudioInputReconnect();
       },
       onPermissionChange: (state) => {
         this.permissionState = state;
@@ -139,8 +177,9 @@ export class ControlApp {
   }
 
   /** Soft mic probe — no full page reload. Updates Active / Blocked / Safe Mode. */
-  private async probeMicStatus(options: { quiet?: boolean } = {}): Promise<void> {
+  private async probeMicStatus(options: { quiet?: boolean; silent?: boolean } = {}): Promise<void> {
     this.permissionState = await queryMicPermissionState();
+    await this.refreshAudioInspect();
     const caps = probeCaptureCapabilities();
     if (!isMediaRecorderCaptureAvailable()) {
       if (caps.speechRecognition) {
@@ -163,7 +202,14 @@ export class ControlApp {
     const probe = await probeMicrophoneAccess({
       preferredDeviceId: this.preferredDeviceId,
       timeoutMs: 8_000,
+      ...(options.silent ? { silent: true } : {}),
     });
+    if (!probe.ok && options.silent) {
+      console.info("[aether:audio] reconexão silenciosa sem endpoint Hands-Free", {
+        kind: probe.error?.kind ?? "unknown",
+      });
+      return;
+    }
     if (probe.ok) {
       this.micStatus = "active";
       this.captureMode = "mediarecorder";
@@ -173,10 +219,12 @@ export class ControlApp {
       try {
         this.devices = await listAudioInputs();
         const preferred = pickPreferredAudioInput(this.devices);
+        this.noteInputIds(this.devices);
         if (preferred?.label) {
           this.activeMicLabel = preferred.label;
           this.preferredDeviceId = preferred.deviceId;
         }
+        await this.refreshAudioInspect();
       } catch {
         // enumeration optional after grant
       }
@@ -261,10 +309,140 @@ export class ControlApp {
     }
   }
 
+  private async refreshAudioInspect(): Promise<void> {
+    try {
+      this.audioInspect = await inspectAudioDevices();
+      this.audioContextState = readAudioContextState();
+    } catch (err) {
+      const name = err instanceof Error ? err.name : "Error";
+      const message = err instanceof Error ? err.message : "enumerateDevices falhou.";
+      this.diagNote = `enumerateDevices: ${name} — ${message}`;
+    }
+  }
+
+  private async forceAudioReset(): Promise<void> {
+    if (this.diagBusy || this.phase !== "idle") return;
+    this.diagBusy = true;
+    this.diagNote = null;
+    this.render();
+    try {
+      const result = await resetAudioContext();
+      await this.refreshAudioInspect();
+      this.audioContextState = result.current;
+      const action =
+        result.action === "resumed"
+          ? "retomado"
+          : result.action === "recreated"
+            ? "recriado"
+            : result.action === "created"
+              ? "criado"
+              : "indisponível";
+      this.diagNote = `AudioContext ${action}: ${result.previous} → ${result.current}. ${this.audioInspect.length} dispositivos de áudio.`;
+      const inputs = this.audioInspect.filter((device) => device.kind === "audioinput");
+      if (inputs.length) {
+        const preferred =
+          inputs.find((device) => device.profile === "hfp" && device.label) ??
+          inputs.find((device) => device.label);
+        if (preferred?.label) {
+          this.activeMicLabel = preferred.label;
+          this.preferredDeviceId = preferred.deviceId;
+        }
+      }
+    } catch (err) {
+      this.diagNote =
+        err instanceof Error ? err.message : "Falha ao repor o AudioContext.";
+    } finally {
+      this.diagBusy = false;
+      this.render();
+    }
+  }
+
+  private noteInputIds(devices: MediaDeviceInfo[]): void {
+    this.knownInputIds = new Set(
+      devices.map((device) => device.deviceId).filter((id) => id.length > 0),
+    );
+    this.inputBaselineReady = true;
+  }
+
+  private async captureInputBaseline(): Promise<void> {
+    try {
+      this.noteInputIds(await listAudioInputs());
+    } catch {
+      this.knownInputIds = new Set();
+      this.inputBaselineReady = true;
+    }
+  }
+
+  /** Agrupa o burst de devicechange do Windows num único reconnect. */
+  private scheduleAudioInputReconnect(): void {
+    if (this.deviceChangeTimer !== null) {
+      window.clearTimeout(this.deviceChangeTimer);
+    }
+    this.deviceChangeTimer = window.setTimeout(() => {
+      this.deviceChangeTimer = null;
+      void this.handleAudioInputChange();
+    }, 450);
+  }
+
+  /**
+   * ondevicechange: se surgir um audioinput novo com o HUD em Blocked/Safe Mode,
+   * abre o microfone outra vez. M100 Hands-Free passa a Active e regista uma linha.
+   */
+  private async handleAudioInputChange(): Promise<void> {
+    if (!this.inputBaselineReady) return;
+    let inputs: MediaDeviceInfo[] = [];
+    try {
+      inputs = await listAudioInputs();
+    } catch {
+      return;
+    }
+    this.devices = inputs;
+    await this.refreshAudioInspect();
+    const arrived = inputs.filter(
+      (device) => device.deviceId.length > 0 && !this.knownInputIds.has(device.deviceId),
+    );
+    this.knownInputIds = new Set(
+      inputs.map((device) => device.deviceId).filter((id) => id.length > 0),
+    );
+    const m100 = inputs.find((device) => isM100HandsFreeLabel(device.label)) ?? null;
+    if (!m100) {
+      this.m100ActivatedLogged = false;
+    }
+    const down = this.micStatus === "blocked" || this.micStatus === "safe";
+    const m100Arrival = arrived.find((device) => isM100HandsFreeLabel(device.label)) ?? null;
+    const shouldReconnect =
+      this.phase === "idle" &&
+      !this.reconnectBusy &&
+      (Boolean(m100Arrival) || (arrived.length > 0 && down));
+
+    if (!shouldReconnect) {
+      if (m100?.label && this.micStatus === "active") {
+        this.activeMicLabel = m100.label;
+        this.preferredDeviceId = m100.deviceId;
+      }
+      this.render();
+      return;
+    }
+
+    const target = m100Arrival ?? m100 ?? arrived[0];
+    if (target?.deviceId) {
+      this.preferredDeviceId = target.deviceId;
+    }
+    await this.reconnectMic({ fromDeviceChange: true });
+    const activated =
+      this.micStatus === "active" &&
+      (isM100HandsFreeLabel(this.activeMicLabel) || Boolean(m100Arrival));
+    if (activated && !this.m100ActivatedLogged) {
+      this.m100ActivatedLogged = true;
+      console.info("[aether:audio] M100 detectado e ativado");
+    }
+  }
+
   private async refreshDeviceLabel(options: { quiet?: boolean } = {}): Promise<void> {
     try {
       const inputs = await listAudioInputs();
       this.devices = inputs;
+      await this.refreshAudioInspect();
       const preferred = pickPreferredAudioInput(inputs);
       if (preferred?.label) {
         this.activeMicLabel = preferred.label;
@@ -284,20 +462,36 @@ export class ControlApp {
     }
   }
 
-  private async reconnectMic(options: { fromAutoRetry?: boolean } = {}): Promise<void> {
+  private async reconnectMic(options: {
+    fromAutoRetry?: boolean;
+    fromDeviceChange?: boolean;
+    silent?: boolean;
+  } = {}): Promise<void> {
     if (this.reconnectBusy || this.phase !== "idle") return;
     this.reconnectBusy = true;
-    this.errorMessage = options.fromAutoRetry
-      ? "A tentar permissão do microfone novamente…"
-      : null;
-    this.capture.cancel();
-    this.speech.cancel();
-    this.speechInterim = "";
-    this.render();
+    if (!options.silent && options.fromDeviceChange) {
+      this.diagNote = "Nova entrada de áudio — a reabrir o microfone.";
+    }
+    if (!options.silent) {
+      this.errorMessage = options.fromAutoRetry
+        ? "A tentar permissão do microfone novamente…"
+        : null;
+      this.capture.cancel();
+      this.speech.cancel();
+      this.speechInterim = "";
+      this.render();
+    }
     try {
+      if (options.silent) {
+        await this.probeMicStatus({ quiet: true, silent: true });
+        return;
+      }
       await this.probeMicStatus({ quiet: false });
       if (this.micStatus === "active") {
         this.errorMessage = null;
+        if (options.fromDeviceChange) {
+          this.diagNote = null;
+        }
         this.activeMicLabel =
           this.activeMicLabel ?? "entrada padrão do sistema";
       }
@@ -305,6 +499,27 @@ export class ControlApp {
       this.reconnectBusy = false;
       this.render();
     }
+  }
+
+  private startHandsFreeWatch(): void {
+    window.setInterval(() => {
+      void this.retryHandsFreeSilently();
+    }, 2000);
+  }
+
+  private async retryHandsFreeSilently(): Promise<void> {
+    if (this.reconnectBusy || this.phase !== "idle" || this.permissionState === "denied") return;
+    let inputs: MediaDeviceInfo[] = [];
+    try {
+      inputs = await listAudioInputs();
+    } catch {
+      return;
+    }
+    const target = selectHandsFreeInput(inputs);
+    if (!target) return;
+    if (this.micStatus === "active" && this.preferredDeviceId === target.deviceId) return;
+    console.info("[aether:audio] reconexão silenciosa a cada 2s", { label: target.label });
+    await this.reconnectMic({ silent: true });
   }
 
   private startHealthPolling(): void {
@@ -401,7 +616,14 @@ export class ControlApp {
         throw probe.error ?? new CaptureError("unknown", "Falha ao listar microfones.");
       }
       this.devices = await listAudioInputs();
-      const preferred = pickPreferredAudioInput(this.devices);
+      await this.refreshAudioInspect();
+      this.noteInputIds(this.devices);
+      const m100 = this.devices.find((device) => isM100HandsFreeLabel(device.label));
+      const preferred = m100 ?? pickPreferredAudioInput(this.devices);
+      if (m100 && !this.m100ActivatedLogged) {
+        this.m100ActivatedLogged = true;
+        console.info("[aether:audio] M100 detectado e ativado");
+      }
       this.micStatus = "active";
       this.captureMode = "mediarecorder";
       this.activeMicLabel = preferred?.label || probe.label;
@@ -435,6 +657,13 @@ export class ControlApp {
   }
 
   private async toggleRecord(): Promise<void> {
+    // Unlock WebAudio + warm speechSynthesis inside the user gesture (mobile autoplay).
+    try {
+      await unlockAudioForGesture();
+    } catch (err) {
+      console.warn("[aether:stage] audio.unlock_failed", err);
+    }
+
     if (this.phase === "listening") {
       await this.finishRecord();
       return;
@@ -497,9 +726,7 @@ export class ControlApp {
           this.setPhase("idle");
           return;
         } else {
-          await this.enterSafeModeInstant(
-            "MediaRecorder falhou — a usar Safe Mode (Web Speech).",
-          );
+          await this.enterSafeModeInstant(classified.message);
         }
       }
     }
@@ -533,7 +760,14 @@ export class ControlApp {
     }
     this.setPhase("validating");
     try {
+      console.log("[aether:stage] capture.stop");
       const captured = await this.capture.stop();
+      console.log("[aether:stage] capture.blob", {
+        size: captured.blob.size,
+        type: captured.mimeType || captured.blob.type || "(empty)",
+        durationMs: captured.durationMs,
+        trackLabel: captured.trackLabel,
+      });
       // Multipart/form-data via FormData (browser sets boundary) → POST /process-audio
       const result = await voiceApi.processAudio(captured.blob, {
         filename: `headset-${Date.now()}.${extensionForMime(captured.mimeType)}`,
@@ -546,30 +780,22 @@ export class ControlApp {
         result.gemini_response ?? result.response_text,
       );
       this.setPhase("responding");
-      // Prefer server TTS; fall back to browser speechSynthesis (Gemini-only stack).
-      try {
-        if (result.audio_url || result.audio_base64) {
-          await playResponseAudio({
-            audioUrl: result.audio_url ?? null,
-            audioBase64: result.audio_base64,
-            mimeType: result.audio_mime_type,
-          });
-        } else {
-          await speakLocally(
-            result.gemini_response ?? result.response_text,
-            "pt-BR",
-          );
-        }
-      } catch {
-        await speakLocally(
-          result.gemini_response ?? result.response_text,
-          "pt-BR",
-        );
-      }
+      await this.deliverSpokenReply({
+        text: result.gemini_response ?? result.response_text,
+        audioUrl: result.audio_url ?? null,
+        audioBase64: result.audio_base64,
+        mimeType: result.audio_mime_type,
+        ttsProvider: result.meta?.tts_provider ?? "",
+        usedSafeFallback: !!result.meta?.used_safe_fallback,
+      });
       this.setPhase("idle");
       // Refresh Session History + Metrics after each successful M100 / headset turn.
       void this.refreshAudit({ quiet: true });
     } catch (err) {
+      console.error("[aether:stage] finishRecord.error", err);
+      if (err instanceof Error && err.stack) {
+        console.error("[aether:stage] finishRecord.error.stack", err.stack);
+      }
       this.capture.cancel();
       if (err instanceof VoiceApiError) {
         this.errorMessage = `${err.message}${err.detail ? ` — ${err.detail}` : ""}${
@@ -582,13 +808,121 @@ export class ControlApp {
     }
   }
 
+  /**
+   * Play server TTS when real; always attempt browser speech for words.
+   * Mock WAV is only a beep — never treat it as the sole audible reply.
+   * If both fail, keep text on HUD and offer «Ouvir resposta» (fresh user gesture).
+   */
+  private async deliverSpokenReply(options: {
+    text: string;
+    audioUrl?: string | null;
+    audioBase64?: string | null;
+    mimeType?: string;
+    ttsProvider?: string;
+    usedSafeFallback?: boolean;
+  }): Promise<void> {
+    const spokenText = (options.text || "").trim();
+    const hasRealTtsUrl = !!options.audioUrl;
+    const ttsProvider = options.ttsProvider ?? "";
+    const preferBrowserSpeech =
+      !hasRealTtsUrl ||
+      ttsProvider === "mock-tts" ||
+      !!options.usedSafeFallback;
+
+    console.log("[aether:stage] tts.plan", {
+      hasRealTtsUrl,
+      ttsProvider,
+      preferBrowserSpeech,
+      spokenChars: spokenText.length,
+    });
+
+    let serverOk = false;
+    let localOk = false;
+
+    try {
+      await ensureAudioContextRunning();
+    } catch (err) {
+      console.warn("[aether:stage] tts.audiocontext", err);
+    }
+
+    if (hasRealTtsUrl || (!preferBrowserSpeech && options.audioBase64)) {
+      try {
+        await playResponseAudio({
+          audioUrl: options.audioUrl ?? null,
+          audioBase64: options.audioBase64 ?? null,
+          mimeType: options.mimeType ?? "audio/mpeg",
+        });
+        serverOk = true;
+        console.log("[aether:stage] tts.server_playback_ok");
+      } catch (playErr) {
+        console.error("[aether:stage] tts.playback_failed", playErr);
+        if (playErr instanceof Error && playErr.stack) {
+          console.error("[aether:stage] tts.playback_failed.stack", playErr.stack);
+        }
+      }
+    }
+
+    // Always try spoken words when mock/fallback or when server audio failed.
+    if (preferBrowserSpeech || !serverOk) {
+      const spoken = await speakLocally(spokenText, "pt-BR");
+      localOk = spoken.ok;
+      if (!spoken.ok) {
+        console.error("[aether:stage] tts.speak_locally_failed", spoken.reason);
+      }
+    } else {
+      localOk = true;
+    }
+
+    if (serverOk || localOk) {
+      this.pendingSpeakText = null;
+      return;
+    }
+
+    // Both paths failed — text stays on HUD; require a fresh tap to speak.
+    this.pendingSpeakText = spokenText || null;
+    this.errorMessage =
+      "Resposta no ecrã, mas o áudio foi bloqueado pelo browser. Toque em «Ouvir resposta».";
+    console.error("[aether:stage] tts.both_failed", {
+      spokenChars: spokenText.length,
+      hasRealTtsUrl,
+      ttsProvider,
+    });
+  }
+
+  private async speakPendingReply(): Promise<void> {
+    const text = this.pendingSpeakText;
+    if (!text) return;
+    try {
+      await unlockAudioForGesture();
+    } catch {
+      // continue — speak may still work inside this click
+    }
+    const spoken = await speakLocally(text, "pt-BR");
+    if (spoken.ok) {
+      this.pendingSpeakText = null;
+      this.errorMessage = null;
+    } else {
+      this.errorMessage =
+        "Ainda sem áudio neste browser. A resposta permanece no painel «Última resposta».";
+    }
+    this.render();
+  }
+
   /** Safe Mode: Web Speech transcript → cognitive chat → local TTS. */
   private async finishSpeechSafeMode(): Promise<void> {
     this.setPhase("validating");
     try {
       const heard = await this.speech.stop();
+      console.log("[aether:stage] safemode.transcript", {
+        chars: heard.transcript.length,
+        preview: heard.transcript.slice(0, 120),
+      });
       this.speechInterim = "";
       const historyForApi = this.chatHistory.slice();
+      console.log("[aether:stage] safemode.cognitive.request", {
+        mode: this.geminiMode,
+        historyTurns: historyForApi.length,
+      });
       const res = await voiceApi.cognitiveChat({
         query: heard.transcript,
         history: historyForApi,
@@ -596,14 +930,29 @@ export class ControlApp {
         locale: "pt-BR",
         client_id: HUD_CLIENT_ID,
       });
+      console.log("[aether:stage] safemode.cognitive.response", {
+        status: res.status,
+        model: res.model,
+        chars: (res.gemini_response || "").length,
+        fallback: res.used_safe_fallback,
+      });
       this.lastChat = res;
       this.lastResult = processAudioFromCognitive(res, heard.transcript);
       this.pushChatTurn(heard.transcript, res.gemini_response);
       this.setPhase("responding");
-      await speakLocally(res.gemini_response || res.response_text, "pt-BR");
+      await this.deliverSpokenReply({
+        text: res.gemini_response || res.response_text,
+        audioUrl: res.audio_response_url,
+        usedSafeFallback: res.used_safe_fallback || !res.audio_response_url,
+        ttsProvider: res.audio_response_url ? "gemini-tts" : "mock-tts",
+      });
       this.setPhase("idle");
       void this.refreshAudit({ quiet: true });
     } catch (err) {
+      console.error("[aether:stage] safemode.error", err);
+      if (err instanceof Error && err.stack) {
+        console.error("[aether:stage] safemode.error.stack", err.stack);
+      }
       this.speech.cancel();
       if (err instanceof SpeechCaptureError) {
         this.errorMessage = err.message;
@@ -720,6 +1069,7 @@ export class ControlApp {
     const listening = this.phase === "listening";
     const busy = this.phase === "validating" || this.phase === "responding";
     const phaseLabel = PHASE_LABEL[this.phase];
+    const radioMissing = isBluetoothRadioMissing(this.audioInspect);
 
     const historyHtml = renderSessionHistory({
       items: this.historyItems,
@@ -837,18 +1187,41 @@ export class ControlApp {
               Checar API
             </button>
           </div>
+          ${this.errorMessage ? `<p class="error">${escapeHtml(this.errorMessage)}</p>` : ""}
           ${
-            this.devices.length
-              ? `<ul class="device-list">${this.devices
-                  .map((d) => {
-                    const label = d.label || d.deviceId;
-                    const hot = looksLikeHeadsetLabel(label) ? " is-headset" : "";
-                    return `<li class="device-list__item${hot}">${escapeHtml(label)}</li>`;
-                  })
-                  .join("")}</ul>`
+            this.pendingSpeakText
+              ? `<button type="button" class="btn-primary" data-action="speak-pending">
+                  Ouvir resposta
+                </button>`
               : ""
           }
-          ${this.errorMessage ? `<p class="error">${escapeHtml(this.errorMessage)}</p>` : ""}
+        </section>
+
+        <section class="panel" aria-labelledby="audio-diag-title">
+          ${
+            radioMissing
+              ? `<div class="radio-alert" role="alert">
+                  <strong>Rádio Bluetooth ausente (NO_BT_RADIO)</strong>
+                  <p>Nenhum endpoint Bluetooth está visível. No diagnóstico isto é <kbd>NO_BT_RADIO</kbd>: o Generic Bluetooth Adapter fica <kbd>CM_PROB_PHANTOM</kbd>.</p>
+                  <ol>
+                    <li><kbd>Win + X</kbd> → Gerenciador de Dispositivos</li>
+                    <li>Exibir → Mostrar dispositivos ocultos</li>
+                    <li>Bluetooth → Generic Bluetooth Adapter → Desinstalar dispositivo. Não exclua o driver.</li>
+                    <li>Ação → Verificar se há alterações de hardware</li>
+                    <li>Desligue o PC, retire a energia da placa e segure o botão de ligar 20 segundos</li>
+                  </ol>
+                </div>`
+              : ""
+          }
+          ${renderAudioDiagnosticsPanel({
+            devices: this.audioInspect,
+            contextState: this.audioContextState,
+            busy: this.diagBusy,
+            disabled: busy,
+            note: this.diagNote,
+            logs: recentCaptureFailures(),
+            activeDeviceId: this.preferredDeviceId,
+          })}
         </section>
 
         <section class="panel" aria-labelledby="result-title">
@@ -1086,6 +1459,12 @@ export class ControlApp {
         void this.toggleRecord();
       },
     );
+    this.root.querySelector<HTMLButtonElement>('[data-action="speak-pending"]')?.addEventListener(
+      "click",
+      () => {
+        void this.speakPendingReply();
+      },
+    );
     this.root.querySelector<HTMLButtonElement>('[data-action="reconnect"]')?.addEventListener(
       "click",
       () => {
@@ -1115,6 +1494,12 @@ export class ControlApp {
       "click",
       () => {
         void this.refreshDevices();
+      },
+    );
+    this.root.querySelector<HTMLButtonElement>('[data-action="audio-reset"]')?.addEventListener(
+      "click",
+      () => {
+        void this.forceAudioReset();
       },
     );
     this.root.querySelector<HTMLButtonElement>('[data-action="health"]')?.addEventListener(

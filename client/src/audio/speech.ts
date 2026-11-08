@@ -183,20 +183,63 @@ export class WebSpeechCapture {
   }
 }
 
-/** Local TTS when the pipeline has no audio_url (Safe Mode path). */
-export function speakLocally(text: string, lang = "pt-BR"): Promise<void> {
+export interface SpeakLocallyResult {
+  ok: boolean;
+  reason: string | null;
+}
+
+/**
+ * Browser speechSynthesis TTS. Returns ok=false when unavailable / ignored /
+ * onerror — never silently “succeeds” on a failed speak (mobile trap).
+ */
+export function speakLocally(text: string, lang = "pt-BR"): Promise<SpeakLocallyResult> {
   const cleaned = text.trim();
-  if (!cleaned) return Promise.resolve();
+  if (!cleaned) {
+    console.warn("[aether:stage] tts.speak_locally.empty");
+    return Promise.resolve({ ok: false, reason: "empty_text" });
+  }
   if (typeof window === "undefined" || !window.speechSynthesis) {
-    return Promise.resolve();
+    console.warn("[aether:stage] tts.speak_locally.unsupported");
+    return Promise.resolve({ ok: false, reason: "speechSynthesis_unavailable" });
   }
   return new Promise((resolve) => {
-    window.speechSynthesis.cancel();
-    const utter = new SpeechSynthesisUtterance(cleaned);
-    utter.lang = lang;
-    utter.rate = 1.02;
-    utter.onend = () => resolve();
-    utter.onerror = () => resolve();
-    window.speechSynthesis.speak(utter);
+    try {
+      window.speechSynthesis.cancel();
+      const utter = new SpeechSynthesisUtterance(cleaned);
+      utter.lang = lang;
+      utter.rate = 1.02;
+      let settled = false;
+      const done = (ok: boolean, reason: string | null) => {
+        if (settled) return;
+        settled = true;
+        console.log("[aether:stage] tts.speak_locally.done", {
+          ok,
+          reason,
+          chars: cleaned.length,
+        });
+        resolve({ ok, reason });
+      };
+      utter.onend = () => done(true, null);
+      utter.onerror = (ev) => {
+        done(false, `speech_error:${(ev as SpeechSynthesisErrorEvent).error || "unknown"}`);
+      };
+      // Some mobile browsers ignore speak() after an async gap with no error event.
+      window.setTimeout(() => {
+        if (settled) return;
+        if (window.speechSynthesis.speaking || window.speechSynthesis.pending) return;
+        done(false, "speech_timeout_or_ignored");
+      }, Math.min(12_000, 1_800 + cleaned.length * 80));
+      window.speechSynthesis.speak(utter);
+      console.log("[aether:stage] tts.speak_locally.start", {
+        chars: cleaned.length,
+        lang,
+      });
+    } catch (err) {
+      console.error("[aether:stage] tts.speak_locally.throw", err);
+      resolve({
+        ok: false,
+        reason: err instanceof Error ? err.message : "speak_threw",
+      });
+    }
   });
 }

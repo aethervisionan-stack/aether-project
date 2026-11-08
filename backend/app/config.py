@@ -70,10 +70,13 @@ class Settings(BaseSettings):
     # Cognitive engine — Gemini only (Flash / Pro)
     cognitive_provider: CognitiveProvider = "auto"
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.5-flash"
+    # Gemini 2.5 Flash/Pro are 404 for new API keys (Nov 2026); use 3.x IDs.
+    gemini_model: str = "gemini-3.8-flash"
     gemini_mode: str = "flash"
-    gemini_stt_model: str = "gemini-2.5-flash"
-    gemini_tts_model: str = "gemini-2.5-flash-preview-tts"
+    # Lite STT is faster / more capacity under multimodal load than 3.8 Flash.
+    gemini_stt_model: str = "gemini-3.5-flash-lite"
+    # Native TTS may reject speechConfig on this SDK — pipeline falls back to mock WAV.
+    gemini_tts_model: str = "gemini-3.8-flash-tts"
     gemini_tts_voice: str = "Kore"
     gemini_inject_sqlite_context: bool = True
 
@@ -84,7 +87,8 @@ class Settings(BaseSettings):
     # Structured session persistence (SQLite relative to backend/)
     sqlite_path: str = "aether_vision.db"
 
-    request_timeout_ms: int = Field(default=30_000, ge=1000)
+    # Gemini 3.x multimodal STT + cognitive can exceed 30s on cold calls / tunnels.
+    request_timeout_ms: int = Field(default=120_000, ge=1000)
     max_audio_bytes: int = Field(default=10_485_760, ge=1024)
     retry_attempts: int = Field(default=2, ge=0, le=5)
     retry_backoff_ms: int = Field(default=200, ge=0)

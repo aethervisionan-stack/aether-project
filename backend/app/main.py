@@ -80,13 +80,18 @@ app.include_router(history_router.router)
 app.include_router(cognitive_router.router)
 
 logger.info(
-    "pipeline use_mock_audio=%s stt=%s tts=%s gemini_key_valid=%s env_file=%s memory=%s",
+    "pipeline use_mock_audio=%s stt=%s tts=%s gemini_key_valid=%s env_file=%s memory=%s "
+    "stt_model=%s gemini_model=%s tts_model=%s request_timeout_ms=%s",
     settings.use_mock_audio,
     settings.effective_stt_provider(),
     settings.effective_tts_provider(),
     settings.has_valid_gemini_key(),
     BACKEND_ENV_FILE,
     settings.memory_enabled,
+    settings.gemini_stt_model,
+    settings.gemini_model,
+    settings.gemini_tts_model,
+    settings.request_timeout_ms,
 )
 
 
