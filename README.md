@@ -5,7 +5,7 @@ Repositório monólito da **Aether Vision**: landing Next.js (raiz) + **Phase 1 
 | Pasta | Função |
 | --- | --- |
 | `app/`, `components/`, `lib/` | Landing / pré-venda Next.js (já existente) |
-| `backend/` | API FastAPI — STT (Whisper), Consenso Alfa, TTS |
+| `backend/` | API FastAPI — STT (Gemini), Consenso Alfa, TTS |
 | `client/` | UI de controle TypeScript (captura + playback no headset) |
 
 ## Arquitetura do pipeline de voz (Phase 1)
@@ -13,10 +13,10 @@ Repositório monólito da **Aether Vision**: landing Next.js (raiz) + **Phase 1 
 ```
 Headset BT mic → client/ (MediaRecorder)
                → POST /process-audio
-               → STT (Whisper pluggable / mock)
-               → ResponseAgent (rascunho)
+               → STT (Gemini / mock)
+               → Gemini cognitive (rascunho)
                → Consenso Alfa (quórum multi-agente)
-               → TTS (alta fidelidade / mock WAV)
+               → TTS (Gemini / mock WAV)
                → áudio base64 → client/ → fones BT
 ```
 
@@ -28,7 +28,12 @@ Seams futuros (env declaradas, não usadas): `SOLANA_RPC_URL`, `AETHER_AGENT_WAL
 
 ## Teste local integrado com headset Bluetooth
 
-Guia passo a passo (modo **mock** — sem modelos pesados nem chaves pagas).
+Guia passo a passo (modo **mock** — sem modelos pesados). Para arranque unificado no Windows
+(com `backend\.venv` + `GEMINI_API_KEY` em `backend\.env`):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\start_dev.ps1
+```
 
 ### 0. Pré-requisitos
 

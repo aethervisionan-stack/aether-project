@@ -1,4 +1,4 @@
-"""Gemini multimodal speech-to-text (replaces OpenAI Whisper)."""
+"""Gemini multimodal speech-to-text."""
 
 from __future__ import annotations
 

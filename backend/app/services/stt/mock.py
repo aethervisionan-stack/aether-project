@@ -1,4 +1,4 @@
-"""Mock Whisper STT for local Bluetooth UI tests without heavy models."""
+"""Mock STT for local Bluetooth UI tests without heavy models."""
 
 from __future__ import annotations
 

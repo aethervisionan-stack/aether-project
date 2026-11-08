@@ -2,7 +2,7 @@
 Local Consenso-gated tool agent (offline / USE_MOCK_AUDIO path).
 
 Production cognitive drafts use GeminiGateway — this module keeps deterministic
-tool routing for tests and mock audio without any OpenAI dependency.
+tool routing for tests and mock audio without a cloud LLM.
 """
 
 from __future__ import annotations

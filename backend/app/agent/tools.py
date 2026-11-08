@@ -1,5 +1,5 @@
 """
-Safe tool surface for gpt-4o-mini Function Calling.
+Safe tool surface for Gemini Function Calling (and local mock agent).
 
 Security model
 --------------

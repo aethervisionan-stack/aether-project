@@ -255,7 +255,7 @@ class AdaptiveMemory:
         return "\n".join(lines)
 
     def format_learned_preferences_prompt(self, hits: list[MemoryHit]) -> str:
-        """Compact block optimized for gpt-4o-mini system/user injection."""
+        """Compact block optimized for Gemini system/user injection."""
         prefs = [h for h in hits if h.collection == "user_preferences"][:4]
         others = [h for h in hits if h.collection != "user_preferences"][:3]
         if not prefs and not others:

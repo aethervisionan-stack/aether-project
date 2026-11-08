@@ -9,7 +9,7 @@ from app.models.schemas import SttResult
 
 @runtime_checkable
 class SttProviderProtocol(Protocol):
-    """Pluggable Whisper / STT backend."""
+    """Pluggable STT backend (Gemini or local mock)."""
 
     name: str
 

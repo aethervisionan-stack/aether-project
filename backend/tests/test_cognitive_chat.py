@@ -47,7 +47,7 @@ def test_cognitive_chat_missing_key_safe_fallback() -> None:
 
 def test_cognitive_chat_mocked_gemini_ok() -> None:
     fake = GeminiTurnResult(
-        text="Whisper → Gemini → Consenso → TTS.",
+        text="STT → Gemini → Consenso → TTS.",
         duration_ms=12,
         provider="gemini-2.5-pro",
         mode="pro",

@@ -38,7 +38,7 @@ async def process_audio(
 ) -> ProcessAudioResponse:
     """
     Accepts multipart audio from a generic Bluetooth headset mic,
-    runs STT → adaptive memory → gpt-4o-mini → Consenso Alfa → TTS, and returns
+    runs STT → adaptive memory → Gemini → Consenso Alfa → TTS, and returns
     transcript + validated text + base64 /audio URL for headphone autoplay.
     """
     content_type = audio.content_type or "application/octet-stream"
