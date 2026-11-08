@@ -1245,12 +1245,12 @@ function extensionForMime(mimeType: string): string {
 function apiConnectionBadge(health: HealthResponse | null): string {
   if (health) {
     const port = health.api_port ?? 8001;
-    return `<span class="conn-badge conn-badge--online" title="GET /health ok → 127.0.0.1:${port}">
+    return `<span class="conn-badge conn-badge--online" title="GET /api/health ok (proxy Vite → backend :${port})">
       <i class="dot dot--ok"></i>
       Backend ligado · :${port}
     </span>`;
   }
-  return `<span class="conn-badge conn-badge--offline" title="Backend não responde em 127.0.0.1:8001">
+  return `<span class="conn-badge conn-badge--offline" title="Backend não responde via /api (Vite → :8001)">
     <i class="dot dot--err"></i>
     Backend desligado
   </span>`;
@@ -1259,14 +1259,15 @@ function apiConnectionBadge(health: HealthResponse | null): string {
 function connectionBanner(health: HealthResponse | null): string {
   if (health) {
     return `<p class="conn-banner conn-banner--ok" role="status">
-      Ligado a <code>127.0.0.1:${health.api_port ?? 8001}</code>
+      Ligado via <code>/api</code> → backend <code>:${health.api_port ?? 8001}</code>
       · cognitive <strong>${escapeHtml(health.cognitive_provider ?? "gemini")}</strong>
       · Gemini key ${health.has_valid_gemini_key ? "ok" : "em falta"}
     </p>`;
   }
   return `<p class="conn-banner conn-banner--err" role="status">
-      Sem ligação ao FastAPI. Arranque o backend em <code>127.0.0.1:8001</code>
-      (ex.: <code>backend\\.venv\\Scripts\\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8001 --reload</code>).
+      Sem ligação ao FastAPI. No PC: <code>.\\start_dev.ps1</code> ou
+      <code>.\\start_mobile_test.ps1</code> (telemóvel / túnel HTTPS).
+      A API escuta em <code>:8001</code>; o HUD usa o proxy <code>/api</code>.
     </p>`;
 }
 

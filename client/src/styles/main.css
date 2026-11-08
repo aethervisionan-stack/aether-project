@@ -50,6 +50,14 @@ body {
   animation: rise 700ms ease-out both;
 }
 
+@media (max-width: 719px) {
+  .shell {
+    width: calc(100% - 1.25rem);
+    padding: 1.25rem 0 2.5rem;
+    gap: 1.5rem;
+  }
+}
+
 @keyframes rise {
   from {
     opacity: 0;

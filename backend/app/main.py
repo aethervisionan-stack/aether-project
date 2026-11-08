@@ -49,15 +49,23 @@ app = FastAPI(
 )
 
 cors_origins = settings.cors_origin_list
+# Prefer same-origin /api via Vite proxy (no CORS). Regex covers direct API
+# calls from phone LAN (http://192.168.x.x:5173) or HTTPS tunnels.
+CORS_ORIGIN_REGEX = (
+    r"https://.*\.(loca\.lt|ngrok-free\.app|ngrok\.io|ngrok\.app)"
+    r"|http://(localhost|127\.0\.0\.1|192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}"
+    r"|172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}):5173"
+)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
+    allow_origin_regex=CORS_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 logger.info(
-    "CORS allow_origins=%s (Vite client: http://127.0.0.1:5173 + localhost:5173)",
+    "CORS allow_origins=%s + tunnel/LAN regex (Vite proxy /api preferred)",
     cors_origins,
 )
 
