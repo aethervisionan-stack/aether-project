@@ -12,6 +12,76 @@ export type PcmFrameHandler = (pcm: ArrayBuffer) => void;
 const TARGET_RATE = 16_000;
 const FRAME_SAMPLES = 640; // 40 ms @ 16 kHz
 
+/** Preferred constraints first; then progressively looser fallbacks. */
+const AUDIO_CONSTRAINT_TRIES: MediaStreamConstraints[] = [
+  {
+    audio: {
+      channelCount: 1,
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+      sampleRate: TARGET_RATE,
+    },
+    video: false,
+  },
+  {
+    audio: {
+      channelCount: 1,
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+    },
+    video: false,
+  },
+  { audio: true, video: false },
+];
+
+export class MicCaptureError extends Error {
+  readonly name = "MicCaptureError";
+  readonly causeName?: string;
+
+  constructor(message: string, cause?: unknown) {
+    super(message);
+    if (cause instanceof Error) {
+      this.causeName = cause.name;
+      // Preserve original for debugging without leaking into UI by default.
+      (this as Error & { cause?: unknown }).cause = cause;
+    }
+  }
+}
+
+/** Map browser getUserMedia failures into a short user-facing sentence. */
+export function formatMicError(err: unknown): string {
+  if (err instanceof MicCaptureError) {
+    return err.message;
+  }
+  if (!(err instanceof Error)) {
+    return "Microphone unavailable.";
+  }
+  const name = err.name;
+  const raw = err.message || "";
+  if (
+    name === "NotFoundError" ||
+    /Requested device not found/i.test(raw) ||
+    /device not found/i.test(raw)
+  ) {
+    return "No microphone was found on this device.";
+  }
+  if (name === "NotAllowedError" || name === "PermissionDeniedError") {
+    return "Microphone permission was denied.";
+  }
+  if (name === "NotReadableError" || name === "AbortError") {
+    return "Microphone is busy or could not be opened.";
+  }
+  if (name === "OverconstrainedError") {
+    return "No microphone matched the requested audio settings.";
+  }
+  if (name === "SecurityError") {
+    return "Microphone access is blocked in this browsing context.";
+  }
+  return raw.trim() || "Microphone unavailable.";
+}
+
 export class PcmCapture {
   private context: AudioContext | null = null;
   private stream: MediaStream | null = null;
@@ -31,18 +101,14 @@ export class PcmCapture {
       return { label: this.stream?.getAudioTracks()[0]?.label ?? null };
     }
 
+    if (!navigator.mediaDevices?.getUserMedia) {
+      throw new MicCaptureError(
+        "This browser does not support microphone capture (mediaDevices).",
+      );
+    }
+
     this.onFrame = onFrame;
-    this.stream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        channelCount: 1,
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
-        // Prefer 16 kHz when the browser/BT stack honors it
-        sampleRate: TARGET_RATE,
-      },
-      video: false,
-    });
+    this.stream = await this.openMicStream();
 
     this.context = new AudioContext();
     // Some browsers ignore getUserMedia sampleRate; we always resample.
@@ -89,6 +155,29 @@ export class PcmCapture {
     this.context = null;
     this.resampleCarry = [];
     this.onFrame = null;
+  }
+
+  private async openMicStream(): Promise<MediaStream> {
+    let lastError: unknown;
+
+    for (const constraints of AUDIO_CONSTRAINT_TRIES) {
+      try {
+        return await navigator.mediaDevices.getUserMedia(constraints);
+      } catch (err) {
+        lastError = err;
+        // Permission / security failures will not improve with looser constraints.
+        if (
+          err instanceof DOMException &&
+          (err.name === "NotAllowedError" ||
+            err.name === "PermissionDeniedError" ||
+            err.name === "SecurityError")
+        ) {
+          break;
+        }
+      }
+    }
+
+    throw new MicCaptureError(formatMicError(lastError), lastError);
   }
 
   private resampleTo16kPcm(input: Float32Array, sourceRate: number): ArrayBuffer {

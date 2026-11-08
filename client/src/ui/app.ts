@@ -7,9 +7,11 @@ export class ControlApp {
   private hudEl!: HTMLElement;
   private logEl!: HTMLElement;
   private statusEl!: HTMLElement;
+  private warnEl!: HTMLElement;
   private connectBtn!: HTMLButtonElement;
   private disconnectBtn!: HTMLButtonElement;
   private textInput!: HTMLInputElement;
+  private sendBtn!: HTMLButtonElement;
 
   constructor(private readonly root: HTMLElement) {}
 
@@ -21,8 +23,9 @@ export class ControlApp {
         <button type="button" data-action="connect">Connect Live</button>
         <button type="button" class="secondary" data-action="disconnect" disabled>Disconnect</button>
       </div>
+      <div class="warn" data-role="warn" hidden></div>
       <div class="text-row">
-        <input type="text" placeholder="Optional text turn…" data-role="text" />
+        <input type="text" placeholder="Type a message to Aether…" data-role="text" />
         <button type="button" class="secondary" data-action="send-text" disabled>Send</button>
       </div>
       <div class="hud" data-role="hud">ws=NONE · rtt=— · fifo=0ms · discards=0 · playQ=0</div>
@@ -34,14 +37,15 @@ export class ControlApp {
     this.hudEl = this.root.querySelector("[data-role=hud]")!;
     this.logEl = this.root.querySelector("[data-role=log]")!;
     this.statusEl = this.root.querySelector("[data-role=status]")!;
+    this.warnEl = this.root.querySelector("[data-role=warn]")!;
     this.connectBtn = this.root.querySelector("[data-action=connect]")!;
     this.disconnectBtn = this.root.querySelector("[data-action=disconnect]")!;
     this.textInput = this.root.querySelector("[data-role=text]")!;
-    const sendBtn = this.root.querySelector<HTMLButtonElement>("[data-action=send-text]")!;
+    this.sendBtn = this.root.querySelector("[data-action=send-text]")!;
 
     this.connectBtn.addEventListener("click", () => void this.connect());
     this.disconnectBtn.addEventListener("click", () => void this.disconnect());
-    sendBtn.addEventListener("click", () => this.sendText());
+    this.sendBtn.addEventListener("click", () => this.sendText());
     this.textInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         this.sendText();
@@ -54,6 +58,7 @@ export class ControlApp {
       return;
     }
     this.setStatus("Connecting…");
+    this.clearWarn();
     this.connectBtn.disabled = true;
 
     this.service = new GeminiLiveService({
@@ -62,13 +67,27 @@ export class ControlApp {
     this.service.telemetry.subscribe((snap) => this.renderHud(snap));
 
     try {
-      await this.service.connect();
+      const result = await this.service.connect();
       this.connected = true;
       this.disconnectBtn.disabled = false;
-      this.root.querySelector<HTMLButtonElement>("[data-action=send-text]")!.disabled = false;
-      const mic = this.service.getMicLabel() ?? "default input";
-      this.setStatus(`Live · mic: ${mic}`);
+      this.sendBtn.disabled = false;
       this.pushLog(`connected ${this.service.getWsUrl()}`, "info");
+
+      if (result.micEnabled) {
+        const mic = result.micLabel ?? "default input";
+        this.setStatus(`Live · mic: ${mic}`);
+        this.textInput.placeholder = "Optional text turn…";
+        this.clearWarn();
+      } else {
+        const detail = result.micWarning ?? "Microphone unavailable.";
+        this.setStatus("Live · text-only (mic unavailable)");
+        this.textInput.placeholder = "Type to chat with Aether (mic offline)…";
+        this.showWarn(
+          `${detail} Voice capture is off, but Live is connected — type below to test Aether Vision.`,
+        );
+        this.pushLog(`mic unavailable: ${detail}`, "warn");
+        this.textInput.focus();
+      }
     } catch (err) {
       this.connectBtn.disabled = false;
       const message = err instanceof Error ? err.message : String(err);
@@ -85,14 +104,16 @@ export class ControlApp {
     this.connected = false;
     this.connectBtn.disabled = false;
     this.disconnectBtn.disabled = true;
-    this.root.querySelector<HTMLButtonElement>("[data-action=send-text]")!.disabled = true;
+    this.sendBtn.disabled = true;
+    this.textInput.placeholder = "Type a message to Aether…";
+    this.clearWarn();
     this.setStatus("Disconnected");
     this.pushLog("disconnected", "info");
   }
 
   private sendText(): void {
     const text = this.textInput.value.trim();
-    if (!text || !this.service) {
+    if (!text || !this.service || !this.connected) {
       return;
     }
     this.service.sendText(text);
@@ -136,6 +157,16 @@ export class ControlApp {
 
   private setStatus(text: string): void {
     this.statusEl.textContent = text;
+  }
+
+  private showWarn(text: string): void {
+    this.warnEl.hidden = false;
+    this.warnEl.textContent = text;
+  }
+
+  private clearWarn(): void {
+    this.warnEl.hidden = true;
+    this.warnEl.textContent = "";
   }
 
   private pushLog(text: string, kind: string): void {

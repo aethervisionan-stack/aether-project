@@ -7,7 +7,7 @@
 
 import { FifoRetentionBuffer } from "../audio/FifoRetentionBuffer";
 import { GaplessPcmPlayer } from "../audio/GaplessPcmPlayer";
-import { PcmCapture } from "../audio/PcmCapture";
+import { formatMicError, PcmCapture } from "../audio/PcmCapture";
 import { TelemetryMonitor } from "../audio/TelemetryMonitor";
 import type { LiveServerJsonEvent, WsReadyStateLabel } from "../types/live";
 
@@ -18,6 +18,14 @@ export interface GeminiLiveServiceOptions {
   url?: string;
   telemetry?: TelemetryMonitor;
   onEvent?: LiveEventHandler;
+}
+
+export interface LiveConnectResult {
+  /** True when mic capture started and PCM flush loop is active. */
+  micEnabled: boolean;
+  micLabel: string | null;
+  /** Present when Live stayed connected in text-only / hybrid-without-mic mode. */
+  micWarning: string | null;
 }
 
 function resolveDefaultWsUrl(): string {
@@ -57,6 +65,8 @@ export class GeminiLiveService {
   private ws: WebSocket | null = null;
   private flushTimer: number | null = null;
   private micLabel: string | null = null;
+  private micEnabled = false;
+  private micWarning: string | null = null;
 
   constructor(options: GeminiLiveServiceOptions = {}) {
     this.url = options.url ?? resolveDefaultWsUrl();
@@ -71,16 +81,33 @@ export class GeminiLiveService {
     return this.micLabel;
   }
 
+  isMicEnabled(): boolean {
+    return this.micEnabled;
+  }
+
+  getMicWarning(): string | null {
+    return this.micWarning;
+  }
+
   getWsUrl(): string {
     return this.url;
   }
 
-  async connect(): Promise<void> {
+  async connect(): Promise<LiveConnectResult> {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      return;
+      return {
+        micEnabled: this.micEnabled,
+        micLabel: this.micLabel,
+        micWarning: this.micWarning,
+      };
     }
 
-    await this.player.ensureStarted();
+    // Playback can still work for Gemini audio replies even if mic capture fails.
+    try {
+      await this.player.ensureStarted();
+    } catch (err) {
+      console.warn("[aether] audio playback init failed; continuing for text", err);
+    }
 
     await new Promise<void>((resolve, reject) => {
       const ws = new WebSocket(this.url);
@@ -111,12 +138,31 @@ export class GeminiLiveService {
       };
     });
 
-    const { label } = await this.capture.start((pcm) => {
-      this.fifo.push(pcm);
-      this.telemetry.setFifo(this.fifo.stats());
-    });
-    this.micLabel = label;
-    this.startFlushLoop();
+    this.micEnabled = false;
+    this.micLabel = null;
+    this.micWarning = null;
+
+    try {
+      const { label } = await this.capture.start((pcm) => {
+        this.fifo.push(pcm);
+        this.telemetry.setFifo(this.fifo.stats());
+      });
+      this.micLabel = label;
+      this.micEnabled = true;
+      this.startFlushLoop();
+    } catch (err) {
+      // Keep the Live WebSocket open for typed text (and any playback).
+      this.micWarning = formatMicError(err);
+      console.warn("[aether] mic capture unavailable; text chat still active", err);
+      this.capture.stop();
+      this.stopFlushLoop();
+    }
+
+    return {
+      micEnabled: this.micEnabled,
+      micLabel: this.micLabel,
+      micWarning: this.micWarning,
+    };
   }
 
   async disconnect(): Promise<void> {
@@ -124,6 +170,9 @@ export class GeminiLiveService {
     this.capture.stop();
     this.player.stop();
     this.fifo.clear();
+    this.micEnabled = false;
+    this.micLabel = null;
+    this.micWarning = null;
     this.telemetry.stopPingLoop();
     this.telemetry.setFifo(this.fifo.stats());
     this.telemetry.setPlaybackQueueDepth(0);
