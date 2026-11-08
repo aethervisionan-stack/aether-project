@@ -1,0 +1,145 @@
+:root {
+  --bg0: #0b0b0c;
+  --bg1: #121316;
+  --cyan: #00f0ff;
+  --text: #f4f7f8;
+  --muted: #8a9199;
+  --danger: #ff5c5c;
+  --font-display: "Syne", sans-serif;
+  --font-body: "IBM Plex Sans", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background:
+    radial-gradient(1200px 600px at 10% -10%, rgba(0, 240, 255, 0.12), transparent 55%),
+    radial-gradient(900px 500px at 90% 0%, rgba(0, 240, 255, 0.06), transparent 50%),
+    var(--bg0);
+  color: var(--text);
+  font-family: var(--font-body);
+}
+
+#app {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 2.5rem 1.25rem 3rem;
+}
+
+.brand {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(2rem, 5vw, 2.75rem);
+  letter-spacing: -0.03em;
+  margin: 0 0 0.35rem;
+}
+
+.brand span {
+  color: var(--cyan);
+}
+
+.lede {
+  margin: 0 0 1.75rem;
+  color: var(--muted);
+  max-width: 42ch;
+  line-height: 1.45;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+button {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 0.95rem;
+  border: 1px solid transparent;
+  background: var(--cyan);
+  color: #041016;
+  padding: 0.7rem 1.1rem;
+  cursor: pointer;
+  transition: transform 120ms ease, opacity 120ms ease;
+}
+
+button:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+button.secondary {
+  background: transparent;
+  color: var(--text);
+  border-color: rgba(244, 247, 248, 0.25);
+}
+
+.text-row {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.text-row input {
+  flex: 1;
+  background: var(--bg1);
+  border: 1px solid rgba(244, 247, 248, 0.12);
+  color: var(--text);
+  padding: 0.7rem 0.85rem;
+  font: inherit;
+}
+
+.hud {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  line-height: 1.55;
+  background: rgba(18, 19, 22, 0.85);
+  border: 1px solid rgba(0, 240, 255, 0.2);
+  padding: 0.9rem 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.hud strong {
+  color: var(--cyan);
+  font-weight: 600;
+}
+
+.log {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+  max-height: 280px;
+  overflow: auto;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.log li[data-kind="error"] {
+  color: var(--danger);
+}
+
+.log li[data-kind="aether"] {
+  color: var(--text);
+}
+
+.path-note {
+  margin-top: 1.5rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.path-note code {
+  color: var(--cyan);
+}
