@@ -42,8 +42,15 @@ class GeminiLiveSession:
 
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
-        self._client = genai.Client(api_key=settings.gemini_api_key.strip())
-        self._model = settings.gemini_live_model.strip() or "gemini-2.5-flash"
+        api_version = (settings.gemini_api_version or "v1beta").strip() or "v1beta"
+        # Live / BidiGenerateContent WebSockets require v1beta or v1alpha.
+        # Default (unset) API version returns HTTP 404 on live.connect.
+        self._client = genai.Client(
+            api_key=settings.gemini_api_key.strip(),
+            http_options={"api_version": api_version},
+        )
+        self._model = settings.gemini_live_model.strip() or "gemini-3.8-live"
+        self._api_version = api_version
         self._audio_in: asyncio.Queue[bytes] = asyncio.Queue(maxsize=64)
         self._text_in: asyncio.Queue[str] = asyncio.Queue(maxsize=16)
         self._session: Any | None = None
@@ -81,7 +88,11 @@ class GeminiLiveSession:
         on_event: EventOutCallback,
     ) -> None:
         config = build_live_config()
-        logger.info("connecting Live session model=%s", self._model)
+        logger.info(
+            "connecting Live session model=%s api_version=%s",
+            self._model,
+            self._api_version,
+        )
         async with self._client.aio.live.connect(model=self._model, config=config) as session:
             self._session = session
             await on_event({"type": "ready", "model": self._model})

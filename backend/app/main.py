@@ -22,7 +22,7 @@ app = FastAPI(
     title="Aether Vision Live API",
     description=(
         "Modular FastAPI bridge: browser WebSocket `/ws/live` ↔ "
-        "Google GenAI Live (`gemini-2.5-flash`) for HUD/spatial audio."
+        "Google GenAI Live (`gemini-3.8-live`) for HUD/spatial audio."
     ),
     version=__version__,
 )

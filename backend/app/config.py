@@ -28,7 +28,10 @@ class Settings(BaseSettings):
     )
 
     gemini_api_key: str = Field(default="", alias="GEMINI_API_KEY")
-    gemini_live_model: str = Field(default="gemini-2.5-flash", alias="GEMINI_LIVE_MODEL")
+    # Live-native bidirectional audio model (requires GEMINI_API_VERSION v1beta/v1alpha).
+    gemini_live_model: str = Field(default="gemini-3.8-live", alias="GEMINI_LIVE_MODEL")
+    # Live WebSocket path is not on the default GenAI API version — use v1beta.
+    gemini_api_version: str = Field(default="v1beta", alias="GEMINI_API_VERSION")
     host: str = Field(default="0.0.0.0", alias="HOST")
     port: int = Field(default=8000, alias="PORT")
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")

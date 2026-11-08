@@ -12,7 +12,7 @@ Headset mic (PCM 16-bit mono @ 16 kHz)
   → client FifoRetentionBuffer (1.5 s cap)
   → WebSocket /api/ws/live  (Vite proxy)
   → FastAPI /ws/live
-  → google-genai Live (gemini-2.5-flash)
+  → google-genai Live (gemini-3.8-live, api_version=v1beta)
   → PCM @ 24 kHz
   → client GaplessPcmPlayer
 ```
@@ -73,7 +73,8 @@ Open [http://127.0.0.1:5173](http://127.0.0.1:5173), pair a Bluetooth headset as
 | Variable | Where | Notes |
 | --- | --- | --- |
 | `GEMINI_API_KEY` | `backend/.env` | Required for Live |
-| `GEMINI_LIVE_MODEL` | `backend/.env` | Default `gemini-2.5-flash` |
+| `GEMINI_LIVE_MODEL` | `backend/.env` | Default `gemini-3.8-live` |
+| `GEMINI_API_VERSION` | `backend/.env` | Default `v1beta` (required for Live WS) |
 | `VITE_LIVE_WS_URL` | `client/.env` | Optional absolute WS URL |
 
 Persona: **Aether** — 1–3 sentence, direct, actionable replies for HUD / spatial audio.
