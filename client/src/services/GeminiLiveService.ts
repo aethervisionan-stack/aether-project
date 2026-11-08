@@ -3,6 +3,12 @@
  *
  * Default URL: `ws(s)://<page-host>/api/ws/live`
  * Vite proxies `/api` → `http://127.0.0.1:8000` (path rewritten, `ws: true`).
+ *
+ * Keeps the Live session stable with:
+ *  - client→server ping / pong RTT + timeout
+ *  - response to server→client heartbeat pings
+ *  - transparent auto-reconnect (HUD: RECONNECTING) after unexpected drops
+ *  - mic-fallback hybrid: text chat stays available if capture fails
  */
 
 import { FifoRetentionBuffer } from "../audio/FifoRetentionBuffer";
@@ -27,6 +33,11 @@ export interface LiveConnectResult {
   /** Present when Live stayed connected in text-only / hybrid-without-mic mode. */
   micWarning: string | null;
 }
+
+const CLIENT_PING_INTERVAL_MS = 10_000;
+const CLIENT_PONG_TIMEOUT_MS = 30_000;
+const RECONNECT_BASE_MS = 500;
+const RECONNECT_MAX_MS = 8_000;
 
 function resolveDefaultWsUrl(): string {
   const fromEnv = import.meta.env.VITE_LIVE_WS_URL?.trim();
@@ -67,6 +78,11 @@ export class GeminiLiveService {
   private micLabel: string | null = null;
   private micEnabled = false;
   private micWarning: string | null = null;
+  private wantConnected = false;
+  private intentionalClose = false;
+  private reconnectTimer: number | null = null;
+  private reconnectAttempt = 0;
+  private opening: Promise<void> | null = null;
 
   constructor(options: GeminiLiveServiceOptions = {}) {
     this.url = options.url ?? resolveDefaultWsUrl();
@@ -94,12 +110,12 @@ export class GeminiLiveService {
   }
 
   async connect(): Promise<LiveConnectResult> {
+    this.wantConnected = true;
+    this.intentionalClose = false;
+    this.clearReconnectTimer();
+
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      return {
-        micEnabled: this.micEnabled,
-        micLabel: this.micLabel,
-        micWarning: this.micWarning,
-      };
+      return this.connectResult();
     }
 
     // Playback can still work for Gemini audio replies even if mic capture fails.
@@ -109,34 +125,123 @@ export class GeminiLiveService {
       console.warn("[aether] audio playback init failed; continuing for text", err);
     }
 
-    await new Promise<void>((resolve, reject) => {
+    await this.openSocket(/*isReconnect=*/ false);
+    await this.ensureMicCapture();
+    this.reconnectAttempt = 0;
+    return this.connectResult();
+  }
+
+  async disconnect(): Promise<void> {
+    this.wantConnected = false;
+    this.intentionalClose = true;
+    this.clearReconnectTimer();
+    this.telemetry.stopPingLoop();
+    this.stopFlushLoop();
+    this.capture.stop();
+    this.player.stop();
+    this.fifo.clear();
+    this.micEnabled = false;
+    this.micLabel = null;
+    this.micWarning = null;
+    this.reconnectAttempt = 0;
+    this.telemetry.setFifo(this.fifo.stats());
+    this.telemetry.setPlaybackQueueDepth(0);
+    this.detachAndCloseSocket();
+    this.telemetry.setWsState("CLOSED");
+  }
+
+  sendText(text: string): void {
+    this.sendJson({ type: "text", text });
+  }
+
+  private connectResult(): LiveConnectResult {
+    return {
+      micEnabled: this.micEnabled,
+      micLabel: this.micLabel,
+      micWarning: this.micWarning,
+    };
+  }
+
+  private async openSocket(isReconnect: boolean): Promise<void> {
+    if (this.opening) {
+      return this.opening;
+    }
+
+    this.opening = new Promise<void>((resolve, reject) => {
+      if (isReconnect) {
+        this.telemetry.setWsState("RECONNECTING");
+      } else {
+        this.telemetry.setWsState("CONNECTING");
+      }
+
       const ws = new WebSocket(this.url);
       ws.binaryType = "arraybuffer";
       this.ws = ws;
-      this.telemetry.setWsState("CONNECTING");
+      let settled = false;
+
+      const settleOk = () => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        resolve();
+      };
+      const settleErr = (err: Error) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        reject(err);
+      };
 
       ws.onopen = () => {
         this.telemetry.setWsState("OPEN");
-        this.telemetry.startPingLoop((t) => {
-          this.sendJson({ type: "ping", t });
+        this.telemetry.startPingLoop((t) => this.sendJson({ type: "ping", t }), {
+          intervalMs: CLIENT_PING_INTERVAL_MS,
+          timeoutMs: CLIENT_PONG_TIMEOUT_MS,
+          onTimeout: () => this.forceReconnect("ping timeout"),
         });
-        resolve();
+        if (this.micEnabled) {
+          this.startFlushLoop();
+        }
+        settleOk();
       };
 
       ws.onerror = () => {
         this.telemetry.setWsState(readyStateLabel(ws));
-        reject(new Error(`WebSocket error connecting to ${this.url}`));
+        if (!settled) {
+          settleErr(new Error(`WebSocket error connecting to ${this.url}`));
+        }
       };
 
       ws.onclose = () => {
-        this.telemetry.setWsState("CLOSED");
         this.telemetry.stopPingLoop();
+        this.stopFlushLoop();
+        this.telemetry.setWsState("CLOSED");
+        if (!settled) {
+          settleErr(new Error(`WebSocket closed before open (${this.url})`));
+          return;
+        }
+        if (this.wantConnected && !this.intentionalClose) {
+          this.scheduleReconnect();
+        }
       };
 
       ws.onmessage = (event) => {
         void this.handleMessage(event);
       };
+    }).finally(() => {
+      this.opening = null;
     });
+
+    return this.opening;
+  }
+
+  private async ensureMicCapture(): Promise<void> {
+    if (this.micEnabled && this.capture.isRunning) {
+      this.startFlushLoop();
+      return;
+    }
 
     this.micEnabled = false;
     this.micLabel = null;
@@ -157,43 +262,102 @@ export class GeminiLiveService {
       this.capture.stop();
       this.stopFlushLoop();
     }
-
-    return {
-      micEnabled: this.micEnabled,
-      micLabel: this.micLabel,
-      micWarning: this.micWarning,
-    };
   }
 
-  async disconnect(): Promise<void> {
-    this.stopFlushLoop();
-    this.capture.stop();
-    this.player.stop();
-    this.fifo.clear();
-    this.micEnabled = false;
-    this.micLabel = null;
-    this.micWarning = null;
-    this.telemetry.stopPingLoop();
-    this.telemetry.setFifo(this.fifo.stats());
-    this.telemetry.setPlaybackQueueDepth(0);
+  private scheduleReconnect(): void {
+    if (!this.wantConnected || this.intentionalClose || this.reconnectTimer != null) {
+      return;
+    }
 
+    const delay = Math.min(
+      RECONNECT_MAX_MS,
+      RECONNECT_BASE_MS * 2 ** this.reconnectAttempt,
+    );
+    this.reconnectAttempt += 1;
+    this.telemetry.setWsState("RECONNECTING");
+    console.warn(
+      `[aether] ws dropped; reconnecting in ${delay}ms (attempt ${this.reconnectAttempt})`,
+    );
+
+    this.reconnectTimer = window.setTimeout(() => {
+      this.reconnectTimer = null;
+      void this.reconnectNow();
+    }, delay);
+  }
+
+  private async reconnectNow(): Promise<void> {
+    if (!this.wantConnected || this.intentionalClose) {
+      return;
+    }
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      return;
+    }
+
+    this.detachAndCloseSocket();
+    this.telemetry.setWsState("RECONNECTING");
+
+    try {
+      await this.openSocket(/*isReconnect=*/ true);
+      // Mic stream can survive across WS reconnects; only re-acquire if needed.
+      if (this.micEnabled && this.capture.isRunning) {
+        this.startFlushLoop();
+      } else if (!this.micEnabled && this.micWarning) {
+        // Stay text-only; do not re-prompt getUserMedia on every drop.
+      } else {
+        await this.ensureMicCapture();
+      }
+      this.reconnectAttempt = 0;
+      this.onEvent?.({
+        type: "info",
+        message: "WebSocket reconnected",
+      } as LiveServerJsonEvent);
+    } catch (err) {
+      console.warn("[aether] reconnect failed", err);
+      this.scheduleReconnect();
+    }
+  }
+
+  private forceReconnect(reason: string): void {
+    console.warn(`[aether] forcing reconnect: ${reason}`);
+    this.telemetry.stopPingLoop();
+    this.stopFlushLoop();
+    // Closing triggers onclose → scheduleReconnect when wantConnected.
     if (this.ws) {
-      this.ws.onopen = null;
-      this.ws.onmessage = null;
-      this.ws.onerror = null;
-      this.ws.onclose = null;
       try {
         this.ws.close();
       } catch {
         // ignore
       }
-      this.ws = null;
+    } else if (this.wantConnected && !this.intentionalClose) {
+      this.scheduleReconnect();
     }
-    this.telemetry.setWsState("CLOSED");
   }
 
-  sendText(text: string): void {
-    this.sendJson({ type: "text", text });
+  private clearReconnectTimer(): void {
+    if (this.reconnectTimer != null) {
+      window.clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+  }
+
+  private detachAndCloseSocket(): void {
+    if (!this.ws) {
+      return;
+    }
+    const ws = this.ws;
+    ws.onopen = null;
+    ws.onmessage = null;
+    ws.onerror = null;
+    // Keep onclose null during intentional teardown so we do not schedule reconnect.
+    ws.onclose = null;
+    this.ws = null;
+    try {
+      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+        ws.close();
+      }
+    } catch {
+      // ignore
+    }
   }
 
   private startFlushLoop(): void {
@@ -227,9 +391,15 @@ export class GeminiLiveService {
   }
 
   private async handleMessage(event: MessageEvent): Promise<void> {
+    this.telemetry.markActivity();
+
     if (event.data instanceof ArrayBuffer) {
-      await this.player.ensureStarted();
-      this.player.enqueuePcm16(event.data);
+      try {
+        await this.player.ensureStarted();
+        this.player.enqueuePcm16(event.data);
+      } catch (err) {
+        console.warn("[aether] playback enqueue failed", err);
+      }
       return;
     }
 
@@ -244,16 +414,31 @@ export class GeminiLiveService {
       return;
     }
 
+    if (parsed.type === "ping") {
+      // Answer server heartbeat so proxies see bidirectional traffic.
+      this.sendJson({
+        type: "pong",
+        t: (parsed as { t?: number }).t,
+        client_t: performance.now(),
+      });
+      return;
+    }
+
     if (parsed.type === "pong") {
       const echo = typeof (parsed as { t?: unknown }).t === "number"
         ? ((parsed as { t: number }).t)
         : undefined;
       this.telemetry.markPong(echo);
+      return;
     }
 
     if (parsed.type === "interrupted") {
       this.player.interrupt();
-      await this.player.ensureStarted();
+      try {
+        await this.player.ensureStarted();
+      } catch {
+        // ignore
+      }
     }
 
     this.onEvent?.(parsed);

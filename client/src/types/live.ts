@@ -3,6 +3,7 @@
 export type WsReadyStateLabel =
   | "CONNECTING"
   | "OPEN"
+  | "RECONNECTING"
   | "CLOSING"
   | "CLOSED"
   | "NONE";
@@ -10,6 +11,12 @@ export type WsReadyStateLabel =
 export interface LiveReadyEvent {
   type: "ready";
   model: string;
+}
+
+export interface LivePingEvent {
+  type: "ping";
+  t?: number;
+  server_t?: number;
 }
 
 export interface LivePongEvent {
@@ -35,6 +42,7 @@ export interface LiveErrorEvent {
 
 export type LiveServerJsonEvent =
   | LiveReadyEvent
+  | LivePingEvent
   | LivePongEvent
   | LiveTranscriptEvent
   | LiveTurnEvent

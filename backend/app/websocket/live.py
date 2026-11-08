@@ -6,6 +6,7 @@ import asyncio
 import base64
 import json
 import logging
+import time
 from typing import Any
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -17,6 +18,11 @@ logger = logging.getLogger("aether.ws.live")
 
 router = APIRouter()
 
+# Keep idle browser↔proxy↔FastAPI sockets alive (many proxies drop ~30–60s idle).
+SERVER_HEARTBEAT_INTERVAL_S = 15.0
+# Brief pause before restarting a Gemini Live session that ended unexpectedly.
+GEMINI_RESTART_DELAY_S = 1.0
+
 
 @router.websocket("/ws/live")
 async def live_websocket(websocket: WebSocket) -> None:
@@ -25,11 +31,11 @@ async def live_websocket(websocket: WebSocket) -> None:
 
     Client → server:
       - binary frames: PCM 16-bit LE mono @ 16 kHz
-      - JSON text: {"type":"ping","t":<ms>} | {"type":"text","text":"..."}
+      - JSON text: {"type":"ping","t":<ms>} | {"type":"pong",...} | {"type":"text","text":"..."}
 
     Server → client:
       - binary frames: PCM 16-bit LE mono @ 24 kHz (Gemini audio)
-      - JSON text: ready | pong | *_transcript | turn_complete | interrupted | error
+      - JSON text: ready | ping | pong | *_transcript | turn_complete | interrupted | error
     """
     await websocket.accept()
     settings = get_settings()
@@ -46,8 +52,9 @@ async def live_websocket(websocket: WebSocket) -> None:
         await websocket.close(code=1011)
         return
 
-    session = GeminiLiveSession(settings)
     stop = asyncio.Event()
+    # Mutable holder so receive loop can target the active Gemini session across restarts.
+    bridge: dict[str, GeminiLiveSession | None] = {"session": None}
 
     async def on_audio(pcm: bytes) -> None:
         if stop.is_set():
@@ -73,12 +80,14 @@ async def live_websocket(websocket: WebSocket) -> None:
                     break
                 raw_bytes = message.get("bytes")
                 if raw_bytes is not None:
-                    await session.push_audio(raw_bytes)
+                    session = bridge["session"]
+                    if session is not None:
+                        await session.push_audio(raw_bytes)
                     continue
                 text = message.get("text")
                 if text is None:
                     continue
-                await _handle_control_message(session, websocket, text)
+                await _handle_control_message(bridge, websocket, text)
         except WebSocketDisconnect:
             logger.info("client disconnected")
         except Exception as exc:
@@ -86,18 +95,87 @@ async def live_websocket(websocket: WebSocket) -> None:
         finally:
             stop.set()
 
+    async def server_heartbeat() -> None:
+        """App-level keepalive so Vite/http-proxy idle timeouts do not kill the socket."""
+        try:
+            while not stop.is_set():
+                await asyncio.sleep(SERVER_HEARTBEAT_INTERVAL_S)
+                if stop.is_set():
+                    break
+                try:
+                    await websocket.send_json(
+                        {
+                            "type": "ping",
+                            "server_t": time.time(),
+                        }
+                    )
+                except Exception:
+                    logger.info("server heartbeat send failed; closing bridge")
+                    stop.set()
+                    break
+        except asyncio.CancelledError:
+            raise
+
+    async def gemini_supervisor() -> None:
+        """
+        Keep Gemini Live running for the lifetime of the browser socket.
+
+        Upstream Live sessions can end after idle minutes; restart them without
+        tearing down `/ws/live` so the client stays connected for text/mic.
+        """
+        attempt = 0
+        while not stop.is_set():
+            attempt += 1
+            session = GeminiLiveSession(settings)
+            bridge["session"] = session
+            try:
+                await session.run(on_audio=on_audio, on_event=on_event)
+                if stop.is_set():
+                    break
+                logger.warning(
+                    "gemini live session ended cleanly (attempt=%s); restarting",
+                    attempt,
+                )
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                logger.exception(
+                    "gemini live session error (attempt=%s): %s",
+                    attempt,
+                    exc,
+                )
+                if not stop.is_set():
+                    try:
+                        await websocket.send_json(
+                            {
+                                "type": "error",
+                                "code": "session_retry",
+                                "message": f"Live model session ended; reconnecting ({exc})",
+                            }
+                        )
+                    except Exception:
+                        stop.set()
+                        break
+            finally:
+                bridge["session"] = None
+
+            if stop.is_set():
+                break
+            await asyncio.sleep(GEMINI_RESTART_DELAY_S)
+
     receive_task = asyncio.create_task(receive_from_client(), name="ws-receive")
-    live_task = asyncio.create_task(
-        session.run(on_audio=on_audio, on_event=on_event),
-        name="gemini-live",
-    )
+    heartbeat_task = asyncio.create_task(server_heartbeat(), name="ws-heartbeat")
+    live_task = asyncio.create_task(gemini_supervisor(), name="gemini-supervisor")
 
     try:
         done, _pending = await asyncio.wait(
-            {receive_task, live_task},
+            {receive_task, heartbeat_task, live_task},
             return_when=asyncio.FIRST_COMPLETED,
         )
         for task in done:
+            if task is live_task and not stop.is_set():
+                # Supervisor should only exit when stop is set; treat early exit as fatal.
+                logger.error("gemini supervisor exited unexpectedly")
             exc = task.exception() if not task.cancelled() else None
             if exc is not None:
                 logger.error("live bridge task error: %s", exc)
@@ -114,8 +192,14 @@ async def live_websocket(websocket: WebSocket) -> None:
     finally:
         stop.set()
         receive_task.cancel()
+        heartbeat_task.cancel()
         live_task.cancel()
-        await asyncio.gather(receive_task, live_task, return_exceptions=True)
+        await asyncio.gather(
+            receive_task,
+            heartbeat_task,
+            live_task,
+            return_exceptions=True,
+        )
         try:
             await websocket.close()
         except Exception:
@@ -124,14 +208,16 @@ async def live_websocket(websocket: WebSocket) -> None:
 
 
 async def _handle_control_message(
-    session: GeminiLiveSession,
+    bridge: dict[str, GeminiLiveSession | None],
     websocket: WebSocket,
     text: str,
 ) -> None:
     try:
         payload = json.loads(text)
     except json.JSONDecodeError:
-        await session.push_text(text)
+        session = bridge["session"]
+        if session is not None:
+            await session.push_text(text)
         return
 
     if not isinstance(payload, dict):
@@ -143,15 +229,23 @@ async def _handle_control_message(
             {
                 "type": "pong",
                 "t": payload.get("t"),
-                "server_t": asyncio.get_running_loop().time(),
+                "server_t": time.time(),
             }
         )
         return
 
+    if msg_type == "pong":
+        # Client acknowledging a server heartbeat — traffic is enough.
+        return
+
+    session = bridge["session"]
+
     if msg_type == "text":
-        await session.push_text(str(payload.get("text") or ""))
+        if session is not None:
+            await session.push_text(str(payload.get("text") or ""))
         return
 
     # Optional base64 PCM in JSON (fallback path)
     if msg_type == "audio" and payload.get("data"):
-        await session.push_audio(base64.b64decode(payload["data"]))
+        if session is not None:
+            await session.push_audio(base64.b64decode(payload["data"]))

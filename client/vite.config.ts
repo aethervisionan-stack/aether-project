@@ -24,6 +24,9 @@ export default defineConfig({
         target: "http://127.0.0.1:8000",
         changeOrigin: true,
         ws: true,
+        // Disable idle proxy timeouts that silently drop long-lived Live sockets.
+        timeout: 0,
+        proxyTimeout: 0,
         rewrite: (p) => p.replace(/^\/api/, ""),
       },
     },

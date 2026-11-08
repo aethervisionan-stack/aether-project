@@ -138,10 +138,18 @@ export class ControlApp {
       case "interrupted":
         this.pushLog("interrupted", "info");
         break;
-      case "error":
-        this.pushLog((event as { message: string }).message, "error");
-        this.setStatus(`Error: ${(event as { message: string }).message}`);
+      case "info":
+        this.pushLog(String((event as { message?: string }).message ?? "info"), "info");
         break;
+      case "error": {
+        const code = (event as { code?: string }).code;
+        const message = (event as { message: string }).message;
+        this.pushLog(message, code === "session_retry" ? "warn" : "error");
+        if (code !== "session_retry") {
+          this.setStatus(`Error: ${message}`);
+        }
+        break;
+      }
       default:
         break;
     }
@@ -153,6 +161,24 @@ export class ControlApp {
       `ws=${snap.wsState} · rtt=${rtt} · ` +
       `fifo=${snap.fifoDepthMs.toFixed(0)}ms · discards=${snap.fifoDiscardCount} · ` +
       `playQ=${snap.playbackQueueDepth}`;
+
+    if (!this.connected || !this.service) {
+      return;
+    }
+    if (snap.wsState === "RECONNECTING") {
+      this.setStatus("Reconnecting Live…");
+    } else if (snap.wsState === "OPEN") {
+      if (this.service.isMicEnabled()) {
+        const mic = this.service.getMicLabel() ?? "default input";
+        this.setStatus(`Live · mic: ${mic}`);
+      } else if (this.service.getMicWarning()) {
+        this.setStatus("Live · text-only (mic unavailable)");
+      } else {
+        this.setStatus("Live · connected");
+      }
+    } else if (snap.wsState === "CLOSED") {
+      this.setStatus("Live · socket closed (retrying if still connected)");
+    }
   }
 
   private setStatus(text: string): void {
