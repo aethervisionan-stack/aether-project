@@ -668,26 +668,14 @@ export class ControlApp {
       return;
     }
 
-    // Blocked + permission denied → Safe Mode only when Web Speech exists.
-    // Otherwise keep trying MediaRecorder → Gemini (phone field path).
-    if (this.micStatus === "blocked" && this.permissionState === "denied") {
-      if (isSpeechRecognitionAvailable()) {
-        await this.enterSafeModeInstant(
-          "Microfone bloqueado (permissão) — Safe Mode (Web Speech).",
-        );
-      } else {
-        this.errorMessage =
-          "Microfone bloqueado. Autorize o site em Definições do browser e Reconectar.";
-        this.render();
-        return;
-      }
-    }
-
     this.errorMessage = null;
     this.speechInterim = "";
 
-    // Prefer MediaRecorder → POST /api/process-audio → Gemini. Never silent Safe Mode.
-    if (this.captureMode !== "webspeech" && isMediaRecorderCaptureAvailable()) {
+    // Phone field path: ALWAYS retry MediaRecorder → relative /api/process-audio → Gemini
+    // when the browser can do it — even if HUD previously flipped to Safe Mode.
+    // Web Speech only after a true NotAllowedError on this click (or manual Safe Mode
+    // when MediaRecorder itself is unavailable).
+    if (isMediaRecorderCaptureAvailable()) {
       try {
         await this.capture.start(this.preferredDeviceId);
         this.activeMicLabel = this.capture.getActiveLabel();
@@ -715,7 +703,9 @@ export class ControlApp {
             // Fall through to start speech in the same click.
           } else {
             this.micStatus = "blocked";
-            this.errorMessage = classified.message;
+            this.captureMode = "mediarecorder";
+            this.errorMessage =
+              "Microfone bloqueado. Autorize o site em Definições do browser e Reconectar.";
             this.setPhase("idle");
             return;
           }
@@ -729,7 +719,8 @@ export class ControlApp {
       }
     }
 
-    // Web Speech path — only when already in Safe Mode (permission deny / manual).
+    // Web Speech path — only after true permission deny this click, or manual Safe Mode
+    // when MediaRecorder/getUserMedia is unavailable (e.g. plain HTTP).
     if (this.captureMode !== "webspeech") {
       this.errorMessage =
         "MediaRecorder indisponível neste browser. Ative Safe Mode manualmente ou use HTTPS.";
@@ -1220,9 +1211,11 @@ export class ControlApp {
                     ? "Validando no Consenso Alfa..."
                     : this.phase === "responding"
                       ? "A responder..."
-                      : this.micStatus === "safe" || this.micStatus === "blocked"
+                      : this.micStatus === "safe"
                         ? "Falar (Safe Mode)"
-                        : "Gravar com o headset"
+                        : this.micStatus === "blocked"
+                          ? "Tentar gravar (Gemini)"
+                          : "Gravar com o headset"
               }
             </button>
             <button
@@ -1419,7 +1412,7 @@ export class ControlApp {
               data-gemini-mode="flash"
               ${this.chatBusy ? "disabled" : ""}
             >
-              Flash · gemini-2.5-flash
+              Flash · gemini-3.8-flash
             </button>
             <button
               type="button"
@@ -1427,7 +1420,7 @@ export class ControlApp {
               data-gemini-mode="pro"
               ${this.chatBusy ? "disabled" : ""}
             >
-              Pro · gemini-2.5-pro
+              Pro · gemini-3.8-flash
             </button>
           </div>
           <label class="chat-label" for="chat-draft">Pergunta</label>

@@ -295,18 +295,31 @@ export function classifyMediaError(err: unknown): CaptureError {
   const constraint = readConstraint(err);
   const browserNote = message && message !== name ? ` Mensagem do browser: ${message}` : "";
 
-  if (
-    name === "NotAllowedError" ||
-    name === "PermissionDeniedError" ||
-    /permission|notallowed|denied/i.test(message)
-  ) {
+  // True mic permission deny only — do NOT treat generic "denied/permission"
+  // substrings from other failures as Safe Mode triggers (phone field path).
+  if (name === "NotAllowedError" || name === "PermissionDeniedError") {
     const reason =
-      "Permissão de microfone negada ou o prompt foi fechado. O site precisa de acesso em localhost/HTTPS. Safe Mode (Web Speech) continua disponível.";
+      "Permissão de microfone negada ou o prompt foi fechado. O site precisa de acesso em localhost/HTTPS. Safe Mode (Web Speech) só neste caso.";
     return new CaptureError(
       "permission_denied",
-      `${name || "NotAllowedError"}: ${reason}`,
+      `${name}: ${reason}`,
       true,
-      failureDetail(name || "NotAllowedError", reason, constraint),
+      failureDetail(name, reason, constraint),
+    );
+  }
+  if (
+    !name &&
+    /notallowederror|permissiondeniederror|permission denied|acesso.*negad/i.test(
+      message,
+    )
+  ) {
+    const reason =
+      "Permissão de microfone negada ou o prompt foi fechado. Safe Mode (Web Speech) só neste caso.";
+    return new CaptureError(
+      "permission_denied",
+      `NotAllowedError: ${reason}`,
+      true,
+      failureDetail("NotAllowedError", reason, constraint),
     );
   }
   if (name === "NotFoundError" || name === "DevicesNotFoundError") {
@@ -342,7 +355,7 @@ export function classifyMediaError(err: unknown): CaptureError {
   }
   if (name === "NotSupportedError" || name === "TypeError") {
     const reason =
-      "MediaRecorder ou getUserMedia indisponível neste browser. Entrando em Safe Mode (Web Speech).";
+      "MediaRecorder ou getUserMedia indisponível neste browser. Use HTTPS (túnel) ou Safe Mode manual se a permissão estiver bloqueada.";
     return new CaptureError(
       "unsupported",
       `${name || "NotSupportedError"}: ${reason}`,

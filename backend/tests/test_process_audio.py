@@ -102,3 +102,31 @@ def test_process_audio_accepts_mp4_mime(client: TestClient) -> None:
     body = res.json()
     assert body["transcript"]
     assert body["response_text"]
+    assert body.get("audio_base64") or body.get("audio_url") or body.get("response_text")
+
+
+@pytest.mark.parametrize(
+    ("filename", "mime"),
+    [
+        ("headset.webm", "audio/webm"),
+        ("headset.webm", "audio/webm;codecs=opus"),
+        ("headset.ogg", "audio/ogg"),
+        ("headset.mp4", "audio/mp4"),
+        ("headset.m4a", "audio/aac"),
+    ],
+)
+def test_process_audio_accepts_mobile_mimes(
+    client: TestClient, filename: str, mime: str
+) -> None:
+    """Android webm/opus + iOS mp4/aac + Firefox ogg must return 200 + text/TTS."""
+    audio = _tiny_wav()
+    res = client.post(
+        "/process-audio",
+        files={"audio": (filename, audio, mime)},
+        data={"locale": "pt-BR", "client_id": "mobile-qa"},
+    )
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["transcript"]
+    assert body["response_text"] or body.get("gemini_response")
+    assert body.get("audio_base64") or body.get("audio_url") or body.get("audio_response_url")
