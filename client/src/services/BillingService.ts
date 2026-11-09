@@ -20,6 +20,11 @@ export interface BillingConfig {
   solana_mode: string;
   treasury_share: number;
   burn_share: number;
+  /** Official Solana treasury pubkey (display only). */
+  treasury_wallet?: string;
+  solana_rpc_url?: string;
+  /** Preferred RPC for official treasury balance (usually mainnet). */
+  treasury_rpc_url?: string;
   unit_amount_cents: number;
   currency: string;
   interval: string;

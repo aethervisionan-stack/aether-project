@@ -110,11 +110,81 @@ button.subscribe-cta:disabled {
   display: none;
 }
 
-.tokenomics {
-  margin: 0.75rem 0 0;
-  font-size: 0.8rem;
+.treasury-mount {
+  margin-top: 0.85rem;
+}
+
+.treasury-card {
+  padding: 0.7rem 0.8rem 0.75rem;
+  border: 1px solid rgba(0, 243, 255, 0.28);
+  background: rgba(8, 12, 16, 0.72);
+}
+
+.treasury-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.35rem 0.75rem;
+  margin-bottom: 0.45rem;
+}
+
+.treasury-title {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  color: var(--cyan);
+}
+
+.treasury-sync {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.72rem;
   color: var(--muted);
-  line-height: 1.4;
+}
+
+.treasury-sync[data-state="online"] {
+  color: var(--ok);
+}
+
+.treasury-sync[data-state="offline"] {
+  color: var(--danger);
+}
+
+.treasury-addr-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.4rem;
+}
+
+.treasury-addr {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.82rem;
+  color: #d7fbff;
+  letter-spacing: 0.02em;
+}
+
+.treasury-copy {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.7rem;
+  padding: 0.25rem 0.45rem;
+  background: transparent;
+  color: var(--cyan);
+  border: 1px solid rgba(0, 243, 255, 0.35);
+  cursor: pointer;
+}
+
+.treasury-bal,
+.treasury-fiat,
+.treasury-split {
+  margin: 0.2rem 0 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.75rem;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.treasury-bal {
+  color: #00ff66;
 }
 
 .live-panel[hidden] {
@@ -155,13 +225,43 @@ button.secondary {
   border-color: rgba(244, 247, 248, 0.25);
 }
 
+.live-status-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.35rem 1rem;
+  margin: 0 0 0.85rem;
+}
+
 .connection {
-  margin: 0 0 1.25rem;
+  margin: 0;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.85rem;
   font-weight: 600;
   letter-spacing: 0.08em;
   color: var(--muted);
+}
+
+.guardrail {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--ok);
+}
+
+.guardrail[data-state="secure"] {
+  color: var(--ok);
+}
+
+.guardrail[data-state="sanitizing"] {
+  color: #ffe066;
+}
+
+.guardrail[data-state="blocked"] {
+  color: var(--danger);
 }
 
 .connection[data-state="OPEN"] {
@@ -230,24 +330,93 @@ button.secondary {
   font: inherit;
 }
 
-.log {
+.transcript-mount {
+  margin-top: 0.25rem;
+}
+
+.transcript-panel {
+  border: 1px solid rgba(0, 243, 255, 0.22);
+  background: rgba(8, 12, 16, 0.65);
+  padding: 0.55rem 0.65rem 0.65rem;
+}
+
+.transcript-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  margin-bottom: 0.45rem;
+}
+
+.transcript-title {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  color: var(--cyan);
+}
+
+.transcript-actions {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.transcript-btn {
+  font-size: 0.72rem !important;
+  padding: 0.3rem 0.55rem !important;
+}
+
+.transcript-list {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 0.4rem;
-  max-height: 320px;
+  gap: 0.55rem;
+  max-height: 280px;
   overflow: auto;
-  font-size: 0.9rem;
-  color: var(--muted);
 }
 
-.log li[data-kind="error"] {
+.transcript-list li {
+  border-left: 2px solid rgba(0, 243, 255, 0.25);
+  padding: 0.15rem 0 0.15rem 0.55rem;
+}
+
+.transcript-list li[data-role="aether"] {
+  border-left-color: rgba(0, 255, 102, 0.45);
+}
+
+.transcript-list li[data-role="system"] {
+  border-left-color: rgba(255, 92, 92, 0.55);
+}
+
+.transcript-who {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--cyan);
+  margin-right: 0.5rem;
+}
+
+.transcript-list li[data-role="aether"] .transcript-who {
+  color: #00ff66;
+}
+
+.transcript-list li[data-role="system"] .transcript-who {
   color: var(--danger);
 }
 
-.log li[data-kind="warn"] {
-  color: #ffe6a8;
+.transcript-time {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.65rem;
+  color: var(--muted);
+}
+
+.transcript-text {
+  margin: 0.2rem 0 0;
+  font-size: 0.88rem;
+  color: var(--text);
+  line-height: 1.4;
 }
 
 .log li[data-kind="aether"] {

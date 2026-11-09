@@ -66,6 +66,10 @@ async def billing_config() -> dict[str, Any]:
         ),
         "treasury_share": 0.70,
         "burn_share": 0.30,
+        # Public treasury display (never secrets). Mainnet RPC for the official wallet balance.
+        "treasury_wallet": settings.treasury_wallet_address.strip(),
+        "solana_rpc_url": settings.solana_rpc_url.strip() or "https://api.devnet.solana.com",
+        "treasury_rpc_url": "https://api.mainnet-beta.solana.com",
         "unit_amount_cents": price["unit_amount_cents"],
         "currency": price["currency"],
         "interval": "month",

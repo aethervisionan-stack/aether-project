@@ -122,11 +122,18 @@ async def sanitize_outbound_event(event: dict[str, Any]) -> dict[str, Any] | Non
     cleaned = await sanitize_and_validate_response(original)
     if cleaned is None:
         logger.debug("guardrails dropped empty/corrupt %s fragment", event_type)
-        return None
-
-    if cleaned == original:
-        return event
+        # Light control event for HUD indicator (no audio impact).
+        return {
+            "type": "guardrail",
+            "status": "blocked",
+            "reason": "empty_or_corrupt",
+            "source_type": event_type,
+        }
 
     out = dict(event)
-    out["text"] = cleaned
+    if cleaned != original:
+        out["text"] = cleaned
+        out["guardrail"] = "sanitizing"
+    else:
+        out["guardrail"] = "secure"
     return out

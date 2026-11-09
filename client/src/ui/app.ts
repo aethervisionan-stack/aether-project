@@ -19,6 +19,9 @@ import { AdvancedAudioVisualizer } from "../audio/AdvancedAudioVisualizer";
 import { LatencyMonitor } from "../audio/LatencyMonitor";
 import { GeminiLiveService } from "../services/GeminiLiveService";
 import type { LiveServerJsonEvent, TelemetrySnapshot, WsReadyStateLabel } from "../types/live";
+import { GuardrailIndicator } from "./GuardrailIndicator";
+import { TranscriptFeed } from "./TranscriptFeed";
+import { TreasuryWidget } from "./TreasuryWidget";
 
 /** Generation-1 connection labels — no PCM/path/telemetry prose. */
 function connectionLabel(state: WsReadyStateLabel): string {
@@ -53,7 +56,6 @@ export class ControlApp {
   private accessEl!: HTMLElement;
   private accessMetaEl!: HTMLElement;
   private warnEl!: HTMLElement;
-  private logEl!: HTMLElement;
   private livePanel!: HTMLElement;
   private subscribeSection!: HTMLElement;
   private connectBtn!: HTMLButtonElement;
@@ -69,6 +71,9 @@ export class ControlApp {
   private latencyEl!: HTMLElement;
   private visualizer: AdvancedAudioVisualizer | null = null;
   private latencyMonitor: LatencyMonitor | null = null;
+  private treasury: TreasuryWidget | null = null;
+  private transcript: TranscriptFeed | null = null;
+  private guardrail: GuardrailIndicator | null = null;
 
   constructor(private readonly root: HTMLElement) {}
 
@@ -87,7 +92,7 @@ export class ControlApp {
           <button type="button" class="secondary" data-action="dev-unlock">Simulate unlock</button>
         </div>
         <p class="process" data-role="process" hidden></p>
-        <p class="tokenomics" data-role="tokenomics"></p>
+        <div class="treasury-mount" data-role="treasury"></div>
       </section>
 
       <section class="live-panel" data-role="live-panel" hidden>
@@ -95,7 +100,10 @@ export class ControlApp {
           <button type="button" data-action="connect">Connect Live</button>
           <button type="button" class="secondary" data-action="disconnect" disabled>Disconnect</button>
         </div>
-        <p class="connection" data-role="status" data-state="CLOSED">CLOSED</p>
+        <div class="live-status-row">
+          <p class="connection" data-role="status" data-state="CLOSED">CLOSED</p>
+          <p class="guardrail" data-role="guardrail">GUARDRAIL: SECURE</p>
+        </div>
         <div class="hud-telemetry" data-role="hud-telemetry">
           <canvas class="audio-viz" data-role="audio-viz" width="640" height="110" aria-label="Advanced audio visualizer"></canvas>
           <p class="latency" data-role="latency">PING: — | AI: —</p>
@@ -105,7 +113,7 @@ export class ControlApp {
           <input type="text" placeholder="Type a message to Aether…" data-role="text" />
           <button type="button" class="secondary" data-action="send-text" disabled>Send</button>
         </div>
-        <ul class="log" data-role="log"></ul>
+        <div class="transcript-mount" data-role="transcript"></div>
       </section>
     `;
 
@@ -114,7 +122,6 @@ export class ControlApp {
     this.accessEl = this.root.querySelector("[data-role=access]")!;
     this.accessMetaEl = this.root.querySelector("[data-role=access-meta]")!;
     this.warnEl = this.root.querySelector("[data-role=warn]")!;
-    this.logEl = this.root.querySelector("[data-role=log]")!;
     this.livePanel = this.root.querySelector("[data-role=live-panel]")!;
     this.connectBtn = this.root.querySelector("[data-action=connect]")!;
     this.disconnectBtn = this.root.querySelector("[data-action=disconnect]")!;
@@ -126,7 +133,13 @@ export class ControlApp {
     this.sendBtn = this.root.querySelector("[data-action=send-text]")!;
     this.vizCanvas = this.root.querySelector("[data-role=audio-viz]")!;
     this.latencyEl = this.root.querySelector("[data-role=latency]")!;
-    const tokenomicsEl = this.root.querySelector<HTMLElement>("[data-role=tokenomics]")!;
+    const treasuryMount = this.root.querySelector<HTMLElement>("[data-role=treasury]")!;
+    const transcriptMount = this.root.querySelector<HTMLElement>("[data-role=transcript]")!;
+    const guardrailEl = this.root.querySelector<HTMLElement>("[data-role=guardrail]")!;
+
+    this.treasury = new TreasuryWidget(treasuryMount);
+    this.transcript = new TranscriptFeed(transcriptMount);
+    this.guardrail = new GuardrailIndicator(guardrailEl);
 
     // Never hide the payment block in Gen-1 local HUD.
     this.subscribeSection.hidden = false;
@@ -145,17 +158,15 @@ export class ControlApp {
       }
     });
 
-    void this.bootstrapBilling(tokenomicsEl);
+    void this.bootstrapBilling();
   }
 
-  private async bootstrapBilling(tokenomicsEl: HTMLElement): Promise<void> {
+  private async bootstrapBilling(): Promise<void> {
     try {
       this.billingConfig = await fetchBillingConfig();
       this.renderSubscribeCta();
-      tokenomicsEl.textContent =
-        `Card payments auto-split on Solana: ${Math.round(this.billingConfig.treasury_share * 100)}% treasury / ` +
-        `${Math.round(this.billingConfig.burn_share * 100)}% burn` +
-        (this.billingConfig.solana_mode === "stub" ? " (stub mode locally)." : ".");
+      this.treasury?.applyBillingConfig(this.billingConfig);
+      this.treasury?.start();
 
       const localSim =
         this.billingConfig.dev_unlock_enabled || this.billingConfig.mock_checkout;
@@ -166,8 +177,7 @@ export class ControlApp {
       this.resetBtn.hidden = !devTools;
 
       if (this.billingConfig.bypass_subscription_check) {
-        tokenomicsEl.textContent =
-          `${tokenomicsEl.textContent} Paywall bypassed for AI testing (BYPASS_SUBSCRIPTION_CHECK).`;
+        // Access meta already covers bypass; treasury card stays independent.
       } else if (!canCheckout(this.billingConfig)) {
         this.accessEl.textContent =
           "Billing API reachable but checkout flags are off — check BILLING_DEV_UNLOCK.";
@@ -186,6 +196,8 @@ export class ControlApp {
         solana_mode: "stub",
         treasury_share: 0.7,
         burn_share: 0.3,
+        treasury_wallet: "AVj6q1t8xWd7Mi7roNjTc1RvaqJy79P7n3XNpCVjQgxa",
+        treasury_rpc_url: "https://api.mainnet-beta.solana.com",
         unit_amount_cents: 1,
         currency: "brl",
         interval: "month",
@@ -195,7 +207,8 @@ export class ControlApp {
       this.devBtn.hidden = false;
       this.resetBtn.hidden = false;
       this.accessEl.textContent = `Billing config error (CTA still available): ${message}`;
-      tokenomicsEl.textContent = "Local mock checkout enabled after config error.";
+      this.treasury?.applyBillingConfig(this.billingConfig);
+      this.treasury?.start();
     }
 
     const ret = readCheckoutReturn();
@@ -451,6 +464,8 @@ export class ControlApp {
       this.disconnectBtn.disabled = false;
       this.sendBtn.disabled = false;
       this.setConnection("OPEN");
+      this.guardrail?.reset();
+      this.transcript?.clear();
 
       if (result.micEnabled) {
         this.textInput.placeholder = "Type a message to Aether…";
@@ -504,18 +519,37 @@ export class ControlApp {
       return;
     }
     this.service.sendText(text);
-    this.pushLog(`you: ${text}`, "user");
+    this.transcript?.push("user", text);
     this.textInput.value = "";
   }
 
   private handleEvent(event: LiveServerJsonEvent): void {
     switch (event.type) {
       case "user_transcript":
-        this.pushLog(`you: ${(event as { text: string }).text}`, "user");
+        this.transcript?.push("user", (event as { text: string }).text);
         break;
-      case "aether_transcript":
-        this.pushLog(`aether: ${(event as { text: string }).text}`, "aether");
+      case "aether_transcript": {
+        const ev = event as { text: string; guardrail?: string };
+        if (ev.guardrail) {
+          this.guardrail?.setStatus(ev.guardrail);
+        } else {
+          this.guardrail?.setStatus("secure");
+        }
+        this.transcript?.push("aether", ev.text, ev.guardrail);
         break;
+      }
+      case "guardrail": {
+        const status = (event as { status?: string }).status;
+        this.guardrail?.setStatus(status);
+        if (status === "blocked") {
+          this.transcript?.push(
+            "system",
+            "Guardrail blocked an AI fragment (empty/corrupt after sanitize).",
+            "blocked",
+          );
+        }
+        break;
+      }
       case "error": {
         const code = (event as { code?: string }).code;
         const message = (event as { message: string }).message;
@@ -552,10 +586,4 @@ export class ControlApp {
     this.warnEl.textContent = "";
   }
 
-  private pushLog(text: string, kind: string): void {
-    const li = document.createElement("li");
-    li.dataset.kind = kind;
-    li.textContent = text;
-    this.logEl.prepend(li);
-  }
 }

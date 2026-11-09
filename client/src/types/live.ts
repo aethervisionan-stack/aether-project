@@ -28,6 +28,15 @@ export interface LivePongEvent {
 export interface LiveTranscriptEvent {
   type: "user_transcript" | "aether_transcript";
   text: string;
+  /** Present on AI text after Motor de Segurança. */
+  guardrail?: "secure" | "sanitizing" | "blocked" | string;
+}
+
+export interface LiveGuardrailEvent {
+  type: "guardrail";
+  status: "secure" | "sanitizing" | "blocked" | string;
+  reason?: string;
+  source_type?: string;
 }
 
 export interface LiveTurnEvent {
@@ -45,9 +54,12 @@ export type LiveServerJsonEvent =
   | LivePingEvent
   | LivePongEvent
   | LiveTranscriptEvent
+  | LiveGuardrailEvent
   | LiveTurnEvent
   | LiveErrorEvent
   | { type: string; [key: string]: unknown };
+
+export type GuardrailStatus = "secure" | "sanitizing" | "blocked";
 
 export interface TelemetrySnapshot {
   rttMs: number | null;
