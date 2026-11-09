@@ -49,18 +49,25 @@ async def billing_config() -> dict[str, Any]:
     """Public billing config for the client widget (no secrets)."""
     settings = get_settings()
     price = expected_price(settings)
+    feature_unlock = settings.local_feature_unlock()
+    # Simulate unlock: mock path without Stripe, or full local unlock (bypass / BILLING_DEV_UNLOCK).
+    simulate_unlock = feature_unlock and (
+        not settings.has_stripe() or settings.subscription_check_bypassed()
+    )
     return {
         "stripe_configured": settings.has_stripe(),
         # off | test | live — flips only by swapping STRIPE_SECRET_KEY in .env
         "stripe_mode": settings.stripe_mode(),
         "mock_checkout": settings.stripe_mock_checkout_enabled(),
         "publishable_key": settings.publishable_key_public(),
-        # Simulate unlock only when Stripe secret is absent (mock path).
-        "dev_unlock_enabled": bool(settings.billing_dev_unlock) and not settings.has_stripe(),
+        # Simulate unlock available under local feature unlock (even with sk_test_ + bypass).
+        "dev_unlock_enabled": simulate_unlock,
         # Reset subscription stays available with sk_test_ when BILLING_DEV_UNLOCK=true.
-        "dev_tools_enabled": settings.billing_dev_tools_enabled(),
-        # TEMP AI testing: Live/HUD unlocked without Subscribe when true.
+        "dev_tools_enabled": settings.billing_dev_tools_enabled() or feature_unlock,
+        # Local-dev: Live/HUD/tools unlocked without Subscribe when true.
         "bypass_subscription_check": settings.subscription_check_bypassed(),
+        "feature_unlock": feature_unlock,
+        "unlocked_surfaces": settings.unlocked_surfaces(),
         "solana_mode": (
             "live_prepared"
             if settings.solana_live_transfers_enabled()
@@ -206,16 +213,22 @@ async def dev_unlock(
     background_tasks: BackgroundTasks,
 ) -> dict[str, Any]:
     """
-    Local-only simulate successful payment when Stripe keys are missing.
+    Local-only simulate successful payment.
 
-    Disabled automatically once STRIPE_SECRET_KEY is set, unless
-    BILLING_DEV_UNLOCK remains true *and* stripe is unset (see config).
+    Allowed when Stripe is unset (mock path), or when local feature unlock /
+    BYPASS_SUBSCRIPTION_CHECK is on so sk_test_ does not block AI/HUD testing.
     """
     settings = get_settings()
-    if settings.has_stripe() or not settings.billing_dev_unlock:
+    allow = settings.local_feature_unlock() and (
+        not settings.has_stripe() or settings.subscription_check_bypassed()
+    )
+    if not allow:
         raise HTTPException(
             status_code=403,
-            detail="Dev unlock disabled (Stripe configured or BILLING_DEV_UNLOCK=false).",
+            detail=(
+                "Dev unlock disabled (set BYPASS_SUBSCRIPTION_CHECK=true or "
+                "BILLING_DEV_UNLOCK=true without a live Stripe secret)."
+            ),
         )
 
     subscriber_id = f"dev_{uuid.uuid4().hex[:12]}"
@@ -251,16 +264,14 @@ async def dev_lock(body: DevLockBody) -> dict[str, Any]:
     """
     Local/dev: revoke entitlement so the HUD returns to blocked state.
 
-    Allowed when mock checkout / BILLING_DEV_UNLOCK is active (no real Stripe).
+    Allowed under local feature unlock / BILLING_DEV_UNLOCK (including sk_test_).
     """
     settings = get_settings()
-    if settings.has_stripe() and not settings.billing_dev_unlock:
+    if not settings.local_feature_unlock():
         raise HTTPException(
             status_code=403,
-            detail="Dev lock disabled while live Stripe is configured.",
+            detail="Dev lock unavailable (local feature unlock off).",
         )
-    if not settings.stripe_mock_checkout_enabled() and not settings.billing_dev_unlock:
-        raise HTTPException(status_code=403, detail="Dev lock unavailable.")
 
     key = (body.subscriber_id or "").strip()
     if not key:

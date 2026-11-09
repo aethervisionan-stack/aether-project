@@ -15,8 +15,11 @@ export interface BillingConfig {
   dev_unlock_enabled: boolean;
   /** Reset / local tools (BILLING_DEV_UNLOCK) — may stay on with sk_test_ */
   dev_tools_enabled?: boolean;
-  /** TEMP: skip paywall for AI/Live testing (BYPASS_SUBSCRIPTION_CHECK) */
+  /** Local-dev: skip paywall for AI/Live testing (BYPASS_SUBSCRIPTION_CHECK) */
   bypass_subscription_check?: boolean;
+  /** Full HUD/tools unlock (bypass or BILLING_DEV_UNLOCK) */
+  feature_unlock?: boolean;
+  unlocked_surfaces?: Record<string, boolean>;
   solana_mode: string;
   treasury_share: number;
   burn_share: number;

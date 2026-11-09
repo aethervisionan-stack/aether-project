@@ -65,10 +65,10 @@ class Settings(BaseSettings):
 
     # Local Gen-1 bypass when Stripe keys are absent (never enable in production).
     billing_dev_unlock: bool = Field(default=True, alias="BILLING_DEV_UNLOCK")
-    # TEMP: skip subscription paywall for AI/Live testing. Keep false once sk_live_ is live.
-    # Real Stripe Checkout + entitlement validation remain intact when this is false.
+    # Local-dev default: unlock Live/HUD/tools without Subscribe.
+    # Set BYPASS_SUBSCRIPTION_CHECK=false before sk_live_ / production — Stripe code stays intact.
     bypass_subscription_check: bool = Field(
-        default=False,
+        default=True,
         alias="BYPASS_SUBSCRIPTION_CHECK",
     )
 
@@ -182,8 +182,35 @@ class Settings(BaseSettings):
         return bool(self.billing_dev_unlock)
 
     def subscription_check_bypassed(self) -> bool:
-        """TEMP AI-test paywall skip — re-enable by setting BYPASS_SUBSCRIPTION_CHECK=false."""
+        """Local-dev paywall skip — re-enable by setting BYPASS_SUBSCRIPTION_CHECK=false."""
         return bool(self.bypass_subscription_check)
+
+    def local_feature_unlock(self) -> bool:
+        """
+        Full local-dev unlock for HUD panels, tool registry, and test routes.
+        True when paywall bypass or BILLING_DEV_UNLOCK is on (default local).
+        """
+        return self.subscription_check_bypassed() or self.billing_dev_tools_enabled()
+
+    def unlocked_surfaces(self) -> dict[str, bool]:
+        """Public map of surfaces exposed under local unlock (no secrets)."""
+        unlocked = self.local_feature_unlock()
+        return {
+            "live_hud": unlocked,
+            "memory_inspector": unlocked,
+            "hardware_profile": unlocked,
+            "latency_tracker": unlocked,
+            "notification_history": unlocked,
+            "tool_registry": unlocked,
+            "async_cot": unlocked,
+            "multimodal_ws": unlocked,
+            "geolocation": unlocked,
+            "productivity": unlocked,
+            "vad_open_mic": unlocked,
+            "push_to_talk": unlocked,
+            "test_routes": unlocked,
+            "dev_unlock_endpoint": unlocked,
+        }
 
     def solana_live_transfers_enabled(self) -> bool:
         """Real on-chain transfers require an explicit payer secret (never invent one)."""

@@ -17,6 +17,7 @@ import {
 } from "../services/BillingService";
 import { AdvancedAudioVisualizer } from "../audio/AdvancedAudioVisualizer";
 import { LatencyMonitor } from "../audio/LatencyMonitor";
+import { envDevUnlock, isFeatureUnlock } from "../dev/unlock";
 import { classifyPace } from "../hardware/NotificationPriority";
 import { GeoNavigation } from "../mobility/GeoNavigation";
 import { parseProductivityLocal } from "../mobility/ProductivityVoice";
@@ -24,6 +25,7 @@ import { FrameCapture } from "../multimodal/FrameCapture";
 import { GeminiLiveService } from "../services/GeminiLiveService";
 import type { LiveServerJsonEvent, TelemetrySnapshot, WsReadyStateLabel } from "../types/live";
 import type { NotificationActionView } from "../types/mobility";
+import { DevToolsPanel } from "./DevToolsPanel";
 import { GuardrailIndicator } from "./GuardrailIndicator";
 import { MemoryInspector } from "./MemoryInspector";
 import { MobilityPanel } from "./MobilityPanel";
@@ -84,6 +86,7 @@ export class ControlApp {
   private guardrail: GuardrailIndicator | null = null;
   private memory: MemoryInspector | null = null;
   private mobility: MobilityPanel | null = null;
+  private devTools: DevToolsPanel | null = null;
   private toasts = new ToastHost();
   private focusBtn!: HTMLButtonElement;
   private frameBtn!: HTMLButtonElement;
@@ -96,6 +99,8 @@ export class ControlApp {
   constructor(private readonly root: HTMLElement) {}
 
   mount(): void {
+    // Optimistic local unlock: show Live HUD immediately (VITE_DEV_UNLOCK default on).
+    const optimisticUnlock = envDevUnlock();
     this.root.innerHTML = `
       <h1 class="brand">Aether <span>Vision</span></h1>
 
@@ -113,7 +118,7 @@ export class ControlApp {
         <div class="treasury-mount" data-role="treasury"></div>
       </section>
 
-      <section class="live-panel glass" data-role="live-panel" hidden>
+      <section class="live-panel glass" data-role="live-panel"${optimisticUnlock ? "" : " hidden"}>
         <div class="live-toolbar">
           <div class="controls">
             <button type="button" data-action="connect">Connect Live</button>
@@ -137,6 +142,7 @@ export class ControlApp {
         </div>
         <div class="warn" data-role="warn" hidden></div>
         <div class="mobility-mount" data-role="mobility"></div>
+        <div class="devtools-mount" data-role="devtools"></div>
         <div class="text-row">
           <input type="text" placeholder="Type a message to Aether…" data-role="text" />
           <button type="button" class="secondary" data-action="send-text" disabled>Send</button>
@@ -168,13 +174,22 @@ export class ControlApp {
     const guardrailEl = this.root.querySelector<HTMLElement>("[data-role=guardrail]")!;
     const memoryMount = this.root.querySelector<HTMLElement>("[data-role=memory]")!;
     const mobilityMount = this.root.querySelector<HTMLElement>("[data-role=mobility]")!;
+    const devtoolsMount = this.root.querySelector<HTMLElement>("[data-role=devtools]")!;
 
     this.treasury = new TreasuryWidget(treasuryMount);
     this.transcript = new TranscriptFeed(transcriptMount);
     this.guardrail = new GuardrailIndicator(guardrailEl);
     this.memory = new MemoryInspector(memoryMount);
     this.mobility = new MobilityPanel(mobilityMount);
+    this.mobility.setUnlockMode(optimisticUnlock);
+    this.devTools = new DevToolsPanel(devtoolsMount);
     this.mobility.setNotify((kind, text) => {
+      if (kind === "ok") this.toasts.ok(text);
+      else if (kind === "warn") this.toasts.warn(text);
+      else if (kind === "danger") this.toasts.danger(text);
+      else this.toasts.info(text);
+    });
+    this.devTools.setNotify((kind, text) => {
       if (kind === "ok") this.toasts.ok(text);
       else if (kind === "warn") this.toasts.warn(text);
       else if (kind === "danger") this.toasts.danger(text);
@@ -252,6 +267,14 @@ export class ControlApp {
       }
     });
 
+    if (optimisticUnlock) {
+      this.entitled = true;
+      this.livePanel.hidden = false;
+      this.devBtn.hidden = false;
+      this.resetBtn.hidden = false;
+      void this.memory?.openPanel(true);
+    }
+
     void this.bootstrapBilling();
   }
 
@@ -294,15 +317,20 @@ export class ControlApp {
       this.treasury?.applyBillingConfig(this.billingConfig);
       this.treasury?.start();
 
+      const unlocked = isFeatureUnlock(this.billingConfig);
       const localSim =
         this.billingConfig.dev_unlock_enabled || this.billingConfig.mock_checkout;
       const devTools =
-        Boolean(this.billingConfig.dev_tools_enabled) || localSim;
-      this.devBtn.hidden = !this.billingConfig.dev_unlock_enabled;
+        Boolean(this.billingConfig.dev_tools_enabled) || localSim || unlocked;
+      this.devBtn.hidden = !(this.billingConfig.dev_unlock_enabled || unlocked);
       // Keep Reset available under sk_test_ when BILLING_DEV_UNLOCK=true.
       this.resetBtn.hidden = !devTools;
+      this.mobility?.setUnlockMode(unlocked);
+      if (unlocked) {
+        void this.memory?.openPanel(true);
+      }
 
-      if (this.billingConfig.bypass_subscription_check) {
+      if (this.billingConfig.bypass_subscription_check || unlocked) {
         // Access meta already covers bypass; treasury card stays independent.
       } else if (!canCheckout(this.billingConfig)) {
         this.accessEl.textContent =
@@ -318,7 +346,8 @@ export class ControlApp {
         publishable_key: null,
         dev_unlock_enabled: true,
         dev_tools_enabled: true,
-        bypass_subscription_check: false,
+        bypass_subscription_check: true,
+        feature_unlock: true,
         solana_mode: "stub",
         treasury_share: 0.7,
         burn_share: 0.3,
@@ -332,7 +361,9 @@ export class ControlApp {
       this.renderSubscribeCta();
       this.devBtn.hidden = false;
       this.resetBtn.hidden = false;
-      this.accessEl.textContent = `Billing config error (CTA still available): ${message}`;
+      this.mobility?.setUnlockMode(true);
+      void this.memory?.openPanel(true);
+      this.accessEl.textContent = `Billing config error (HUD unlocked locally): ${message}`;
       this.treasury?.applyBillingConfig(this.billingConfig);
       this.treasury?.start();
     }
@@ -367,12 +398,16 @@ export class ControlApp {
   }
 
   private async refreshEntitlement(): Promise<void> {
-    // TEMP AI testing: unlock Live/chat without Stripe when backend flag is on.
-    if (this.billingConfig?.bypass_subscription_check) {
+    // Local unlock: Live/HUD/tools without Stripe when bypass / feature_unlock / VITE_DEV_UNLOCK.
+    if (isFeatureUnlock(this.billingConfig)) {
       this.setEntitled(true);
       this.accessEl.classList.remove("is-loading", "skeleton");
-      this.accessEl.textContent = "Access active — paywall bypassed for AI testing.";
-      this.setAccessMeta("BYPASS_SUBSCRIPTION_CHECK=true · Stripe structure kept · set false to re-enable paywall");
+      this.accessEl.textContent = "Access active — local feature unlock (all HUD tools).";
+      this.setAccessMeta(
+        this.billingConfig?.bypass_subscription_check
+          ? "BYPASS_SUBSCRIPTION_CHECK=true · Stripe structure kept · set false to re-enable paywall"
+          : "VITE_DEV_UNLOCK / BILLING_DEV_UNLOCK · full local surfaces unlocked",
+      );
       return;
     }
 
@@ -525,10 +560,10 @@ export class ControlApp {
       await this.disconnect();
       await resetSubscription(loadSubscriberId());
       clearSubscriberId();
-      if (this.billingConfig?.bypass_subscription_check) {
-        // Paywall still bypassed — keep Live available for AI testing.
+      if (isFeatureUnlock(this.billingConfig)) {
+        // Local unlock still active — keep Live / HUD available.
         await this.refreshEntitlement();
-        this.setProcess("Local entitlement cleared; paywall bypass still active.");
+        this.setProcess("Local entitlement cleared; feature unlock still active.");
       } else {
         this.setEntitled(false);
         this.clearAccessMeta();
@@ -539,9 +574,9 @@ export class ControlApp {
     } catch (err) {
       // Still clear local state so the user is not stuck unlocked.
       clearSubscriberId();
-      if (this.billingConfig?.bypass_subscription_check) {
+      if (isFeatureUnlock(this.billingConfig)) {
         await this.refreshEntitlement();
-        this.setProcess("Local lock skipped — paywall bypass active.");
+        this.setProcess("Local lock skipped — feature unlock active.");
       } else {
         this.setEntitled(false);
         this.clearAccessMeta();

@@ -69,6 +69,19 @@ export class MemoryInspector {
     this.onNotify = handler;
   }
 
+  /** Local unlock: force Memory Inspector open so prefs are visible without a click. */
+  async openPanel(forceOpen = true): Promise<void> {
+    if (forceOpen && !this.open) {
+      this.open = true;
+      this.panel.hidden = false;
+      this.toggleBtn.setAttribute("aria-expanded", "true");
+      this.toggleBtn.textContent = "Memory ▾";
+      await this.reload();
+      return;
+    }
+    await this.ensureLoaded();
+  }
+
   async ensureLoaded(): Promise<void> {
     if (!this.profile) {
       await this.reload();

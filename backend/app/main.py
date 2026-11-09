@@ -55,6 +55,7 @@ async def verify_subscription_alias(session_id: str):
 
 @app.get("/health")
 async def health() -> dict[str, object]:
+    feature_unlock = settings.local_feature_unlock()
     return {
         "status": "ok",
         "service": "aether-vision-live",
@@ -72,6 +73,9 @@ async def health() -> dict[str, object]:
         "memory": "/memory/profile",
         "memory_enabled": settings.memory_enabled,
         "tools": "/tools/catalog",
+        "bypass_subscription_check": settings.subscription_check_bypassed(),
+        "feature_unlock": feature_unlock,
+        "unlocked_surfaces": settings.unlocked_surfaces(),
         "frontier": {
             "cot": True,
             "tools": True,
@@ -90,6 +94,17 @@ async def health() -> dict[str, object]:
             "push_to_talk": True,
             "barge_in": True,
         },
+        # Explicit route map for local unlock verification (no auth middleware).
+        "unlocked_routes": [
+            "/health",
+            "/ws/live",
+            "/billing/config",
+            "/billing/entitlement",
+            "/billing/dev-unlock",
+            "/memory/profile",
+            "/tools/catalog",
+            "/tools/invoke",
+        ],
     }
 
 
