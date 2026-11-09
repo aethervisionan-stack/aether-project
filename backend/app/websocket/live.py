@@ -13,6 +13,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.config import get_settings
 from app.genai.session import GeminiLiveSession
+from app.safety import sanitize_outbound_event
 
 logger = logging.getLogger("aether.ws.live")
 
@@ -68,7 +69,11 @@ async def live_websocket(websocket: WebSocket) -> None:
         if stop.is_set():
             return
         try:
-            await websocket.send_json(event)
+            # Guardrails on AI text only — audio PCM and heartbeats bypass this path.
+            sanitized = await sanitize_outbound_event(event)
+            if sanitized is None:
+                return
+            await websocket.send_json(sanitized)
         except Exception:
             stop.set()
 
