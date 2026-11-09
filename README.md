@@ -76,5 +76,57 @@ Open [http://127.0.0.1:5173](http://127.0.0.1:5173), pair a Bluetooth headset as
 | `GEMINI_LIVE_MODEL` | `backend/.env` | Default `gemini-3.8-live` |
 | `GEMINI_API_VERSION` | `backend/.env` | Default `v1beta` (required for Live WS) |
 | `VITE_LIVE_WS_URL` | `client/.env` | Optional absolute WS URL |
+| `STRIPE_SECRET_KEY` | `backend/.env` | Server Checkout + webhook |
+| `STRIPE_PUBLISHABLE_KEY` | `backend/.env` | Exposed via `/billing/config` only |
+| `STRIPE_WEBHOOK_SECRET` | `backend/.env` | Stripe CLI / Dashboard signing secret |
+| `STRIPE_PRICE_ID` | `backend/.env` | Optional; else dynamic `price_data` |
+| `BILLING_DEV_UNLOCK` | `backend/.env` | Local simulate unlock when Stripe unset |
+| `TREASURY_WALLET_ADDRESS` | `backend/.env` | 70% Solana destination |
+| `VISION_BURN_ADDRESS` | `backend/.env` | 30% burn destination |
+| `VISION_MINT_ADDRESS` | `backend/.env` | VISION mint |
+| `SOLANA_RPC_URL` | `backend/.env` | Default devnet |
+| `SOLANA_PAYER_SECRET_KEY` | `backend/.env` | Empty = **stub mode** (no real transfers) |
 
 Persona: **Aether** — 1–3 sentence, direct, actionable replies for HUD / spatial audio.
+
+## Subscription (Stripe) + tokenomics (Solana)
+
+Traditional **card** checkout unlocks the Gen-1 Live HUD — no crypto wallet required.
+
+### Flow
+
+1. Client **Subscribe** → `POST /billing/checkout` → Stripe Checkout (subscription).
+2. Stripe webhook `POST /billing/webhook` (`checkout.session.completed`) → entitlement granted instantly.
+3. Background job plans **70% treasury / 30% burn** VISION distribution on Solana.
+4. Client stores `subscriber_id` in `localStorage` and shows Connect Live + chat.
+
+### Gen-1 entitlement assumptions
+
+- Access key = Stripe customer id (preferred), else Checkout session id, else `dev_*`.
+- Stored in `backend/data/entitlements.json` (gitignored). Not multi-device auth.
+- Instant unlock on webhook; ~31-day expiry placeholder unless you wire subscription periods.
+
+### Local without Stripe keys
+
+Leave `STRIPE_*` empty and keep `BILLING_DEV_UNLOCK=true`. The UI shows **Simulate unlock**, which grants access and runs the Solana job in **stub** mode.
+
+### Enable real Stripe
+
+1. Copy keys into `backend/.env` (never commit them).
+2. `stripe listen --forward-to localhost:8000/billing/webhook` and set `STRIPE_WEBHOOK_SECRET`.
+3. Restart uvicorn. Client **Subscribe** redirects to Checkout.
+
+### Enable real Solana transfers
+
+1. Set `TREASURY_WALLET_ADDRESS`, `VISION_BURN_ADDRESS`, `VISION_MINT_ADDRESS`, `SOLANA_RPC_URL`.
+2. Set `SOLANA_PAYER_SECRET_KEY` to a real base58 payer secret you control (**do not invent keys**).
+3. `pip install solders solana` (optional deps).
+4. Gen-1 validates the payer and prepares the 70/30 plan (`live_prepared`). Extend `app/billing/solana_distribution.py` with SPL transfer instructions once mint decimals are confirmed. With an empty payer secret, the stack stays in safe **stub** mode and logs the planned split.
+
+### Billing modules
+
+- `backend/app/billing/routes.py` — `/billing/config|checkout|webhook|entitlement|dev-unlock`
+- `backend/app/billing/stripe_service.py` — Checkout Session helpers
+- `backend/app/billing/solana_distribution.py` — 70/30 stub / prepared live
+- `backend/app/billing/entitlements.py` — Gen-1 access flag store
+- `client/src/services/BillingService.ts` — Subscribe + entitlement client

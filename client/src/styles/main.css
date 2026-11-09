@@ -45,6 +45,34 @@ body {
   color: var(--cyan);
 }
 
+.subscribe {
+  margin-bottom: 1.75rem;
+}
+
+.subscribe-lede {
+  margin: 0 0 0.5rem;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.access {
+  margin: 0 0 0.85rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.tokenomics {
+  margin: 0.75rem 0 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.live-panel[hidden] {
+  display: none;
+}
+
 .controls {
   display: flex;
   flex-wrap: wrap;

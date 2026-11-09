@@ -37,6 +37,52 @@ class Settings(BaseSettings):
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
     cors_origins: str = Field(default=DEFAULT_CORS, alias="CORS_ORIGINS")
 
+    # --- Stripe (card subscription; never commit real secrets) ---
+    stripe_secret_key: str = Field(default="", alias="STRIPE_SECRET_KEY")
+    stripe_publishable_key: str = Field(default="", alias="STRIPE_PUBLISHABLE_KEY")
+    stripe_webhook_secret: str = Field(default="", alias="STRIPE_WEBHOOK_SECRET")
+    stripe_price_id: str = Field(default="", alias="STRIPE_PRICE_ID")
+    stripe_success_url: str = Field(
+        default="http://127.0.0.1:5173/?checkout=success&session_id={CHECKOUT_SESSION_ID}",
+        alias="STRIPE_SUCCESS_URL",
+    )
+    stripe_cancel_url: str = Field(
+        default="http://127.0.0.1:5173/?checkout=cancel",
+        alias="STRIPE_CANCEL_URL",
+    )
+    # Monthly amount used when STRIPE_PRICE_ID is empty (cents).
+    stripe_unit_amount_cents: int = Field(default=1999, alias="STRIPE_UNIT_AMOUNT_CENTS")
+
+    # Local Gen-1 bypass when Stripe keys are absent (never enable in production).
+    billing_dev_unlock: bool = Field(default=True, alias="BILLING_DEV_UNLOCK")
+
+    # --- Solana tokenomics (70% treasury / 30% burn) ---
+    treasury_wallet_address: str = Field(
+        default="TreasuryWalletPubkeyPlaceholder1111111111111",
+        alias="TREASURY_WALLET_ADDRESS",
+    )
+    vision_burn_address: str = Field(
+        default="BurnAddressPubkeyPlaceholder111111111111111",
+        alias="VISION_BURN_ADDRESS",
+    )
+    vision_mint_address: str = Field(
+        default="VisionMintPubkeyPlaceholder1111111111111111",
+        alias="VISION_MINT_ADDRESS",
+    )
+    solana_rpc_url: str = Field(
+        default="https://api.devnet.solana.com",
+        alias="SOLANA_RPC_URL",
+    )
+    # Base58 secret of the payer that funds treasury/burn transfers — leave empty for stub mode.
+    solana_payer_secret_key: str = Field(default="", alias="SOLANA_PAYER_SECRET_KEY")
+    # Rough VISION tokens credited per USD of subscription for Gen-1 distribution math.
+    vision_tokens_per_usd: float = Field(default=100.0, alias="VISION_TOKENS_PER_USD")
+
+    entitlements_path: str = Field(
+        default="data/entitlements.json",
+        alias="ENTITLEMENTS_PATH",
+    )
+
     @property
     def cors_origin_list(self) -> list[str]:
         raw = {o.strip() for o in self.cors_origins.split(",") if o.strip()}
@@ -45,6 +91,13 @@ class Settings(BaseSettings):
 
     def has_api_key(self) -> bool:
         return bool(self.gemini_api_key.strip())
+
+    def has_stripe(self) -> bool:
+        return bool(self.stripe_secret_key.strip())
+
+    def solana_live_transfers_enabled(self) -> bool:
+        """Real on-chain transfers require an explicit payer secret (never invent one)."""
+        return bool(self.solana_payer_secret_key.strip())
 
 
 @lru_cache
