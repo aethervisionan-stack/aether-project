@@ -28,7 +28,8 @@ app = FastAPI(
         "Google GenAI Live (`gemini-3.8-live`) for HUD/spatial audio. "
         "Stripe subscription + Solana 70/30 tokenomics under `/billing`. "
         "Long-term memory / prefs under `/memory`. "
-        "Frontier tools under `/tools`. CoT + multimodal sidecars on `/ws/live`."
+        "Frontier tools under `/tools`. CoT + multimodal sidecars on `/ws/live`. "
+        "Hands-free OS agent: messaging/email/telephony/system + two-step confirm."
     ),
     version=__version__,
 )
@@ -94,6 +95,16 @@ async def health() -> dict[str, object]:
             "push_to_talk": True,
             "barge_in": True,
         },
+        "hands_free": {
+            "os_agent": True,
+            "messaging_tool": True,
+            "email_calendar_tool": True,
+            "telephony_tool": True,
+            "system_control_tool": True,
+            "two_step_confirm": True,
+            "notification_listener": True,
+            "os_bridge": "mock",
+        },
         # Explicit route map for local unlock verification (no auth middleware).
         "unlocked_routes": [
             "/health",
@@ -104,6 +115,11 @@ async def health() -> dict[str, object]:
             "/memory/profile",
             "/tools/catalog",
             "/tools/invoke",
+            "/tools/confirm",
+            "/tools/pending",
+            "/tools/listener/poll",
+            "/tools/listener/ingest",
+            "/tools/os-bridge",
         ],
     }
 

@@ -3,7 +3,9 @@
  */
 
 import { msg, t } from "../i18n";
+import { playSuccessBeep } from "../os/SuccessBeep";
 import {
+  confirmToolHttp,
   fetchToolCatalog,
   invokeToolHttp,
   localToolSchemas,
@@ -141,11 +143,51 @@ export class DevToolsPanel {
         });
       } else if (name === "solana_treasury_query") {
         res = await invokeToolHttp("solana_treasury_query", {});
+      } else if (name === "messaging_tool") {
+        res = await invokeToolHttp("messaging_tool", {
+          action: "send",
+          app: "whatsapp",
+          contact: "Carlos",
+          text: "Chego em 10 minutos.",
+        });
+      } else if (name === "email_calendar_tool") {
+        res = await invokeToolHttp("email_calendar_tool", {
+          action: "schedule",
+          title: "Sync with Ana",
+          when: "tomorrow 14:00",
+          duration_min: 30,
+        });
+      } else if (name === "telephony_tool") {
+        res = await invokeToolHttp("telephony_tool", { action: "incoming" });
+      } else if (name === "system_control_tool") {
+        res = await invokeToolHttp("system_control_tool", { action: "battery" });
       } else {
         this.statusEl.textContent = t(d.unknownTool, { name });
         return;
       }
+
       const label = name as ToolName;
+      const status = String((res.result as { status?: string } | undefined)?.status || "");
+      if (status === "pending_confirmation") {
+        const pendingId = String(
+          (res.result as { pending_id?: string } | undefined)?.pending_id || "",
+        );
+        const speak = String((res.result as { speak?: string } | undefined)?.speak || "");
+        this.statusEl.textContent = speak || `Pending confirm ${pendingId}`;
+        this.notify?.("info", this.statusEl.textContent);
+        // Auto-complete confirm in local unlock harness so catalog demos stay one-click.
+        const confirmed = await confirmToolHttp({
+          pending_id: pendingId || undefined,
+          utterance: "Sim",
+        });
+        if (confirmed.success_beep || confirmed.ok) {
+          void playSuccessBeep();
+        }
+        this.statusEl.textContent = confirmed.speak || `Confirmed ${label}`;
+        this.notify?.(confirmed.ok ? "ok" : "warn", this.statusEl.textContent);
+        return;
+      }
+
       this.statusEl.textContent = res.ok
         ? t(d.invokeOk, { name: label, ms: Math.round(res.elapsed_ms ?? 0) })
         : t(d.invokeFail, { name: label, error: res.error ?? "fail" });

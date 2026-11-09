@@ -23,6 +23,8 @@ import { initI18n, msg, onLocaleChange, t } from "../i18n";
 import { GeoNavigation } from "../mobility/GeoNavigation";
 import { parseProductivityLocal } from "../mobility/ProductivityVoice";
 import { FrameCapture } from "../multimodal/FrameCapture";
+import { ConfirmationLoop } from "../os/ConfirmationLoop";
+import { playSuccessBeep } from "../os/SuccessBeep";
 import { GeminiLiveService } from "../services/GeminiLiveService";
 import type { LiveServerJsonEvent, TelemetrySnapshot, WsReadyStateLabel } from "../types/live";
 import type { NotificationActionView } from "../types/mobility";
@@ -98,6 +100,7 @@ export class ControlApp {
   private treasuryToastArmed = false;
   private readonly frameCapture = new FrameCapture();
   private readonly geo = new GeoNavigation();
+  private readonly confirmLoop = new ConfirmationLoop();
 
   constructor(private readonly root: HTMLElement) {}
 
@@ -909,24 +912,75 @@ export class ControlApp {
         }
         break;
       }
+      case "tool_confirm_request": {
+        const ev = event as {
+          name?: string;
+          pending_id?: string | null;
+          speak?: string;
+          action?: string | null;
+        };
+        this.confirmLoop.onConfirmRequest({
+          type: "tool_confirm_request",
+          name: ev.name ?? "tool",
+          ok: true,
+          pending_id: ev.pending_id,
+          action: ev.action,
+          speak: ev.speak,
+          requires_confirmation: true,
+        });
+        const speak = ev.speak || `Confirm ${ev.name}?`;
+        this.transcript?.push("system", speak);
+        this.toasts.info(speak);
+        break;
+      }
       case "tool_result": {
-        const ev = event as { name?: string; ok?: boolean; error?: string | null };
+        const ev = event as {
+          name?: string;
+          ok?: boolean;
+          error?: string | null;
+          result?: {
+            status?: string;
+            speak?: string;
+            success_beep?: boolean;
+            pending_id?: string;
+          };
+        };
+        const status = ev.result?.status;
+        if (status === "pending_confirmation") {
+          // Mirrored confirm request already handled via tool_confirm_request.
+          break;
+        }
+        if (status === "cancelled") {
+          this.confirmLoop.clear();
+          this.transcript?.push("system", ev.result?.speak || "Cancelado.");
+          this.toasts.warn(ev.result?.speak || "Cancelado.");
+          break;
+        }
         const label = ev.ok ? "ok" : `fail ${ev.error ?? ""}`.trim();
         this.transcript?.push(
           "system",
           t(msg().mobilityApp.toolLine, { name: ev.name ?? "?", label }),
         );
+        if (ev.result?.success_beep && ev.ok) {
+          this.confirmLoop.clear();
+          void playSuccessBeep();
+          if (ev.result.speak) this.toasts.ok(ev.result.speak);
+        }
         break;
       }
       case "notification_action": {
         const ev = event as {
           action?: NotificationActionView;
           muted?: boolean;
+          level?: string;
+          favorite?: boolean;
         };
         if (ev.action) {
           this.mobility?.showNotificationAction(ev.action, Boolean(ev.muted));
           if (!ev.muted) {
-            this.transcript?.push("system", ev.action.summary);
+            const prefix = ev.favorite ? "★ " : "";
+            const level = ev.level ? `[${ev.level}] ` : "";
+            this.transcript?.push("system", `${prefix}${level}${ev.action.summary}`);
           }
         }
         break;

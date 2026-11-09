@@ -63,3 +63,55 @@ export async function invokeToolHttp<N extends ToolName>(
 export function localToolSchemas(): readonly ToolSchema[] {
   return TOOL_SCHEMAS;
 }
+
+export interface ToolConfirmResponse {
+  ok: boolean;
+  status?: string;
+  pending_id?: string;
+  tool?: string;
+  action?: string;
+  speak?: string;
+  success_beep?: boolean;
+  name?: string;
+  result?: Record<string, unknown>;
+  error?: string | null;
+}
+
+/** Complete two-step confirmation via HTTP (dev harness / no Live socket). */
+export async function confirmToolHttp(body: {
+  pending_id?: string;
+  utterance?: string;
+  confirm?: boolean;
+  profile_id?: string;
+}): Promise<ToolConfirmResponse> {
+  const res = await fetch(apiUrl("/tools/confirm"), {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      pending_id: body.pending_id,
+      utterance: body.utterance,
+      confirm: body.confirm,
+      profile_id: body.profile_id ?? "local",
+    }),
+  });
+  if (!res.ok) {
+    throw new Error(`tools confirm HTTP ${res.status}`);
+  }
+  return (await res.json()) as ToolConfirmResponse;
+}
+
+export async function fetchPendingTools(profileId = "local"): Promise<{
+  pending: Array<Record<string, unknown>>;
+  count: number;
+}> {
+  const res = await fetch(apiUrl(`/tools/pending?profile_id=${encodeURIComponent(profileId)}`), {
+    headers: { Accept: "application/json" },
+  });
+  if (!res.ok) {
+    throw new Error(`tools pending HTTP ${res.status}`);
+  }
+  return (await res.json()) as { pending: Array<Record<string, unknown>>; count: number };
+}

@@ -141,6 +141,24 @@ def _recommend_tools(text: str) -> list[str]:
         tools.append("memory_payload")
     if any(k in lower for k in ("test", "routine", "health", "latency", "ping")):
         tools.append("run_test_routine")
+    # Hands-free OS agent (safe read defaults — irreversible actions need confirm loop).
+    if any(
+        k in lower
+        for k in ("whatsapp", "telegram", "sms", "instagram", "mensagem", "message", "dm")
+    ):
+        tools.append("messaging_tool")
+    if any(
+        k in lower
+        for k in ("email", "e-mail", "agenda", "calendar", "reuni", "appointment", "schedule")
+    ):
+        tools.append("email_calendar_tool")
+    if any(k in lower for k in ("call", "ligar", "telefone", "telephony", "chamada")):
+        tools.append("telephony_tool")
+    if any(
+        k in lower
+        for k in ("battery", "bateria", "volume", "alarme", "alarm", "timer", "media", "som")
+    ):
+        tools.append("system_control_tool")
     return tools
 
 

@@ -6,7 +6,11 @@ export type AudioProfileKind = "speaker" | "earbuds" | "wearable";
 
 export type PaceClass = "steady" | "fast_travel" | "running";
 
+/** Legacy mobility priorities (mapped from OS low/medium/high/critical). */
 export type NotificationPriority = "critical" | "normal" | "secondary";
+
+/** Hands-free listener levels — interrupt audio for medium/high or favorites. */
+export type OsNotificationLevel = "low" | "medium" | "high" | "critical";
 
 export type VoiceMicMode = "open_mic" | "push_to_talk";
 

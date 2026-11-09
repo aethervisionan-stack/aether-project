@@ -13,16 +13,20 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.config import get_settings
 from app.genai.session import GeminiLiveSession
-from app.hardware.audio_profile import interruption_allows
 from app.hardware.priority import priority_policy
 from app.memory.context import build_system_instruction
 from app.memory.extractor import run_extraction
 from app.memory.store import get_memory_store
 from app.mobility.geo import PlacePoint, build_nav_guidance, suggest_places
-from app.mobility.notifications import parse_notification
 from app.mobility.productivity import parse_productivity_command
 from app.mobility.state import MobilitySessionState
 from app.multimodal.ingest import MultimodalBuffer
+from app.os_bridge.confirmation import (
+    get_confirmation_engine,
+    is_confirmation_utterance,
+    is_rejection_utterance,
+)
+from app.os_bridge.listener import get_notification_listener
 from app.pipeline.decision import DecisionContext, run_decision_pipeline
 from app.reasoning.classifier import Complexity, classify_complexity
 from app.safety import sanitize_outbound_event
@@ -53,14 +57,14 @@ async def live_websocket(websocket: WebSocket) -> None:
       - binary frames: PCM 16-bit LE mono @ 16 kHz
       - JSON text:
           ping | pong | text | audio | frame | telemetry | tool_call |
-          mobility_config | notification | notification_reply | productivity |
-          geo | place | nav_request | barge_in | ptt
+          tool_confirm | mobility_config | notification | notification_reply |
+          listener_poll | productivity | geo | place | nav_request | barge_in | ptt
 
     Server → client:
       - binary frames: PCM 16-bit LE mono @ 24 kHz (Gemini audio)
       - JSON text: ready | ping | pong | *_transcript | token_* | decision |
-        tool_result | multimodal_ack | mobility_ack | notification_action |
-        productivity_ack | nav_guidance | priority_policy |
+        tool_result | tool_confirm_request | multimodal_ack | mobility_ack |
+        notification_action | productivity_ack | nav_guidance | priority_policy |
         turn_complete | interrupted | error
     """
     await websocket.accept()
@@ -222,7 +226,9 @@ async def live_websocket(websocket: WebSocket) -> None:
                 "Available tools (client/server may invoke via tool_call): "
                 + ", ".join(get_tool_registry().list_names())
                 + ". Prefer short HUD answers; never narrate internal plans unless asked. "
-                "Voice UX: open-mic / PTT — no wake word required. Support barge-in."
+                "Voice UX: open-mic / PTT — no wake word required. Support barge-in. "
+                "Hands-free OS agent: for send/schedule/delete/call actions, speak what you "
+                "will do and wait for confirm words (Sim / Pode enviar / Yes) before executing."
             )
             system_instruction = f"{system_instruction}\n{tools_hint}"
 
@@ -373,26 +379,36 @@ async def _handle_control_message(
         return
 
     if msg_type == "notification" and mobility is not None:
-        action = parse_notification(
+        listener = get_notification_listener()
+        decision = listener.ingest_raw(
             source=str(payload.get("source") or "unknown"),
             title=str(payload.get("title") or ""),
             body=str(payload.get("body") or ""),
             raw=str(payload["raw"]) if payload.get("raw") is not None else None,
             sender=str(payload["sender"]) if payload.get("sender") is not None else None,
+            package=str(payload.get("package") or "hud"),
+            app=str(payload["app"]) if payload.get("app") is not None else None,
+            priority_hint=str(payload["priority_hint"])
+            if payload.get("priority_hint") is not None
+            else None,
+            favorite=bool(payload["favorite"]) if payload.get("favorite") is not None else None,
+            screen_lit=bool(payload.get("screen_lit", False)),
+            pace=mobility.pace,
+            audio_profile=mobility.audio_profile,
+            interruption_filter=mobility.interruption_filter,
         )
-        policy = priority_policy(mobility.pace, mobility.audio_profile)
-        allowed = policy.allows(action.priority) and interruption_allows(
-            profile=mobility.audio_profile,
-            filter_enabled=mobility.interruption_filter,
-            event_priority=action.priority,
-        )
+        action = decision.action
+        allowed = decision.interrupt_audio
         try:
             await websocket.send_json(
                 {
                     "type": "notification_action",
                     "action": action.to_dict(),
                     "muted": not allowed,
-                    "reason": None if allowed else "priority_or_interruption_filter",
+                    "reason": None if allowed else decision.reason,
+                    "level": decision.level,
+                    "favorite": decision.favorite,
+                    "screen_lit": decision.event.screen_lit,
                 }
             )
         except Exception:
@@ -407,6 +423,36 @@ async def _handle_control_message(
                     else "Await voice or tap confirmation."
                 )
             )
+        return
+
+    if msg_type == "listener_poll" and mobility is not None:
+        listener = get_notification_listener()
+        decisions = await listener.poll_bridge(
+            since_id=str(payload["since_id"]) if payload.get("since_id") else None,
+            pace=mobility.pace,
+            audio_profile=mobility.audio_profile,
+            interruption_filter=mobility.interruption_filter,
+        )
+        for decision in decisions:
+            try:
+                await websocket.send_json(
+                    {
+                        "type": "notification_action",
+                        "action": decision.action.to_dict(),
+                        "muted": not decision.interrupt_audio,
+                        "reason": None if decision.interrupt_audio else decision.reason,
+                        "level": decision.level,
+                        "favorite": decision.favorite,
+                        "screen_lit": decision.event.screen_lit,
+                        "from_listener": True,
+                    }
+                )
+            except Exception:
+                break
+            if decision.interrupt_audio and session is not None:
+                await session.push_text(
+                    "[notification_pending_confirm]\n" + decision.action.summary
+                )
         return
 
     if msg_type == "notification_reply":
@@ -610,16 +656,21 @@ async def _handle_control_message(
             args,
             ctx=ToolContext(profile_id=profile_id, settings=get_settings(), source="ws"),
         )
-        event = {"type": "tool_result", **result.to_dict()}
-        try:
-            await websocket.send_json(event)
-        except Exception:
-            pass
-        # Feed tool outcome into Live as compact context (text path only).
-        if session is not None:
-            await session.push_text(
-                f"[tool_result {result.name}] {result.context_line()}"
-            )
+        await _emit_tool_outcome(
+            websocket=websocket,
+            session=session,
+            result=result,
+        )
+        return
+
+    # --- Two-step voice/tap confirmation for irreversible OS actions ---
+    if msg_type == "tool_confirm":
+        await _handle_tool_confirm(
+            websocket=websocket,
+            session=session,
+            payload=payload,
+            profile_id=profile_id,
+        )
         return
 
     if msg_type == "text":
@@ -638,6 +689,29 @@ async def _handle_control_message(
         user_text = str(payload.get("text") or "")
         if schedule_memory is not None:
             schedule_memory("user", user_text)
+
+        # If a pending irreversible action exists, short confirm/reject utterances
+        # complete the two-step loop (integrates with Live voice + barge-in/VAD).
+        pending = get_confirmation_engine().latest_for_profile(profile_id)
+        if pending is not None and (
+            is_confirmation_utterance(user_text) or is_rejection_utterance(user_text)
+        ):
+            await _handle_tool_confirm(
+                websocket=websocket,
+                session=session,
+                payload={
+                    "pending_id": pending.id,
+                    "utterance": user_text,
+                    "client_t": client_t,
+                },
+                profile_id=profile_id,
+            )
+            # Still forward a compact cue so Live can acknowledge verbally.
+            if session is not None:
+                await session.push_text(
+                    f"[tool_confirm_utterance pending={pending.id}] {user_text}"
+                )
+            return
 
         # Fast path: always forward user text to Live immediately (TTFT).
         if session is not None:
@@ -736,6 +810,165 @@ async def _run_text_sidecar(
                 )
         except Exception:
             logger.exception("decision sidecar failed")
+
+
+async def _emit_tool_outcome(
+    *,
+    websocket: WebSocket,
+    session: GeminiLiveSession | None,
+    result: Any,
+) -> None:
+    """Emit tool_result / tool_confirm_request + voice/context cue (TTFT path untouched)."""
+    payload = result.to_dict() if hasattr(result, "to_dict") else dict(result)
+    status = None
+    if isinstance(payload.get("result"), dict):
+        status = payload["result"].get("status")
+    pending = status == "pending_confirmation"
+    if pending:
+        speak = ""
+        pending_id = None
+        action = None
+        if isinstance(payload.get("result"), dict):
+            speak = str(payload["result"].get("speak") or "")
+            pending_id = payload["result"].get("pending_id")
+            action = payload["result"].get("action")
+        event = {
+            "type": "tool_confirm_request",
+            "name": payload.get("name"),
+            "ok": True,
+            "pending_id": pending_id,
+            "action": action,
+            "speak": speak,
+            "result": payload.get("result") or {},
+            "elapsed_ms": payload.get("elapsed_ms"),
+            "requires_confirmation": True,
+        }
+        try:
+            await websocket.send_json(event)
+            # Also mirror as tool_result so HUD telemetry stays consistent.
+            await websocket.send_json({"type": "tool_result", **payload})
+        except Exception:
+            return
+        if session is not None and speak:
+            await session.push_text(
+                f"[tool_confirm_request {payload.get('name')}] Speak aloud then wait: {speak}"
+            )
+        return
+
+    try:
+        await websocket.send_json({"type": "tool_result", **payload})
+    except Exception:
+        return
+    if session is not None:
+        line = result.context_line() if hasattr(result, "context_line") else str(payload)
+        await session.push_text(f"[tool_result {payload.get('name')}] {line}")
+        speak = None
+        if isinstance(payload.get("result"), dict):
+            speak = payload["result"].get("speak")
+        if speak and payload.get("result", {}).get("success_beep"):
+            await session.push_text(f"[tool_success_beep] {speak}")
+
+
+async def _handle_tool_confirm(
+    *,
+    websocket: WebSocket,
+    session: GeminiLiveSession | None,
+    payload: dict[str, Any],
+    profile_id: str,
+) -> None:
+    """Resolve pending irreversible action from WS tool_confirm or voice utterance."""
+    engine = get_confirmation_engine()
+    registry = get_tool_registry()
+    pending_id = str(payload.get("pending_id") or "").strip()
+    utterance = str(payload.get("utterance") or "").strip()
+    confirm_flag = payload.get("confirm")
+
+    pending = engine.get(pending_id) if pending_id else engine.latest_for_profile(profile_id)
+    if pending is None:
+        try:
+            await websocket.send_json(
+                {
+                    "type": "tool_result",
+                    "name": "tool_confirm",
+                    "ok": False,
+                    "error": "no pending action",
+                    "result": {"status": "no_pending"},
+                }
+            )
+        except Exception:
+            pass
+        return
+
+    confirm: bool | None
+    if confirm_flag is not None:
+        confirm = bool(confirm_flag)
+    elif utterance:
+        if is_rejection_utterance(utterance):
+            confirm = False
+        elif is_confirmation_utterance(utterance):
+            confirm = True
+        else:
+            confirm = None
+    else:
+        confirm = None
+
+    if confirm is None:
+        try:
+            await websocket.send_json(
+                {
+                    "type": "tool_confirm_request",
+                    "name": pending.tool,
+                    "ok": True,
+                    "pending_id": pending.id,
+                    "action": pending.action,
+                    "speak": pending.speak,
+                    "requires_confirmation": True,
+                    "result": {"status": "unclear_utterance"},
+                }
+            )
+        except Exception:
+            pass
+        return
+
+    if not confirm:
+        engine.pop(pending.id)
+        try:
+            await websocket.send_json(
+                {
+                    "type": "tool_result",
+                    "name": pending.tool,
+                    "ok": True,
+                    "result": {
+                        "status": "cancelled",
+                        "action": pending.action,
+                        "pending_id": pending.id,
+                        "speak": "Cancelado.",
+                        "success_beep": False,
+                    },
+                }
+            )
+        except Exception:
+            pass
+        if session is not None:
+            await session.push_text(
+                f"[tool_confirm_cancelled {pending.tool}] User rejected."
+            )
+        return
+
+    engine.pop(pending.id)
+    args = dict(pending.arguments)
+    args["confirmed"] = True
+    args["pending_id"] = pending.id
+    result = await registry.invoke(
+        pending.tool,
+        args,
+        ctx=ToolContext(
+            profile_id=profile_id,
+            settings=get_settings(),
+            source="ws_confirm",
+        ),
+    )
+    await _emit_tool_outcome(websocket=websocket, session=session, result=result)
 
 
 def _optional_int(value: Any) -> int | None:

@@ -129,6 +129,21 @@ async def run_decision_pipeline(ctx: DecisionContext) -> DecisionOutcome:
                     args = {"routine": "health"}
             elif name == "memory_payload":
                 args = {"action": "get"}
+            elif name == "messaging_tool":
+                # Prefer summarize/read — never auto-send (confirm loop required).
+                args = {"action": "read", "app": "whatsapp", "limit": 5}
+            elif name == "email_calendar_tool":
+                args = {"action": "agenda", "day": "today"}
+            elif name == "telephony_tool":
+                args = {"action": "incoming"}
+            elif name == "system_control_tool":
+                lower = text.lower()
+                if "volume" in lower or "som" in lower:
+                    args = {"action": "volume", "level": 50}
+                elif "alarm" in lower or "alarme" in lower or "timer" in lower:
+                    args = {"action": "timer", "minutes": 5, "label": "aether"}
+                else:
+                    args = {"action": "battery"}
             result = await registry.invoke(name, args, ctx=tool_ctx)
             tool_results.append(result)
 

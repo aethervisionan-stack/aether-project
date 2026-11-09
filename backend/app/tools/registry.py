@@ -10,7 +10,7 @@ from functools import lru_cache
 from typing import Any
 
 from app.config import Settings, get_settings
-from app.tools import handlers
+from app.tools import handlers, os_handlers
 from app.tools.schemas import TOOL_SCHEMAS, ToolSchema, schema_by_name, schemas_for_prompt
 
 logger = logging.getLogger("aether.tools.registry")
@@ -46,7 +46,19 @@ class ToolResult:
         if not self.ok:
             return f"Tool {self.name} failed: {self.error or 'unknown'}"
         # Compact HUD-friendly summary
-        keys = ["sol", "lamports", "preference_summary", "status", "routine", "wallet", "address"]
+        keys = [
+            "sol",
+            "lamports",
+            "preference_summary",
+            "status",
+            "routine",
+            "wallet",
+            "address",
+            "action",
+            "speak",
+            "pending_id",
+            "detail",
+        ]
         bits = [f"{k}={self.result[k]}" for k in keys if k in self.result and self.result[k] is not None]
         if not bits:
             bits = [f"ok={self.ok}"]
@@ -65,6 +77,11 @@ class ToolRegistry:
         self.register("onchain_lookup", handlers.onchain_lookup)
         self.register("run_test_routine", handlers.run_test_routine)
         self.register("memory_payload", handlers.memory_payload)
+        # Hands-free OS agent tools (mock bridge on web/desktop).
+        self.register("messaging_tool", os_handlers.messaging_tool)
+        self.register("email_calendar_tool", os_handlers.email_calendar_tool)
+        self.register("telephony_tool", os_handlers.telephony_tool)
+        self.register("system_control_tool", os_handlers.system_control_tool)
 
     def register(self, name: str, handler: ToolHandler) -> None:
         self._handlers[name] = handler

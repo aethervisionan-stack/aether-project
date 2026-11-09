@@ -351,6 +351,30 @@ export class GeminiLiveService {
     });
   }
 
+  /** Complete two-step confirm for irreversible OS actions (voice or tap). */
+  confirmTool(opts: {
+    pendingId?: string | null;
+    confirm?: boolean;
+    utterance?: string;
+  }): void {
+    this.sendJson({
+      type: "tool_confirm",
+      pending_id: opts.pendingId ?? null,
+      confirm: opts.confirm ?? null,
+      utterance: opts.utterance ?? null,
+      client_t: performance.now(),
+    });
+  }
+
+  /** Poll accessibility notification listener (mock bridge on web/desktop). */
+  pollNotificationListener(sinceId?: string | null): void {
+    this.sendJson({
+      type: "listener_poll",
+      since_id: sinceId ?? null,
+      client_t: performance.now(),
+    });
+  }
+
   /** Push a screen/image frame beside PCM (multimodal sidecar). */
   sendFrame(frame: CapturedFrame): void {
     this.sendJson({

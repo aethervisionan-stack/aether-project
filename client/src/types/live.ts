@@ -85,6 +85,19 @@ export interface LiveToolResultEvent {
   elapsed_ms?: number;
 }
 
+/** Two-step confirm: speak aloud what will be done, await Sim/Yes. */
+export interface LiveToolConfirmRequestEvent {
+  type: "tool_confirm_request";
+  name: string;
+  ok: boolean;
+  pending_id?: string | null;
+  action?: string | null;
+  speak?: string;
+  requires_confirmation?: boolean;
+  result?: Record<string, unknown>;
+  elapsed_ms?: number;
+}
+
 export interface LiveMultimodalAckEvent {
   type: "multimodal_ack";
   kind: "frame" | "telemetry" | string;
@@ -145,6 +158,7 @@ export type LiveServerJsonEvent =
   | LiveTokenDoneEvent
   | LiveDecisionEvent
   | LiveToolResultEvent
+  | LiveToolConfirmRequestEvent
   | LiveMultimodalAckEvent
   | LiveOutboundAckEvent
   | LiveMobilityAckEvent

@@ -84,6 +84,123 @@ TOOL_SCHEMAS: list[ToolSchema] = [
             "additionalProperties": False,
         },
     },
+    {
+        "name": "messaging_tool",
+        "description": (
+            "Read/summarize/voice-reply WhatsApp, Telegram, SMS, Instagram Direct. "
+            "Send/voice_reply require two-step voice confirmation."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["read", "summarize", "send", "voice_reply"],
+                },
+                "app": {
+                    "type": "string",
+                    "enum": ["whatsapp", "telegram", "sms", "instagram"],
+                },
+                "contact": {"type": "string", "description": "Contact or chat name."},
+                "text": {"type": "string", "description": "Message body for send/voice_reply."},
+                "limit": {"type": "integer", "description": "Thread/message limit."},
+                "confirmed": {
+                    "type": "boolean",
+                    "description": "True only after user voice/tap confirm.",
+                },
+            },
+            "required": ["action"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "email_calendar_tool",
+        "description": (
+            "Priority email read, dictation drafts, schedule appointments, agenda query. "
+            "send_draft/schedule/delete require two-step confirmation."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": [
+                        "read_email",
+                        "priority_email",
+                        "draft",
+                        "send_draft",
+                        "schedule",
+                        "agenda",
+                        "query_agenda",
+                        "delete",
+                    ],
+                },
+                "to": {"type": "string"},
+                "subject": {"type": "string"},
+                "body": {"type": "string"},
+                "text": {"type": "string"},
+                "draft_id": {"type": "string"},
+                "title": {"type": "string"},
+                "when": {"type": "string"},
+                "duration_min": {"type": "integer"},
+                "attendees": {"type": "array", "description": "Attendee names/emails."},
+                "day": {"type": "string"},
+                "event_id": {"type": "string"},
+                "limit": {"type": "integer"},
+                "confirmed": {"type": "boolean"},
+            },
+            "required": ["action"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "telephony_tool",
+        "description": (
+            "Incoming call ID ('Carlos is calling. Speaker or decline?'), "
+            "answer/decline, place calls. Mutating call actions need confirmation."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["incoming", "identify", "answer", "decline", "place_call"],
+                },
+                "contact": {"type": "string"},
+                "speaker": {"type": "boolean"},
+                "confirmed": {"type": "boolean"},
+            },
+            "required": ["action"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "system_control_tool",
+        "description": "Media playback, battery, volume/sound modes, timers/alarms via OS adapters.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["media", "battery", "volume", "sound_mode", "timer", "alarm"],
+                },
+                "media_action": {
+                    "type": "string",
+                    "enum": ["play", "pause", "next", "previous", "stop"],
+                },
+                "level": {"type": "integer", "description": "Volume 0–100."},
+                "mode": {
+                    "type": "string",
+                    "enum": ["normal", "vibrate", "silent"],
+                },
+                "minutes": {"type": "integer"},
+                "time": {"type": "string", "description": "Alarm HH:MM."},
+                "label": {"type": "string"},
+            },
+            "required": ["action"],
+            "additionalProperties": False,
+        },
+    },
 ]
 
 ToolName = Literal[
@@ -91,6 +208,10 @@ ToolName = Literal[
     "onchain_lookup",
     "run_test_routine",
     "memory_payload",
+    "messaging_tool",
+    "email_calendar_tool",
+    "telephony_tool",
+    "system_control_tool",
 ]
 
 
