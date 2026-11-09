@@ -117,6 +117,12 @@ def create_checkout_session(settings: Settings) -> dict[str, Any]:
             }
         ]
 
+    # Global Checkout (US + any Stripe-supported country):
+    # - billing_address_collection=auto → country/region selector includes United States
+    # - intentionally omit shipping_address_collection / allowed_countries so we do
+    #   not narrow the country list with a shipping allowlist
+    # Currency: keep TEMP TEST R$0,01 BRL. International (incl. US) cards still work;
+    # Stripe settles in BRL and the issuer handles FX — no multi-currency Prices invented.
     session = stripe.checkout.Session.create(
         mode="subscription",
         line_items=line_items,
@@ -124,6 +130,7 @@ def create_checkout_session(settings: Settings) -> dict[str, Any]:
         cancel_url=settings.stripe_cancel_url,
         allow_promotion_codes=True,
         billing_address_collection="auto",
+        locale="auto",
         metadata={
             "product": "aether_vision_monthly",
             "treasury_share": "0.70",
@@ -131,6 +138,7 @@ def create_checkout_session(settings: Settings) -> dict[str, Any]:
             "expected_currency": price["currency"],
             "expected_unit_amount_cents": str(price["unit_amount_cents"]),
             "temp_test": "true" if price["temp_test"] else "false",
+            "billing_countries": "global",
         },
     )
     checkout_url = session.url

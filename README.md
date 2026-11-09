@@ -118,6 +118,7 @@ Leave `STRIPE_*` empty and keep `BILLING_DEV_UNLOCK=true`. The UI shows **Simula
 1. Copy a real `STRIPE_SECRET_KEY` (`sk_test_…`) into `backend/.env` (never commit it). Mock Checkout turns off automatically. Publishable key is not required for hosted Checkout redirect.
 2. `stripe listen --forward-to localhost:8000/billing/webhook` and set `STRIPE_WEBHOOK_SECRET`.
 3. Restart uvicorn. Client **Subscribe** redirects to Stripe-hosted Checkout (`checkout.stripe.com`).
+4. Checkout uses `billing_address_collection=auto` and **no** `shipping_address_collection` / `allowed_countries` allowlist, so the country/region selector stays global (United States included). TEMP TEST amount stays **R$0,01 BRL** — US/international cards work via issuer FX; we do not invent multi-currency Prices.
 
 ### Enable real Solana transfers
 
