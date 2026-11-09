@@ -15,6 +15,8 @@ import {
   type BillingConfig,
   type EntitlementStatus,
 } from "../services/BillingService";
+import { AudioVisualizer } from "../audio/AudioVisualizer";
+import { LatencyMonitor } from "../audio/LatencyMonitor";
 import { GeminiLiveService } from "../services/GeminiLiveService";
 import type { LiveServerJsonEvent, TelemetrySnapshot, WsReadyStateLabel } from "../types/live";
 
@@ -63,6 +65,10 @@ export class ControlApp {
   private textInput!: HTMLInputElement;
   private sendBtn!: HTMLButtonElement;
   private checkoutBusy = false;
+  private vizCanvas!: HTMLCanvasElement;
+  private latencyEl!: HTMLElement;
+  private visualizer: AudioVisualizer | null = null;
+  private latencyMonitor: LatencyMonitor | null = null;
 
   constructor(private readonly root: HTMLElement) {}
 
@@ -90,6 +96,10 @@ export class ControlApp {
           <button type="button" class="secondary" data-action="disconnect" disabled>Disconnect</button>
         </div>
         <p class="connection" data-role="status" data-state="CLOSED">CLOSED</p>
+        <div class="hud-telemetry" data-role="hud-telemetry">
+          <canvas class="audio-viz" data-role="audio-viz" width="640" height="96" aria-label="Audio visualizer"></canvas>
+          <p class="latency" data-role="latency">PING: — | AI: —</p>
+        </div>
         <div class="warn" data-role="warn" hidden></div>
         <div class="text-row">
           <input type="text" placeholder="Type a message to Aether…" data-role="text" />
@@ -114,6 +124,8 @@ export class ControlApp {
     this.processEl = this.root.querySelector("[data-role=process]")!;
     this.textInput = this.root.querySelector("[data-role=text]")!;
     this.sendBtn = this.root.querySelector("[data-action=send-text]")!;
+    this.vizCanvas = this.root.querySelector("[data-role=audio-viz]")!;
+    this.latencyEl = this.root.querySelector("[data-role=latency]")!;
     const tokenomicsEl = this.root.querySelector<HTMLElement>("[data-role=tokenomics]")!;
 
     // Never hide the payment block in Gen-1 local HUD.
@@ -421,9 +433,16 @@ export class ControlApp {
     this.clearWarn();
     this.connectBtn.disabled = true;
 
+    this.visualizer = new AudioVisualizer();
+    this.visualizer.mount(this.vizCanvas);
+    this.visualizer.start();
+
     this.service = new GeminiLiveService({
       onEvent: (event) => this.handleEvent(event),
+      visualizer: this.visualizer,
     });
+    this.latencyMonitor = new LatencyMonitor(this.latencyEl, this.service.telemetry);
+    this.latencyMonitor.start();
     this.service.telemetry.subscribe((snap) => this.renderConnection(snap));
 
     try {
@@ -454,6 +473,7 @@ export class ControlApp {
       this.showWarn(`Connect Live failed: ${message}.${hint}`);
       await this.service.disconnect();
       this.service = null;
+      this.teardownTelemetryHud();
     }
   }
 
@@ -467,6 +487,15 @@ export class ControlApp {
     this.textInput.placeholder = "Type a message to Aether…";
     this.clearWarn();
     this.setConnection("CLOSED");
+    this.teardownTelemetryHud();
+  }
+
+  private teardownTelemetryHud(): void {
+    this.latencyMonitor?.stop();
+    this.latencyMonitor = null;
+    this.visualizer?.dispose();
+    this.visualizer = null;
+    this.latencyEl.textContent = "PING: — | AI: —";
   }
 
   private sendText(): void {

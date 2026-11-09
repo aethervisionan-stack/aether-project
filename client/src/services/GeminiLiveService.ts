@@ -11,6 +11,7 @@
  *  - mic-fallback hybrid: text chat stays available if capture fails
  */
 
+import type { AudioVisualizer } from "../audio/AudioVisualizer";
 import { FifoRetentionBuffer } from "../audio/FifoRetentionBuffer";
 import { GaplessPcmPlayer } from "../audio/GaplessPcmPlayer";
 import { formatMicError, PcmCapture } from "../audio/PcmCapture";
@@ -24,7 +25,13 @@ export interface GeminiLiveServiceOptions {
   url?: string;
   telemetry?: TelemetryMonitor;
   onEvent?: LiveEventHandler;
+  /** Optional HUD spectrogram/wave — fed mic + playback PCM (non-blocking). */
+  visualizer?: AudioVisualizer | null;
 }
+
+/** RMS threshold (0–1) to treat a mic flush as the start of a voice cycle. */
+const VOICE_OUTBOUND_RMS = 0.02;
+const VOICE_IDLE_MS = 450;
 
 export interface LiveConnectResult {
   /** True when mic capture started and PCM flush loop is active. */
@@ -83,14 +90,23 @@ export class GeminiLiveService {
   private reconnectTimer: number | null = null;
   private reconnectAttempt = 0;
   private opening: Promise<void> | null = null;
+  private visualizer: AudioVisualizer | null = null;
+  private lastMicEnergyAt = 0;
+  private voiceCycleArmed = true;
 
   constructor(options: GeminiLiveServiceOptions = {}) {
     this.url = options.url ?? resolveDefaultWsUrl();
     this.telemetry = options.telemetry ?? new TelemetryMonitor({ logToConsole: true });
     this.onEvent = options.onEvent;
+    this.visualizer = options.visualizer ?? null;
     this.player = new GaplessPcmPlayer({
       onDepth: (depth) => this.telemetry.setPlaybackQueueDepth(depth),
     });
+  }
+
+  /** Attach / detach the Gen-1 audio HUD visualizer without reconnecting. */
+  setVisualizer(visualizer: AudioVisualizer | null): void {
+    this.visualizer = visualizer;
   }
 
   getMicLabel(): string | null {
@@ -146,12 +162,16 @@ export class GeminiLiveService {
     this.reconnectAttempt = 0;
     this.telemetry.setFifo(this.fifo.stats());
     this.telemetry.setPlaybackQueueDepth(0);
+    this.telemetry.clearAiCycle();
+    this.voiceCycleArmed = true;
     this.detachAndCloseSocket();
     this.telemetry.setWsState("CLOSED");
   }
 
   sendText(text: string): void {
-    this.sendJson({ type: "text", text });
+    const t = performance.now();
+    this.telemetry.markOutbound(t);
+    this.sendJson({ type: "text", text, client_t: t });
   }
 
   private connectResult(): LiveConnectResult {
@@ -251,6 +271,12 @@ export class GeminiLiveService {
       const { label } = await this.capture.start((pcm) => {
         this.fifo.push(pcm);
         this.telemetry.setFifo(this.fifo.stats());
+        try {
+          this.visualizer?.pushMicPcm(pcm);
+        } catch {
+          // visualizer must never break capture
+        }
+        this.maybeMarkVoiceOutbound(pcm);
       });
       this.micLabel = label;
       this.micEnabled = true;
@@ -376,6 +402,23 @@ export class GeminiLiveService {
     }, 20);
   }
 
+  private maybeMarkVoiceOutbound(pcm: ArrayBuffer): void {
+    const now = performance.now();
+    const rms = pcmRms(pcm);
+    if (rms < VOICE_OUTBOUND_RMS) {
+      if (now - this.lastMicEnergyAt > VOICE_IDLE_MS) {
+        this.voiceCycleArmed = true;
+      }
+      return;
+    }
+    this.lastMicEnergyAt = now;
+    if (!this.voiceCycleArmed) {
+      return;
+    }
+    this.voiceCycleArmed = false;
+    this.telemetry.markOutbound(now);
+  }
+
   private stopFlushLoop(): void {
     if (this.flushTimer != null) {
       window.clearInterval(this.flushTimer);
@@ -394,6 +437,13 @@ export class GeminiLiveService {
     this.telemetry.markActivity();
 
     if (event.data instanceof ArrayBuffer) {
+      this.telemetry.markAiFirstChunk();
+      this.voiceCycleArmed = true;
+      try {
+        this.visualizer?.pushPlayPcm(event.data);
+      } catch {
+        // ignore viz errors
+      }
       try {
         await this.player.ensureStarted();
         this.player.enqueuePcm16(event.data);
@@ -432,8 +482,15 @@ export class GeminiLiveService {
       return;
     }
 
+    if (parsed.type === "aether_transcript") {
+      this.telemetry.markAiFirstChunk();
+      this.voiceCycleArmed = true;
+    }
+
     if (parsed.type === "interrupted") {
       this.player.interrupt();
+      this.telemetry.clearAiCycle();
+      this.voiceCycleArmed = true;
       try {
         await this.player.ensureStarted();
       } catch {
@@ -441,6 +498,28 @@ export class GeminiLiveService {
       }
     }
 
+    if (parsed.type === "turn_complete") {
+      this.voiceCycleArmed = true;
+    }
+
     this.onEvent?.(parsed);
   }
+}
+
+function pcmRms(pcm: ArrayBuffer): number {
+  const n = pcm.byteLength >> 1;
+  if (n <= 0) {
+    return 0;
+  }
+  const view = new DataView(pcm);
+  let sum = 0;
+  // Stride sample for cheap energy estimate.
+  const step = Math.max(1, Math.floor(n / 64));
+  let count = 0;
+  for (let i = 0; i < n; i += step) {
+    const s = view.getInt16(i * 2, true) / 0x8000;
+    sum += s * s;
+    count += 1;
+  }
+  return Math.sqrt(sum / Math.max(1, count));
 }

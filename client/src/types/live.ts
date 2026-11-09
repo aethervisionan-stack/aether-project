@@ -51,6 +51,10 @@ export type LiveServerJsonEvent =
 
 export interface TelemetrySnapshot {
   rttMs: number | null;
+  /** Client voice/text outbound → first AI audio/transcript chunk (ms). */
+  aiLatencyMs: number | null;
+  /** Last completed voice-cycle AI latency (sticky until next cycle). */
+  lastAiLatencyMs: number | null;
   wsState: WsReadyStateLabel;
   fifoDiscardCount: number;
   fifoDepthMs: number;

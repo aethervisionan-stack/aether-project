@@ -234,7 +234,7 @@ async def _handle_control_message(
             {
                 "type": "pong",
                 "t": payload.get("t"),
-                "server_t": time.time(),
+                "server_t": time.time() * 1000.0,
             }
         )
         return
@@ -246,6 +246,19 @@ async def _handle_control_message(
     session = bridge["session"]
 
     if msg_type == "text":
+        # Echo client_t so HUD latency can correlate outbound stamps (Gen-1).
+        client_t = payload.get("client_t")
+        if client_t is not None:
+            try:
+                await websocket.send_json(
+                    {
+                        "type": "outbound_ack",
+                        "client_t": client_t,
+                        "server_t": time.time() * 1000.0,
+                    }
+                )
+            except Exception:
+                pass
         if session is not None:
             await session.push_text(str(payload.get("text") or ""))
         return

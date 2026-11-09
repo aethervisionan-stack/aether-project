@@ -1,9 +1,12 @@
 /**
  * Lightweight telemetry for real-time Live validation:
- * RTT, WebSocket state, FIFO discard count, buffer queue depth.
+ * RTT, AI voice-cycle latency, WebSocket state, FIFO discard count, buffer queue depth.
  *
  * Also owns the client→server app-level ping loop with pong timeout detection
  * so half-open sockets (proxy idle kill) surface quickly.
+ *
+ * Voice-cycle timing: markOutbound() when mic/text leaves the client; markAiFirstChunk()
+ * on the first AI audio/transcript for that cycle → aiLatencyMs.
  */
 
 import type { TelemetrySnapshot, WsReadyStateLabel } from "../types/live";
@@ -21,6 +24,10 @@ export interface PingLoopOptions {
 
 export class TelemetryMonitor {
   private rttMs: number | null = null;
+  private aiLatencyMs: number | null = null;
+  private lastAiLatencyMs: number | null = null;
+  private outboundAt: number | null = null;
+  private awaitingAi = false;
   private wsState: WsReadyStateLabel = "NONE";
   private fifoDiscardCount = 0;
   private fifoDepthMs = 0;
@@ -46,6 +53,8 @@ export class TelemetryMonitor {
   snapshot(): TelemetrySnapshot {
     return {
       rttMs: this.rttMs,
+      aiLatencyMs: this.aiLatencyMs,
+      lastAiLatencyMs: this.lastAiLatencyMs,
       wsState: this.wsState,
       fifoDiscardCount: this.fifoDiscardCount,
       fifoDepthMs: this.fifoDepthMs,
@@ -53,6 +62,41 @@ export class TelemetryMonitor {
       playbackQueueDepth: this.playbackQueueDepth,
       updatedAt: performance.now(),
     };
+  }
+
+  /**
+   * Stamp client outbound for a voice/text cycle (idempotent while awaiting).
+   * `clientT` should be performance.now() at send time.
+   */
+  markOutbound(clientT: number = performance.now()): void {
+    if (this.awaitingAi && this.outboundAt != null) {
+      return;
+    }
+    this.outboundAt = clientT;
+    this.awaitingAi = true;
+    this.aiLatencyMs = null;
+    this.emit();
+  }
+
+  /** First AI audio chunk or transcript after markOutbound → AI processing latency. */
+  markAiFirstChunk(clientT: number = performance.now()): void {
+    if (!this.awaitingAi || this.outboundAt == null) {
+      return;
+    }
+    const ms = Math.max(0, clientT - this.outboundAt);
+    this.aiLatencyMs = ms;
+    this.lastAiLatencyMs = ms;
+    this.awaitingAi = false;
+    this.outboundAt = null;
+    this.emit();
+  }
+
+  /** Reset in-flight AI timing (disconnect / interrupt without a measured chunk). */
+  clearAiCycle(): void {
+    this.awaitingAi = false;
+    this.outboundAt = null;
+    this.aiLatencyMs = null;
+    this.emit();
   }
 
   setWsState(state: WsReadyStateLabel): void {
@@ -154,6 +198,7 @@ export class TelemetryMonitor {
       // Compact single-line HUD-friendly log
       console.debug(
         `[aether:telemetry] ws=${snap.wsState} rtt=${snap.rttMs?.toFixed(0) ?? "—"}ms ` +
+          `ai=${snap.aiLatencyMs?.toFixed(0) ?? snap.lastAiLatencyMs?.toFixed(0) ?? "—"}ms ` +
           `fifoDepth=${snap.fifoDepthMs.toFixed(0)}ms discards=${snap.fifoDiscardCount} ` +
           `playQ=${snap.playbackQueueDepth}`,
       );
