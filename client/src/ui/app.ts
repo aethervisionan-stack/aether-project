@@ -58,6 +58,7 @@ export class ControlApp {
   private processEl!: HTMLElement;
   private textInput!: HTMLInputElement;
   private sendBtn!: HTMLButtonElement;
+  private checkoutBusy = false;
 
   constructor(private readonly root: HTMLElement) {}
 
@@ -250,38 +251,40 @@ export class ControlApp {
   }
 
   private async subscribe(): Promise<void> {
+    if (this.checkoutBusy) {
+      return;
+    }
+    this.checkoutBusy = true;
     this.subscribeBtn.disabled = true;
     this.subscribeBtn.textContent = "Processing…";
     this.setProcess("Opening checkout…");
+    this.accessEl.textContent = "Starting checkout…";
     try {
       if (!canCheckout(this.billingConfig)) {
         throw new Error("Checkout unavailable (set Stripe keys or BILLING_DEV_UNLOCK=true).");
       }
-      this.setProcess("Creating payment session (mock or Stripe)…");
+      this.setProcess("POST /api/billing/checkout …");
       const session = await startCheckout();
       saveSubscriberId(session.id);
       const isMock = Boolean(session.mock) || session.id.startsWith("cs_test_mock_");
       if (isMock) {
-        this.setProcess("Mock checkout confirmed — unlocking AI…");
-        this.accessEl.textContent = "Mock payment OK — unlocking…";
-        // Brief visible feedback before navigation so the click feels active.
-        await new Promise((r) => window.setTimeout(r, 450));
-        this.setEntitled(true);
-        this.accessEl.textContent = "Access active — Live unlocked.";
-        this.setProcess("Mock payment complete. Live HUD unlocked.");
-        this.renderSubscribeCta();
-        // Soft refresh entitlement from server, then stay on page (no blank redirect).
-        await this.refreshEntitlement();
+        this.setProcess(`Mock session ${session.id} — opening checkout return…`);
+        this.accessEl.textContent = "Mock checkout — redirecting to confirm payment…";
+        // Navigate to mock success URL so the user sees a real transition (not silent unlock).
+        await new Promise((r) => window.setTimeout(r, 350));
+        window.location.assign(session.url);
         return;
       }
       this.setProcess("Redirecting to Stripe Checkout…");
-      this.accessEl.textContent = "Redirecting to Checkout…";
-      window.location.href = session.url;
+      this.accessEl.textContent = "Redirecting to Stripe Checkout…";
+      window.location.assign(session.url);
     } catch (err) {
+      console.error("[aether:ui] subscribe/checkout failed", err);
       const message = err instanceof Error ? err.message : String(err);
-      this.accessEl.textContent = message;
-      this.setProcess(null);
+      this.accessEl.textContent = `Checkout error: ${message}`;
+      this.setProcess(`Checkout failed — ${message}`);
       this.subscribeBtn.disabled = false;
+      this.checkoutBusy = false;
       this.renderSubscribeCta();
     }
   }

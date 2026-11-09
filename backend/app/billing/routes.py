@@ -50,7 +50,11 @@ async def billing_config() -> dict[str, Any]:
     return {
         "stripe_configured": settings.has_stripe(),
         "mock_checkout": settings.stripe_mock_checkout_enabled(),
-        "publishable_key": settings.stripe_publishable_key.strip() or None,
+        "publishable_key": (
+            settings.stripe_publishable_key.strip()
+            if settings.has_stripe()
+            else None
+        ),
         "dev_unlock_enabled": bool(settings.billing_dev_unlock) and not settings.has_stripe(),
         "solana_mode": (
             "live_prepared"

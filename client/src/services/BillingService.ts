@@ -76,16 +76,49 @@ export async function fetchEntitlement(subscriberId: string): Promise<Entitlemen
 }
 
 export async function startCheckout(): Promise<{ id: string; url: string; mock?: boolean }> {
-  const res = await fetch(apiUrl("/billing/checkout"), { method: "POST" });
+  const endpoint = apiUrl("/billing/checkout");
+  let res: Response;
+  try {
+    res = await fetch(endpoint, {
+      method: "POST",
+      headers: { Accept: "application/json" },
+    });
+  } catch (err) {
+    console.error("[aether:billing] checkout network error", endpoint, err);
+    throw new Error(
+      `Could not reach ${endpoint}. Is the backend on :8000 and Vite proxy up?`,
+    );
+  }
+
+  const raw = await res.text();
+  let data: { id?: string; url?: string; mock?: boolean; detail?: unknown } = {};
+  try {
+    data = raw ? (JSON.parse(raw) as typeof data) : {};
+  } catch {
+    console.error("[aether:billing] checkout non-JSON response", res.status, raw.slice(0, 300));
+    throw new Error(`Checkout failed (${res.status}): invalid JSON from server`);
+  }
+
   if (!res.ok) {
-    const detail = await res.text();
-    throw new Error(detail || `Checkout failed (${res.status})`);
+    const detail =
+      typeof data.detail === "string"
+        ? data.detail
+        : raw.slice(0, 240) || `Checkout failed (${res.status})`;
+    console.error("[aether:billing] checkout HTTP error", res.status, detail);
+    throw new Error(detail);
   }
-  const data = (await res.json()) as { id: string; url: string; mock?: boolean };
-  if (!data.url) {
-    throw new Error("Checkout session missing url");
+
+  if (!data.id || !data.url) {
+    console.error("[aether:billing] checkout missing id/url", data);
+    throw new Error("Checkout session missing id or url");
   }
-  return data;
+
+  console.info("[aether:billing] checkout ok", {
+    id: data.id,
+    mock: Boolean(data.mock),
+    url: data.url,
+  });
+  return { id: data.id, url: data.url, mock: data.mock };
 }
 
 /** Local/dev: revoke entitlement on the server and clear client id. */
