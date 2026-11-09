@@ -48,17 +48,82 @@ body {
   max-width: 720px;
 }
 
+.hud-topbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 0 0 1.35rem;
+}
+
 .brand {
   font-family: var(--font-display);
   font-weight: 800;
   font-size: clamp(2rem, 5vw, 2.75rem);
   letter-spacing: -0.03em;
-  margin: 0 0 1.35rem;
+  margin: 0;
   transform: translateZ(0);
 }
 
 .brand span {
   color: var(--cyan);
+}
+
+.lang-mount {
+  flex: 0 0 auto;
+  padding-top: 0.35rem;
+}
+
+.lang-toggle-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.35rem;
+}
+
+.lang-toggle-label {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.lang-toggle-options {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  background: var(--glass-strong);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  overflow: hidden;
+}
+
+.lang-option {
+  min-width: 2.4rem;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  padding: 0.45rem 0.55rem;
+  box-shadow: none;
+}
+
+.lang-option + .lang-option {
+  border-left: 1px solid var(--border);
+}
+
+.lang-option:hover {
+  color: var(--text);
+  background: rgba(0, 243, 255, 0.06);
+}
+
+.lang-option.is-active {
+  color: var(--cyan);
+  background: var(--cyan-dim);
 }
 
 .glass,

@@ -3,8 +3,9 @@
  * Does not own the ping loop; extends display only.
  */
 
-import type { TelemetryMonitor } from "./TelemetryMonitor";
+import { msg } from "../i18n";
 import type { TelemetrySnapshot } from "../types/live";
+import type { TelemetryMonitor } from "./TelemetryMonitor";
 
 function fmtMs(value: number | null | undefined): string {
   if (value == null || !Number.isFinite(value)) {
@@ -14,13 +15,19 @@ function fmtMs(value: number | null | undefined): string {
 }
 
 export function formatLatencyLine(snap: TelemetrySnapshot): string {
+  const L = msg().latency;
   const ai = snap.aiLatencyMs ?? snap.lastAiLatencyMs;
   const ttft = snap.ttftMs ?? snap.lastTtftMs;
-  return `PING: ${fmtMs(snap.rttMs)} | AI: ${fmtMs(ai)} | TTFT: ${fmtMs(ttft)}`;
+  return `${L.ping}: ${fmtMs(snap.rttMs)} | ${L.ai}: ${fmtMs(ai)} | ${L.ttft}: ${fmtMs(ttft)}`;
+}
+
+export function idleLatencyLine(): string {
+  return msg().latency.idle;
 }
 
 export class LatencyMonitor {
   private unsub: (() => void) | null = null;
+  private lastSnap: TelemetrySnapshot | null = null;
 
   constructor(
     private readonly el: HTMLElement,
@@ -37,7 +44,17 @@ export class LatencyMonitor {
     this.unsub = null;
   }
 
+  /** Re-apply locale labels without waiting for the next telemetry tick. */
+  applyLocale(): void {
+    if (this.lastSnap) {
+      this.render(this.lastSnap);
+      return;
+    }
+    this.el.textContent = idleLatencyLine();
+  }
+
   render(snap: TelemetrySnapshot): void {
+    this.lastSnap = snap;
     this.el.textContent = formatLatencyLine(snap);
     this.el.dataset.rtt = snap.rttMs != null ? String(Math.round(snap.rttMs)) : "";
     const ai = snap.aiLatencyMs ?? snap.lastAiLatencyMs;

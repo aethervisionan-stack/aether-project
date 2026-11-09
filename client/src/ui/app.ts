@@ -16,9 +16,10 @@ import {
   type EntitlementStatus,
 } from "../services/BillingService";
 import { AdvancedAudioVisualizer } from "../audio/AdvancedAudioVisualizer";
-import { LatencyMonitor } from "../audio/LatencyMonitor";
+import { idleLatencyLine, LatencyMonitor } from "../audio/LatencyMonitor";
 import { envDevUnlock, isFeatureUnlock } from "../dev/unlock";
 import { classifyPace } from "../hardware/NotificationPriority";
+import { initI18n, msg, onLocaleChange, t } from "../i18n";
 import { GeoNavigation } from "../mobility/GeoNavigation";
 import { parseProductivityLocal } from "../mobility/ProductivityVoice";
 import { FrameCapture } from "../multimodal/FrameCapture";
@@ -27,6 +28,7 @@ import type { LiveServerJsonEvent, TelemetrySnapshot, WsReadyStateLabel } from "
 import type { NotificationActionView } from "../types/mobility";
 import { DevToolsPanel } from "./DevToolsPanel";
 import { GuardrailIndicator } from "./GuardrailIndicator";
+import { LanguageToggle } from "./LanguageToggle";
 import { MemoryInspector } from "./MemoryInspector";
 import { MobilityPanel } from "./MobilityPanel";
 import { ToastHost } from "./ToastHost";
@@ -35,17 +37,18 @@ import { TreasuryWidget } from "./TreasuryWidget";
 
 /** Generation-1 connection labels — no PCM/path/telemetry prose. */
 function connectionLabel(state: WsReadyStateLabel): string {
+  const c = msg().connection;
   switch (state) {
     case "OPEN":
-      return "OPEN";
+      return c.open;
     case "RECONNECTING":
     case "CONNECTING":
-      return "RECONNECTING";
+      return c.reconnecting;
     case "CLOSING":
     case "CLOSED":
-      return "CLOSED";
+      return c.closed;
     default:
-      return "CLOSED";
+      return c.closed;
   }
 }
 
@@ -99,20 +102,25 @@ export class ControlApp {
   constructor(private readonly root: HTMLElement) {}
 
   mount(): void {
+    initI18n();
     // Optimistic local unlock: show Live HUD immediately (VITE_DEV_UNLOCK default on).
     const optimisticUnlock = envDevUnlock();
+    const m = msg();
     this.root.innerHTML = `
-      <h1 class="brand">Aether <span>Vision</span></h1>
+      <div class="hud-topbar">
+        <h1 class="brand">${m.brand.aether} <span>${m.brand.vision}</span></h1>
+        <div class="lang-mount" data-role="lang"></div>
+      </div>
 
       <section class="subscribe glass" data-role="subscribe">
-        <h2 class="subscribe-title">Subscription</h2>
-        <p class="subscribe-lede">Monthly access — card checkout, no wallet required.</p>
-        <p class="access is-loading skeleton" data-role="access">Checking access…</p>
+        <h2 class="subscribe-title" data-i18n="subscribe.title">${m.subscribe.title}</h2>
+        <p class="subscribe-lede" data-i18n="subscribe.lede">${m.subscribe.lede}</p>
+        <p class="access is-loading skeleton" data-role="access">${m.subscribe.checking}</p>
         <p class="access-meta" data-role="access-meta" hidden></p>
         <div class="controls subscribe-actions">
-          <button type="button" class="subscribe-cta" data-action="subscribe">Subscribe</button>
-          <button type="button" class="secondary" data-action="reset-sub">Reset subscription</button>
-          <button type="button" class="secondary" data-action="dev-unlock">Simulate unlock</button>
+          <button type="button" class="subscribe-cta" data-action="subscribe">${m.subscribe.cta}</button>
+          <button type="button" class="secondary" data-action="reset-sub">${m.subscribe.reset}</button>
+          <button type="button" class="secondary" data-action="dev-unlock">${m.subscribe.simulate}</button>
         </div>
         <p class="process" data-role="process" hidden></p>
         <div class="treasury-mount" data-role="treasury"></div>
@@ -121,31 +129,31 @@ export class ControlApp {
       <section class="live-panel glass" data-role="live-panel"${optimisticUnlock ? "" : " hidden"}>
         <div class="live-toolbar">
           <div class="controls">
-            <button type="button" data-action="connect">Connect Live</button>
-            <button type="button" class="secondary" data-action="disconnect" disabled>Disconnect</button>
-            <button type="button" class="secondary" data-action="share-frame" disabled title="Send a screen frame (multimodal)">Frame</button>
+            <button type="button" data-action="connect">${m.live.connect}</button>
+            <button type="button" class="secondary" data-action="disconnect" disabled>${m.live.disconnect}</button>
+            <button type="button" class="secondary" data-action="share-frame" disabled title="${m.live.frameTitle}">${m.live.frame}</button>
           </div>
           <div class="live-toolbar-right">
             <div class="memory-mount" data-role="memory"></div>
-            <button type="button" class="secondary focus-toggle" data-action="focus-toggle" aria-pressed="false">FOCUS</button>
+            <button type="button" class="secondary focus-toggle" data-action="focus-toggle" aria-pressed="false">${m.live.focus}</button>
           </div>
         </div>
         <div class="live-status-row">
-          <p class="connection" data-role="status" data-state="CLOSED">CLOSED</p>
-          <p class="guardrail" data-role="guardrail">GUARDRAIL: SECURE</p>
+          <p class="connection" data-role="status" data-state="CLOSED">${m.connection.closed}</p>
+          <p class="guardrail" data-role="guardrail">${m.guardrail.prefix}: ${m.guardrail.secure}</p>
         </div>
         <div class="hud-grid">
           <div class="hud-telemetry" data-role="hud-telemetry">
-            <canvas class="audio-viz" data-role="audio-viz" width="640" height="110" aria-label="Advanced audio visualizer"></canvas>
-            <p class="latency" data-role="latency">PING: — | AI: — | TTFT: —</p>
+            <canvas class="audio-viz" data-role="audio-viz" width="640" height="110" aria-label="${m.live.vizLabel}"></canvas>
+            <p class="latency" data-role="latency">${m.latency.idle}</p>
           </div>
         </div>
         <div class="warn" data-role="warn" hidden></div>
         <div class="mobility-mount" data-role="mobility"></div>
         <div class="devtools-mount" data-role="devtools"></div>
         <div class="text-row">
-          <input type="text" placeholder="Type a message to Aether…" data-role="text" />
-          <button type="button" class="secondary" data-action="send-text" disabled>Send</button>
+          <input type="text" placeholder="${m.live.placeholder}" data-role="text" />
+          <button type="button" class="secondary" data-action="send-text" disabled>${m.live.send}</button>
         </div>
         <div class="transcript-mount" data-role="transcript"></div>
       </section>
@@ -169,6 +177,7 @@ export class ControlApp {
     this.sendBtn = this.root.querySelector("[data-action=send-text]")!;
     this.vizCanvas = this.root.querySelector("[data-role=audio-viz]")!;
     this.latencyEl = this.root.querySelector("[data-role=latency]")!;
+    const langMount = this.root.querySelector<HTMLElement>("[data-role=lang]")!;
     const treasuryMount = this.root.querySelector<HTMLElement>("[data-role=treasury]")!;
     const transcriptMount = this.root.querySelector<HTMLElement>("[data-role=transcript]")!;
     const guardrailEl = this.root.querySelector<HTMLElement>("[data-role=guardrail]")!;
@@ -176,6 +185,7 @@ export class ControlApp {
     const mobilityMount = this.root.querySelector<HTMLElement>("[data-role=mobility]")!;
     const devtoolsMount = this.root.querySelector<HTMLElement>("[data-role=devtools]")!;
 
+    new LanguageToggle(langMount);
     this.treasury = new TreasuryWidget(treasuryMount);
     this.transcript = new TranscriptFeed(transcriptMount);
     this.guardrail = new GuardrailIndicator(guardrailEl);
@@ -205,32 +215,37 @@ export class ControlApp {
       onSavePlace: () => this.saveGeoPlace(),
       onNavRequest: () => {
         this.service?.requestNavGuidance();
-        this.toasts.info("Requesting nav cue…");
+        this.toasts.info(msg().mobilityApp.requestingNav);
       },
       onDemoNotification: () => this.demoNotification(),
       onConfirmNotification: (id, reply) => {
         this.service?.confirmNotificationReply(id, reply);
-        this.transcript?.push("system", `Notification reply confirmed${reply ? `: ${reply}` : ""}`);
-        this.toasts.ok("Reply confirmed");
+        this.transcript?.push(
+          "system",
+          t(msg().mobilityApp.notifReplyConfirmed, {
+            detail: reply ? `: ${reply}` : "",
+          }),
+        );
+        this.toasts.ok(msg().mobilityApp.replyConfirmed);
       },
       onDismissNotification: (id) => {
         this.service?.dismissNotification(id);
-        this.transcript?.push("system", `Notification ${id} dismissed`);
+        this.transcript?.push("system", t(msg().mobilityApp.notifDismissed, { id }));
       },
     });
     this.geo.setOnFix((fix) => {
       this.service?.sendGeoFix(fix);
       this.mobility?.setPace(classifyPace(fix.speed_mps ?? null));
     });
-    this.memory.setNotify((msg) => {
-      if (msg.kind === "ok") {
-        this.toasts.ok(msg.text);
-      } else if (msg.kind === "warn") {
-        this.toasts.warn(msg.text);
-      } else if (msg.kind === "danger") {
-        this.toasts.danger(msg.text);
+    this.memory.setNotify((notifyMsg) => {
+      if (notifyMsg.kind === "ok") {
+        this.toasts.ok(notifyMsg.text);
+      } else if (notifyMsg.kind === "warn") {
+        this.toasts.warn(notifyMsg.text);
+      } else if (notifyMsg.kind === "danger") {
+        this.toasts.danger(notifyMsg.text);
       } else {
-        this.toasts.info(msg.text);
+        this.toasts.info(notifyMsg.text);
       }
     });
     this.treasury.setStatusHandler((status) => {
@@ -244,9 +259,13 @@ export class ControlApp {
         return;
       }
       if (status.reconnecting || !status.online) {
-        this.toasts.warn(status.error ? `Treasury RPC: ${status.error}` : "Treasury sync reconnecting…");
+        this.toasts.warn(
+          status.error ? `Treasury RPC: ${status.error}` : msg().treasury.treasuryReconnect,
+        );
       }
     });
+
+    onLocaleChange(() => this.applyLocale());
 
     // Never hide the payment block in Gen-1 local HUD.
     this.subscribeSection.hidden = false;
@@ -278,13 +297,50 @@ export class ControlApp {
     void this.bootstrapBilling();
   }
 
+  private applyLocale(): void {
+    const m = msg();
+    const brand = this.root.querySelector(".brand");
+    if (brand) {
+      brand.innerHTML = `${m.brand.aether} <span>${m.brand.vision}</span>`;
+    }
+    const title = this.root.querySelector("[data-i18n='subscribe.title']");
+    const lede = this.root.querySelector("[data-i18n='subscribe.lede']");
+    if (title) title.textContent = m.subscribe.title;
+    if (lede) lede.textContent = m.subscribe.lede;
+    this.resetBtn.textContent = m.subscribe.reset;
+    this.devBtn.textContent = m.subscribe.simulate;
+    this.connectBtn.textContent = m.live.connect;
+    this.disconnectBtn.textContent = m.live.disconnect;
+    this.frameBtn.textContent = m.live.frame;
+    this.frameBtn.title = m.live.frameTitle;
+    this.focusBtn.textContent = this.focusMode ? m.live.focusOn : m.live.focus;
+    this.sendBtn.textContent = m.live.send;
+    this.vizCanvas.setAttribute("aria-label", m.live.vizLabel);
+    if (!this.connected) {
+      this.textInput.placeholder = m.live.placeholder;
+      this.latencyEl.textContent = idleLatencyLine();
+      this.statusEl.textContent = connectionLabel("CLOSED");
+      this.statusEl.dataset.state = msg().connection.closed;
+    } else {
+      this.textInput.placeholder = m.live.placeholder;
+    }
+    this.renderSubscribeCta();
+    void this.refreshEntitlement();
+    this.latencyMonitor?.applyLocale();
+    this.guardrail?.applyLocale();
+    this.memory?.applyLocale();
+    this.mobility?.applyLocale();
+    this.devTools?.applyLocale();
+    this.treasury?.applyLocale();
+  }
+
   private toggleFocusMode(force?: boolean): void {
     this.focusMode = force ?? !this.focusMode;
     this.root.classList.toggle("focus-mode", this.focusMode);
     this.focusBtn.setAttribute("aria-pressed", this.focusMode ? "true" : "false");
-    this.focusBtn.textContent = this.focusMode ? "FOCUS ON" : "FOCUS";
+    this.focusBtn.textContent = this.focusMode ? msg().live.focusOn : msg().live.focus;
     if (this.focusMode) {
-      this.toasts.info("Focus mode — spectrogram + chat prioritized");
+      this.toasts.info(msg().live.focusToast);
     }
   }
 
@@ -333,8 +389,7 @@ export class ControlApp {
       if (this.billingConfig.bypass_subscription_check || unlocked) {
         // Access meta already covers bypass; treasury card stays independent.
       } else if (!canCheckout(this.billingConfig)) {
-        this.accessEl.textContent =
-          "Billing API reachable but checkout flags are off — check BILLING_DEV_UNLOCK.";
+        this.accessEl.textContent = msg().subscribe.billingFlagsOff;
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -363,7 +418,7 @@ export class ControlApp {
       this.resetBtn.hidden = false;
       this.mobility?.setUnlockMode(true);
       void this.memory?.openPanel(true);
-      this.accessEl.textContent = `Billing config error (HUD unlocked locally): ${message}`;
+      this.accessEl.textContent = t(msg().subscribe.billingConfigError, { message });
       this.treasury?.applyBillingConfig(this.billingConfig);
       this.treasury?.start();
     }
@@ -372,12 +427,12 @@ export class ControlApp {
     if (ret.success && ret.sessionId) {
       saveSubscriberId(ret.sessionId);
       clearCheckoutQuery();
-      this.accessEl.textContent = "Payment received — unlocking…";
+      this.accessEl.textContent = msg().subscribe.paymentReceived;
     } else if (ret.success) {
       clearCheckoutQuery();
     } else if (new URLSearchParams(window.location.search).get("checkout") === "cancel") {
       clearCheckoutQuery();
-      this.accessEl.textContent = "Checkout canceled.";
+      this.accessEl.textContent = msg().subscribe.checkoutCanceled;
     }
 
     await this.refreshEntitlement();
@@ -388,13 +443,14 @@ export class ControlApp {
     this.subscribeBtn.hidden = false;
     this.subscribeBtn.disabled = false;
     const cfg = this.billingConfig;
+    const s = msg().subscribe;
     if (!cfg) {
-      this.subscribeBtn.textContent = "Subscribe";
+      this.subscribeBtn.textContent = s.cta;
       return;
     }
     const price = formatPrice(cfg.unit_amount_cents, cfg.currency);
-    const mode = cfg.mock_checkout && !cfg.stripe_configured ? " (mock)" : "";
-    this.subscribeBtn.textContent = `Subscribe — ${price}/mo${mode}`;
+    const mode = cfg.mock_checkout && !cfg.stripe_configured ? s.ctaMock : "";
+    this.subscribeBtn.textContent = t(s.ctaPrice, { price, mode });
   }
 
   private async refreshEntitlement(): Promise<void> {
@@ -402,11 +458,11 @@ export class ControlApp {
     if (isFeatureUnlock(this.billingConfig)) {
       this.setEntitled(true);
       this.accessEl.classList.remove("is-loading", "skeleton");
-      this.accessEl.textContent = "Access active — local feature unlock (all HUD tools).";
+      this.accessEl.textContent = msg().subscribe.accessActiveUnlock;
       this.setAccessMeta(
         this.billingConfig?.bypass_subscription_check
-          ? "BYPASS_SUBSCRIPTION_CHECK=true · Stripe structure kept · set false to re-enable paywall"
-          : "VITE_DEV_UNLOCK / BILLING_DEV_UNLOCK · full local surfaces unlocked",
+          ? msg().subscribe.accessMetaBypass
+          : msg().subscribe.accessMetaDev,
       );
       return;
     }
@@ -416,12 +472,13 @@ export class ControlApp {
       this.setEntitled(false);
       this.clearAccessMeta();
       this.accessEl.classList.remove("is-loading", "skeleton");
-      if (
-        !this.accessEl.textContent?.startsWith("Billing") &&
-        !this.accessEl.textContent?.startsWith("Checkout") &&
-        !this.accessEl.textContent?.includes("config error")
-      ) {
-        this.accessEl.textContent = "Subscribe to unlock Live HUD + chat.";
+      const access = this.accessEl.textContent || "";
+      const preserveAccess =
+        /billing|checkout|config error|config de billing|erro na config|error de config/i.test(
+          access,
+        );
+      if (!preserveAccess) {
+        this.accessEl.textContent = msg().subscribe.accessSubscribe;
       }
       return;
     }
@@ -434,8 +491,8 @@ export class ControlApp {
       this.renderAccessGate(status);
     } catch {
       this.setEntitled(false);
-      this.accessEl.textContent = "Could not verify access — Subscribe remains available.";
-      this.setAccessMeta(`Stored session ${shortenSubscriberId(id)} (verify failed)`);
+      this.accessEl.textContent = msg().subscribe.accessVerifyFailed;
+      this.setAccessMeta(t(msg().subscribe.storedVerifyFailed, { id: shortenSubscriberId(id) }));
     }
   }
 
@@ -450,7 +507,7 @@ export class ControlApp {
       status.expires_at * 1000 < Date.now();
 
     if (status.active) {
-      this.accessEl.textContent = "Access active — Live unlocked.";
+      this.accessEl.textContent = msg().subscribe.accessActiveLive;
       const parts = [
         status.source ? `source ${status.source}` : null,
         until ? `until ${until}` : null,
@@ -462,7 +519,7 @@ export class ControlApp {
     }
 
     if (expired) {
-      this.accessEl.textContent = "Access expired — Subscribe again to unlock Live.";
+      this.accessEl.textContent = msg().subscribe.accessExpired;
       this.setAccessMeta(
         [until ? `expired ${until}` : null, status.source ? `was ${status.source}` : null, `id ${shortId}`]
           .filter(Boolean)
@@ -471,8 +528,8 @@ export class ControlApp {
       return;
     }
 
-    this.accessEl.textContent = "Subscribe to unlock Live HUD + chat.";
-    this.setAccessMeta(`Stored session ${shortId} (inactive)`);
+    this.accessEl.textContent = msg().subscribe.accessSubscribe;
+    this.setAccessMeta(t(msg().subscribe.storedInactive, { id: shortId }));
   }
 
   private setAccessMeta(text: string | null): void {
@@ -513,39 +570,40 @@ export class ControlApp {
     if (this.checkoutBusy) {
       return;
     }
+    const s = msg().subscribe;
     this.checkoutBusy = true;
     this.subscribeBtn.disabled = true;
     this.pulseButton(this.subscribeBtn);
-    this.setBusy(this.subscribeBtn, true, "Processing…");
-    this.setProcess("Opening checkout…");
+    this.setBusy(this.subscribeBtn, true, s.processing);
+    this.setProcess(s.openingCheckout);
     this.accessEl.classList.remove("is-loading", "skeleton");
-    this.accessEl.textContent = "Starting checkout…";
-    this.toasts.info("Creating checkout session…");
+    this.accessEl.textContent = s.startingCheckout;
+    this.toasts.info(s.creatingSession);
     try {
       if (!canCheckout(this.billingConfig)) {
-        throw new Error("Checkout unavailable (set Stripe keys or BILLING_DEV_UNLOCK=true).");
+        throw new Error(s.checkoutUnavailable);
       }
-      this.setProcess("POST /api/billing/checkout …");
+      this.setProcess(s.postCheckout);
       const session = await startCheckout();
       saveSubscriberId(session.id);
       const checkoutUrl = session.url;
       const isMock = Boolean(session.mock) || session.id.startsWith("cs_test_mock_");
       if (isMock) {
         this.setProcess(`Mock session ${session.id} — opening checkout return…`);
-        this.accessEl.textContent = "Mock checkout — redirecting to confirm payment…";
+        this.accessEl.textContent = s.mockRedirect;
         await new Promise((r) => window.setTimeout(r, 350));
         window.location.href = checkoutUrl;
         return;
       }
-      this.setProcess("Redirecting to Stripe Checkout…");
-      this.accessEl.textContent = "Redirecting to Stripe hosted Checkout…";
+      this.setProcess(s.stripeRedirect);
+      this.accessEl.textContent = s.stripeRedirect;
       window.location.href = checkoutUrl;
     } catch (err) {
       console.error("[aether:ui] subscribe/checkout failed", err);
       const message = err instanceof Error ? err.message : String(err);
-      this.accessEl.textContent = `Checkout error: ${message}`;
-      this.setProcess(`Checkout failed — ${message}`);
-      this.toasts.danger(`Checkout failed: ${message}`);
+      this.accessEl.textContent = t(s.checkoutError, { message });
+      this.setProcess(t(s.checkoutFailed, { message }));
+      this.toasts.danger(t(s.checkoutFailed, { message }));
       this.subscribeBtn.disabled = false;
       this.setBusy(this.subscribeBtn, false);
       this.checkoutBusy = false;
@@ -554,8 +612,9 @@ export class ControlApp {
   }
 
   private async resetSubscriptionFlow(): Promise<void> {
+    const s = msg().subscribe;
     this.resetBtn.disabled = true;
-    this.setProcess("Resetting subscription — locking access…");
+    this.setProcess(s.resetting);
     try {
       await this.disconnect();
       await resetSubscription(loadSubscriberId());
@@ -563,12 +622,12 @@ export class ControlApp {
       if (isFeatureUnlock(this.billingConfig)) {
         // Local unlock still active — keep Live / HUD available.
         await this.refreshEntitlement();
-        this.setProcess("Local entitlement cleared; feature unlock still active.");
+        this.setProcess(s.resetDoneUnlock);
       } else {
         this.setEntitled(false);
         this.clearAccessMeta();
-        this.accessEl.textContent = "Blocked — Subscribe again to unlock.";
-        this.setProcess("Subscription reset. HUD is locked.");
+        this.accessEl.textContent = s.accessBlocked;
+        this.setProcess(s.resetDoneLocked);
       }
       this.renderSubscribeCta();
     } catch (err) {
@@ -576,13 +635,13 @@ export class ControlApp {
       clearSubscriberId();
       if (isFeatureUnlock(this.billingConfig)) {
         await this.refreshEntitlement();
-        this.setProcess("Local lock skipped — feature unlock active.");
+        this.setProcess(s.resetSkippedUnlock);
       } else {
         this.setEntitled(false);
         this.clearAccessMeta();
         const message = err instanceof Error ? err.message : String(err);
-        this.accessEl.textContent = `Reset forced locally (${message}).`;
-        this.setProcess("Local lock applied.");
+        this.accessEl.textContent = t(s.resetForced, { message });
+        this.setProcess(s.resetLocalLock);
       }
     } finally {
       this.resetBtn.disabled = false;
@@ -591,7 +650,7 @@ export class ControlApp {
 
   private async simulateUnlock(): Promise<void> {
     try {
-      this.setProcess("Simulating unlock…");
+      this.setProcess(msg().subscribe.simulating);
       const status = await devUnlock();
       this.setEntitled(Boolean(status.active));
       this.renderAccessGate(status);
@@ -607,18 +666,19 @@ export class ControlApp {
     if (this.connected) {
       return;
     }
+    const live = msg().live;
     if (!this.entitled) {
-      this.showWarn("Subscribe to unlock Live.");
-      this.toasts.warn("Subscribe to unlock Live");
+      this.showWarn(live.subscribeToUnlock);
+      this.toasts.warn(live.subscribeToUnlock);
       return;
     }
     // Optimistic HUD feedback while WS opens.
     this.setConnection("CONNECTING");
     this.clearWarn();
     this.connectBtn.disabled = true;
-    this.setBusy(this.connectBtn, true, "Connecting…");
+    this.setBusy(this.connectBtn, true, live.connecting);
     this.pulseButton(this.connectBtn);
-    this.toasts.info("Opening Live bridge…");
+    this.toasts.info(live.openingBridge);
 
     this.visualizer = new AdvancedAudioVisualizer();
     this.visualizer.mount(this.vizCanvas);
@@ -646,16 +706,16 @@ export class ControlApp {
       if (this.mobility) {
         this.service.applyMobilityConfig(this.mobility.getConfig());
       }
-      this.toasts.ok("Live connected");
+      this.toasts.ok(live.connected);
       this.toggleFocusMode(true);
 
       if (result.micEnabled) {
-        this.textInput.placeholder = "Type a message to Aether…";
+        this.textInput.placeholder = live.placeholder;
         this.clearWarn();
       } else {
-        const detail = result.micWarning ?? "Microphone unavailable.";
-        this.textInput.placeholder = "Type to chat with Aether…";
-        this.showWarn(`${detail} You can still chat by text.`);
+        const detail = result.micWarning ?? live.micUnavailable;
+        this.textInput.placeholder = live.placeholderTextOnly;
+        this.showWarn(t(live.textStillWorks, { detail }));
         this.toasts.warn(detail);
         this.textInput.focus();
       }
@@ -665,12 +725,12 @@ export class ControlApp {
       const message = err instanceof Error ? err.message : String(err);
       this.setConnection("CLOSED");
       const hint = /websocket|network|failed to fetch|econnrefused/i.test(message)
-        ? " Check backend :8000 and Vite /api proxy."
+        ? live.networkHint
         : /mic|device|permission|NotFoundError|NotAllowedError/i.test(message)
-          ? " Mic blocked — text chat may still work after a successful connect."
+          ? live.micHint
           : "";
-      this.showWarn(`Connect Live failed: ${message}.${hint}`);
-      this.toasts.danger(`Connect failed: ${message}`);
+      this.showWarn(t(live.connectFailedDetail, { message, hint }));
+      this.toasts.danger(t(live.connectFailed, { message }));
       await this.service.disconnect();
       this.service = null;
       this.teardownTelemetryHud();
@@ -678,8 +738,9 @@ export class ControlApp {
   }
 
   private async disconnect(): Promise<void> {
+    const live = msg().live;
     this.pulseButton(this.disconnectBtn);
-    this.setBusy(this.disconnectBtn, true, "Closing…");
+    this.setBusy(this.disconnectBtn, true, live.closing);
     await this.service?.disconnect();
     this.service = null;
     this.connected = false;
@@ -688,7 +749,7 @@ export class ControlApp {
     this.frameBtn.disabled = true;
     this.setBusy(this.disconnectBtn, false);
     this.sendBtn.disabled = true;
-    this.textInput.placeholder = "Type a message to Aether…";
+    this.textInput.placeholder = live.placeholder;
     this.clearWarn();
     this.setConnection("CLOSED");
     this.mobility?.setConnected(false);
@@ -696,16 +757,16 @@ export class ControlApp {
     this.geo.stopWatch();
     this.teardownTelemetryHud();
     this.toggleFocusMode(false);
-    this.toasts.info("Live disconnected");
+    this.toasts.info(live.disconnected);
   }
 
   private enableGps(): void {
     const ok = this.geo.startWatch();
     if (!ok) {
-      this.toasts.warn("Geolocation unavailable in this browser");
+      this.toasts.warn(msg().mobilityApp.geoUnavailable);
       return;
     }
-    this.toasts.ok("GPS watch started — coords feed Live prompt");
+    this.toasts.ok(msg().mobilityApp.gpsStarted);
     const fix = this.geo.getLastFix();
     if (fix) {
       this.service?.sendGeoFix(fix);
@@ -713,14 +774,21 @@ export class ControlApp {
   }
 
   private saveGeoPlace(): void {
-    const place = this.geo.saveCurrentPlace("Saved point", "saved");
+    const place = this.geo.saveCurrentPlace(msg().mobilityApp.placeName, "saved");
     if (!place) {
-      this.toasts.warn("No GPS fix yet — tap GPS first");
+      this.toasts.warn(msg().mobilityApp.noGpsFix);
       return;
     }
     this.service?.sendPlace(place);
-    this.transcript?.push("system", `Saved place ${place.name} (${place.lat.toFixed(4)}, ${place.lon.toFixed(4)})`);
-    this.toasts.ok("Place saved");
+    this.transcript?.push(
+      "system",
+      t(msg().mobilityApp.savedPlace, {
+        name: place.name,
+        lat: place.lat.toFixed(4),
+        lon: place.lon.toFixed(4),
+      }),
+    );
+    this.toasts.ok(msg().mobilityApp.placeSaved);
   }
 
   private demoNotification(): void {
@@ -732,7 +800,7 @@ export class ControlApp {
       raw: "João: Você vai se atrasar?",
     };
     this.service?.sendRawNotification(raw);
-    this.transcript?.push("system", "Demo notification sent for parse/confirm");
+    this.transcript?.push("system", msg().mobilityApp.demoSent);
   }
 
   private teardownTelemetryHud(): void {
@@ -740,7 +808,7 @@ export class ControlApp {
     this.latencyMonitor = null;
     this.visualizer?.dispose();
     this.visualizer = null;
-    this.latencyEl.textContent = "PING: — | AI: — | TTFT: —";
+    this.latencyEl.textContent = idleLatencyLine();
   }
 
   private async shareFrame(): Promise<void> {
@@ -752,11 +820,14 @@ export class ControlApp {
     try {
       const frame = await this.frameCapture.captureDisplay();
       this.service.sendFrame(frame);
-      this.transcript?.push("system", `Screen frame sent (${frame.width}×${frame.height})`);
-      this.toasts.ok("Frame sent to Live");
+      this.transcript?.push(
+        "system",
+        t(msg().mobilityApp.screenFrame, { width: frame.width, height: frame.height }),
+      );
+      this.toasts.ok(msg().mobilityApp.frameSent);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      this.toasts.warn(`Frame capture: ${message}`);
+      this.toasts.warn(t(msg().mobilityApp.frameCapture, { message }));
     } finally {
       this.frameBtn.disabled = !this.connected;
     }
@@ -804,12 +875,8 @@ export class ControlApp {
         const status = (event as { status?: string }).status;
         this.guardrail?.setStatus(status);
         if (status === "blocked") {
-          this.transcript?.push(
-            "system",
-            "Guardrail blocked an AI fragment (empty/corrupt after sanitize).",
-            "blocked",
-          );
-          this.toasts.warn("Guardrail blocked a fragment");
+          this.transcript?.push("system", msg().guardrail.blockedFragment, "blocked");
+          this.toasts.warn(msg().guardrail.blockedToast);
         }
         break;
       }
@@ -833,7 +900,11 @@ export class ControlApp {
           const prefs = ev.preference_summary ? ` · prefs ${ev.preference_summary}` : "";
           this.transcript?.push(
             "system",
-            `CoT ${ev.complexity ?? "complex"} (${Math.round(ev.elapsed_ms ?? 0)}ms)${prefs}`,
+            t(msg().mobilityApp.cotLine, {
+              complexity: ev.complexity ?? "complex",
+              ms: Math.round(ev.elapsed_ms ?? 0),
+              prefs,
+            }),
           );
         }
         break;
@@ -841,7 +912,10 @@ export class ControlApp {
       case "tool_result": {
         const ev = event as { name?: string; ok?: boolean; error?: string | null };
         const label = ev.ok ? "ok" : `fail ${ev.error ?? ""}`.trim();
-        this.transcript?.push("system", `Tool ${ev.name ?? "?"} · ${label}`);
+        this.transcript?.push(
+          "system",
+          t(msg().mobilityApp.toolLine, { name: ev.name ?? "?", label }),
+        );
         break;
       }
       case "notification_action": {
@@ -865,19 +939,23 @@ export class ControlApp {
         if (ev.intent?.ok) {
           this.transcript?.push(
             "system",
-            `Productivity ${ev.intent.kind}: ${ev.intent.title}${ev.memory_saved ? " · memory" : ""}`,
+            t(msg().mobilityApp.productivityLine, {
+              kind: ev.intent.kind ?? "",
+              title: ev.intent.title ?? "",
+              memory: ev.memory_saved ? " · memory" : "",
+            }),
           );
-          this.toasts.ok(`Saved ${ev.intent.kind}`);
+          this.toasts.ok(t(msg().mobilityApp.productivitySaved, { kind: ev.intent.kind ?? "" }));
         }
         break;
       }
       case "nav_guidance": {
         const ev = event as { ok?: boolean; steps?: string[] };
         if (ev.ok && ev.steps?.length) {
-          this.transcript?.push("system", `Nav: ${ev.steps[0]}`);
+          this.transcript?.push("system", t(msg().mobilityApp.navLine, { step: ev.steps[0] }));
           this.toasts.info(ev.steps[0]);
         } else {
-          this.toasts.warn("Nav guidance unavailable — enable GPS / save a place");
+          this.toasts.warn(msg().mobilityApp.navUnavailable);
         }
         break;
       }
@@ -907,15 +985,16 @@ export class ControlApp {
 
   private setConnection(state: WsReadyStateLabel): void {
     const label = connectionLabel(state);
+    const c = msg().connection;
     this.statusEl.textContent = label;
     this.statusEl.dataset.state = label;
     if (label !== this.lastWsLabel) {
-      if (label === "RECONNECTING") {
-        this.toasts.warn("WebSocket reconnecting…");
-      } else if (label === "OPEN" && this.lastWsLabel === "RECONNECTING") {
-        this.toasts.ok("WebSocket restored");
-      } else if (label === "CLOSED" && this.lastWsLabel === "OPEN") {
-        this.toasts.warn("WebSocket offline");
+      if (label === c.reconnecting) {
+        this.toasts.warn(c.wsReconnecting);
+      } else if (label === c.open && this.lastWsLabel === c.reconnecting) {
+        this.toasts.ok(c.wsRestored);
+      } else if (label === c.closed && this.lastWsLabel === c.open) {
+        this.toasts.warn(c.wsOffline);
       }
       this.lastWsLabel = label;
     }
@@ -930,5 +1009,4 @@ export class ControlApp {
     this.warnEl.hidden = true;
     this.warnEl.textContent = "";
   }
-
 }

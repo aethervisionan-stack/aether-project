@@ -2,6 +2,7 @@
  * Discrete Gen-1 HUD panel: view / edit / clear learned preferences.
  */
 
+import { msg, t } from "../i18n";
 import {
   clearMemoryProfile,
   extractMemoryNow,
@@ -35,11 +36,11 @@ export class MemoryInspector {
       </button>
       <div class="memory-panel glass" data-role="panel" hidden>
         <div class="memory-head">
-          <h3 class="memory-title">Memory Inspector</h3>
-          <p class="memory-lede">Learned prefs for Live replies. Local profile only.</p>
+          <h3 class="memory-title" data-i18n="title">Memory Inspector</h3>
+          <p class="memory-lede" data-i18n="lede">Learned prefs for Live replies. Local profile only.</p>
         </div>
         <div class="memory-body" data-role="body">
-          <p class="memory-empty">Loading profile…</p>
+          <p class="memory-empty" data-i18n="loadingProfile">Loading profile…</p>
         </div>
         <div class="memory-actions">
           <button type="button" class="secondary" data-action="refresh" disabled>Refresh</button>
@@ -63,10 +64,35 @@ export class MemoryInspector {
       .querySelector("[data-action=clear-history]")
       ?.addEventListener("click", () => void this.clear(true));
     this.root.querySelector("[data-action=clear-all]")?.addEventListener("click", () => void this.clear(false));
+    this.applyLocale();
   }
 
   setNotify(handler: MemoryInspectorHandler | null): void {
     this.onNotify = handler;
+  }
+
+  applyLocale(): void {
+    const m = msg().memory;
+    this.toggleBtn.textContent = this.open ? m.toggleOpen : m.toggle;
+    const title = this.root.querySelector("[data-i18n=title]");
+    const lede = this.root.querySelector("[data-i18n=lede]");
+    if (title) title.textContent = m.title;
+    if (lede) lede.textContent = m.lede;
+    const setBtn = (action: string, label: string) => {
+      const btn = this.root.querySelector(`[data-action="${action}"]`);
+      if (btn) btn.textContent = label;
+    };
+    setBtn("refresh", m.refresh);
+    setBtn("extract", m.extract);
+    setBtn("save", m.save);
+    setBtn("clear-history", m.clearHistory);
+    setBtn("clear-all", m.clearAll);
+    if (this.profile) {
+      this.renderBody();
+    } else {
+      const empty = this.root.querySelector("[data-i18n=loadingProfile]");
+      if (empty) empty.textContent = m.loadingProfile;
+    }
   }
 
   /** Local unlock: force Memory Inspector open so prefs are visible without a click. */
@@ -75,7 +101,7 @@ export class MemoryInspector {
       this.open = true;
       this.panel.hidden = false;
       this.toggleBtn.setAttribute("aria-expanded", "true");
-      this.toggleBtn.textContent = "Memory ▾";
+      this.toggleBtn.textContent = msg().memory.toggleOpen;
       await this.reload();
       return;
     }
@@ -115,7 +141,7 @@ export class MemoryInspector {
     this.open = !this.open;
     this.panel.hidden = !this.open;
     this.toggleBtn.setAttribute("aria-expanded", this.open ? "true" : "false");
-    this.toggleBtn.textContent = this.open ? "Memory ▾" : "Memory";
+    this.toggleBtn.textContent = this.open ? msg().memory.toggleOpen : msg().memory.toggle;
     if (this.open) {
       await this.reload();
     }
@@ -123,15 +149,15 @@ export class MemoryInspector {
 
   private async reload(): Promise<void> {
     this.setBusy(true);
-    this.setStatus("Loading…");
+    this.setStatus(msg().memory.loading);
     try {
       this.profile = await fetchMemoryProfile();
       this.renderBody();
       this.setStatus(null);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      this.setStatus(`Load failed: ${message}`);
-      this.onNotify?.({ kind: "warn", text: `Memory load failed: ${message}` });
+      this.setStatus(t(msg().memory.loadFailed, { message }));
+      this.onNotify?.({ kind: "warn", text: t(msg().memory.loadFailed, { message }) });
     } finally {
       this.setBusy(false);
     }
@@ -142,6 +168,7 @@ export class MemoryInspector {
     if (!body || !this.profile) {
       return;
     }
+    const m = msg().memory;
     const p = this.profile.preferences;
     const cmds = (p.frequent_commands || []).join(", ");
     const historyCount = this.profile.history?.length ?? 0;
@@ -149,38 +176,38 @@ export class MemoryInspector {
 
     body.innerHTML = `
       <dl class="memory-meta">
-        <div><dt>Profile</dt><dd>${escapeHtml(this.profile.profile_id)}</dd></div>
-        <div><dt>History</dt><dd>${historyCount} turns</dd></div>
-        <div><dt>Summary</dt><dd class="memory-summary">${escapeHtml(summary || "—")}</dd></div>
+        <div><dt>${escapeHtml(m.profile)}</dt><dd>${escapeHtml(this.profile.profile_id)}</dd></div>
+        <div><dt>${escapeHtml(m.history)}</dt><dd>${escapeHtml(t(m.historyTurns, { count: historyCount }))}</dd></div>
+        <div><dt>${escapeHtml(m.summary)}</dt><dd class="memory-summary">${escapeHtml(summary || "—")}</dd></div>
       </dl>
       <form class="memory-form" data-role="form">
         <label>
-          <span>Tone</span>
+          <span>${escapeHtml(m.tone)}</span>
           <select name="tone">${options(TONES, p.tone)}</select>
         </label>
         <label>
-          <span>Style</span>
+          <span>${escapeHtml(m.style)}</span>
           <select name="style">${options(STYLES, p.style)}</select>
         </label>
         <label>
-          <span>Technical</span>
+          <span>${escapeHtml(m.technical)}</span>
           <select name="technical_level">${options(LEVELS, p.technical_level)}</select>
         </label>
         <label>
-          <span>Language</span>
-          <input name="language" type="text" maxlength="8" placeholder="auto" value="${escapeAttr(p.language || "")}" />
+          <span>${escapeHtml(m.language)}</span>
+          <input name="language" type="text" maxlength="8" placeholder="${escapeAttr(m.languagePh)}" value="${escapeAttr(p.language || "")}" />
         </label>
         <label class="memory-notes">
-          <span>Notes</span>
-          <textarea name="notes" rows="2" maxlength="400" placeholder="Optional freeform notes">${escapeHtml(p.notes || "")}</textarea>
+          <span>${escapeHtml(m.notes)}</span>
+          <textarea name="notes" rows="2" maxlength="400" placeholder="${escapeAttr(m.notesPh)}">${escapeHtml(p.notes || "")}</textarea>
         </label>
         <label class="memory-cmds">
-          <span>Frequent commands</span>
-          <input name="frequent_commands" type="text" maxlength="240" value="${escapeAttr(cmds)}" placeholder="comma-separated" />
+          <span>${escapeHtml(m.commands)}</span>
+          <input name="frequent_commands" type="text" maxlength="240" value="${escapeAttr(cmds)}" placeholder="${escapeAttr(m.commandsPh)}" />
         </label>
       </form>
       <details class="memory-history">
-        <summary>Recent interactions (${historyCount})</summary>
+        <summary>${escapeHtml(t(m.recent, { count: historyCount }))}</summary>
         <ul>
           ${(this.profile.history || [])
             .slice(-12)
@@ -189,7 +216,7 @@ export class MemoryInspector {
               (h) =>
                 `<li><span class="memory-role">${escapeHtml(h.role)}</span> ${escapeHtml(h.text)}</li>`,
             )
-            .join("") || "<li class=\"memory-empty\">No history yet.</li>"}
+            .join("") || `<li class="memory-empty">${escapeHtml(m.noHistory)}</li>`}
         </ul>
       </details>
     `;
@@ -223,16 +250,16 @@ export class MemoryInspector {
       return;
     }
     this.setBusy(true);
-    this.setStatus("Saving…");
+    this.setStatus(msg().memory.saving);
     try {
       this.profile = await updateMemoryPreferences(patch);
       this.renderBody();
-      this.setStatus("Saved.");
-      this.onNotify?.({ kind: "ok", text: "Memory preferences saved" });
+      this.setStatus(msg().memory.saved);
+      this.onNotify?.({ kind: "ok", text: msg().memory.savedToast });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      this.setStatus(`Save failed: ${message}`);
-      this.onNotify?.({ kind: "danger", text: `Memory save failed: ${message}` });
+      this.setStatus(t(msg().memory.saveFailed, { message }));
+      this.onNotify?.({ kind: "danger", text: t(msg().memory.saveFailed, { message }) });
     } finally {
       this.setBusy(false);
     }
@@ -240,40 +267,41 @@ export class MemoryInspector {
 
   private async extract(): Promise<void> {
     this.setBusy(true);
-    this.setStatus("Re-learning from history…");
+    this.setStatus(msg().memory.relearning);
     try {
       this.profile = await extractMemoryNow();
       this.renderBody();
-      this.setStatus("Preferences refreshed from history.");
-      this.onNotify?.({ kind: "info", text: "Preferences re-learned from history" });
+      this.setStatus(msg().memory.refreshed);
+      this.onNotify?.({ kind: "info", text: msg().memory.refreshedToast });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      this.setStatus(`Extract failed: ${message}`);
-      this.onNotify?.({ kind: "warn", text: `Memory extract failed: ${message}` });
+      this.setStatus(t(msg().memory.extractFailed, { message }));
+      this.onNotify?.({ kind: "warn", text: t(msg().memory.extractFailed, { message }) });
     } finally {
       this.setBusy(false);
     }
   }
 
   private async clear(historyOnly: boolean): Promise<void> {
-    const label = historyOnly ? "Clear interaction history?" : "Clear all memory (prefs + history)?";
+    const m = msg().memory;
+    const label = historyOnly ? m.confirmHistory : m.confirmAll;
     if (!window.confirm(label)) {
       return;
     }
     this.setBusy(true);
-    this.setStatus(historyOnly ? "Clearing history…" : "Clearing profile…");
+    this.setStatus(historyOnly ? m.clearingHistory : m.clearingProfile);
     try {
       this.profile = await clearMemoryProfile({ historyOnly });
       this.renderBody();
-      this.setStatus(historyOnly ? "History cleared." : "Profile cleared.");
+      this.setStatus(historyOnly ? m.historyCleared : m.profileCleared);
       this.onNotify?.({
         kind: "ok",
-        text: historyOnly ? "Memory history cleared" : "Memory profile cleared",
+        text: historyOnly ? m.historyClearedToast : m.profileClearedToast,
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      this.setStatus(`Clear failed: ${message}`);
-      this.onNotify?.({ kind: "danger", text: `Memory clear failed: ${message}` });
+      this.setStatus(t(m.clearFailed, { message }));
+      this.onNotify?.({ kind: "danger", text: t(m.clearFailed, { message }) });
     } finally {
       this.setBusy(false);
     }

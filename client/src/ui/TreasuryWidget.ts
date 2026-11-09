@@ -2,6 +2,7 @@
  * Gen-1 tactical treasury / tokenomics HUD card.
  */
 
+import { msg, t } from "../i18n";
 import type { BillingConfig } from "../services/BillingService";
 import { formatPrice } from "../services/BillingService";
 import {
@@ -35,23 +36,28 @@ export class TreasuryWidget {
   private fiatEl: HTMLElement | null = null;
   private addrEl: HTMLElement | null = null;
   private splitEl: HTMLElement | null = null;
+  private titleEl: HTMLElement | null = null;
+  private lastBalance: TreasuryBalanceResult | null = null;
+  private lastSyncState: "online" | "offline" | "reconnecting" | null = null;
 
   constructor(private readonly root: HTMLElement) {
     this.root.classList.add("treasury-card");
+    const tr = msg().treasury;
     this.root.innerHTML = `
       <div class="treasury-head">
-        <span class="treasury-title">TREASURY</span>
-        <span class="treasury-sync" data-role="sync">Blockchain Sync: —</span>
+        <span class="treasury-title" data-role="title">${escapeHtml(tr.title)}</span>
+        <span class="treasury-sync" data-role="sync">${escapeHtml(tr.syncIdle)}</span>
       </div>
       <div class="treasury-addr-row">
         <code class="treasury-addr" data-role="addr" title="${OFFICIAL_TREASURY_WALLET}">${truncateAddress(OFFICIAL_TREASURY_WALLET)}</code>
-        <button type="button" class="treasury-copy" data-role="copy" title="Copy full address">Copy</button>
-        <button type="button" class="treasury-copy" data-role="retry" title="Retry Solana balance">Retry</button>
+        <button type="button" class="treasury-copy" data-role="copy" title="${escapeAttr(tr.copyTitle)}">${escapeHtml(tr.copy)}</button>
+        <button type="button" class="treasury-copy" data-role="retry" title="${escapeAttr(tr.retryTitle)}">${escapeHtml(tr.retry)}</button>
       </div>
-      <p class="treasury-bal" data-role="bal">SOL: —</p>
-      <p class="treasury-fiat" data-role="fiat">Retained fiat: —</p>
-      <p class="treasury-split" data-role="split">Tokenomics: 70% treasury / 30% burn</p>
+      <p class="treasury-bal" data-role="bal">${escapeHtml(t(tr.sol, { value: "—" }))}</p>
+      <p class="treasury-fiat" data-role="fiat">${escapeHtml(tr.retainedFiat)}</p>
+      <p class="treasury-split" data-role="split"></p>
     `;
+    this.titleEl = this.root.querySelector("[data-role=title]");
     this.syncEl = this.root.querySelector("[data-role=sync]");
     this.balEl = this.root.querySelector("[data-role=bal]");
     this.fiatEl = this.root.querySelector("[data-role=fiat]");
@@ -61,10 +67,34 @@ export class TreasuryWidget {
     this.retryBtn = this.root.querySelector("[data-role=retry]");
     this.copyBtn?.addEventListener("click", () => void this.copyAddress());
     this.retryBtn?.addEventListener("click", () => void this.refresh(true));
+    this.renderSplit();
   }
 
   setStatusHandler(handler: TreasuryStatusHandler | null): void {
     this.onStatus = handler;
+  }
+
+  applyLocale(): void {
+    const tr = msg().treasury;
+    if (this.titleEl) this.titleEl.textContent = tr.title;
+    if (this.copyBtn) {
+      this.copyBtn.textContent = tr.copy;
+      this.copyBtn.title = tr.copyTitle;
+    }
+    if (this.retryBtn) {
+      this.retryBtn.textContent = tr.retry;
+      this.retryBtn.title = tr.retryTitle;
+    }
+    if (this.lastSyncState) {
+      this.setSync(this.lastSyncState, syncLabel(this.lastSyncState));
+    } else if (this.syncEl) {
+      this.syncEl.textContent = tr.syncIdle;
+    }
+    if (this.lastBalance) {
+      this.renderBalance(this.lastBalance);
+    }
+    this.renderFiatStub();
+    this.renderSplit();
   }
 
   applyBillingConfig(cfg: BillingConfig): void {
@@ -75,12 +105,7 @@ export class TreasuryWidget {
       this.addrEl.textContent = truncateAddress(this.wallet);
       this.addrEl.setAttribute("title", this.wallet);
     }
-    if (this.splitEl) {
-      const t = Math.round((cfg.treasury_share ?? 0.7) * 100);
-      const b = Math.round((cfg.burn_share ?? 0.3) * 100);
-      const mode = cfg.solana_mode === "stub" ? "stub" : cfg.solana_mode;
-      this.splitEl.textContent = `Tokenomics: ${t}% treasury / ${b}% burn · ${mode}`;
-    }
+    this.renderSplit();
     this.renderFiatStub();
   }
 
@@ -101,16 +126,25 @@ export class TreasuryWidget {
     this.stop();
   }
 
+  private renderSplit(): void {
+    if (!this.splitEl) return;
+    const cfg = this.cfg;
+    const treasury = Math.round((cfg?.treasury_share ?? 0.7) * 100);
+    const burn = Math.round((cfg?.burn_share ?? 0.3) * 100);
+    const mode = cfg?.solana_mode === "stub" ? "stub" : cfg?.solana_mode || "stub";
+    this.splitEl.textContent = t(msg().treasury.tokenomics, { treasury, burn, mode });
+  }
+
   private async refresh(manual = false): Promise<void> {
     if (this.inflight) {
       return;
     }
     this.inflight = true;
-    this.setSync("reconnecting", "Blockchain Sync: Reconnecting…");
+    this.setSync("reconnecting", msg().treasury.syncReconnecting);
     this.balEl?.classList.add("is-loading", "skeleton");
     if (this.retryBtn) {
       this.retryBtn.disabled = true;
-      this.retryBtn.textContent = manual ? "…" : "Retry";
+      this.retryBtn.textContent = manual ? "…" : msg().treasury.retry;
     }
     try {
       const result = await fetchSolBalance(this.wallet, this.rpc);
@@ -147,7 +181,7 @@ export class TreasuryWidget {
       this.inflight = false;
       if (this.retryBtn) {
         this.retryBtn.disabled = false;
-        this.retryBtn.textContent = "Retry";
+        this.retryBtn.textContent = msg().treasury.retry;
       }
     }
   }
@@ -156,32 +190,35 @@ export class TreasuryWidget {
     if (!this.syncEl) {
       return;
     }
+    this.lastSyncState = state;
     this.syncEl.dataset.state = state;
     this.syncEl.textContent = label;
   }
 
   private renderBalance(result: TreasuryBalanceResult): void {
+    this.lastBalance = result;
     if (result.ok && result.online) {
-      this.setSync("online", "Blockchain Sync: Online");
+      this.setSync("online", msg().treasury.syncOnline);
     } else if (result.reconnecting || !result.online) {
-      this.setSync("reconnecting", "Blockchain Sync: Reconnecting…");
+      this.setSync("reconnecting", msg().treasury.syncReconnecting);
     } else {
-      this.setSync("offline", "Blockchain Sync: Offline");
+      this.setSync("offline", msg().treasury.syncOffline);
     }
 
     if (this.balEl) {
       if (result.ok && result.sol != null) {
-        this.balEl.textContent = `SOL: ${result.sol.toLocaleString(undefined, {
+        const value = result.sol.toLocaleString(undefined, {
           minimumFractionDigits: 4,
           maximumFractionDigits: 6,
-        })}`;
+        });
+        this.balEl.textContent = t(msg().treasury.sol, { value });
         this.balEl.title = result.rpc ? `via ${result.rpc}` : "";
       } else {
         const sol = result.sol != null && Number.isFinite(result.sol) ? result.sol : 0;
-        this.balEl.textContent = `SOL: ${sol.toFixed(2)}`;
+        this.balEl.textContent = t(msg().treasury.sol, { value: sol.toFixed(2) });
         this.balEl.title = result.error
-          ? `${result.error} — tap Retry`
-          : "Balance unavailable — tap Retry";
+          ? `${result.error} — ${msg().treasury.retry}`
+          : msg().treasury.balanceUnavailable;
       }
     }
   }
@@ -195,27 +232,45 @@ export class TreasuryWidget {
       Math.round(this.cfg.unit_amount_cents * (this.cfg.treasury_share ?? 0.7)),
       this.cfg.currency,
     );
-    this.fiatEl.textContent =
-      `Retained fiat (plan/stub): ${retained} of ${price}/mo · live ledger TBD`;
+    this.fiatEl.textContent = t(msg().treasury.retainedFiatLive, { retained, price });
   }
 
   private async copyAddress(): Promise<void> {
     const value = OFFICIAL_TREASURY_WALLET;
+    const tr = msg().treasury;
     try {
       await navigator.clipboard.writeText(value);
       if (this.copyBtn) {
-        const prev = this.copyBtn.textContent;
-        this.copyBtn.textContent = "Copied";
+        this.copyBtn.textContent = tr.copied;
         window.setTimeout(() => {
           if (this.copyBtn) {
-            this.copyBtn.textContent = prev || "Copy";
+            this.copyBtn.textContent = msg().treasury.copy;
           }
         }, 1200);
       }
     } catch {
       if (this.copyBtn) {
-        this.copyBtn.textContent = "Fail";
+        this.copyBtn.textContent = tr.copyFail;
       }
     }
   }
+}
+
+function syncLabel(state: "online" | "offline" | "reconnecting"): string {
+  const tr = msg().treasury;
+  if (state === "online") return tr.syncOnline;
+  if (state === "offline") return tr.syncOffline;
+  return tr.syncReconnecting;
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function escapeAttr(value: string): string {
+  return escapeHtml(value).replace(/'/g, "&#39;");
 }

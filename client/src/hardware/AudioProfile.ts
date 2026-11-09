@@ -1,5 +1,6 @@
 /** Earbuds / wearable audio profile + intelligent interruption filtering. */
 
+import { msg } from "../i18n";
 import type { AudioProfileKind, NotificationPriority } from "../types/mobility";
 
 export function cycleAudioProfile(current: AudioProfileKind): AudioProfileKind {
@@ -9,13 +10,14 @@ export function cycleAudioProfile(current: AudioProfileKind): AudioProfileKind {
 }
 
 export function audioProfileLabel(profile: AudioProfileKind): string {
+  const m = msg().mobility;
   switch (profile) {
     case "earbuds":
-      return "EARBUDS";
+      return m.earbuds;
     case "wearable":
-      return "GLASSES";
+      return m.glasses;
     default:
-      return "SPEAKER";
+      return m.speaker;
   }
 }
 

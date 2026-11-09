@@ -2,6 +2,7 @@
  * Local unlock panel: Tool Registry catalog + test routines (HTTP, no payment gate).
  */
 
+import { msg, t } from "../i18n";
 import {
   fetchToolCatalog,
   invokeToolHttp,
@@ -29,14 +30,28 @@ export class DevToolsPanel {
     this.notify = fn;
   }
 
+  applyLocale(): void {
+    const d = msg().devtools;
+    const title = this.mount.querySelector(".devtools-title");
+    const lede = this.mount.querySelector(".devtools-lede");
+    const refresh = this.mount.querySelector("[data-action=reload-tools]");
+    if (title) title.textContent = d.title;
+    if (lede) lede.textContent = d.lede;
+    if (refresh) refresh.textContent = d.refresh;
+    if (this.catalog) {
+      this.statusEl.textContent = t(d.toolsCount, { count: this.catalog.names.length });
+    }
+  }
+
   private renderShell(): void {
+    const d = msg().devtools;
     this.mount.innerHTML = `
       <div class="devtools-panel" data-role="devtools-root">
         <div class="devtools-head">
-          <h3 class="devtools-title">Tool Registry</h3>
-          <button type="button" class="secondary" data-action="reload-tools" data-keep-enabled="true">Refresh</button>
+          <h3 class="devtools-title">${escapeHtml(d.title)}</h3>
+          <button type="button" class="secondary" data-action="reload-tools" data-keep-enabled="true">${escapeHtml(d.refresh)}</button>
         </div>
-        <p class="devtools-lede">Local unlock — all registered tools invocable without payment approval.</p>
+        <p class="devtools-lede">${escapeHtml(d.lede)}</p>
         <ul class="devtools-list" data-role="tool-list"></ul>
         <div class="mobility-row" data-role="test-row">
           ${TEST_ROUTINES.map(
@@ -44,7 +59,7 @@ export class DevToolsPanel {
               `<button type="button" class="secondary" data-action="test-routine" data-routine="${r}" data-keep-enabled="true">${r}</button>`,
           ).join("")}
         </div>
-        <p class="devtools-status" data-role="devtools-status">Loading catalog…</p>
+        <p class="devtools-status" data-role="devtools-status">${escapeHtml(d.loading)}</p>
       </div>
     `;
     this.statusEl = this.mount.querySelector("[data-role=devtools-status]")!;
@@ -75,41 +90,44 @@ export class DevToolsPanel {
   }
 
   private async reload(): Promise<void> {
-    this.statusEl.textContent = "Loading catalog…";
+    const d = msg().devtools;
+    this.statusEl.textContent = d.loading;
     try {
       this.catalog = await fetchToolCatalog();
       this.renderList(this.catalog.names);
-      this.statusEl.textContent = `${this.catalog.names.length} tools · /tools/catalog`;
-      this.notify?.("ok", `Tool catalog: ${this.catalog.names.length}`);
+      this.statusEl.textContent = t(d.toolsCount, { count: this.catalog.names.length });
+      this.notify?.("ok", t(d.catalogOk, { count: this.catalog.names.length }));
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       this.renderList(localToolSchemas().map((s) => s.name));
-      this.statusEl.textContent = `Catalog offline — local schemas shown (${message})`;
-      this.notify?.("warn", `Tool catalog: ${message}`);
+      this.statusEl.textContent = t(d.catalogOffline, { message });
+      this.notify?.("warn", t(d.catalogWarn, { message }));
     }
   }
 
   private async runRoutine(routine: string): Promise<void> {
+    const d = msg().devtools;
     const name = (TEST_ROUTINES as readonly string[]).includes(routine)
       ? (routine as TestRoutine)
       : "health";
-    this.statusEl.textContent = `Running ${name}…`;
+    this.statusEl.textContent = t(d.running, { name });
     try {
       const res = await invokeToolHttp("run_test_routine", { routine: name });
       this.statusEl.textContent = res.ok
-        ? `Test ${name}: ok (${Math.round(res.elapsed_ms ?? 0)}ms)`
-        : `Test ${name}: ${res.error ?? "fail"}`;
+        ? t(d.testOk, { name, ms: Math.round(res.elapsed_ms ?? 0) })
+        : t(d.testFail, { name, error: res.error ?? "fail" });
       this.notify?.(res.ok ? "ok" : "warn", this.statusEl.textContent);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      this.statusEl.textContent = `Test failed: ${message}`;
+      this.statusEl.textContent = t(d.testFailed, { message });
       this.notify?.("danger", message);
     }
   }
 
   private async invokeNamed(name: string): Promise<void> {
     if (!name) return;
-    this.statusEl.textContent = `Invoke ${name}…`;
+    const d = msg().devtools;
+    this.statusEl.textContent = t(d.invoke, { name });
     try {
       let res;
       if (name === "run_test_routine") {
@@ -124,17 +142,17 @@ export class DevToolsPanel {
       } else if (name === "solana_treasury_query") {
         res = await invokeToolHttp("solana_treasury_query", {});
       } else {
-        this.statusEl.textContent = `Unknown tool: ${name}`;
+        this.statusEl.textContent = t(d.unknownTool, { name });
         return;
       }
       const label = name as ToolName;
       this.statusEl.textContent = res.ok
-        ? `${label}: ok (${Math.round(res.elapsed_ms ?? 0)}ms)`
-        : `${label}: ${res.error ?? "fail"}`;
+        ? t(d.invokeOk, { name: label, ms: Math.round(res.elapsed_ms ?? 0) })
+        : t(d.invokeFail, { name: label, error: res.error ?? "fail" });
       this.notify?.(res.ok ? "ok" : "warn", this.statusEl.textContent);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      this.statusEl.textContent = `Invoke failed: ${message}`;
+      this.statusEl.textContent = t(d.invokeFailed, { message });
       this.notify?.("danger", message);
     }
   }

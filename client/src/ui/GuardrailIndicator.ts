@@ -2,13 +2,8 @@
  * Subtle Gen-1 Motor de Segurança status chip for the Live HUD.
  */
 
+import { msg } from "../i18n";
 import type { GuardrailStatus } from "../types/live";
-
-const LABELS: Record<GuardrailStatus, string> = {
-  secure: "SECURE",
-  sanitizing: "SANITIZING",
-  blocked: "BLOCKED",
-};
 
 export class GuardrailIndicator {
   private status: GuardrailStatus = "secure";
@@ -36,15 +31,26 @@ export class GuardrailIndicator {
     this.render();
   }
 
+  applyLocale(): void {
+    this.render();
+  }
+
   private render(): void {
+    const g = msg().guardrail;
+    const label =
+      this.status === "secure"
+        ? g.secure
+        : this.status === "sanitizing"
+          ? g.sanitizing
+          : g.blocked;
     this.el.dataset.state = this.status;
-    this.el.textContent = `GUARDRAIL: ${LABELS[this.status]}`;
+    this.el.textContent = `${g.prefix}: ${label}`;
     this.el.title =
       this.status === "secure"
-        ? "Motor de Segurança — output clean"
+        ? g.titleSecure
         : this.status === "sanitizing"
-          ? "Motor de Segurança — text cleaned before HUD"
-          : "Motor de Segurança — fragment blocked";
+          ? g.titleSanitizing
+          : g.titleBlocked;
   }
 }
 
