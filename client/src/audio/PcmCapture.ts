@@ -96,6 +96,11 @@ export class PcmCapture {
     return this.running;
   }
 
+  /** Live MediaStream for HUD Analyser taps (do not stop tracks externally). */
+  getMediaStream(): MediaStream | null {
+    return this.stream;
+  }
+
   async start(onFrame: PcmFrameHandler): Promise<{ label: string | null }> {
     if (this.running) {
       return { label: this.stream?.getAudioTracks()[0]?.label ?? null };

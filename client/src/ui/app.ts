@@ -15,7 +15,7 @@ import {
   type BillingConfig,
   type EntitlementStatus,
 } from "../services/BillingService";
-import { AudioVisualizer } from "../audio/AudioVisualizer";
+import { AdvancedAudioVisualizer } from "../audio/AdvancedAudioVisualizer";
 import { LatencyMonitor } from "../audio/LatencyMonitor";
 import { GeminiLiveService } from "../services/GeminiLiveService";
 import type { LiveServerJsonEvent, TelemetrySnapshot, WsReadyStateLabel } from "../types/live";
@@ -67,7 +67,7 @@ export class ControlApp {
   private checkoutBusy = false;
   private vizCanvas!: HTMLCanvasElement;
   private latencyEl!: HTMLElement;
-  private visualizer: AudioVisualizer | null = null;
+  private visualizer: AdvancedAudioVisualizer | null = null;
   private latencyMonitor: LatencyMonitor | null = null;
 
   constructor(private readonly root: HTMLElement) {}
@@ -97,7 +97,7 @@ export class ControlApp {
         </div>
         <p class="connection" data-role="status" data-state="CLOSED">CLOSED</p>
         <div class="hud-telemetry" data-role="hud-telemetry">
-          <canvas class="audio-viz" data-role="audio-viz" width="640" height="96" aria-label="Audio visualizer"></canvas>
+          <canvas class="audio-viz" data-role="audio-viz" width="640" height="110" aria-label="Advanced audio visualizer"></canvas>
           <p class="latency" data-role="latency">PING: — | AI: —</p>
         </div>
         <div class="warn" data-role="warn" hidden></div>
@@ -433,7 +433,7 @@ export class ControlApp {
     this.clearWarn();
     this.connectBtn.disabled = true;
 
-    this.visualizer = new AudioVisualizer();
+    this.visualizer = new AdvancedAudioVisualizer();
     this.visualizer.mount(this.vizCanvas);
     this.visualizer.start();
 

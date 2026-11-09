@@ -11,7 +11,7 @@
  *  - mic-fallback hybrid: text chat stays available if capture fails
  */
 
-import type { AudioVisualizer } from "../audio/AudioVisualizer";
+import type { AdvancedAudioVisualizer } from "../audio/AdvancedAudioVisualizer";
 import { FifoRetentionBuffer } from "../audio/FifoRetentionBuffer";
 import { GaplessPcmPlayer } from "../audio/GaplessPcmPlayer";
 import { formatMicError, PcmCapture } from "../audio/PcmCapture";
@@ -25,8 +25,8 @@ export interface GeminiLiveServiceOptions {
   url?: string;
   telemetry?: TelemetryMonitor;
   onEvent?: LiveEventHandler;
-  /** Optional HUD spectrogram/wave — fed mic + playback PCM (non-blocking). */
-  visualizer?: AudioVisualizer | null;
+  /** Optional advanced HUD visualizer (Analyser taps + silent AI spectrum). */
+  visualizer?: AdvancedAudioVisualizer | null;
 }
 
 /** RMS threshold (0–1) to treat a mic flush as the start of a voice cycle. */
@@ -90,7 +90,7 @@ export class GeminiLiveService {
   private reconnectTimer: number | null = null;
   private reconnectAttempt = 0;
   private opening: Promise<void> | null = null;
-  private visualizer: AudioVisualizer | null = null;
+  private visualizer: AdvancedAudioVisualizer | null = null;
   private lastMicEnergyAt = 0;
   private voiceCycleArmed = true;
 
@@ -105,8 +105,11 @@ export class GeminiLiveService {
   }
 
   /** Attach / detach the Gen-1 audio HUD visualizer without reconnecting. */
-  setVisualizer(visualizer: AudioVisualizer | null): void {
+  setVisualizer(visualizer: AdvancedAudioVisualizer | null): void {
     this.visualizer = visualizer;
+    if (visualizer && this.micEnabled) {
+      void visualizer.connectMicStream(this.capture.getMediaStream());
+    }
   }
 
   getMicLabel(): string | null {
@@ -164,6 +167,8 @@ export class GeminiLiveService {
     this.telemetry.setPlaybackQueueDepth(0);
     this.telemetry.clearAiCycle();
     this.voiceCycleArmed = true;
+    void this.visualizer?.connectMicStream(null);
+    this.visualizer?.setMode("idle");
     this.detachAndCloseSocket();
     this.telemetry.setWsState("CLOSED");
   }
@@ -171,6 +176,7 @@ export class GeminiLiveService {
   sendText(text: string): void {
     const t = performance.now();
     this.telemetry.markOutbound(t);
+    this.visualizer?.setMode("processing");
     this.sendJson({ type: "text", text, client_t: t });
   }
 
@@ -271,22 +277,24 @@ export class GeminiLiveService {
       const { label } = await this.capture.start((pcm) => {
         this.fifo.push(pcm);
         this.telemetry.setFifo(this.fifo.stats());
-        try {
-          this.visualizer?.pushMicPcm(pcm);
-        } catch {
-          // visualizer must never break capture
-        }
         this.maybeMarkVoiceOutbound(pcm);
       });
       this.micLabel = label;
       this.micEnabled = true;
       this.startFlushLoop();
+      try {
+        await this.visualizer?.connectMicStream(this.capture.getMediaStream());
+        this.visualizer?.setMode("listening");
+      } catch (vizErr) {
+        console.warn("[aether] visualizer mic tap failed", vizErr);
+      }
     } catch (err) {
       // Keep the Live WebSocket open for typed text (and any playback).
       this.micWarning = formatMicError(err);
       console.warn("[aether] mic capture unavailable; text chat still active", err);
       this.capture.stop();
       this.stopFlushLoop();
+      void this.visualizer?.connectMicStream(null);
     }
   }
 
@@ -417,6 +425,7 @@ export class GeminiLiveService {
     }
     this.voiceCycleArmed = false;
     this.telemetry.markOutbound(now);
+    this.visualizer?.setMode("processing");
   }
 
   private stopFlushLoop(): void {
@@ -440,9 +449,10 @@ export class GeminiLiveService {
       this.telemetry.markAiFirstChunk();
       this.voiceCycleArmed = true;
       try {
+        this.visualizer?.setMode("speaking");
         this.visualizer?.pushPlayPcm(event.data);
       } catch {
-        // ignore viz errors
+        // ignore viz errors — never block playback/WS
       }
       try {
         await this.player.ensureStarted();
@@ -485,12 +495,14 @@ export class GeminiLiveService {
     if (parsed.type === "aether_transcript") {
       this.telemetry.markAiFirstChunk();
       this.voiceCycleArmed = true;
+      this.visualizer?.setMode("speaking");
     }
 
     if (parsed.type === "interrupted") {
       this.player.interrupt();
       this.telemetry.clearAiCycle();
       this.voiceCycleArmed = true;
+      this.visualizer?.setMode(this.micEnabled ? "listening" : "idle");
       try {
         await this.player.ensureStarted();
       } catch {
@@ -500,6 +512,7 @@ export class GeminiLiveService {
 
     if (parsed.type === "turn_complete") {
       this.voiceCycleArmed = true;
+      this.visualizer?.setMode(this.micEnabled ? "listening" : "idle");
     }
 
     this.onEvent?.(parsed);
