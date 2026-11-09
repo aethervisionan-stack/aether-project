@@ -103,7 +103,7 @@ class Settings(BaseSettings):
         return bool(self.gemini_api_key.strip())
 
     def has_stripe(self) -> bool:
-        """True only for a real-looking secret — placeholders do not enable live Stripe."""
+        """True for a real-looking secret (sk_test_ or sk_live_). Placeholders do not count."""
         key = self.stripe_secret_key.strip()
         if not key:
             return False
@@ -117,9 +117,51 @@ class Settings(BaseSettings):
             return False
         return key.startswith("sk_test_") or key.startswith("sk_live_")
 
+    def stripe_mode(self) -> str:
+        """
+        Public mode label derived from STRIPE_SECRET_KEY alone (no code change to flip).
+        - off: missing / placeholder
+        - test: sk_test_
+        - live: sk_live_ (paste after MEI / production keys are ready — do not invent)
+        """
+        if not self.has_stripe():
+            return "off"
+        key = self.stripe_secret_key.strip()
+        if key.startswith("sk_live_"):
+            return "live"
+        return "test"
+
+    def publishable_key_public(self) -> str | None:
+        """
+        Only expose a real-looking publishable key to the client.
+        Incomplete placeholders like `pk_test_` stay hidden — Session.create does not need them.
+        """
+        if not self.has_stripe():
+            return None
+        pk = self.stripe_publishable_key.strip()
+        if not pk:
+            return None
+        lowered = pk.lower()
+        if (
+            "placeholder" in lowered
+            or "replace_me" in lowered
+            or "not_a_real" in lowered
+            or pk.endswith("...")
+            or pk in {"pk_test_", "pk_live_"}
+            or len(pk) < 20
+        ):
+            return None
+        if not (pk.startswith("pk_test_") or pk.startswith("pk_live_")):
+            return None
+        return pk
+
     def stripe_mock_checkout_enabled(self) -> bool:
         """Local/dev fallback when no real Stripe secret is configured."""
         return (not self.has_stripe()) and bool(self.billing_dev_unlock)
+
+    def billing_dev_tools_enabled(self) -> bool:
+        """Reset / local tools — allowed with test Stripe when BILLING_DEV_UNLOCK=true."""
+        return bool(self.billing_dev_unlock)
 
     def solana_live_transfers_enabled(self) -> bool:
         """Real on-chain transfers require an explicit payer secret (never invent one)."""

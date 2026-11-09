@@ -49,13 +49,14 @@ async def billing_config() -> dict[str, Any]:
     price = expected_price(settings)
     return {
         "stripe_configured": settings.has_stripe(),
+        # off | test | live — flips only by swapping STRIPE_SECRET_KEY in .env
+        "stripe_mode": settings.stripe_mode(),
         "mock_checkout": settings.stripe_mock_checkout_enabled(),
-        "publishable_key": (
-            settings.stripe_publishable_key.strip()
-            if settings.has_stripe()
-            else None
-        ),
+        "publishable_key": settings.publishable_key_public(),
+        # Simulate unlock only when Stripe secret is absent (mock path).
         "dev_unlock_enabled": bool(settings.billing_dev_unlock) and not settings.has_stripe(),
+        # Reset subscription stays available with sk_test_ when BILLING_DEV_UNLOCK=true.
+        "dev_tools_enabled": settings.billing_dev_tools_enabled(),
         "solana_mode": (
             "live_prepared"
             if settings.solana_live_transfers_enabled()

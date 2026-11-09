@@ -113,12 +113,23 @@ Traditional **card** checkout unlocks the Gen-1 Live HUD — no crypto wallet re
 
 Leave `STRIPE_*` empty and keep `BILLING_DEV_UNLOCK=true`. The UI shows **Simulate unlock**, which grants access and runs the Solana job in **stub** mode.
 
-### Enable real Stripe
+### Enable real Stripe (test)
 
 1. Copy a real `STRIPE_SECRET_KEY` (`sk_test_…`) into `backend/.env` (never commit it). Mock Checkout turns off automatically. Publishable key is not required for hosted Checkout redirect.
 2. `stripe listen --forward-to localhost:8000/billing/webhook` and set `STRIPE_WEBHOOK_SECRET`.
 3. Restart uvicorn. Client **Subscribe** redirects to Stripe-hosted Checkout (`checkout.stripe.com`).
 4. Checkout uses `billing_address_collection=auto` and **no** `shipping_address_collection` / `allowed_countries` allowlist, so the country/region selector stays global (United States included). TEMP TEST amount stays **R$0,01 BRL** — US/international cards work via issuer FX; we do not invent multi-currency Prices.
+
+### Flip test → live (`.env` only — no code changes)
+
+Waiting on MEI fiscal docs before pasting production keys. When ready:
+
+1. In `backend/.env` replace `STRIPE_SECRET_KEY=sk_test_…` with your real `sk_live_…` (never invent keys; never commit).
+2. Optionally set `STRIPE_PUBLISHABLE_KEY=pk_live_…` (only needed for Stripe.js / Elements — hosted Checkout redirect works with secret alone).
+3. Set production `STRIPE_WEBHOOK_SECRET=whsec_…` for the live webhook endpoint.
+4. Restore official pricing (example): `STRIPE_CURRENCY=usd`, `STRIPE_UNIT_AMOUNT_CENTS=1999`, `STRIPE_FORCE_UNIT_AMOUNT=false`, optional `STRIPE_PRICE_ID=price_…`.
+5. Set `BILLING_DEV_UNLOCK=false` for production.
+6. Restart uvicorn. `/billing/config` reports `stripe_mode: "live"` (vs `"test"` / `"off"`). No app code edits required.
 
 ### Enable real Solana transfers
 

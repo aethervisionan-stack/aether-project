@@ -92,10 +92,22 @@ button.subscribe-cta:disabled {
 }
 
 .access {
-  margin: 0 0 0.85rem;
+  margin: 0 0 0.35rem;
   font-size: 0.9rem;
   font-weight: 600;
   color: var(--text);
+}
+
+.access-meta {
+  margin: 0 0 0.85rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.access-meta[hidden] {
+  display: none;
 }
 
 .tokenomics {

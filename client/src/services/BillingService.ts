@@ -7,10 +7,14 @@ const SUBSCRIBER_KEY = "aether.subscriber_id";
 
 export interface BillingConfig {
   stripe_configured: boolean;
+  /** off | test | live — derived from STRIPE_SECRET_KEY alone */
+  stripe_mode?: "off" | "test" | "live" | string;
   /** Local mock Checkout when real Stripe keys are absent */
   mock_checkout?: boolean;
   publishable_key: string | null;
   dev_unlock_enabled: boolean;
+  /** Reset / local tools (BILLING_DEV_UNLOCK) — may stay on with sk_test_ */
+  dev_tools_enabled?: boolean;
   solana_mode: string;
   treasury_share: number;
   burn_share: number;
@@ -198,5 +202,31 @@ export function formatPrice(cents: number, currency: string): string {
     }).format(cents / 100);
   } catch {
     return `$${(cents / 100).toFixed(2)}`;
+  }
+}
+
+/** Short stable id for HUD (keeps localStorage value intact). */
+export function shortenSubscriberId(id: string | null | undefined): string {
+  const raw = (id ?? "").trim();
+  if (!raw) {
+    return "—";
+  }
+  if (raw.length <= 18) {
+    return raw;
+  }
+  return `${raw.slice(0, 10)}…${raw.slice(-6)}`;
+}
+
+export function formatEpochLocal(epochSec: number | null | undefined): string | null {
+  if (epochSec == null || !Number.isFinite(epochSec) || epochSec <= 0) {
+    return null;
+  }
+  try {
+    return new Intl.DateTimeFormat(undefined, {
+      dateStyle: "medium",
+      timeStyle: "short",
+    }).format(new Date(epochSec * 1000));
+  } catch {
+    return new Date(epochSec * 1000).toISOString();
   }
 }

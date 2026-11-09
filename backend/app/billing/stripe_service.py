@@ -153,8 +153,6 @@ def create_checkout_session(settings: Settings) -> dict[str, Any]:
     )
     # Session.create only needs STRIPE_SECRET_KEY. Publishable key is optional
     # (used by Stripe.js / Elements, not by hosted Checkout redirect).
-    pk = settings.stripe_publishable_key.strip()
-    pk_ok = bool(pk) and not pk.endswith("_") and "placeholder" not in pk.lower()
     return {
         "id": session.id,
         "url": checkout_url,
@@ -163,7 +161,8 @@ def create_checkout_session(settings: Settings) -> dict[str, Any]:
         "unit_amount_cents": price["unit_amount_cents"],
         "temp_test": price["temp_test"],
         "mock": False,
-        "publishable_key_configured": pk_ok,
+        "stripe_mode": settings.stripe_mode(),
+        "publishable_key_configured": settings.publishable_key_public() is not None,
     }
 
 

@@ -4,13 +4,16 @@ import {
   devUnlock,
   fetchBillingConfig,
   fetchEntitlement,
+  formatEpochLocal,
   formatPrice,
   loadSubscriberId,
   readCheckoutReturn,
   resetSubscription,
   saveSubscriberId,
+  shortenSubscriberId,
   startCheckout,
   type BillingConfig,
+  type EntitlementStatus,
 } from "../services/BillingService";
 import { GeminiLiveService } from "../services/GeminiLiveService";
 import type { LiveServerJsonEvent, TelemetrySnapshot, WsReadyStateLabel } from "../types/live";
@@ -46,6 +49,7 @@ export class ControlApp {
   private billingConfig: BillingConfig | null = null;
   private statusEl!: HTMLElement;
   private accessEl!: HTMLElement;
+  private accessMetaEl!: HTMLElement;
   private warnEl!: HTMLElement;
   private logEl!: HTMLElement;
   private livePanel!: HTMLElement;
@@ -70,6 +74,7 @@ export class ControlApp {
         <h2 class="subscribe-title">Subscription</h2>
         <p class="subscribe-lede">Monthly access — card checkout, no wallet required.</p>
         <p class="access" data-role="access">Checking access…</p>
+        <p class="access-meta" data-role="access-meta" hidden></p>
         <div class="controls subscribe-actions">
           <button type="button" class="subscribe-cta" data-action="subscribe">Subscribe</button>
           <button type="button" class="secondary" data-action="reset-sub">Reset subscription</button>
@@ -97,6 +102,7 @@ export class ControlApp {
     this.subscribeSection = this.root.querySelector("[data-role=subscribe]")!;
     this.statusEl = this.root.querySelector("[data-role=status]")!;
     this.accessEl = this.root.querySelector("[data-role=access]")!;
+    this.accessMetaEl = this.root.querySelector("[data-role=access-meta]")!;
     this.warnEl = this.root.querySelector("[data-role=warn]")!;
     this.logEl = this.root.querySelector("[data-role=log]")!;
     this.livePanel = this.root.querySelector("[data-role=live-panel]")!;
@@ -141,8 +147,11 @@ export class ControlApp {
 
       const localSim =
         this.billingConfig.dev_unlock_enabled || this.billingConfig.mock_checkout;
-      this.devBtn.hidden = !localSim;
-      this.resetBtn.hidden = !localSim;
+      const devTools =
+        Boolean(this.billingConfig.dev_tools_enabled) || localSim;
+      this.devBtn.hidden = !this.billingConfig.dev_unlock_enabled;
+      // Keep Reset available under sk_test_ when BILLING_DEV_UNLOCK=true.
+      this.resetBtn.hidden = !devTools;
 
       if (!canCheckout(this.billingConfig)) {
         this.accessEl.textContent =
@@ -153,9 +162,11 @@ export class ControlApp {
       // Keep CTA visible even if /billing/config fails (mock path still attempted on click).
       this.billingConfig = {
         stripe_configured: false,
+        stripe_mode: "off",
         mock_checkout: true,
         publishable_key: null,
         dev_unlock_enabled: true,
+        dev_tools_enabled: true,
         solana_mode: "stub",
         treasury_share: 0.7,
         burn_share: 0.3,
@@ -204,6 +215,7 @@ export class ControlApp {
     const id = loadSubscriberId();
     if (!id) {
       this.setEntitled(false);
+      this.clearAccessMeta();
       if (
         !this.accessEl.textContent?.startsWith("Billing") &&
         !this.accessEl.textContent?.startsWith("Checkout") &&
@@ -216,18 +228,64 @@ export class ControlApp {
 
     try {
       const status = await fetchEntitlement(id);
-      if (status.active) {
-        saveSubscriberId(status.subscriber_id || id);
-        this.setEntitled(true);
-        this.accessEl.textContent = "Access active — Live unlocked. You can still re-test Subscribe.";
-      } else {
-        this.setEntitled(false);
-        this.accessEl.textContent = "Subscribe to unlock Live HUD + chat.";
-      }
+      const canonical = status.subscriber_id || id;
+      saveSubscriberId(canonical);
+      this.setEntitled(Boolean(status.active));
+      this.renderAccessGate(status);
     } catch {
       this.setEntitled(false);
       this.accessEl.textContent = "Could not verify access — Subscribe remains available.";
+      this.setAccessMeta(`Stored session ${shortenSubscriberId(id)} (verify failed)`);
     }
+  }
+
+  private renderAccessGate(status: EntitlementStatus): void {
+    const shortId = shortenSubscriberId(status.subscriber_id);
+    const until = formatEpochLocal(status.expires_at);
+    const granted = formatEpochLocal(status.granted_at);
+    const expired =
+      status.expires_at != null &&
+      Number.isFinite(status.expires_at) &&
+      status.expires_at * 1000 < Date.now();
+
+    if (status.active) {
+      this.accessEl.textContent = "Access active — Live unlocked.";
+      const parts = [
+        status.source ? `source ${status.source}` : null,
+        until ? `until ${until}` : null,
+        granted ? `granted ${granted}` : null,
+        `id ${shortId}`,
+      ].filter(Boolean);
+      this.setAccessMeta(parts.join(" · "));
+      return;
+    }
+
+    if (expired) {
+      this.accessEl.textContent = "Access expired — Subscribe again to unlock Live.";
+      this.setAccessMeta(
+        [until ? `expired ${until}` : null, status.source ? `was ${status.source}` : null, `id ${shortId}`]
+          .filter(Boolean)
+          .join(" · "),
+      );
+      return;
+    }
+
+    this.accessEl.textContent = "Subscribe to unlock Live HUD + chat.";
+    this.setAccessMeta(`Stored session ${shortId} (inactive)`);
+  }
+
+  private setAccessMeta(text: string | null): void {
+    if (!text) {
+      this.clearAccessMeta();
+      return;
+    }
+    this.accessMetaEl.hidden = false;
+    this.accessMetaEl.textContent = text;
+  }
+
+  private clearAccessMeta(): void {
+    this.accessMetaEl.hidden = true;
+    this.accessMetaEl.textContent = "";
   }
 
   private setEntitled(active: boolean): void {
@@ -297,6 +355,7 @@ export class ControlApp {
       await resetSubscription(loadSubscriberId());
       clearSubscriberId();
       this.setEntitled(false);
+      this.clearAccessMeta();
       this.accessEl.textContent = "Blocked — Subscribe again to unlock.";
       this.setProcess("Subscription reset. HUD is locked.");
       this.renderSubscribeCta();
@@ -304,6 +363,7 @@ export class ControlApp {
       // Still clear local state so the user is not stuck unlocked.
       clearSubscriberId();
       this.setEntitled(false);
+      this.clearAccessMeta();
       const message = err instanceof Error ? err.message : String(err);
       this.accessEl.textContent = `Reset forced locally (${message}).`;
       this.setProcess("Local lock applied.");
@@ -317,7 +377,7 @@ export class ControlApp {
       this.setProcess("Simulating unlock…");
       const status = await devUnlock();
       this.setEntitled(Boolean(status.active));
-      this.accessEl.textContent = "Access active (local simulate)";
+      this.renderAccessGate(status);
       this.setProcess(null);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -363,7 +423,12 @@ export class ControlApp {
       this.connectBtn.disabled = false;
       const message = err instanceof Error ? err.message : String(err);
       this.setConnection("CLOSED");
-      this.showWarn(message);
+      const hint = /websocket|network|failed to fetch|econnrefused/i.test(message)
+        ? " Check backend :8000 and Vite /api proxy."
+        : /mic|device|permission|NotFoundError|NotAllowedError/i.test(message)
+          ? " Mic blocked — text chat may still work after a successful connect."
+          : "";
+      this.showWarn(`Connect Live failed: ${message}.${hint}`);
       await this.service.disconnect();
       this.service = null;
     }
