@@ -65,6 +65,12 @@ class Settings(BaseSettings):
 
     # Local Gen-1 bypass when Stripe keys are absent (never enable in production).
     billing_dev_unlock: bool = Field(default=True, alias="BILLING_DEV_UNLOCK")
+    # TEMP: skip subscription paywall for AI/Live testing. Keep false once sk_live_ is live.
+    # Real Stripe Checkout + entitlement validation remain intact when this is false.
+    bypass_subscription_check: bool = Field(
+        default=False,
+        alias="BYPASS_SUBSCRIPTION_CHECK",
+    )
 
     # --- Solana tokenomics (70% treasury / 30% burn) ---
     treasury_wallet_address: str = Field(
@@ -162,6 +168,10 @@ class Settings(BaseSettings):
     def billing_dev_tools_enabled(self) -> bool:
         """Reset / local tools — allowed with test Stripe when BILLING_DEV_UNLOCK=true."""
         return bool(self.billing_dev_unlock)
+
+    def subscription_check_bypassed(self) -> bool:
+        """TEMP AI-test paywall skip — re-enable by setting BYPASS_SUBSCRIPTION_CHECK=false."""
+        return bool(self.bypass_subscription_check)
 
     def solana_live_transfers_enabled(self) -> bool:
         """Real on-chain transfers require an explicit payer secret (never invent one)."""

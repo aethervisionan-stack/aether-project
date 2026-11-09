@@ -57,6 +57,8 @@ async def billing_config() -> dict[str, Any]:
         "dev_unlock_enabled": bool(settings.billing_dev_unlock) and not settings.has_stripe(),
         # Reset subscription stays available with sk_test_ when BILLING_DEV_UNLOCK=true.
         "dev_tools_enabled": settings.billing_dev_tools_enabled(),
+        # TEMP AI testing: Live/HUD unlocked without Subscribe when true.
+        "bypass_subscription_check": settings.subscription_check_bypassed(),
         "solana_mode": (
             "live_prepared"
             if settings.solana_live_transfers_enabled()
@@ -100,7 +102,23 @@ async def start_checkout(background_tasks: BackgroundTasks) -> dict[str, Any]:
 
 
 @router.get("/entitlement")
-async def entitlement_status(subscriber_id: str) -> dict[str, Any]:
+async def entitlement_status(subscriber_id: str = "") -> dict[str, Any]:
+    """
+    Gen-1 access probe. When BYPASS_SUBSCRIPTION_CHECK=true, always returns granted
+    so Live/AI testing works without Subscribe. Real store validation remains when false.
+    """
+    settings = get_settings()
+    if settings.subscription_check_bypassed():
+        sid = (subscriber_id or "").strip() or "bypass_local"
+        return {
+            "subscriber_id": sid,
+            "active": True,
+            "source": "bypass_subscription_check",
+            "email": None,
+            "expires_at": None,
+            "granted_at": None,
+            "bypassed": True,
+        }
     store = get_entitlement_store()
     return store.status(subscriber_id)
 

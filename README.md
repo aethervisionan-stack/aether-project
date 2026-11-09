@@ -84,6 +84,7 @@ Open [http://127.0.0.1:5173](http://127.0.0.1:5173), pair a Bluetooth headset as
 | `STRIPE_UNIT_AMOUNT_CENTS` | `backend/.env` | **TEMP TEST:** `1` = R$0,01 (restore e.g. `1999`) |
 | `STRIPE_FORCE_UNIT_AMOUNT` | `backend/.env` | **TEMP TEST:** `true` forces dynamic price_data |
 | `BILLING_DEV_UNLOCK` | `backend/.env` | Local simulate unlock when Stripe unset |
+| `BYPASS_SUBSCRIPTION_CHECK` | `backend/.env` | **TEMP:** `true` unlocks Live/AI without Subscribe (set `false` before `sk_live_`) |
 | `TREASURY_WALLET_ADDRESS` | `backend/.env` | 70% Solana destination |
 | `VISION_BURN_ADDRESS` | `backend/.env` | 30% burn destination |
 | `VISION_MINT_ADDRESS` | `backend/.env` | VISION mint |
@@ -112,6 +113,10 @@ Traditional **card** checkout unlocks the Gen-1 Live HUD — no crypto wallet re
 ### Local without Stripe keys
 
 Leave `STRIPE_*` empty and keep `BILLING_DEV_UNLOCK=true`. The UI shows **Simulate unlock**, which grants access and runs the Solana job in **stub** mode.
+
+### TEMP: bypass subscription paywall (AI testing)
+
+Set `BYPASS_SUBSCRIPTION_CHECK=true` in `backend/.env` and restart uvicorn. The HUD unlocks Connect Live + chat without Subscribe; `/billing/entitlement` returns granted. Stripe Checkout routes stay in place — flip the flag to `false` when `sk_live_` arrives to restore the real paywall.
 
 ### Enable real Stripe (test)
 

@@ -153,7 +153,10 @@ export class ControlApp {
       // Keep Reset available under sk_test_ when BILLING_DEV_UNLOCK=true.
       this.resetBtn.hidden = !devTools;
 
-      if (!canCheckout(this.billingConfig)) {
+      if (this.billingConfig.bypass_subscription_check) {
+        tokenomicsEl.textContent =
+          `${tokenomicsEl.textContent} Paywall bypassed for AI testing (BYPASS_SUBSCRIPTION_CHECK).`;
+      } else if (!canCheckout(this.billingConfig)) {
         this.accessEl.textContent =
           "Billing API reachable but checkout flags are off — check BILLING_DEV_UNLOCK.";
       }
@@ -167,6 +170,7 @@ export class ControlApp {
         publishable_key: null,
         dev_unlock_enabled: true,
         dev_tools_enabled: true,
+        bypass_subscription_check: false,
         solana_mode: "stub",
         treasury_share: 0.7,
         burn_share: 0.3,
@@ -212,6 +216,14 @@ export class ControlApp {
   }
 
   private async refreshEntitlement(): Promise<void> {
+    // TEMP AI testing: unlock Live/chat without Stripe when backend flag is on.
+    if (this.billingConfig?.bypass_subscription_check) {
+      this.setEntitled(true);
+      this.accessEl.textContent = "Access active — paywall bypassed for AI testing.";
+      this.setAccessMeta("BYPASS_SUBSCRIPTION_CHECK=true · Stripe structure kept · set false to re-enable paywall");
+      return;
+    }
+
     const id = loadSubscriberId();
     if (!id) {
       this.setEntitled(false);
@@ -354,19 +366,30 @@ export class ControlApp {
       await this.disconnect();
       await resetSubscription(loadSubscriberId());
       clearSubscriberId();
-      this.setEntitled(false);
-      this.clearAccessMeta();
-      this.accessEl.textContent = "Blocked — Subscribe again to unlock.";
-      this.setProcess("Subscription reset. HUD is locked.");
+      if (this.billingConfig?.bypass_subscription_check) {
+        // Paywall still bypassed — keep Live available for AI testing.
+        await this.refreshEntitlement();
+        this.setProcess("Local entitlement cleared; paywall bypass still active.");
+      } else {
+        this.setEntitled(false);
+        this.clearAccessMeta();
+        this.accessEl.textContent = "Blocked — Subscribe again to unlock.";
+        this.setProcess("Subscription reset. HUD is locked.");
+      }
       this.renderSubscribeCta();
     } catch (err) {
       // Still clear local state so the user is not stuck unlocked.
       clearSubscriberId();
-      this.setEntitled(false);
-      this.clearAccessMeta();
-      const message = err instanceof Error ? err.message : String(err);
-      this.accessEl.textContent = `Reset forced locally (${message}).`;
-      this.setProcess("Local lock applied.");
+      if (this.billingConfig?.bypass_subscription_check) {
+        await this.refreshEntitlement();
+        this.setProcess("Local lock skipped — paywall bypass active.");
+      } else {
+        this.setEntitled(false);
+        this.clearAccessMeta();
+        const message = err instanceof Error ? err.message : String(err);
+        this.accessEl.textContent = `Reset forced locally (${message}).`;
+        this.setProcess("Local lock applied.");
+      }
     } finally {
       this.resetBtn.disabled = false;
     }
