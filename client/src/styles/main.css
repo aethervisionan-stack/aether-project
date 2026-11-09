@@ -47,12 +47,37 @@ body {
 
 .subscribe {
   margin-bottom: 1.75rem;
+  padding: 1.1rem 1.15rem 1.2rem;
+  border: 1px solid rgba(0, 240, 255, 0.35);
+  background: rgba(0, 240, 255, 0.06);
+}
+
+.subscribe-title {
+  margin: 0 0 0.35rem;
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
 }
 
 .subscribe-lede {
   margin: 0 0 0.5rem;
   color: var(--muted);
   font-size: 0.95rem;
+}
+
+.subscribe-actions {
+  margin-top: 0.85rem;
+}
+
+button.subscribe-cta {
+  min-width: 12rem;
+  font-size: 1rem;
+  padding: 0.85rem 1.25rem;
+}
+
+button.subscribe-cta:disabled {
+  opacity: 0.7;
 }
 
 .access {

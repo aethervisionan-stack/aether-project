@@ -29,6 +29,14 @@ function connectionLabel(state: WsReadyStateLabel): string {
   }
 }
 
+function canCheckout(cfg: BillingConfig | null): boolean {
+  if (!cfg) {
+    // Optimistic local-dev default so the CTA never vanishes if /billing/config flakes.
+    return true;
+  }
+  return Boolean(cfg.stripe_configured || cfg.mock_checkout || cfg.dev_unlock_enabled);
+}
+
 export class ControlApp {
   private service: GeminiLiveService | null = null;
   private connected = false;
@@ -39,9 +47,11 @@ export class ControlApp {
   private warnEl!: HTMLElement;
   private logEl!: HTMLElement;
   private livePanel!: HTMLElement;
+  private subscribeSection!: HTMLElement;
   private connectBtn!: HTMLButtonElement;
   private disconnectBtn!: HTMLButtonElement;
   private subscribeBtn!: HTMLButtonElement;
+  private devBtn!: HTMLButtonElement;
   private textInput!: HTMLInputElement;
   private sendBtn!: HTMLButtonElement;
 
@@ -52,11 +62,12 @@ export class ControlApp {
       <h1 class="brand">Aether <span>Vision</span></h1>
 
       <section class="subscribe" data-role="subscribe">
+        <h2 class="subscribe-title">Subscription</h2>
         <p class="subscribe-lede">Monthly access — card checkout, no wallet required.</p>
         <p class="access" data-role="access">Checking access…</p>
-        <div class="controls">
-          <button type="button" data-action="subscribe">Subscribe</button>
-          <button type="button" class="secondary" data-action="dev-unlock" hidden>Simulate unlock</button>
+        <div class="controls subscribe-actions">
+          <button type="button" class="subscribe-cta" data-action="subscribe">Subscribe</button>
+          <button type="button" class="secondary" data-action="dev-unlock">Simulate unlock</button>
         </div>
         <p class="tokenomics" data-role="tokenomics"></p>
       </section>
@@ -76,6 +87,7 @@ export class ControlApp {
       </section>
     `;
 
+    this.subscribeSection = this.root.querySelector("[data-role=subscribe]")!;
     this.statusEl = this.root.querySelector("[data-role=status]")!;
     this.accessEl = this.root.querySelector("[data-role=access]")!;
     this.warnEl = this.root.querySelector("[data-role=warn]")!;
@@ -84,15 +96,20 @@ export class ControlApp {
     this.connectBtn = this.root.querySelector("[data-action=connect]")!;
     this.disconnectBtn = this.root.querySelector("[data-action=disconnect]")!;
     this.subscribeBtn = this.root.querySelector("[data-action=subscribe]")!;
+    this.devBtn = this.root.querySelector("[data-action=dev-unlock]")!;
     this.textInput = this.root.querySelector("[data-role=text]")!;
     this.sendBtn = this.root.querySelector("[data-action=send-text]")!;
-    const devBtn = this.root.querySelector<HTMLButtonElement>("[data-action=dev-unlock]")!;
     const tokenomicsEl = this.root.querySelector<HTMLElement>("[data-role=tokenomics]")!;
+
+    // Never hide the payment block in Gen-1 local HUD.
+    this.subscribeSection.hidden = false;
+    this.subscribeBtn.hidden = false;
+    this.subscribeBtn.disabled = false;
 
     this.connectBtn.addEventListener("click", () => void this.connect());
     this.disconnectBtn.addEventListener("click", () => void this.disconnect());
     this.subscribeBtn.addEventListener("click", () => void this.subscribe());
-    devBtn.addEventListener("click", () => void this.simulateUnlock());
+    this.devBtn.addEventListener("click", () => void this.simulateUnlock());
     this.sendBtn.addEventListener("click", () => this.sendText());
     this.textInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
@@ -100,32 +117,46 @@ export class ControlApp {
       }
     });
 
-    void this.bootstrapBilling(devBtn, tokenomicsEl);
+    void this.bootstrapBilling(tokenomicsEl);
   }
 
-  private async bootstrapBilling(
-    devBtn: HTMLButtonElement,
-    tokenomicsEl: HTMLElement,
-  ): Promise<void> {
+  private async bootstrapBilling(tokenomicsEl: HTMLElement): Promise<void> {
     try {
       this.billingConfig = await fetchBillingConfig();
-      const price = formatPrice(
-        this.billingConfig.unit_amount_cents,
-        this.billingConfig.currency,
-      );
-      this.subscribeBtn.textContent = `Subscribe — ${price}/mo`;
+      this.renderSubscribeCta();
       tokenomicsEl.textContent =
         `Card payments auto-split on Solana: ${Math.round(this.billingConfig.treasury_share * 100)}% treasury / ` +
         `${Math.round(this.billingConfig.burn_share * 100)}% burn` +
         (this.billingConfig.solana_mode === "stub" ? " (stub mode locally)." : ".");
-      devBtn.hidden = !this.billingConfig.dev_unlock_enabled;
-      if (!this.billingConfig.stripe_configured && !this.billingConfig.dev_unlock_enabled) {
-        this.subscribeBtn.disabled = true;
-        this.accessEl.textContent = "Billing is not configured.";
+
+      const localSim =
+        this.billingConfig.dev_unlock_enabled || this.billingConfig.mock_checkout;
+      this.devBtn.hidden = !localSim;
+
+      if (!canCheckout(this.billingConfig)) {
+        this.accessEl.textContent =
+          "Billing API reachable but checkout flags are off — check BILLING_DEV_UNLOCK.";
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      this.accessEl.textContent = `Billing unavailable: ${message}`;
+      // Keep CTA visible even if /billing/config fails (mock path still attempted on click).
+      this.billingConfig = {
+        stripe_configured: false,
+        mock_checkout: true,
+        publishable_key: null,
+        dev_unlock_enabled: true,
+        solana_mode: "stub",
+        treasury_share: 0.7,
+        burn_share: 0.3,
+        unit_amount_cents: 1,
+        currency: "brl",
+        interval: "month",
+        temp_test: true,
+      };
+      this.renderSubscribeCta();
+      this.devBtn.hidden = false;
+      this.accessEl.textContent = `Billing config error (CTA still available): ${message}`;
+      tokenomicsEl.textContent = "Local mock checkout enabled after config error.";
     }
 
     const ret = readCheckoutReturn();
@@ -143,12 +174,29 @@ export class ControlApp {
     await this.refreshEntitlement();
   }
 
+  private renderSubscribeCta(): void {
+    this.subscribeSection.hidden = false;
+    this.subscribeBtn.hidden = false;
+    this.subscribeBtn.disabled = false;
+    const cfg = this.billingConfig;
+    if (!cfg) {
+      this.subscribeBtn.textContent = "Subscribe";
+      return;
+    }
+    const price = formatPrice(cfg.unit_amount_cents, cfg.currency);
+    const mode = cfg.mock_checkout && !cfg.stripe_configured ? " (mock)" : "";
+    this.subscribeBtn.textContent = `Subscribe — ${price}/mo${mode}`;
+  }
+
   private async refreshEntitlement(): Promise<void> {
     const id = loadSubscriberId();
     if (!id) {
       this.setEntitled(false);
-      if (!this.accessEl.textContent?.startsWith("Billing") &&
-          !this.accessEl.textContent?.startsWith("Checkout")) {
+      if (
+        !this.accessEl.textContent?.startsWith("Billing") &&
+        !this.accessEl.textContent?.startsWith("Checkout") &&
+        !this.accessEl.textContent?.includes("config error")
+      ) {
         this.accessEl.textContent = "Subscribe to unlock Live HUD + chat.";
       }
       return;
@@ -159,43 +207,31 @@ export class ControlApp {
       if (status.active) {
         saveSubscriberId(status.subscriber_id || id);
         this.setEntitled(true);
-        this.accessEl.textContent = "Access active";
+        this.accessEl.textContent = "Access active — Live unlocked. You can still re-test Subscribe.";
       } else {
         this.setEntitled(false);
         this.accessEl.textContent = "Subscribe to unlock Live HUD + chat.";
       }
     } catch {
       this.setEntitled(false);
-      this.accessEl.textContent = "Could not verify access.";
+      this.accessEl.textContent = "Could not verify access — Subscribe remains available.";
     }
   }
 
   private setEntitled(active: boolean): void {
     this.entitled = active;
     this.livePanel.hidden = !active;
-    const canSubscribe = Boolean(
-      this.billingConfig?.stripe_configured ||
-        this.billingConfig?.mock_checkout ||
-        this.billingConfig?.dev_unlock_enabled,
-    );
-    this.subscribeBtn.disabled = active ? true : !canSubscribe;
-    if (active) {
-      this.subscribeBtn.textContent = "Subscribed";
-    } else if (this.billingConfig) {
-      this.subscribeBtn.textContent = `Subscribe — ${formatPrice(
-        this.billingConfig.unit_amount_cents,
-        this.billingConfig.currency,
-      )}/mo`;
-    }
+    // Keep payment CTA visible + clickable in local/mock so the button never “disappears”.
+    this.subscribeSection.hidden = false;
+    this.subscribeBtn.hidden = false;
+    this.subscribeBtn.disabled = !canCheckout(this.billingConfig);
+    this.renderSubscribeCta();
   }
 
   private async subscribe(): Promise<void> {
     this.subscribeBtn.disabled = true;
     try {
-      const canCheckout = Boolean(
-        this.billingConfig?.stripe_configured || this.billingConfig?.mock_checkout,
-      );
-      if (!canCheckout) {
+      if (!canCheckout(this.billingConfig)) {
         throw new Error("Checkout unavailable (set Stripe keys or BILLING_DEV_UNLOCK=true).");
       }
       const session = await startCheckout();
@@ -208,6 +244,7 @@ export class ControlApp {
       const message = err instanceof Error ? err.message : String(err);
       this.accessEl.textContent = message;
       this.subscribeBtn.disabled = false;
+      this.renderSubscribeCta();
     }
   }
 
