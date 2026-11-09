@@ -5,6 +5,8 @@
   --text: #f4f7f8;
   --muted: #8a9199;
   --danger: #ff5c5c;
+  --ok: #5dffb0;
+  --warn: #ffe6a8;
   --font-display: "Syne", sans-serif;
   --font-body: "IBM Plex Sans", sans-serif;
 }
@@ -36,25 +38,18 @@ body {
   font-weight: 800;
   font-size: clamp(2rem, 5vw, 2.75rem);
   letter-spacing: -0.03em;
-  margin: 0 0 0.35rem;
+  margin: 0 0 1.5rem;
 }
 
 .brand span {
   color: var(--cyan);
 }
 
-.lede {
-  margin: 0 0 1.75rem;
-  color: var(--muted);
-  max-width: 42ch;
-  line-height: 1.45;
-}
-
 .controls {
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem;
-  margin-bottom: 1.25rem;
+  margin-bottom: 1rem;
 }
 
 button {
@@ -82,6 +77,27 @@ button.secondary {
   background: transparent;
   color: var(--text);
   border-color: rgba(244, 247, 248, 0.25);
+}
+
+.connection {
+  margin: 0 0 1.25rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.connection[data-state="OPEN"] {
+  color: var(--ok);
+}
+
+.connection[data-state="RECONNECTING"] {
+  color: var(--warn);
+}
+
+.connection[data-state="CLOSED"] {
+  color: var(--muted);
 }
 
 .warn {
@@ -113,28 +129,13 @@ button.secondary {
   font: inherit;
 }
 
-.hud {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.8rem;
-  line-height: 1.55;
-  background: rgba(18, 19, 22, 0.85);
-  border: 1px solid rgba(0, 240, 255, 0.2);
-  padding: 0.9rem 1rem;
-  margin-bottom: 1.25rem;
-}
-
-.hud strong {
-  color: var(--cyan);
-  font-weight: 600;
-}
-
 .log {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
   gap: 0.4rem;
-  max-height: 280px;
+  max-height: 320px;
   overflow: auto;
   font-size: 0.9rem;
   color: var(--muted);
@@ -150,14 +151,4 @@ button.secondary {
 
 .log li[data-kind="aether"] {
   color: var(--text);
-}
-
-.path-note {
-  margin-top: 1.5rem;
-  font-size: 0.8rem;
-  color: var(--muted);
-}
-
-.path-note code {
-  color: var(--cyan);
 }

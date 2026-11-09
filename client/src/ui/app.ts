@@ -1,13 +1,28 @@
 import { GeminiLiveService } from "../services/GeminiLiveService";
-import type { LiveServerJsonEvent, TelemetrySnapshot } from "../types/live";
+import type { LiveServerJsonEvent, TelemetrySnapshot, WsReadyStateLabel } from "../types/live";
+
+/** Generation-1 connection labels — no PCM/path/telemetry prose. */
+function connectionLabel(state: WsReadyStateLabel): string {
+  switch (state) {
+    case "OPEN":
+      return "OPEN";
+    case "RECONNECTING":
+    case "CONNECTING":
+      return "RECONNECTING";
+    case "CLOSING":
+    case "CLOSED":
+      return "CLOSED";
+    default:
+      return "CLOSED";
+  }
+}
 
 export class ControlApp {
   private service: GeminiLiveService | null = null;
   private connected = false;
-  private hudEl!: HTMLElement;
-  private logEl!: HTMLElement;
   private statusEl!: HTMLElement;
   private warnEl!: HTMLElement;
+  private logEl!: HTMLElement;
   private connectBtn!: HTMLButtonElement;
   private disconnectBtn!: HTMLButtonElement;
   private textInput!: HTMLInputElement;
@@ -18,26 +33,22 @@ export class ControlApp {
   mount(): void {
     this.root.innerHTML = `
       <h1 class="brand">Aether <span>Vision</span></h1>
-      <p class="lede">Live HUD audio bridge — mic PCM @ 16 kHz in, Gemini PCM @ 24 kHz out, FIFO capped at 1.5 s.</p>
       <div class="controls">
         <button type="button" data-action="connect">Connect Live</button>
         <button type="button" class="secondary" data-action="disconnect" disabled>Disconnect</button>
       </div>
+      <p class="connection" data-role="status" data-state="CLOSED">CLOSED</p>
       <div class="warn" data-role="warn" hidden></div>
       <div class="text-row">
         <input type="text" placeholder="Type a message to Aether…" data-role="text" />
         <button type="button" class="secondary" data-action="send-text" disabled>Send</button>
       </div>
-      <div class="hud" data-role="hud">ws=NONE · rtt=— · fifo=0ms · discards=0 · playQ=0</div>
-      <p class="status" data-role="status">Idle</p>
       <ul class="log" data-role="log"></ul>
-      <p class="path-note">WebSocket path: <code>/api/ws/live</code> → Vite proxy → FastAPI <code>/ws/live</code></p>
     `;
 
-    this.hudEl = this.root.querySelector("[data-role=hud]")!;
-    this.logEl = this.root.querySelector("[data-role=log]")!;
     this.statusEl = this.root.querySelector("[data-role=status]")!;
     this.warnEl = this.root.querySelector("[data-role=warn]")!;
+    this.logEl = this.root.querySelector("[data-role=log]")!;
     this.connectBtn = this.root.querySelector("[data-action=connect]")!;
     this.disconnectBtn = this.root.querySelector("[data-action=disconnect]")!;
     this.textInput = this.root.querySelector("[data-role=text]")!;
@@ -57,42 +68,36 @@ export class ControlApp {
     if (this.connected) {
       return;
     }
-    this.setStatus("Connecting…");
+    this.setConnection("CONNECTING");
     this.clearWarn();
     this.connectBtn.disabled = true;
 
     this.service = new GeminiLiveService({
       onEvent: (event) => this.handleEvent(event),
     });
-    this.service.telemetry.subscribe((snap) => this.renderHud(snap));
+    this.service.telemetry.subscribe((snap) => this.renderConnection(snap));
 
     try {
       const result = await this.service.connect();
       this.connected = true;
       this.disconnectBtn.disabled = false;
       this.sendBtn.disabled = false;
-      this.pushLog(`connected ${this.service.getWsUrl()}`, "info");
+      this.setConnection("OPEN");
 
       if (result.micEnabled) {
-        const mic = result.micLabel ?? "default input";
-        this.setStatus(`Live · mic: ${mic}`);
-        this.textInput.placeholder = "Optional text turn…";
+        this.textInput.placeholder = "Type a message to Aether…";
         this.clearWarn();
       } else {
         const detail = result.micWarning ?? "Microphone unavailable.";
-        this.setStatus("Live · text-only (mic unavailable)");
-        this.textInput.placeholder = "Type to chat with Aether (mic offline)…";
-        this.showWarn(
-          `${detail} Voice capture is off, but Live is connected — type below to test Aether Vision.`,
-        );
-        this.pushLog(`mic unavailable: ${detail}`, "warn");
+        this.textInput.placeholder = "Type to chat with Aether…";
+        this.showWarn(`${detail} You can still chat by text.`);
         this.textInput.focus();
       }
     } catch (err) {
       this.connectBtn.disabled = false;
       const message = err instanceof Error ? err.message : String(err);
-      this.setStatus(`Failed: ${message}`);
-      this.pushLog(message, "error");
+      this.setConnection("CLOSED");
+      this.showWarn(message);
       await this.service.disconnect();
       this.service = null;
     }
@@ -107,8 +112,7 @@ export class ControlApp {
     this.sendBtn.disabled = true;
     this.textInput.placeholder = "Type a message to Aether…";
     this.clearWarn();
-    this.setStatus("Disconnected");
-    this.pushLog("disconnected", "info");
+    this.setConnection("CLOSED");
   }
 
   private sendText(): void {
@@ -123,66 +127,37 @@ export class ControlApp {
 
   private handleEvent(event: LiveServerJsonEvent): void {
     switch (event.type) {
-      case "ready":
-        this.pushLog(`ready model=${(event as { model?: string }).model ?? "?"}`, "info");
-        break;
       case "user_transcript":
-        this.pushLog(`user: ${(event as { text: string }).text}`, "user");
+        this.pushLog(`you: ${(event as { text: string }).text}`, "user");
         break;
       case "aether_transcript":
         this.pushLog(`aether: ${(event as { text: string }).text}`, "aether");
         break;
-      case "turn_complete":
-        this.pushLog("turn_complete", "info");
-        break;
-      case "interrupted":
-        this.pushLog("interrupted", "info");
-        break;
-      case "info":
-        this.pushLog(String((event as { message?: string }).message ?? "info"), "info");
-        break;
       case "error": {
         const code = (event as { code?: string }).code;
         const message = (event as { message: string }).message;
-        this.pushLog(message, code === "session_retry" ? "warn" : "error");
         if (code !== "session_retry") {
-          this.setStatus(`Error: ${message}`);
+          this.showWarn(message);
         }
         break;
       }
       default:
+        // Skip ready / turn_complete / interrupted / info noise in Gen-1 HUD.
         break;
     }
   }
 
-  private renderHud(snap: TelemetrySnapshot): void {
-    const rtt = snap.rttMs == null ? "—" : `${snap.rttMs.toFixed(0)}ms`;
-    this.hudEl.textContent =
-      `ws=${snap.wsState} · rtt=${rtt} · ` +
-      `fifo=${snap.fifoDepthMs.toFixed(0)}ms · discards=${snap.fifoDiscardCount} · ` +
-      `playQ=${snap.playbackQueueDepth}`;
-
-    if (!this.connected || !this.service) {
+  private renderConnection(snap: TelemetrySnapshot): void {
+    if (!this.connected) {
       return;
     }
-    if (snap.wsState === "RECONNECTING") {
-      this.setStatus("Reconnecting Live…");
-    } else if (snap.wsState === "OPEN") {
-      if (this.service.isMicEnabled()) {
-        const mic = this.service.getMicLabel() ?? "default input";
-        this.setStatus(`Live · mic: ${mic}`);
-      } else if (this.service.getMicWarning()) {
-        this.setStatus("Live · text-only (mic unavailable)");
-      } else {
-        this.setStatus("Live · connected");
-      }
-    } else if (snap.wsState === "CLOSED") {
-      this.setStatus("Live · socket closed (retrying if still connected)");
-    }
+    this.setConnection(snap.wsState);
   }
 
-  private setStatus(text: string): void {
-    this.statusEl.textContent = text;
+  private setConnection(state: WsReadyStateLabel): void {
+    const label = connectionLabel(state);
+    this.statusEl.textContent = label;
+    this.statusEl.dataset.state = label;
   }
 
   private showWarn(text: string): void {
