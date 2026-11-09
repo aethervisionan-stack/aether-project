@@ -41,6 +41,12 @@ app.include_router(live_ws.router)
 app.include_router(billing_routes.router)
 
 
+@app.get("/verify-subscription")
+async def verify_subscription_alias(session_id: str):
+    """Alias for `/billing/verify-subscription` (Vite: `/api/verify-subscription`)."""
+    return await billing_routes.verify_subscription(session_id)
+
+
 @app.get("/health")
 async def health() -> dict[str, object]:
     return {

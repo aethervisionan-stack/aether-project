@@ -79,7 +79,10 @@ Open [http://127.0.0.1:5173](http://127.0.0.1:5173), pair a Bluetooth headset as
 | `STRIPE_SECRET_KEY` | `backend/.env` | Server Checkout + webhook |
 | `STRIPE_PUBLISHABLE_KEY` | `backend/.env` | Exposed via `/billing/config` only |
 | `STRIPE_WEBHOOK_SECRET` | `backend/.env` | Stripe CLI / Dashboard signing secret |
-| `STRIPE_PRICE_ID` | `backend/.env` | Optional; else dynamic `price_data` |
+| `STRIPE_PRICE_ID` | `backend/.env` | Optional; ignored while `STRIPE_FORCE_UNIT_AMOUNT=true` |
+| `STRIPE_CURRENCY` | `backend/.env` | **TEMP TEST:** `brl` (restore `usd`) |
+| `STRIPE_UNIT_AMOUNT_CENTS` | `backend/.env` | **TEMP TEST:** `1` = R$0,01 (restore e.g. `1999`) |
+| `STRIPE_FORCE_UNIT_AMOUNT` | `backend/.env` | **TEMP TEST:** `true` forces dynamic price_data |
 | `BILLING_DEV_UNLOCK` | `backend/.env` | Local simulate unlock when Stripe unset |
 | `TREASURY_WALLET_ADDRESS` | `backend/.env` | 70% Solana destination |
 | `VISION_BURN_ADDRESS` | `backend/.env` | 30% burn destination |

@@ -16,7 +16,10 @@ from app.billing.stripe_service import (
     StripeNotConfiguredError,
     construct_webhook_event,
     create_checkout_session,
+    expected_price,
+    retrieve_checkout_session,
     session_amount_usd,
+    session_matches_expected_price,
 )
 from app.config import get_settings
 
@@ -37,6 +40,7 @@ class EntitlementQuery(BaseModel):
 async def billing_config() -> dict[str, Any]:
     """Public billing config for the client widget (no secrets)."""
     settings = get_settings()
+    price = expected_price(settings)
     return {
         "stripe_configured": settings.has_stripe(),
         "publishable_key": settings.stripe_publishable_key.strip() or None,
@@ -48,9 +52,11 @@ async def billing_config() -> dict[str, Any]:
         ),
         "treasury_share": 0.70,
         "burn_share": 0.30,
-        "unit_amount_cents": settings.stripe_unit_amount_cents,
-        "currency": "usd",
+        "unit_amount_cents": price["unit_amount_cents"],
+        "currency": price["currency"],
         "interval": "month",
+        # TEMP TEST: true while BRL 0,01 force-unit-amount is active.
+        "temp_test": price["temp_test"],
     }
 
 
@@ -71,6 +77,59 @@ async def start_checkout() -> dict[str, Any]:
 async def entitlement_status(subscriber_id: str) -> dict[str, Any]:
     store = get_entitlement_store()
     return store.status(subscriber_id)
+
+
+@router.get("/verify-subscription")
+async def verify_subscription(session_id: str) -> dict[str, Any]:
+    """
+    Verify a Checkout Session amount/currency against configured TEMP/official price.
+
+    Also exposed as the Gen-1 price check used after Stripe return / before trusting unlock.
+    Proxied as `/api/billing/verify-subscription`.
+    """
+    settings = get_settings()
+    if not session_id.strip():
+        raise HTTPException(status_code=400, detail="session_id required")
+
+    # Dev / offline path: entitlement already granted under this id.
+    store = get_entitlement_store()
+    ent = store.status(session_id.strip())
+    if ent.get("active") and str(ent.get("source") or "").startswith("dev"):
+        price = expected_price(settings)
+        return {
+            "matched": True,
+            "paid_ok": True,
+            "source": "dev_entitlement",
+            "entitlement": ent,
+            "expected": price,
+            "temp_test": price["temp_test"],
+        }
+
+    price = expected_price(settings)
+    if not settings.has_stripe():
+        return {
+            "matched": False,
+            "paid_ok": False,
+            "source": "offline",
+            "expected": price,
+            "temp_test": price["temp_test"],
+            "entitlement": ent,
+            "message": (
+                "Stripe not configured. TEMP expected price is listed under expected; "
+                "use Simulate unlock or set STRIPE_SECRET_KEY to verify live sessions."
+            ),
+        }
+
+    try:
+        session = retrieve_checkout_session(settings, session_id.strip())
+    except StripeNotConfiguredError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=404, detail=f"Session not found: {exc}") from exc
+
+    verification = session_matches_expected_price(settings, session)
+    verification["entitlement"] = store.status(session_id.strip())
+    return verification
 
 
 @router.post("/dev-unlock")
@@ -196,13 +255,21 @@ async def _handle_checkout_completed(
     email = email or session.get("customer_email")
 
     subscriber_id = customer_id or session_id or f"stripe_{uuid.uuid4().hex[:12]}"
-    amount_usd = session_amount_usd(session)
-    if amount_usd <= 0:
-        amount_usd = settings.stripe_unit_amount_cents / 100.0
+    price_check = session_matches_expected_price(settings, session)
+    if not price_check["matched"]:
+        logger.warning(
+            "checkout amount mismatch (still unlocking Gen-1) expected=%s actual=%s",
+            price_check["expected"],
+            price_check["actual"],
+        )
+
+    amount_major = session_amount_usd(session)
+    if amount_major <= 0:
+        amount_major = settings.stripe_unit_amount_cents / 100.0
 
     expires_at = time.time() + 31 * 24 * 3600
 
-    # Instant HUD unlock for Gen-1.
+    # Instant HUD unlock for Gen-1 (AI access) after payment confirmation.
     store.grant(
         subscriber_id=subscriber_id,
         source="stripe",
@@ -210,14 +277,20 @@ async def _handle_checkout_completed(
         stripe_session_id=session_id or None,
         stripe_customer_id=customer_id,
         expires_at=expires_at,
-        metadata={"amount_usd": amount_usd, "solana_pending": True},
+        metadata={
+            "amount_major": amount_major,
+            "currency": price_check["expected"]["currency"],
+            "price_check": price_check,
+            "solana_pending": True,
+            "temp_test": price_check["temp_test"],
+        },
     )
 
     background_tasks.add_task(
         _run_solana_and_patch,
         settings,
         subscriber_id,
-        amount_usd,
+        amount_major,
         session_id or subscriber_id,
     )
     logger.info(

@@ -50,8 +50,14 @@ class Settings(BaseSettings):
         default="http://127.0.0.1:5173/?checkout=cancel",
         alias="STRIPE_CANCEL_URL",
     )
-    # Monthly amount used when STRIPE_PRICE_ID is empty (cents).
-    stripe_unit_amount_cents: int = Field(default=1999, alias="STRIPE_UNIT_AMOUNT_CENTS")
+    # --- TEMP TEST price (restore official later) ---
+    # Official restore: STRIPE_CURRENCY=usd, STRIPE_UNIT_AMOUNT_CENTS=1999,
+    # STRIPE_FORCE_UNIT_AMOUNT=false (and set STRIPE_PRICE_ID if you use a Dashboard Price).
+    # TEMP: R$ 0,01 = 1 centavo BRL.
+    stripe_currency: str = Field(default="brl", alias="STRIPE_CURRENCY")
+    stripe_unit_amount_cents: int = Field(default=1, alias="STRIPE_UNIT_AMOUNT_CENTS")
+    # When true, Checkout always uses price_data (ignores STRIPE_PRICE_ID) — TEMP TEST.
+    stripe_force_unit_amount: bool = Field(default=True, alias="STRIPE_FORCE_UNIT_AMOUNT")
 
     # Local Gen-1 bypass when Stripe keys are absent (never enable in production).
     billing_dev_unlock: bool = Field(default=True, alias="BILLING_DEV_UNLOCK")

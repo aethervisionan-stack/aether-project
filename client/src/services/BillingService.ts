@@ -15,6 +15,8 @@ export interface BillingConfig {
   unit_amount_cents: number;
   currency: string;
   interval: string;
+  /** TEMP TEST: R$0,01 local pricing active */
+  temp_test?: boolean;
 }
 
 export interface EntitlementStatus {
