@@ -7,6 +7,8 @@ const SUBSCRIBER_KEY = "aether.subscriber_id";
 
 export interface BillingConfig {
   stripe_configured: boolean;
+  /** Local mock Checkout when real Stripe keys are absent */
+  mock_checkout?: boolean;
   publishable_key: string | null;
   dev_unlock_enabled: boolean;
   solana_mode: string;

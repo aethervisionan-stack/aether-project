@@ -173,9 +173,12 @@ export class ControlApp {
   private setEntitled(active: boolean): void {
     this.entitled = active;
     this.livePanel.hidden = !active;
-    this.subscribeBtn.disabled = active
-      ? true
-      : !(this.billingConfig?.stripe_configured || this.billingConfig?.dev_unlock_enabled);
+    const canSubscribe = Boolean(
+      this.billingConfig?.stripe_configured ||
+        this.billingConfig?.mock_checkout ||
+        this.billingConfig?.dev_unlock_enabled,
+    );
+    this.subscribeBtn.disabled = active ? true : !canSubscribe;
     if (active) {
       this.subscribeBtn.textContent = "Subscribed";
     } else if (this.billingConfig) {
@@ -189,10 +192,17 @@ export class ControlApp {
   private async subscribe(): Promise<void> {
     this.subscribeBtn.disabled = true;
     try {
-      if (!this.billingConfig?.stripe_configured) {
-        throw new Error("Stripe is not configured on the server.");
+      const canCheckout = Boolean(
+        this.billingConfig?.stripe_configured || this.billingConfig?.mock_checkout,
+      );
+      if (!canCheckout) {
+        throw new Error("Checkout unavailable (set Stripe keys or BILLING_DEV_UNLOCK=true).");
       }
       const session = await startCheckout();
+      saveSubscriberId(session.id);
+      this.accessEl.textContent = session.id.startsWith("cs_test_mock_")
+        ? "Mock payment OK — unlocking…"
+        : "Redirecting to Checkout…";
       window.location.href = session.url;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

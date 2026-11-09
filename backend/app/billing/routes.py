@@ -43,6 +43,7 @@ async def billing_config() -> dict[str, Any]:
     price = expected_price(settings)
     return {
         "stripe_configured": settings.has_stripe(),
+        "mock_checkout": settings.stripe_mock_checkout_enabled(),
         "publishable_key": settings.stripe_publishable_key.strip() or None,
         "dev_unlock_enabled": bool(settings.billing_dev_unlock) and not settings.has_stripe(),
         "solana_mode": (
@@ -61,16 +62,30 @@ async def billing_config() -> dict[str, Any]:
 
 
 @router.post("/checkout")
-async def start_checkout() -> dict[str, Any]:
-    """Create a Stripe Checkout Session and return the hosted URL."""
+async def start_checkout(background_tasks: BackgroundTasks) -> dict[str, Any]:
+    """Create a Stripe Checkout Session (or local mock) and return the hosted URL."""
     settings = get_settings()
     try:
-        return create_checkout_session(settings)
+        result = create_checkout_session(settings)
     except StripeNotConfiguredError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except Exception as exc:
         logger.exception("checkout session failed")
         raise HTTPException(status_code=502, detail=f"Stripe error: {exc}") from exc
+
+    # Mock path: simulate webhook unlock immediately so AI/HUD tests work without Stripe.
+    if result.get("mock"):
+        mock_session = {
+            "id": result["id"],
+            "amount_total": result["unit_amount_cents"],
+            "currency": result["currency"],
+            "payment_status": "paid",
+            "status": "complete",
+            "customer_email": None,
+            "customer_details": {},
+        }
+        await _handle_checkout_completed(mock_session, background_tasks)
+    return result
 
 
 @router.get("/entitlement")
@@ -91,15 +106,18 @@ async def verify_subscription(session_id: str) -> dict[str, Any]:
     if not session_id.strip():
         raise HTTPException(status_code=400, detail="session_id required")
 
-    # Dev / offline path: entitlement already granted under this id.
+    # Dev / mock / offline path: entitlement already granted under this id.
     store = get_entitlement_store()
     ent = store.status(session_id.strip())
-    if ent.get("active") and str(ent.get("source") or "").startswith("dev"):
+    source = str(ent.get("source") or "")
+    if ent.get("active") and (
+        source.startswith("dev") or source.startswith("mock") or session_id.startswith("cs_test_mock_")
+    ):
         price = expected_price(settings)
         return {
             "matched": True,
             "paid_ok": True,
-            "source": "dev_entitlement",
+            "source": source or "mock_entitlement",
             "entitlement": ent,
             "expected": price,
             "temp_test": price["temp_test"],
@@ -219,6 +237,19 @@ async def stripe_webhook(
     payload = await request.body()
     sig = request.headers.get("stripe-signature")
 
+    # Local/dev: accept unsigned JSON mock events when Stripe is not configured.
+    if settings.stripe_mock_checkout_enabled() and not settings.has_stripe():
+        try:
+            import json as _json
+
+            event = _json.loads(payload.decode("utf-8") or "{}")
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=f"Invalid mock webhook JSON: {exc}") from exc
+        if event.get("type") == "checkout.session.completed":
+            session = (event.get("data") or {}).get("object") or {}
+            await _handle_checkout_completed(session, background_tasks)
+        return {"status": "ok", "mode": "mock"}
+
     try:
         event = construct_webhook_event(settings, payload, sig)
     except StripeNotConfiguredError as exc:
@@ -255,8 +286,9 @@ async def _handle_checkout_completed(
     email = email or session.get("customer_email")
 
     subscriber_id = customer_id or session_id or f"stripe_{uuid.uuid4().hex[:12]}"
+    is_mock = str(session_id).startswith("cs_test_mock_")
     price_check = session_matches_expected_price(settings, session)
-    if not price_check["matched"]:
+    if not price_check["matched"] and not is_mock:
         logger.warning(
             "checkout amount mismatch (still unlocking Gen-1) expected=%s actual=%s",
             price_check["expected"],
@@ -272,7 +304,7 @@ async def _handle_checkout_completed(
     # Instant HUD unlock for Gen-1 (AI access) after payment confirmation.
     store.grant(
         subscriber_id=subscriber_id,
-        source="stripe",
+        source="mock_stripe" if is_mock else "stripe",
         email=email,
         stripe_session_id=session_id or None,
         stripe_customer_id=customer_id,
@@ -283,6 +315,7 @@ async def _handle_checkout_completed(
             "price_check": price_check,
             "solana_pending": True,
             "temp_test": price_check["temp_test"],
+            "mock": is_mock,
         },
     )
 

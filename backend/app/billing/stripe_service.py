@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import uuid
 from typing import Any
 
 import stripe
@@ -31,14 +32,52 @@ def expected_price(settings: Settings) -> dict[str, Any]:
 def _configure(settings: Settings) -> None:
     if not settings.has_stripe():
         raise StripeNotConfiguredError(
-            "STRIPE_SECRET_KEY is not set. Add it to backend/.env or use "
-            "BILLING_DEV_UNLOCK for local simulation."
+            "STRIPE_SECRET_KEY is not set (or is a placeholder). "
+            "Add a real sk_test_/sk_live_ key, or keep BILLING_DEV_UNLOCK=true "
+            "for mock Checkout."
         )
     stripe.api_key = settings.stripe_secret_key.strip()
 
 
+def create_mock_checkout_session(settings: Settings) -> dict[str, Any]:
+    """
+    Local/dev Checkout stand-in when Stripe is not configured.
+
+    Returns a session id + success URL the UI can open (same shape as live Checkout).
+    Does not call Stripe and never invents API keys.
+    """
+    price = expected_price(settings)
+    session_id = f"cs_test_mock_{uuid.uuid4().hex[:20]}"
+    success = settings.stripe_success_url.replace(
+        "{CHECKOUT_SESSION_ID}",
+        session_id,
+    )
+    logger.info(
+        "MOCK checkout session id=%s amount=%s %s (Stripe not configured)",
+        session_id,
+        price["unit_amount_cents"],
+        price["currency"],
+    )
+    return {
+        "id": session_id,
+        "url": success,
+        "currency": price["currency"],
+        "unit_amount_cents": price["unit_amount_cents"],
+        "temp_test": price["temp_test"],
+        "mock": True,
+        "publishable_key_configured": False,
+    }
+
+
 def create_checkout_session(settings: Settings) -> dict[str, Any]:
-    """Create a Stripe Checkout Session (subscription mode) and return url + id."""
+    """Create a Stripe Checkout Session, or a mock session in local/dev fallback."""
+    if not settings.has_stripe():
+        if settings.stripe_mock_checkout_enabled():
+            return create_mock_checkout_session(settings)
+        raise StripeNotConfiguredError(
+            "STRIPE_SECRET_KEY missing and BILLING_DEV_UNLOCK is false."
+        )
+
     _configure(settings)
     price = expected_price(settings)
 
@@ -106,6 +145,7 @@ def create_checkout_session(settings: Settings) -> dict[str, Any]:
         "currency": price["currency"],
         "unit_amount_cents": price["unit_amount_cents"],
         "temp_test": price["temp_test"],
+        "mock": False,
         "publishable_key_configured": bool(settings.stripe_publishable_key.strip()),
     }
 

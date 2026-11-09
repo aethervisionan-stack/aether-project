@@ -99,7 +99,23 @@ class Settings(BaseSettings):
         return bool(self.gemini_api_key.strip())
 
     def has_stripe(self) -> bool:
-        return bool(self.stripe_secret_key.strip())
+        """True only for a real-looking secret — placeholders do not enable live Stripe."""
+        key = self.stripe_secret_key.strip()
+        if not key:
+            return False
+        lowered = key.lower()
+        if (
+            "placeholder" in lowered
+            or "replace_me" in lowered
+            or "not_a_real" in lowered
+            or key.endswith("...")
+        ):
+            return False
+        return key.startswith("sk_test_") or key.startswith("sk_live_")
+
+    def stripe_mock_checkout_enabled(self) -> bool:
+        """Local/dev fallback when no real Stripe secret is configured."""
+        return (not self.has_stripe()) and bool(self.billing_dev_unlock)
 
     def solana_live_transfers_enabled(self) -> bool:
         """Real on-chain transfers require an explicit payer secret (never invent one)."""
