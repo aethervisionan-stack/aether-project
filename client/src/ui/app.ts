@@ -207,12 +207,16 @@ export class ControlApp {
 
   private setBusy(btn: HTMLButtonElement, busy: boolean, label?: string): void {
     btn.classList.toggle("is-busy", busy);
-    if (label) {
-      btn.dataset.label = btn.dataset.label || btn.textContent || "";
-      btn.textContent = busy ? label : btn.dataset.label || btn.textContent || "";
-      if (!busy) {
-        delete btn.dataset.label;
+    if (busy && label) {
+      if (!btn.dataset.label) {
+        btn.dataset.label = btn.textContent || "";
       }
+      btn.textContent = label;
+      return;
+    }
+    if (!busy && btn.dataset.label) {
+      btn.textContent = btn.dataset.label;
+      delete btn.dataset.label;
     }
   }
 
