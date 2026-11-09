@@ -25,6 +25,8 @@ export interface BillingConfig {
   solana_rpc_url?: string;
   /** Preferred RPC for official treasury balance (usually mainnet). */
   treasury_rpc_url?: string;
+  /** Backend proxy path for SOL balance (avoids browser RPC 403/CORS). */
+  treasury_balance_path?: string;
   unit_amount_cents: number;
   currency: string;
   interval: string;

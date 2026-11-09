@@ -88,7 +88,8 @@ Open [http://127.0.0.1:5173](http://127.0.0.1:5173), pair a Bluetooth headset as
 | `TREASURY_WALLET_ADDRESS` | `backend/.env` | 70% Solana destination |
 | `VISION_BURN_ADDRESS` | `backend/.env` | 30% burn destination |
 | `VISION_MINT_ADDRESS` | `backend/.env` | VISION mint |
-| `SOLANA_RPC_URL` | `backend/.env` | Default devnet |
+| `SOLANA_RPC_URL` | `backend/.env` | Operational / distribution RPC (default devnet) |
+| `TREASURY_RPC_URL` | `backend/.env` | Preferred mainnet RPC for treasury HUD; backend proxies `/billing/treasury-balance` with Ankr/PublicNode fallbacks |
 | `SOLANA_PAYER_SECRET_KEY` | `backend/.env` | Empty = **stub mode** (no real transfers) |
 
 Persona: **Aether** — 1–3 sentence, direct, actionable replies for HUD / spatial audio.

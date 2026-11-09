@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 import uuid
@@ -21,6 +22,7 @@ from app.billing.stripe_service import (
     session_amount_usd,
     session_matches_expected_price,
 )
+from app.billing.treasury_rpc import fetch_treasury_balance
 from app.config import get_settings
 
 logger = logging.getLogger("aether.billing.routes")
@@ -66,16 +68,31 @@ async def billing_config() -> dict[str, Any]:
         ),
         "treasury_share": 0.70,
         "burn_share": 0.30,
-        # Public treasury display (never secrets). Mainnet RPC for the official wallet balance.
+        # Public treasury display (never secrets). Prefer backend proxy for balance.
         "treasury_wallet": settings.treasury_wallet_address.strip(),
         "solana_rpc_url": settings.solana_rpc_url.strip() or "https://api.devnet.solana.com",
-        "treasury_rpc_url": "https://api.mainnet-beta.solana.com",
+        "treasury_rpc_url": (
+            settings.treasury_rpc_url.strip() or "https://rpc.ankr.com/solana"
+        ),
+        "treasury_balance_path": "/billing/treasury-balance",
         "unit_amount_cents": price["unit_amount_cents"],
         "currency": price["currency"],
         "interval": "month",
         # TEMP TEST: true while BRL 0,01 force-unit-amount is active.
         "temp_test": price["temp_test"],
     }
+
+
+@router.get("/treasury-balance")
+async def treasury_balance() -> dict[str, Any]:
+    """
+    Proxy Solana getBalance for the official treasury wallet.
+
+    Avoids browser CORS/403 against public RPCs. Tries TREASURY_RPC_URL /
+    SOLANA_RPC_URL then Ankr / PublicNode / Solana Labs fallbacks.
+    """
+    settings = get_settings()
+    return await asyncio.to_thread(fetch_treasury_balance, settings)
 
 
 @router.post("/checkout")

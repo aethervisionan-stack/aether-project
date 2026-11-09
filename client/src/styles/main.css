@@ -149,6 +149,10 @@ button.subscribe-cta:disabled {
   color: var(--danger);
 }
 
+.treasury-sync[data-state="reconnecting"] {
+  color: #ffe066;
+}
+
 .treasury-addr-row {
   display: flex;
   align-items: center;

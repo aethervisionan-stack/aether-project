@@ -89,6 +89,12 @@ class Settings(BaseSettings):
         default="https://api.devnet.solana.com",
         alias="SOLANA_RPC_URL",
     )
+    # Preferred public RPC for Gen-1 treasury HUD balance (mainnet official wallet).
+    # Falls back through Ankr / PublicNode / Solana Labs if this endpoint 403s.
+    treasury_rpc_url: str = Field(
+        default="https://rpc.ankr.com/solana",
+        alias="TREASURY_RPC_URL",
+    )
     # Base58 secret of the payer that funds treasury/burn transfers — leave empty for stub mode.
     solana_payer_secret_key: str = Field(default="", alias="SOLANA_PAYER_SECRET_KEY")
     # Rough VISION tokens credited per USD of subscription for Gen-1 distribution math.
