@@ -31,6 +31,8 @@ from app.pipeline.decision import DecisionContext, run_decision_pipeline
 from app.reasoning.classifier import Complexity, classify_complexity
 from app.safety import sanitize_outbound_event
 from app.streaming.tokens import TokenStreamEmitter
+from app.introspection.manifest import build_feature_flags
+from app.introspection.telemetry import record_latency_sample
 from app.tools.registry import ToolContext, get_tool_registry
 
 logger = logging.getLogger("aether.ws.live")
@@ -206,8 +208,40 @@ async def live_websocket(websocket: WebSocket) -> None:
         attempt = 0
         while not stop.is_set():
             attempt += 1
+            registry_names = get_tool_registry().list_names()
+            health_flags = {
+                "status": True,
+                "memory_enabled": settings.memory_enabled,
+                "frontier": {
+                    "cot": True,
+                    "tools": True,
+                    "multimodal": True,
+                    "memory_runtime": True,
+                    "token_streaming": True,
+                },
+                "mobility": {
+                    "notifications": True,
+                    "priority_manager": True,
+                    "vad_open_mic": True,
+                    "push_to_talk": True,
+                    "barge_in": True,
+                    "audio_profile": True,
+                },
+                "hands_free": {
+                    "os_agent": True,
+                    "messaging_tool": True,
+                    "email_calendar_tool": True,
+                    "telephony_tool": True,
+                    "system_control_tool": True,
+                    "two_step_confirm": True,
+                    "notification_listener": True,
+                },
+                "introspection": build_feature_flags(),
+            }
             system_instruction = build_system_instruction(
                 copilot_mode=mobility.copilot_mode,
+                registered_tools=registry_names,
+                health_flags=health_flags,
             )
             if settings.memory_enabled:
                 try:
@@ -217,16 +251,18 @@ async def live_websocket(websocket: WebSocket) -> None:
                         snap.get("preferences"),
                         copilot_mode=mobility.copilot_mode,
                         mobility_extra="\n".join(mobility.runtime_blocks()),
+                        registered_tools=registry_names,
+                        health_flags=health_flags,
                     )
                 except Exception:
                     logger.debug("memory prefs load failed; using base persona", exc_info=True)
 
-            # Advertise tool catalog in the persona so Live can suggest tool_call JSON.
+            # Compact tool remind (full self-knowledge already lists registry ∩ manifest).
             tools_hint = (
-                "Available tools (client/server may invoke via tool_call): "
-                + ", ".join(get_tool_registry().list_names())
-                + ". Prefer short HUD answers; never narrate internal plans unless asked. "
-                "Voice UX: open-mic / PTT — no wake word required. Support barge-in. "
+                "Invoke tools via tool_call JSON when useful. "
+                "system_help_tool is read-only (no confirm). "
+                "Prefer short HUD answers; never narrate internal plans unless asked. "
+                "Voice UX: open-mic / PTT — no wake word. Support barge-in. "
                 "Hands-free OS agent: for send/schedule/delete/call actions, speak what you "
                 "will do and wait for confirm words (Sim / Pode enviar / Yes) before executing."
             )
@@ -632,6 +668,8 @@ async def _handle_control_message(
     # --- Multimodal: HUD telemetry ---
     if msg_type == "telemetry" and multimodal is not None:
         sample = multimodal.push_telemetry(payload)
+        # Feed introspection health (TTFT / ping) for system_help_tool.
+        record_latency_sample(payload)
         try:
             await websocket.send_json(
                 {

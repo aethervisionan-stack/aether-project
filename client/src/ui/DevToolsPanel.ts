@@ -161,6 +161,10 @@ export class DevToolsPanel {
         res = await invokeToolHttp("telephony_tool", { action: "incoming" });
       } else if (name === "system_control_tool") {
         res = await invokeToolHttp("system_control_tool", { action: "battery" });
+      } else if (name === "system_help_tool") {
+        res = await invokeToolHttp("system_help_tool", {
+          action: "get_system_capabilities",
+        });
       } else {
         this.statusEl.textContent = t(d.unknownTool, { name });
         return;

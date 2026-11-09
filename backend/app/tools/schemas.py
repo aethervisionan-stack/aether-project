@@ -201,6 +201,33 @@ TOOL_SCHEMAS: list[ToolSchema] = [
             "additionalProperties": False,
         },
     },
+    {
+        "name": "system_help_tool",
+        "description": (
+            "Introspection / help: get_system_capabilities (optional category) and "
+            "get_system_health (version, TTFT telemetry, integrations). Read-only — "
+            "no two-step confirmation."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["get_system_capabilities", "get_system_health"],
+                    "description": "Help operation to run.",
+                },
+                "category": {
+                    "type": "string",
+                    "description": (
+                        "Optional capability category filter: identity, hands_free, "
+                        "notifications, hardware, memory, frontier, billing, help, or all."
+                    ),
+                },
+            },
+            "required": ["action"],
+            "additionalProperties": False,
+        },
+    },
 ]
 
 ToolName = Literal[
@@ -212,6 +239,7 @@ ToolName = Literal[
     "email_calendar_tool",
     "telephony_tool",
     "system_control_tool",
+    "system_help_tool",
 ]
 
 

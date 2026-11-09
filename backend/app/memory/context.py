@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Iterable
 
 from app.config import AETHER_SYSTEM_INSTRUCTION
+from app.introspection.prompt import (
+    build_communication_guidelines,
+    build_self_knowledge_block,
+)
 from app.memory.store import Preferences
 from app.mobility.copilot import CopilotMode, build_copilot_guidance, parse_copilot_mode
 
@@ -37,14 +41,34 @@ def build_system_instruction(
     *,
     copilot_mode: CopilotMode | str | None = None,
     mobility_extra: str | None = None,
+    registered_tools: Iterable[str] | None = None,
+    health_flags: dict[str, Any] | None = None,
+    include_self_knowledge: bool = True,
 ) -> str:
     """
-    Base Aether HUD persona + optional learned preference block + mobility modes.
+    Base Aether HUD persona + optional learned preference block + mobility modes
+    + dynamic self-knowledge (capabilities manifest ∩ Tool Registry).
 
     Keeps replies short; preferences adapt tone/depth without breaking HUD style.
     """
     base = AETHER_SYSTEM_INSTRUCTION.strip()
     parts: list[str] = [base]
+    if include_self_knowledge:
+        tools = list(registered_tools) if registered_tools is not None else None
+        if tools is None:
+            try:
+                from app.tools.registry import get_tool_registry
+
+                tools = get_tool_registry().list_names()
+            except Exception:
+                tools = None
+        parts.append(
+            build_self_knowledge_block(
+                registered_tools=tools,
+                health_flags=health_flags,
+            )
+        )
+        parts.append(build_communication_guidelines())
     summary = preferences_summary(prefs)
     if summary:
         adapt = (

@@ -10,6 +10,8 @@ export interface HudTelemetryPayload {
   type: "telemetry";
   ping_ms: number | null;
   ai_ms: number | null;
+  /** First-token latency from LatencyTracker — feeds system_help_tool health. */
+  ttft_ms: number | null;
   ws_state: WsReadyStateLabel | string | null;
   viz_mode: VisualizerMode | string | null;
   fifo_depth_ms: number | null;
@@ -25,6 +27,7 @@ export function buildHudTelemetry(options: {
     type: "telemetry",
     ping_ms: snap.rttMs,
     ai_ms: snap.aiLatencyMs ?? snap.lastAiLatencyMs,
+    ttft_ms: snap.ttftMs ?? snap.lastTtftMs,
     ws_state: snap.wsState,
     viz_mode: vizMode,
     fifo_depth_ms: snap.fifoDepthMs,

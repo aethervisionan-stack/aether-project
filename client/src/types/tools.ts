@@ -10,7 +10,8 @@ export type ToolName =
   | "messaging_tool"
   | "email_calendar_tool"
   | "telephony_tool"
-  | "system_control_tool";
+  | "system_control_tool"
+  | "system_help_tool";
 
 export type TestRoutine = "health" | "memory_snapshot" | "latency_targets";
 
@@ -85,6 +86,14 @@ export interface SystemControlToolArgs {
   label?: string;
 }
 
+export type SystemHelpAction = "get_system_capabilities" | "get_system_health";
+
+export interface SystemHelpToolArgs {
+  action: SystemHelpAction;
+  /** Optional filter: identity | hands_free | notifications | hardware | memory | frontier | help | all */
+  category?: string;
+}
+
 export type ToolArgumentsByName = {
   solana_treasury_query: SolanaTreasuryArgs;
   onchain_lookup: OnchainLookupArgs;
@@ -94,6 +103,7 @@ export type ToolArgumentsByName = {
   email_calendar_tool: EmailCalendarToolArgs;
   telephony_tool: TelephonyToolArgs;
   system_control_tool: SystemControlToolArgs;
+  system_help_tool: SystemHelpToolArgs;
 };
 
 export interface ToolParamProperty {
@@ -280,6 +290,23 @@ export const TOOL_SCHEMAS: readonly ToolSchema[] = [
       additionalProperties: false,
     },
   },
+  {
+    name: "system_help_tool",
+    description:
+      "Introspection help: capabilities + health/TTFT. Read-only, no confirm.",
+    parameters: {
+      type: "object",
+      properties: {
+        action: {
+          type: "string",
+          enum: ["get_system_capabilities", "get_system_health"],
+        },
+        category: { type: "string" },
+      },
+      required: ["action"],
+      additionalProperties: false,
+    },
+  },
 ] as const;
 
 export interface ToolResultEvent {
@@ -301,3 +328,6 @@ export const OS_TOOL_NAMES: readonly ToolName[] = [
   "telephony_tool",
   "system_control_tool",
 ];
+
+/** Read-only help tools — never enter the two-step confirm loop. */
+export const HELP_TOOL_NAMES: readonly ToolName[] = ["system_help_tool"];

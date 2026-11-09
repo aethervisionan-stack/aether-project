@@ -159,6 +159,26 @@ def _recommend_tools(text: str) -> list[str]:
         for k in ("battery", "bateria", "volume", "alarme", "alarm", "timer", "media", "som")
     ):
         tools.append("system_control_tool")
+    if any(
+        k in lower
+        for k in (
+            "what can you",
+            "o que você",
+            "o que voce",
+            "capabilities",
+            "capacidade",
+            "help",
+            "ajuda",
+            "system health",
+            "saúde do sistema",
+            "saude do sistema",
+            "ttft",
+            "introspection",
+            "self-aware",
+            "o que consegue",
+        )
+    ):
+        tools.append("system_help_tool")
     return tools
 
 

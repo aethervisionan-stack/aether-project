@@ -67,6 +67,10 @@ async def tool_catalog() -> dict[str, Any]:
             "two_step_confirm": True,
             "notification_listener": True,
         },
+        "introspection": {
+            "system_help_tool": True,
+            "read_only_no_confirm": True,
+        },
     }
 
 

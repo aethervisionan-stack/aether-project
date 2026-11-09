@@ -10,6 +10,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from app import __version__
 from app.billing import routes as billing_routes
 from app.config import get_settings
+from app.introspection.manifest import build_feature_flags
+from app.introspection.telemetry import get_latency_telemetry
 from app.memory import routes as memory_routes
 from app.tools import routes as tools_routes
 from app.websocket import live as live_ws
@@ -29,7 +31,8 @@ app = FastAPI(
         "Stripe subscription + Solana 70/30 tokenomics under `/billing`. "
         "Long-term memory / prefs under `/memory`. "
         "Frontier tools under `/tools`. CoT + multimodal sidecars on `/ws/live`. "
-        "Hands-free OS agent: messaging/email/telephony/system + two-step confirm."
+        "Hands-free OS agent: messaging/email/telephony/system + two-step confirm. "
+        "Introspection: dynamic self-knowledge + system_help_tool."
     ),
     version=__version__,
 )
@@ -104,6 +107,10 @@ async def health() -> dict[str, object]:
             "two_step_confirm": True,
             "notification_listener": True,
             "os_bridge": "mock",
+        },
+        "introspection": {
+            **build_feature_flags(),
+            "latency": get_latency_telemetry(),
         },
         # Explicit route map for local unlock verification (no auth middleware).
         "unlocked_routes": [

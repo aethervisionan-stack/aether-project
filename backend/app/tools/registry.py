@@ -10,6 +10,7 @@ from functools import lru_cache
 from typing import Any
 
 from app.config import Settings, get_settings
+from app.introspection import handlers as help_handlers
 from app.tools import handlers, os_handlers
 from app.tools.schemas import TOOL_SCHEMAS, ToolSchema, schema_by_name, schemas_for_prompt
 
@@ -58,6 +59,10 @@ class ToolResult:
             "speak",
             "pending_id",
             "detail",
+            "version",
+            "ttft_ms",
+            "category",
+            "action",
         ]
         bits = [f"{k}={self.result[k]}" for k in keys if k in self.result and self.result[k] is not None]
         if not bits:
@@ -82,6 +87,8 @@ class ToolRegistry:
         self.register("email_calendar_tool", os_handlers.email_calendar_tool)
         self.register("telephony_tool", os_handlers.telephony_tool)
         self.register("system_control_tool", os_handlers.system_control_tool)
+        # Introspection / help (read-only — never pending_confirmation).
+        self.register("system_help_tool", help_handlers.system_help_tool)
 
     def register(self, name: str, handler: ToolHandler) -> None:
         self._handlers[name] = handler

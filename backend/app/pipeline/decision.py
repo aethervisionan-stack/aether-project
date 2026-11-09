@@ -144,6 +144,16 @@ async def run_decision_pipeline(ctx: DecisionContext) -> DecisionOutcome:
                     args = {"action": "timer", "minutes": 5, "label": "aether"}
                 else:
                     args = {"action": "battery"}
+            elif name == "system_help_tool":
+                # Read-only help — never pending_confirmation.
+                lower = text.lower()
+                if any(
+                    k in lower
+                    for k in ("health", "ttft", "latency", "status", "integra", "saúde", "saude")
+                ):
+                    args = {"action": "get_system_health"}
+                else:
+                    args = {"action": "get_system_capabilities"}
             result = await registry.invoke(name, args, ctx=tool_ctx)
             tool_results.append(result)
 

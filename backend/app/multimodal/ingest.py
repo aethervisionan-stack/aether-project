@@ -55,6 +55,7 @@ class MultimodalFrame:
 class TelemetrySample:
     ping_ms: float | None = None
     ai_ms: float | None = None
+    ttft_ms: float | None = None
     ws_state: str | None = None
     viz_mode: str | None = None
     fifo_depth_ms: float | None = None
@@ -111,6 +112,8 @@ class MultimodalBuffer:
         known = {
             "ping_ms",
             "ai_ms",
+            "ttft_ms",
+            "ttftMs",
             "ws_state",
             "viz_mode",
             "fifo_depth_ms",
@@ -119,6 +122,7 @@ class MultimodalBuffer:
         sample = TelemetrySample(
             ping_ms=_as_float(payload.get("ping_ms")),
             ai_ms=_as_float(payload.get("ai_ms")),
+            ttft_ms=_as_float(payload.get("ttft_ms") if payload.get("ttft_ms") is not None else payload.get("ttftMs")),
             ws_state=str(payload["ws_state"]) if payload.get("ws_state") else None,
             viz_mode=str(payload["viz_mode"]) if payload.get("viz_mode") else None,
             fifo_depth_ms=_as_float(payload.get("fifo_depth_ms")),
@@ -151,6 +155,8 @@ class MultimodalBuffer:
                 bits.append(f"ping={tel.ping_ms:.0f}ms")
             if tel.ai_ms is not None:
                 bits.append(f"ai={tel.ai_ms:.0f}ms")
+            if tel.ttft_ms is not None:
+                bits.append(f"ttft={tel.ttft_ms:.0f}ms")
             if tel.viz_mode:
                 bits.append(f"viz={tel.viz_mode}")
             if tel.ws_state:
