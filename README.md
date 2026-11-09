@@ -76,8 +76,8 @@ Open [http://127.0.0.1:5173](http://127.0.0.1:5173), pair a Bluetooth headset as
 | `GEMINI_LIVE_MODEL` | `backend/.env` | Default `gemini-3.8-live` |
 | `GEMINI_API_VERSION` | `backend/.env` | Default `v1beta` (required for Live WS) |
 | `VITE_LIVE_WS_URL` | `client/.env` | Optional absolute WS URL |
-| `STRIPE_SECRET_KEY` | `backend/.env` | Server Checkout + webhook |
-| `STRIPE_PUBLISHABLE_KEY` | `backend/.env` | Exposed via `/billing/config` only |
+| `STRIPE_SECRET_KEY` | `backend/.env` | Required for hosted Checkout `Session.create` + webhook |
+| `STRIPE_PUBLISHABLE_KEY` | `backend/.env` | Optional for redirect Checkout (Stripe.js / Elements only); incomplete `pk_test_` is fine |
 | `STRIPE_WEBHOOK_SECRET` | `backend/.env` | Stripe CLI / Dashboard signing secret |
 | `STRIPE_PRICE_ID` | `backend/.env` | Optional; ignored while `STRIPE_FORCE_UNIT_AMOUNT=true` |
 | `STRIPE_CURRENCY` | `backend/.env` | **TEMP TEST:** `brl` (restore `usd`) |
@@ -115,9 +115,9 @@ Leave `STRIPE_*` empty and keep `BILLING_DEV_UNLOCK=true`. The UI shows **Simula
 
 ### Enable real Stripe
 
-1. Copy keys into `backend/.env` (never commit them).
+1. Copy a real `STRIPE_SECRET_KEY` (`sk_test_…`) into `backend/.env` (never commit it). Mock Checkout turns off automatically. Publishable key is not required for hosted Checkout redirect.
 2. `stripe listen --forward-to localhost:8000/billing/webhook` and set `STRIPE_WEBHOOK_SECRET`.
-3. Restart uvicorn. Client **Subscribe** redirects to Checkout.
+3. Restart uvicorn. Client **Subscribe** redirects to Stripe-hosted Checkout (`checkout.stripe.com`).
 
 ### Enable real Solana transfers
 

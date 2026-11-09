@@ -266,18 +266,18 @@ export class ControlApp {
       this.setProcess("POST /api/billing/checkout …");
       const session = await startCheckout();
       saveSubscriberId(session.id);
+      const checkoutUrl = session.url;
       const isMock = Boolean(session.mock) || session.id.startsWith("cs_test_mock_");
       if (isMock) {
         this.setProcess(`Mock session ${session.id} — opening checkout return…`);
         this.accessEl.textContent = "Mock checkout — redirecting to confirm payment…";
-        // Navigate to mock success URL so the user sees a real transition (not silent unlock).
         await new Promise((r) => window.setTimeout(r, 350));
-        window.location.assign(session.url);
+        window.location.href = checkoutUrl;
         return;
       }
       this.setProcess("Redirecting to Stripe Checkout…");
-      this.accessEl.textContent = "Redirecting to Stripe Checkout…";
-      window.location.assign(session.url);
+      this.accessEl.textContent = "Redirecting to Stripe hosted Checkout…";
+      window.location.href = checkoutUrl;
     } catch (err) {
       console.error("[aether:ui] subscribe/checkout failed", err);
       const message = err instanceof Error ? err.message : String(err);

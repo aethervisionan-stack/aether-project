@@ -91,7 +91,13 @@ export async function startCheckout(): Promise<{ id: string; url: string; mock?:
   }
 
   const raw = await res.text();
-  let data: { id?: string; url?: string; mock?: boolean; detail?: unknown } = {};
+  let data: {
+    id?: string;
+    url?: string;
+    checkout_url?: string;
+    mock?: boolean;
+    detail?: unknown;
+  } = {};
   try {
     data = raw ? (JSON.parse(raw) as typeof data) : {};
   } catch {
@@ -108,7 +114,8 @@ export async function startCheckout(): Promise<{ id: string; url: string; mock?:
     throw new Error(detail);
   }
 
-  if (!data.id || !data.url) {
+  const url = (data.checkout_url || data.url || "").trim();
+  if (!data.id || !url) {
     console.error("[aether:billing] checkout missing id/url", data);
     throw new Error("Checkout session missing id or url");
   }
@@ -116,9 +123,15 @@ export async function startCheckout(): Promise<{ id: string; url: string; mock?:
   console.info("[aether:billing] checkout ok", {
     id: data.id,
     mock: Boolean(data.mock),
-    url: data.url,
+    host: (() => {
+      try {
+        return new URL(url).host;
+      } catch {
+        return "invalid-url";
+      }
+    })(),
   });
-  return { id: data.id, url: data.url, mock: data.mock };
+  return { id: data.id, url, mock: data.mock };
 }
 
 /** Local/dev: revoke entitlement on the server and clear client id. */

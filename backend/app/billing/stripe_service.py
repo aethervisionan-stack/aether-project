@@ -61,6 +61,7 @@ def create_mock_checkout_session(settings: Settings) -> dict[str, Any]:
     return {
         "id": session_id,
         "url": success,
+        "checkout_url": success,
         "currency": price["currency"],
         "unit_amount_cents": price["unit_amount_cents"],
         "temp_test": price["temp_test"],
@@ -132,6 +133,9 @@ def create_checkout_session(settings: Settings) -> dict[str, Any]:
             "temp_test": "true" if price["temp_test"] else "false",
         },
     )
+    checkout_url = session.url
+    if not checkout_url:
+        raise RuntimeError("Stripe Checkout Session missing hosted url")
     logger.info(
         "stripe checkout session created id=%s amount=%s %s temp_test=%s",
         session.id,
@@ -139,14 +143,19 @@ def create_checkout_session(settings: Settings) -> dict[str, Any]:
         price["currency"],
         price["temp_test"],
     )
+    # Session.create only needs STRIPE_SECRET_KEY. Publishable key is optional
+    # (used by Stripe.js / Elements, not by hosted Checkout redirect).
+    pk = settings.stripe_publishable_key.strip()
+    pk_ok = bool(pk) and not pk.endswith("_") and "placeholder" not in pk.lower()
     return {
         "id": session.id,
-        "url": session.url,
+        "url": checkout_url,
+        "checkout_url": checkout_url,
         "currency": price["currency"],
         "unit_amount_cents": price["unit_amount_cents"],
         "temp_test": price["temp_test"],
         "mock": False,
-        "publishable_key_configured": bool(settings.stripe_publishable_key.strip()),
+        "publishable_key_configured": pk_ok,
     }
 
 

@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Always load backend/.env regardless of process cwd.
+_BACKEND_ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
 
 DEFAULT_CORS = (
     "http://127.0.0.1:5173,"
@@ -22,7 +26,7 @@ AETHER_SYSTEM_INSTRUCTION = (
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=str(_BACKEND_ENV_FILE),
         env_file_encoding="utf-8",
         extra="ignore",
     )
