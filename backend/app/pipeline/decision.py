@@ -17,6 +17,7 @@ from typing import Any
 from app.config import Settings, get_settings
 from app.memory.context import build_runtime_guidance, preferences_summary
 from app.memory.store import Preferences, get_memory_store
+from app.mobility.state import MobilitySessionState
 from app.multimodal.ingest import MultimodalBuffer
 from app.reasoning.classifier import Complexity, classify_complexity
 from app.reasoning.cot import PlanningResult, plan_and_correct
@@ -32,6 +33,7 @@ class DecisionContext:
     multimodal: MultimodalBuffer | None = None
     settings: Settings | None = None
     auto_tools: bool = True
+    mobility: MobilitySessionState | None = None
 
 
 @dataclass
@@ -46,6 +48,7 @@ class DecisionOutcome:
     injection_text: str = ""
     elapsed_ms: float = 0.0
     skipped_heavy: bool = False
+    mobility_mode: str | None = None
 
     def to_event(self) -> dict[str, Any]:
         return {
@@ -57,6 +60,7 @@ class DecisionOutcome:
             "plan": self.planning.to_dict() if not self.planning.skipped else {"skipped": True},
             "tools": [t.to_dict() for t in self.tool_results],
             "elapsed_ms": self.elapsed_ms,
+            "mobility_mode": self.mobility_mode,
         }
 
 
@@ -78,14 +82,23 @@ async def run_decision_pipeline(ctx: DecisionContext) -> DecisionOutcome:
         pref_summary = preferences_summary(prefs)
         guidance = build_runtime_guidance(prefs)
 
-    # Simple turns: memory guidance only — no CoT / tools (protect TTFT / voice).
+    mobility_blocks: list[str] = []
+    mobility_mode: str | None = None
+    if ctx.mobility is not None:
+        mobility_mode = ctx.mobility.copilot_mode.value
+        mobility_blocks = ctx.mobility.runtime_blocks()
+
+    def _compose_injection(*extra: str) -> str:
+        parts = [guidance, *mobility_blocks, *[e for e in extra if e]]
+        return "\n".join(p for p in parts if p).strip()
+
+    # Simple turns: memory + mobility guidance only — no CoT / tools (protect TTFT / voice).
     if complexity is Complexity.SIMPLE:
         planning = plan_and_correct(text)  # returns skipped
-        injection = guidance
+        mm = ""
         if ctx.multimodal:
-            mm = ctx.multimodal.context_snippet()
-            if mm:
-                injection = (injection + "\n" + mm).strip()
+            mm = ctx.multimodal.context_snippet() or ""
+        injection = _compose_injection(mm)
         return DecisionOutcome(
             turn_id=turn_id,
             complexity=complexity,
@@ -96,6 +109,7 @@ async def run_decision_pipeline(ctx: DecisionContext) -> DecisionOutcome:
             injection_text=injection,
             elapsed_ms=(time.perf_counter() - started) * 1000.0,
             skipped_heavy=True,
+            mobility_mode=mobility_mode,
         )
 
     planning = plan_and_correct(text)
@@ -118,20 +132,12 @@ async def run_decision_pipeline(ctx: DecisionContext) -> DecisionOutcome:
             result = await registry.invoke(name, args, ctx=tool_ctx)
             tool_results.append(result)
 
-    parts: list[str] = []
-    if guidance:
-        parts.append(guidance)
     plan_block = planning.context_block()
-    if plan_block:
-        parts.append(plan_block)
-    for tr in tool_results:
-        parts.append(tr.context_line())
+    tool_lines = [tr.context_line() for tr in tool_results]
+    mm = ""
     if ctx.multimodal:
-        mm = ctx.multimodal.context_snippet()
-        if mm:
-            parts.append(mm)
-
-    injection = "\n".join(p for p in parts if p).strip()
+        mm = ctx.multimodal.context_snippet() or ""
+    injection = _compose_injection(plan_block, *tool_lines, mm)
     outcome = DecisionOutcome(
         turn_id=turn_id,
         complexity=complexity,
@@ -143,6 +149,7 @@ async def run_decision_pipeline(ctx: DecisionContext) -> DecisionOutcome:
         injection_text=injection,
         elapsed_ms=(time.perf_counter() - started) * 1000.0,
         skipped_heavy=False,
+        mobility_mode=mobility_mode,
     )
     logger.info(
         "decision turn=%s complexity=%s tools=%s ms=%.1f",

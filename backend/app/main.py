@@ -79,6 +79,17 @@ async def health() -> dict[str, object]:
             "memory_runtime": True,
             "token_streaming": True,
         },
+        "mobility": {
+            "copilot_mode": True,
+            "notifications": True,
+            "productivity": True,
+            "geo_nav": True,
+            "audio_profile": True,
+            "priority_manager": True,
+            "vad_open_mic": True,
+            "push_to_talk": True,
+            "barge_in": True,
+        },
     }
 
 

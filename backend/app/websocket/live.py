@@ -13,9 +13,15 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.config import get_settings
 from app.genai.session import GeminiLiveSession
+from app.hardware.audio_profile import interruption_allows
+from app.hardware.priority import priority_policy
 from app.memory.context import build_system_instruction
 from app.memory.extractor import run_extraction
 from app.memory.store import get_memory_store
+from app.mobility.geo import PlacePoint, build_nav_guidance, suggest_places
+from app.mobility.notifications import parse_notification
+from app.mobility.productivity import parse_productivity_command
+from app.mobility.state import MobilitySessionState
 from app.multimodal.ingest import MultimodalBuffer
 from app.pipeline.decision import DecisionContext, run_decision_pipeline
 from app.reasoning.classifier import Complexity, classify_complexity
@@ -46,12 +52,16 @@ async def live_websocket(websocket: WebSocket) -> None:
     Client → server:
       - binary frames: PCM 16-bit LE mono @ 16 kHz
       - JSON text:
-          ping | pong | text | audio | frame | telemetry | tool_call | planning
+          ping | pong | text | audio | frame | telemetry | tool_call |
+          mobility_config | notification | notification_reply | productivity |
+          geo | place | nav_request | barge_in | ptt
 
     Server → client:
       - binary frames: PCM 16-bit LE mono @ 24 kHz (Gemini audio)
       - JSON text: ready | ping | pong | *_transcript | token_* | decision |
-        tool_result | multimodal_ack | turn_complete | interrupted | error
+        tool_result | multimodal_ack | mobility_ack | notification_action |
+        productivity_ack | nav_guidance | priority_policy |
+        turn_complete | interrupted | error
     """
     await websocket.accept()
     settings = get_settings()
@@ -76,6 +86,7 @@ async def live_websocket(websocket: WebSocket) -> None:
     bridge: dict[str, GeminiLiveSession | None] = {"session": None}
     memory_turns = 0
     multimodal = MultimodalBuffer()
+    mobility = MobilitySessionState()
     # Serialize heavy decision work so voice PCM never waits on CoT/tools.
     decision_lock = asyncio.Lock()
 
@@ -146,6 +157,7 @@ async def live_websocket(websocket: WebSocket) -> None:
                     text,
                     schedule_memory=_schedule_memory,
                     multimodal=multimodal,
+                    mobility=mobility,
                     profile_id=profile_id,
                     on_event=on_event,
                     decision_lock=decision_lock,
@@ -190,12 +202,18 @@ async def live_websocket(websocket: WebSocket) -> None:
         attempt = 0
         while not stop.is_set():
             attempt += 1
-            system_instruction = build_system_instruction()
+            system_instruction = build_system_instruction(
+                copilot_mode=mobility.copilot_mode,
+            )
             if settings.memory_enabled:
                 try:
                     store = get_memory_store()
                     snap = await asyncio.to_thread(store.snapshot, profile_id)
-                    system_instruction = build_system_instruction(snap.get("preferences"))
+                    system_instruction = build_system_instruction(
+                        snap.get("preferences"),
+                        copilot_mode=mobility.copilot_mode,
+                        mobility_extra="\n".join(mobility.runtime_blocks()),
+                    )
                 except Exception:
                     logger.debug("memory prefs load failed; using base persona", exc_info=True)
 
@@ -203,7 +221,8 @@ async def live_websocket(websocket: WebSocket) -> None:
             tools_hint = (
                 "Available tools (client/server may invoke via tool_call): "
                 + ", ".join(get_tool_registry().list_names())
-                + ". Prefer short HUD answers; never narrate internal plans unless asked."
+                + ". Prefer short HUD answers; never narrate internal plans unless asked. "
+                "Voice UX: open-mic / PTT — no wake word required. Support barge-in."
             )
             system_instruction = f"{system_instruction}\n{tools_hint}"
 
@@ -294,6 +313,7 @@ async def _handle_control_message(
     *,
     schedule_memory: Any | None = None,
     multimodal: MultimodalBuffer | None = None,
+    mobility: MobilitySessionState | None = None,
     profile_id: str = DEFAULT_MEMORY_PROFILE,
     on_event: Any | None = None,
     decision_lock: asyncio.Lock | None = None,
@@ -327,6 +347,215 @@ async def _handle_control_message(
         return
 
     session = bridge["session"]
+
+    # --- Mobility / hardware / voice UX (sidecar; never blocks PCM) ---
+    if msg_type == "mobility_config" and mobility is not None:
+        mobility.apply_config(payload)
+        policy = priority_policy(mobility.pace, mobility.audio_profile)
+        try:
+            await websocket.send_json(
+                {
+                    "type": "mobility_ack",
+                    "ok": True,
+                    "state": mobility.to_dict(),
+                    "policy": policy.to_dict(),
+                }
+            )
+            await websocket.send_json(
+                {"type": "priority_policy", "policy": policy.to_dict()}
+            )
+        except Exception:
+            pass
+        if session is not None:
+            await session.push_text(
+                "[runtime_context]\n" + "\n".join(mobility.runtime_blocks())
+            )
+        return
+
+    if msg_type == "notification" and mobility is not None:
+        action = parse_notification(
+            source=str(payload.get("source") or "unknown"),
+            title=str(payload.get("title") or ""),
+            body=str(payload.get("body") or ""),
+            raw=str(payload["raw"]) if payload.get("raw") is not None else None,
+            sender=str(payload["sender"]) if payload.get("sender") is not None else None,
+        )
+        policy = priority_policy(mobility.pace, mobility.audio_profile)
+        allowed = policy.allows(action.priority) and interruption_allows(
+            profile=mobility.audio_profile,
+            filter_enabled=mobility.interruption_filter,
+            event_priority=action.priority,
+        )
+        try:
+            await websocket.send_json(
+                {
+                    "type": "notification_action",
+                    "action": action.to_dict(),
+                    "muted": not allowed,
+                    "reason": None if allowed else "priority_or_interruption_filter",
+                }
+            )
+        except Exception:
+            pass
+        if allowed and session is not None:
+            await session.push_text(
+                "[notification_pending_confirm]\n"
+                f"{action.summary}\n"
+                + (
+                    f"Suggested reply: {action.suggested_reply}"
+                    if action.suggested_reply
+                    else "Await voice or tap confirmation."
+                )
+            )
+        return
+
+    if msg_type == "notification_reply":
+        confirm = bool(payload.get("confirm"))
+        reply = str(payload.get("reply") or "").strip()
+        action_id = str(payload.get("id") or "")
+        if confirm and schedule_memory is not None and reply:
+            schedule_memory("user", f"[notification_reply {action_id}] {reply}")
+        if session is not None:
+            if confirm:
+                await session.push_text(
+                    f"[notification_confirmed id={action_id}] "
+                    + (reply or "User confirmed the suggested reply.")
+                )
+            else:
+                await session.push_text(
+                    f"[notification_dismissed id={action_id}] User dismissed."
+                )
+        return
+
+    if msg_type == "productivity":
+        intent = parse_productivity_command(str(payload.get("text") or ""))
+        memory_saved = False
+        if intent.ok and intent.memory_note and get_settings().memory_enabled:
+            try:
+                store = get_memory_store()
+                snap = await asyncio.to_thread(store.snapshot, profile_id)
+                prefs = snap.get("preferences") if isinstance(snap, dict) else {}
+                notes = ""
+                if isinstance(prefs, dict):
+                    notes = str(prefs.get("notes") or "")
+                merged = (notes + "\n" + intent.memory_note).strip()[-1200:]
+                await asyncio.to_thread(
+                    store.update_preferences,
+                    profile_id,
+                    preferences={"notes": merged},
+                    merge=True,
+                )
+                memory_saved = True
+            except Exception:
+                logger.debug("productivity memory save failed", exc_info=True)
+        if schedule_memory is not None and intent.ok:
+            schedule_memory("user", f"[productivity {intent.kind}] {intent.detail}")
+        try:
+            await websocket.send_json(
+                {
+                    "type": "productivity_ack",
+                    "intent": intent.to_dict(),
+                    "memory_saved": memory_saved,
+                }
+            )
+        except Exception:
+            pass
+        if session is not None and intent.ok:
+            await session.push_text(
+                f"[productivity {intent.kind}] Saved: {intent.title}"
+                + (f" when={intent.when_hint}" if intent.when_hint else "")
+            )
+        return
+
+    if msg_type == "geo" and mobility is not None:
+        fix = mobility.set_geo(payload)
+        policy = priority_policy(mobility.pace, mobility.audio_profile)
+        nearby = suggest_places(fix, mobility.places) if fix else []
+        try:
+            await websocket.send_json(
+                {
+                    "type": "mobility_ack",
+                    "ok": fix is not None,
+                    "state": mobility.to_dict(),
+                    "policy": policy.to_dict(),
+                }
+            )
+            await websocket.send_json(
+                {"type": "priority_policy", "policy": policy.to_dict()}
+            )
+        except Exception:
+            pass
+        if fix is not None and session is not None:
+            nav = build_nav_guidance(fix, nearby=nearby)
+            await session.push_text(str(nav.get("prompt_block") or ""))
+        return
+
+    if msg_type == "place" and mobility is not None:
+        place = mobility.upsert_place(payload)
+        try:
+            await websocket.send_json(
+                {
+                    "type": "mobility_ack",
+                    "ok": place is not None,
+                    "state": mobility.to_dict(),
+                }
+            )
+        except Exception:
+            pass
+        return
+
+    if msg_type == "nav_request" and mobility is not None:
+        dest_id = str(payload.get("destination_id") or "").strip()
+        destination: PlacePoint | None = None
+        if dest_id:
+            for p in mobility.places:
+                if p.id == dest_id:
+                    destination = p
+                    break
+        nearby = suggest_places(mobility.last_fix, mobility.places)
+        if destination is None and nearby:
+            # Default to closest saved/meeting point.
+            first = nearby[0]
+            destination = PlacePoint(
+                id=str(first.get("id") or "near"),
+                name=str(first.get("name") or "Nearby"),
+                lat=float(first["lat"]),
+                lon=float(first["lon"]),
+                kind=str(first.get("kind") or "saved"),
+            )
+        nav = build_nav_guidance(
+            mobility.last_fix,
+            destination=destination,
+            nearby=nearby,
+        )
+        try:
+            await websocket.send_json({"type": "nav_guidance", **nav})
+        except Exception:
+            pass
+        if session is not None and nav.get("prompt_block"):
+            await session.push_text(str(nav["prompt_block"]))
+        return
+
+    if msg_type == "barge_in":
+        # Client already aborted local playback; ask Live to treat as interruption.
+        try:
+            await websocket.send_json({"type": "interrupted"})
+        except Exception:
+            pass
+        if session is not None:
+            await session.push_text(
+                "[barge_in] User interrupted playback — listen to the new command now."
+            )
+        return
+
+    if msg_type == "ptt":
+        active = bool(payload.get("active"))
+        if mobility is not None:
+            mobility.ptt_enabled = True
+            mobility.updated_at = time.time()
+        if session is not None and active:
+            await session.push_text("[ptt] Mic gate open — user is speaking.")
+        return
 
     # --- Multimodal: screen/image frames (sidecar; never blocks PCM) ---
     if msg_type == "frame" and multimodal is not None:
@@ -425,6 +654,7 @@ async def _handle_control_message(
                     user_text=user_text,
                     profile_id=profile_id,
                     multimodal=multimodal,
+                    mobility=mobility,
                     on_event=on_event,
                     decision_lock=decision_lock,
                     stop=stop,
@@ -447,6 +677,7 @@ async def _run_text_sidecar(
     user_text: str,
     profile_id: str,
     multimodal: MultimodalBuffer | None,
+    mobility: MobilitySessionState | None = None,
     on_event: Any | None,
     decision_lock: asyncio.Lock | None,
     stop: asyncio.Event | None,
@@ -467,6 +698,7 @@ async def _run_text_sidecar(
                     multimodal=multimodal,
                     settings=get_settings(),
                     auto_tools=True,
+                    mobility=mobility,
                 )
             )
             if force_plan and outcome.planning.skipped:

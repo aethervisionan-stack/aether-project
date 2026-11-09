@@ -99,6 +99,40 @@ export interface LiveOutboundAckEvent {
   server_t?: number;
 }
 
+/** Mobility / hardware / voice UX events from `/ws/live`. */
+export interface LiveMobilityAckEvent {
+  type: "mobility_ack";
+  ok: boolean;
+  state?: Record<string, unknown>;
+  policy?: Record<string, unknown>;
+}
+
+export interface LiveNotificationActionEvent {
+  type: "notification_action";
+  action: Record<string, unknown>;
+  muted?: boolean;
+  reason?: string;
+}
+
+export interface LiveProductivityAckEvent {
+  type: "productivity_ack";
+  intent: Record<string, unknown>;
+  memory_saved?: boolean;
+}
+
+export interface LiveNavGuidanceEvent {
+  type: "nav_guidance";
+  ok: boolean;
+  steps?: string[];
+  nearby?: Array<Record<string, unknown>>;
+  prompt_block?: string;
+}
+
+export interface LivePriorityPolicyEvent {
+  type: "priority_policy";
+  policy: Record<string, unknown>;
+}
+
 export type LiveServerJsonEvent =
   | LiveReadyEvent
   | LivePingEvent
@@ -113,6 +147,11 @@ export type LiveServerJsonEvent =
   | LiveToolResultEvent
   | LiveMultimodalAckEvent
   | LiveOutboundAckEvent
+  | LiveMobilityAckEvent
+  | LiveNotificationActionEvent
+  | LiveProductivityAckEvent
+  | LiveNavGuidanceEvent
+  | LivePriorityPolicyEvent
   | { type: string; [key: string]: unknown };
 
 export type GuardrailStatus = "secure" | "sanitizing" | "blocked";

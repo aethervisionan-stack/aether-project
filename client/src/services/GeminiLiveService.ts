@@ -18,8 +18,18 @@ import { formatMicError, PcmCapture } from "../audio/PcmCapture";
 import { TelemetryMonitor } from "../audio/TelemetryMonitor";
 import { buildHudTelemetry } from "../multimodal/HudTelemetry";
 import type { CapturedFrame } from "../multimodal/FrameCapture";
+import type {
+  GeoFixPayload,
+  MobilityConfig,
+  PlacePointPayload,
+  RawNotificationInput,
+} from "../types/mobility";
+import { DEFAULT_MOBILITY_CONFIG } from "../types/mobility";
 import type { LiveServerJsonEvent, WsReadyStateLabel } from "../types/live";
 import type { ToolArgumentsByName, ToolName } from "../types/tools";
+import { BargeInController } from "../voice/BargeInController";
+import { PushToTalk } from "../voice/PushToTalk";
+import { VadController } from "../voice/VadController";
 
 export type LiveEventHandler = (event: LiveServerJsonEvent) => void;
 
@@ -100,6 +110,12 @@ export class GeminiLiveService {
   private telemetryFlushTimer: number | null = null;
   /** Latest streamed token text for HUD consumers (does not block audio). */
   private lastTokenStream = "";
+  private mobilityConfig: MobilityConfig = { ...DEFAULT_MOBILITY_CONFIG };
+  /** When PTT is enabled, PCM only flushes while gate is open. */
+  private pttGateOpen = true;
+  private readonly vad: VadController;
+  private readonly ptt: PushToTalk;
+  private readonly bargeIn: BargeInController;
 
   constructor(options: GeminiLiveServiceOptions = {}) {
     this.url = options.url ?? resolveDefaultWsUrl();
@@ -109,6 +125,133 @@ export class GeminiLiveService {
     this.player = new GaplessPcmPlayer({
       onDepth: (depth) => this.telemetry.setPlaybackQueueDepth(depth),
     });
+    this.bargeIn = new BargeInController({
+      interruptPlayback: () => this.abortPlaybackQueue(),
+      clearTokenStream: () => {
+        this.lastTokenStream = "";
+      },
+      notifyServer: () => this.sendJson({ type: "barge_in", client_t: performance.now() }),
+      onBargeIn: () => {
+        this.telemetry.clearAiCycle();
+        this.voiceCycleArmed = true;
+        this.setVizMode(this.micEnabled ? "listening" : "idle");
+      },
+    });
+    this.vad = new VadController({
+      onSpeechStart: () => {
+        this.bargeIn.tryBargeIn();
+      },
+    });
+    this.ptt = new PushToTalk({
+      mode: "hold_to_talk",
+      onActiveChange: (active) => {
+        this.pttGateOpen = !this.mobilityConfig.pttEnabled || active;
+        this.sendJson({
+          type: "ptt",
+          active,
+          client_t: performance.now(),
+        });
+        if (active) {
+          this.bargeIn.tryBargeIn();
+          this.setVizMode("listening");
+        }
+      },
+    });
+  }
+
+  getMobilityConfig(): MobilityConfig {
+    return { ...this.mobilityConfig };
+  }
+
+  /** Sync HUD mobility / hardware toggles to the Live bridge + local mic gates. */
+  applyMobilityConfig(partial: Partial<MobilityConfig>): void {
+    this.mobilityConfig = { ...this.mobilityConfig, ...partial };
+    const cfg = this.mobilityConfig;
+    this.vad.setEnabled(cfg.openMic && !cfg.pttEnabled);
+    this.ptt.setEnabled(cfg.pttEnabled);
+    this.pttGateOpen = !cfg.pttEnabled;
+    this.sendJson({
+      type: "mobility_config",
+      copilot_mode: cfg.copilotMode,
+      audio_profile: cfg.audioProfile,
+      interruption_filter: cfg.interruptionFilter,
+      open_mic: cfg.openMic,
+      ptt_enabled: cfg.pttEnabled,
+      client_t: performance.now(),
+    });
+  }
+
+  pttPress(): void {
+    this.ptt.press();
+  }
+
+  pttRelease(): void {
+    this.ptt.release();
+  }
+
+  isPttActive(): boolean {
+    return this.ptt.isActive();
+  }
+
+  sendGeoFix(fix: GeoFixPayload): void {
+    this.sendJson({ type: "geo", ...fix, client_t: performance.now() });
+  }
+
+  sendPlace(place: PlacePointPayload): void {
+    this.sendJson({ type: "place", ...place, client_t: performance.now() });
+  }
+
+  sendRawNotification(input: RawNotificationInput): void {
+    this.sendJson({
+      type: "notification",
+      source: input.source ?? "hud",
+      title: input.title ?? "",
+      body: input.body ?? "",
+      raw: input.raw,
+      sender: input.sender,
+      client_t: performance.now(),
+    });
+  }
+
+  confirmNotificationReply(actionId: string, reply?: string | null): void {
+    this.sendJson({
+      type: "notification_reply",
+      id: actionId,
+      confirm: true,
+      reply: reply ?? null,
+      client_t: performance.now(),
+    });
+  }
+
+  dismissNotification(actionId: string): void {
+    this.sendJson({
+      type: "notification_reply",
+      id: actionId,
+      confirm: false,
+      client_t: performance.now(),
+    });
+  }
+
+  sendProductivityCommand(text: string): void {
+    this.sendJson({
+      type: "productivity",
+      text,
+      client_t: performance.now(),
+    });
+  }
+
+  requestNavGuidance(destinationId?: string): void {
+    this.sendJson({
+      type: "nav_request",
+      destination_id: destinationId ?? null,
+      client_t: performance.now(),
+    });
+  }
+
+  /** Instant barge-in: abort PCM playback + clear synth queue (TTFT path untouched). */
+  abortPlaybackQueue(): void {
+    this.player.clearOutputQueue();
+    this.lastTokenStream = "";
   }
 
   /** Attach / detach the Gen-1 audio HUD visualizer without reconnecting. */
@@ -176,6 +319,9 @@ export class GeminiLiveService {
     this.voiceCycleArmed = true;
     this.stopTelemetryFlushLoop();
     this.lastTokenStream = "";
+    this.ptt.setEnabled(false);
+    this.vad.reset();
+    this.bargeIn.markAssistantIdle();
     void this.visualizer?.connectMicStream(null);
     this.setVizMode("idle");
     this.detachAndCloseSocket();
@@ -329,6 +475,13 @@ export class GeminiLiveService {
 
     try {
       const { label } = await this.capture.start((pcm) => {
+        // Full-duplex VAD (open mic, no wake word) — barge-in before enqueue when AI speaks.
+        this.vad.pushPcm16(pcm);
+        // PTT gate: drop uplink PCM when hold-to-talk is idle (still run VAD locally).
+        if (this.mobilityConfig.pttEnabled && !this.pttGateOpen) {
+          this.telemetry.setFifo(this.fifo.stats());
+          return;
+        }
         this.fifo.push(pcm);
         this.telemetry.setFifo(this.fifo.stats());
         this.maybeMarkVoiceOutbound(pcm);
@@ -530,6 +683,7 @@ export class GeminiLiveService {
     if (event.data instanceof ArrayBuffer) {
       this.telemetry.markAiFirstChunk();
       this.voiceCycleArmed = true;
+      this.bargeIn.markAssistantSpeaking();
       try {
         // Expressive synthesis path: visualizer mode tracks AI speech energy.
         this.setVizMode("speaking");
@@ -597,14 +751,15 @@ export class GeminiLiveService {
       this.telemetry.markAiFirstChunk();
       this.telemetry.markTtft();
       this.voiceCycleArmed = true;
+      this.bargeIn.markAssistantSpeaking();
       this.setVizMode("speaking");
     }
 
     if (parsed.type === "interrupted") {
-      this.player.interrupt();
+      this.abortPlaybackQueue();
       this.telemetry.clearAiCycle();
       this.voiceCycleArmed = true;
-      this.lastTokenStream = "";
+      this.bargeIn.markAssistantIdle();
       this.setVizMode(this.micEnabled ? "listening" : "idle");
       try {
         await this.player.ensureStarted();
@@ -615,6 +770,7 @@ export class GeminiLiveService {
 
     if (parsed.type === "turn_complete") {
       this.voiceCycleArmed = true;
+      this.bargeIn.markAssistantIdle();
       this.setVizMode(this.micEnabled ? "listening" : "idle");
     }
 

@@ -6,6 +6,7 @@ from typing import Any
 
 from app.config import AETHER_SYSTEM_INSTRUCTION
 from app.memory.store import Preferences
+from app.mobility.copilot import CopilotMode, build_copilot_guidance, parse_copilot_mode
 
 
 def preferences_summary(prefs: Preferences | dict[str, Any] | None) -> str:
@@ -31,24 +32,33 @@ def preferences_summary(prefs: Preferences | dict[str, Any] | None) -> str:
     return "; ".join(parts)
 
 
-def build_system_instruction(prefs: Preferences | dict[str, Any] | None = None) -> str:
+def build_system_instruction(
+    prefs: Preferences | dict[str, Any] | None = None,
+    *,
+    copilot_mode: CopilotMode | str | None = None,
+    mobility_extra: str | None = None,
+) -> str:
     """
-    Base Aether HUD persona + optional learned preference block.
+    Base Aether HUD persona + optional learned preference block + mobility modes.
 
     Keeps replies short; preferences adapt tone/depth without breaking HUD style.
     """
     base = AETHER_SYSTEM_INSTRUCTION.strip()
+    parts: list[str] = [base]
     summary = preferences_summary(prefs)
-    if not summary:
-        return base
-
-    adapt = (
-        "Learned user preferences (adapt quietly; still reply in 1–3 short HUD sentences): "
-        f"{summary}. "
-        "If language is set, prefer that language. "
-        "If technical_level=advanced, use precise terms; if simple, avoid jargon."
-    )
-    return f"{base}\n{adapt}"
+    if summary:
+        adapt = (
+            "Learned user preferences (adapt quietly; still reply in 1–3 short HUD sentences): "
+            f"{summary}. "
+            "If language is set, prefer that language. "
+            "If technical_level=advanced, use precise terms; if simple, avoid jargon."
+        )
+        parts.append(adapt)
+    if copilot_mode is not None:
+        parts.append(build_copilot_guidance(parse_copilot_mode(copilot_mode)))
+    if mobility_extra and mobility_extra.strip():
+        parts.append(mobility_extra.strip())
+    return "\n".join(parts)
 
 
 def build_runtime_guidance(prefs: Preferences | dict[str, Any] | None = None) -> str:

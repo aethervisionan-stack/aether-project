@@ -17,11 +17,16 @@ import {
 } from "../services/BillingService";
 import { AdvancedAudioVisualizer } from "../audio/AdvancedAudioVisualizer";
 import { LatencyMonitor } from "../audio/LatencyMonitor";
+import { classifyPace } from "../hardware/NotificationPriority";
+import { GeoNavigation } from "../mobility/GeoNavigation";
+import { parseProductivityLocal } from "../mobility/ProductivityVoice";
 import { FrameCapture } from "../multimodal/FrameCapture";
 import { GeminiLiveService } from "../services/GeminiLiveService";
 import type { LiveServerJsonEvent, TelemetrySnapshot, WsReadyStateLabel } from "../types/live";
+import type { NotificationActionView } from "../types/mobility";
 import { GuardrailIndicator } from "./GuardrailIndicator";
 import { MemoryInspector } from "./MemoryInspector";
+import { MobilityPanel } from "./MobilityPanel";
 import { ToastHost } from "./ToastHost";
 import { TranscriptFeed } from "./TranscriptFeed";
 import { TreasuryWidget } from "./TreasuryWidget";
@@ -78,6 +83,7 @@ export class ControlApp {
   private transcript: TranscriptFeed | null = null;
   private guardrail: GuardrailIndicator | null = null;
   private memory: MemoryInspector | null = null;
+  private mobility: MobilityPanel | null = null;
   private toasts = new ToastHost();
   private focusBtn!: HTMLButtonElement;
   private frameBtn!: HTMLButtonElement;
@@ -85,6 +91,7 @@ export class ControlApp {
   private lastWsLabel: string | null = null;
   private treasuryToastArmed = false;
   private readonly frameCapture = new FrameCapture();
+  private readonly geo = new GeoNavigation();
 
   constructor(private readonly root: HTMLElement) {}
 
@@ -129,6 +136,7 @@ export class ControlApp {
           </div>
         </div>
         <div class="warn" data-role="warn" hidden></div>
+        <div class="mobility-mount" data-role="mobility"></div>
         <div class="text-row">
           <input type="text" placeholder="Type a message to Aether…" data-role="text" />
           <button type="button" class="secondary" data-action="send-text" disabled>Send</button>
@@ -159,11 +167,46 @@ export class ControlApp {
     const transcriptMount = this.root.querySelector<HTMLElement>("[data-role=transcript]")!;
     const guardrailEl = this.root.querySelector<HTMLElement>("[data-role=guardrail]")!;
     const memoryMount = this.root.querySelector<HTMLElement>("[data-role=memory]")!;
+    const mobilityMount = this.root.querySelector<HTMLElement>("[data-role=mobility]")!;
 
     this.treasury = new TreasuryWidget(treasuryMount);
     this.transcript = new TranscriptFeed(transcriptMount);
     this.guardrail = new GuardrailIndicator(guardrailEl);
     this.memory = new MemoryInspector(memoryMount);
+    this.mobility = new MobilityPanel(mobilityMount);
+    this.mobility.setNotify((kind, text) => {
+      if (kind === "ok") this.toasts.ok(text);
+      else if (kind === "warn") this.toasts.warn(text);
+      else if (kind === "danger") this.toasts.danger(text);
+      else this.toasts.info(text);
+    });
+    this.mobility.setHandlers({
+      onConfigChange: (cfg) => {
+        this.service?.applyMobilityConfig(cfg);
+      },
+      onPttPress: () => this.service?.pttPress(),
+      onPttRelease: () => this.service?.pttRelease(),
+      onEnableGps: () => this.enableGps(),
+      onSavePlace: () => this.saveGeoPlace(),
+      onNavRequest: () => {
+        this.service?.requestNavGuidance();
+        this.toasts.info("Requesting nav cue…");
+      },
+      onDemoNotification: () => this.demoNotification(),
+      onConfirmNotification: (id, reply) => {
+        this.service?.confirmNotificationReply(id, reply);
+        this.transcript?.push("system", `Notification reply confirmed${reply ? `: ${reply}` : ""}`);
+        this.toasts.ok("Reply confirmed");
+      },
+      onDismissNotification: (id) => {
+        this.service?.dismissNotification(id);
+        this.transcript?.push("system", `Notification ${id} dismissed`);
+      },
+    });
+    this.geo.setOnFix((fix) => {
+      this.service?.sendGeoFix(fix);
+      this.mobility?.setPace(classifyPace(fix.speed_mps ?? null));
+    });
     this.memory.setNotify((msg) => {
       if (msg.kind === "ok") {
         this.toasts.ok(msg.text);
@@ -564,6 +607,10 @@ export class ControlApp {
       this.setConnection("OPEN");
       this.guardrail?.reset();
       this.transcript?.clear();
+      this.mobility?.setConnected(true);
+      if (this.mobility) {
+        this.service.applyMobilityConfig(this.mobility.getConfig());
+      }
       this.toasts.ok("Live connected");
       this.toggleFocusMode(true);
 
@@ -609,9 +656,48 @@ export class ControlApp {
     this.textInput.placeholder = "Type a message to Aether…";
     this.clearWarn();
     this.setConnection("CLOSED");
+    this.mobility?.setConnected(false);
+    this.mobility?.clearPending();
+    this.geo.stopWatch();
     this.teardownTelemetryHud();
     this.toggleFocusMode(false);
     this.toasts.info("Live disconnected");
+  }
+
+  private enableGps(): void {
+    const ok = this.geo.startWatch();
+    if (!ok) {
+      this.toasts.warn("Geolocation unavailable in this browser");
+      return;
+    }
+    this.toasts.ok("GPS watch started — coords feed Live prompt");
+    const fix = this.geo.getLastFix();
+    if (fix) {
+      this.service?.sendGeoFix(fix);
+    }
+  }
+
+  private saveGeoPlace(): void {
+    const place = this.geo.saveCurrentPlace("Saved point", "saved");
+    if (!place) {
+      this.toasts.warn("No GPS fix yet — tap GPS first");
+      return;
+    }
+    this.service?.sendPlace(place);
+    this.transcript?.push("system", `Saved place ${place.name} (${place.lat.toFixed(4)}, ${place.lon.toFixed(4)})`);
+    this.toasts.ok("Place saved");
+  }
+
+  private demoNotification(): void {
+    const raw = {
+      source: "sms",
+      sender: "João",
+      title: "João",
+      body: "Você vai se atrasar?",
+      raw: "João: Você vai se atrasar?",
+    };
+    this.service?.sendRawNotification(raw);
+    this.transcript?.push("system", "Demo notification sent for parse/confirm");
   }
 
   private teardownTelemetryHud(): void {
@@ -650,7 +736,12 @@ export class ControlApp {
     this.transcript?.push("user", text);
     this.textInput.value = "";
     this.pulseButton(this.sendBtn);
-    this.service.sendText(text);
+    const productivity = parseProductivityLocal(text);
+    if (productivity.ok) {
+      this.service.sendProductivityCommand(text);
+    } else {
+      this.service.sendText(text);
+    }
     if (!this.focusMode) {
       this.toggleFocusMode(true);
     }
@@ -718,11 +809,54 @@ export class ControlApp {
         this.transcript?.push("system", `Tool ${ev.name ?? "?"} · ${label}`);
         break;
       }
+      case "notification_action": {
+        const ev = event as {
+          action?: NotificationActionView;
+          muted?: boolean;
+        };
+        if (ev.action) {
+          this.mobility?.showNotificationAction(ev.action, Boolean(ev.muted));
+          if (!ev.muted) {
+            this.transcript?.push("system", ev.action.summary);
+          }
+        }
+        break;
+      }
+      case "productivity_ack": {
+        const ev = event as {
+          intent?: { kind?: string; title?: string; ok?: boolean };
+          memory_saved?: boolean;
+        };
+        if (ev.intent?.ok) {
+          this.transcript?.push(
+            "system",
+            `Productivity ${ev.intent.kind}: ${ev.intent.title}${ev.memory_saved ? " · memory" : ""}`,
+          );
+          this.toasts.ok(`Saved ${ev.intent.kind}`);
+        }
+        break;
+      }
+      case "nav_guidance": {
+        const ev = event as { ok?: boolean; steps?: string[] };
+        if (ev.ok && ev.steps?.length) {
+          this.transcript?.push("system", `Nav: ${ev.steps[0]}`);
+          this.toasts.info(ev.steps[0]);
+        } else {
+          this.toasts.warn("Nav guidance unavailable — enable GPS / save a place");
+        }
+        break;
+      }
+      case "priority_policy": {
+        const pace = (event as { policy?: { pace?: string } }).policy?.pace;
+        if (pace) this.mobility?.setPace(pace);
+        break;
+      }
+      case "mobility_ack":
       case "token_delta":
       case "token_done":
       case "multimodal_ack":
       case "outbound_ack":
-        // TTFT / multimodal acks feed LatencyTracker + buffers; no HUD spam.
+        // TTFT / multimodal / mobility acks feed LatencyTracker + buffers; no HUD spam.
         break;
       default:
         break;

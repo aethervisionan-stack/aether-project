@@ -64,7 +64,7 @@ export class GaplessPcmPlayer {
     };
   }
 
-  /** Drop scheduled future audio (model interruption). */
+  /** Drop scheduled future audio (model interruption / barge-in). */
   interrupt(): void {
     // Recreate context to flush scheduled sources cleanly.
     const prev = this.context;
@@ -73,6 +73,11 @@ export class GaplessPcmPlayer {
     this.queuedSources = 0;
     this.onDepth?.(0);
     void prev?.close();
+  }
+
+  /** Alias for barge-in: abort playback and clear the synth/output queue. */
+  clearOutputQueue(): void {
+    this.interrupt();
   }
 
   stop(): void {

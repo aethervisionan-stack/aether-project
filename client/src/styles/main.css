@@ -664,6 +664,50 @@ button.voice-pulse {
   display: none;
 }
 
+.mobility-mount {
+  margin: 0.65rem 0 0.85rem;
+}
+
+.mobility-panel {
+  border: 1px solid var(--border);
+  background: rgba(6, 12, 22, 0.4);
+  padding: 0.55rem 0.65rem 0.7rem;
+}
+
+.mobility-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.4rem;
+}
+
+.mobility-status {
+  margin: 0.15rem 0 0;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+
+.mobility-pending {
+  margin-top: 0.45rem;
+  padding-top: 0.45rem;
+  border-top: 1px solid rgba(0, 243, 255, 0.1);
+}
+
+.mobility-pending-summary {
+  margin: 0 0 0.4rem;
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+.mobility-panel button.is-active,
+.ptt-hold.is-active {
+  border-color: rgba(0, 243, 255, 0.55);
+  color: var(--cyan);
+  box-shadow: 0 0 0 1px rgba(0, 243, 255, 0.15);
+}
+
 .text-row {
   display: flex;
   gap: 0.5rem;
