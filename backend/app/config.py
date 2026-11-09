@@ -64,7 +64,7 @@ class Settings(BaseSettings):
 
     # --- Solana tokenomics (70% treasury / 30% burn) ---
     treasury_wallet_address: str = Field(
-        default="TreasuryWalletPubkeyPlaceholder1111111111111",
+        default="AVj6q1t8xWd7Mi7roNjTc1RvaqJy79P7n3XNpCVjQgxa",
         alias="TREASURY_WALLET_ADDRESS",
     )
     vision_burn_address: str = Field(
