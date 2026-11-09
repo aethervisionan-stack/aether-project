@@ -60,6 +60,8 @@ class GeminiLiveSession:
         self._system_instruction = (system_instruction or build_system_instruction()).strip()
         self._audio_in: asyncio.Queue[bytes] = asyncio.Queue(maxsize=64)
         self._text_in: asyncio.Queue[str] = asyncio.Queue(maxsize=16)
+        # Screen/image frames: (mime, bytes) — bounded so voice path stays primary.
+        self._image_in: asyncio.Queue[tuple[str, bytes]] = asyncio.Queue(maxsize=2)
         self._session: Any | None = None
         self._tasks: list[asyncio.Task[Any]] = []
 
@@ -88,6 +90,23 @@ class GeminiLiveSession:
         if cleaned:
             await self._text_in.put(cleaned)
 
+    async def push_image(self, data: bytes, *, mime: str = "image/jpeg") -> None:
+        """Enqueue a screen/image frame for Live multimodal input (drops oldest)."""
+        if not data:
+            return
+        item = (mime or "image/jpeg", data)
+        try:
+            self._image_in.put_nowait(item)
+        except asyncio.QueueFull:
+            try:
+                _ = self._image_in.get_nowait()
+            except asyncio.QueueEmpty:
+                pass
+            try:
+                self._image_in.put_nowait(item)
+            except asyncio.QueueFull:
+                logger.warning("image queue full; dropping frame")
+
     async def run(
         self,
         *,
@@ -106,11 +125,12 @@ class GeminiLiveSession:
             await on_event({"type": "ready", "model": self._model})
             send_audio_task = asyncio.create_task(self._send_audio_loop(session), name="live-send-audio")
             send_text_task = asyncio.create_task(self._send_text_loop(session), name="live-send-text")
+            send_image_task = asyncio.create_task(self._send_image_loop(session), name="live-send-image")
             receive_task = asyncio.create_task(
                 self._receive_loop(session, on_audio=on_audio, on_event=on_event),
                 name="live-receive",
             )
-            self._tasks = [send_audio_task, send_text_task, receive_task]
+            self._tasks = [send_audio_task, send_text_task, send_image_task, receive_task]
             try:
                 done, pending = await asyncio.wait(
                     self._tasks,
@@ -140,6 +160,26 @@ class GeminiLiveSession:
             text = await self._text_in.get()
             await session.send_realtime_input(text=text)
 
+    async def _send_image_loop(self, session: Any) -> None:
+        """Forward screen frames without competing with PCM priority queues."""
+        while True:
+            mime, data = await self._image_in.get()
+            try:
+                # google-genai Live accepts realtime media blobs (image/jpeg|png).
+                await session.send_realtime_input(
+                    media=types.Blob(data=data, mime_type=mime),
+                )
+            except TypeError:
+                # Older SDK keyword — try video= for compatibility.
+                try:
+                    await session.send_realtime_input(
+                        video=types.Blob(data=data, mime_type=mime),
+                    )
+                except Exception:
+                    logger.debug("image send unsupported by Live SDK; skipping frame", exc_info=True)
+            except Exception:
+                logger.debug("image send failed; skipping frame", exc_info=True)
+
     async def _receive_loop(
         self,
         session: Any,
@@ -159,7 +199,18 @@ class GeminiLiveSession:
                         inline = getattr(part, "inline_data", None)
                         data = getattr(inline, "data", None) if inline else None
                         if data:
+                            # First audio chunk → client marks TTFT via LatencyTracker.
                             await on_audio(bytes(data))
+                        # Stream any text parts as token deltas (ultra-low TTFT for HUD).
+                        part_text = getattr(part, "text", None)
+                        if part_text:
+                            await on_event(
+                                {
+                                    "type": "token_delta",
+                                    "stream_id": "live-text",
+                                    "text": str(part_text),
+                                }
+                            )
 
                 in_tx = getattr(server_content, "input_transcription", None)
                 if in_tx and getattr(in_tx, "text", None):
@@ -167,10 +218,19 @@ class GeminiLiveSession:
 
                 out_tx = getattr(server_content, "output_transcription", None)
                 if out_tx and getattr(out_tx, "text", None):
+                    # Transcript chunks also count as streamed AI text for TTFT.
                     await on_event({"type": "aether_transcript", "text": out_tx.text})
+                    await on_event(
+                        {
+                            "type": "token_delta",
+                            "stream_id": "live-transcript",
+                            "text": str(out_tx.text),
+                        }
+                    )
 
                 if getattr(server_content, "interrupted", False):
                     await on_event({"type": "interrupted"})
 
                 if getattr(server_content, "turn_complete", False):
+                    await on_event({"type": "token_done", "stream_id": "live-transcript"})
                     await on_event({"type": "turn_complete"})

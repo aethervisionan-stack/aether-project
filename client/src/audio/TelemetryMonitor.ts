@@ -26,8 +26,11 @@ export class TelemetryMonitor {
   private rttMs: number | null = null;
   private aiLatencyMs: number | null = null;
   private lastAiLatencyMs: number | null = null;
+  private ttftMs: number | null = null;
+  private lastTtftMs: number | null = null;
   private outboundAt: number | null = null;
   private awaitingAi = false;
+  private awaitingTtft = false;
   private wsState: WsReadyStateLabel = "NONE";
   private fifoDiscardCount = 0;
   private fifoDepthMs = 0;
@@ -55,6 +58,8 @@ export class TelemetryMonitor {
       rttMs: this.rttMs,
       aiLatencyMs: this.aiLatencyMs,
       lastAiLatencyMs: this.lastAiLatencyMs,
+      ttftMs: this.ttftMs,
+      lastTtftMs: this.lastTtftMs,
       wsState: this.wsState,
       fifoDiscardCount: this.fifoDiscardCount,
       fifoDepthMs: this.fifoDepthMs,
@@ -74,7 +79,9 @@ export class TelemetryMonitor {
     }
     this.outboundAt = clientT;
     this.awaitingAi = true;
+    this.awaitingTtft = true;
     this.aiLatencyMs = null;
+    this.ttftMs = null;
     this.emit();
   }
 
@@ -87,15 +94,38 @@ export class TelemetryMonitor {
     this.aiLatencyMs = ms;
     this.lastAiLatencyMs = ms;
     this.awaitingAi = false;
-    this.outboundAt = null;
+    // Keep outboundAt until TTFT lands if token streaming is still pending.
+    if (!this.awaitingTtft) {
+      this.outboundAt = null;
+    }
+    this.emit();
+  }
+
+  /**
+   * First streamed token_delta after outbound → text TTFT (ms).
+   * Independent of spectrogram; safe to call on every delta (idempotent).
+   */
+  markTtft(clientT: number = performance.now()): void {
+    if (!this.awaitingTtft || this.outboundAt == null) {
+      return;
+    }
+    const ms = Math.max(0, clientT - this.outboundAt);
+    this.ttftMs = ms;
+    this.lastTtftMs = ms;
+    this.awaitingTtft = false;
+    if (!this.awaitingAi) {
+      this.outboundAt = null;
+    }
     this.emit();
   }
 
   /** Reset in-flight AI timing (disconnect / interrupt without a measured chunk). */
   clearAiCycle(): void {
     this.awaitingAi = false;
+    this.awaitingTtft = false;
     this.outboundAt = null;
     this.aiLatencyMs = null;
+    this.ttftMs = null;
     this.emit();
   }
 
@@ -199,6 +229,7 @@ export class TelemetryMonitor {
       console.debug(
         `[aether:telemetry] ws=${snap.wsState} rtt=${snap.rttMs?.toFixed(0) ?? "—"}ms ` +
           `ai=${snap.aiLatencyMs?.toFixed(0) ?? snap.lastAiLatencyMs?.toFixed(0) ?? "—"}ms ` +
+          `ttft=${snap.ttftMs?.toFixed(0) ?? snap.lastTtftMs?.toFixed(0) ?? "—"}ms ` +
           `fifoDepth=${snap.fifoDepthMs.toFixed(0)}ms discards=${snap.fifoDiscardCount} ` +
           `playQ=${snap.playbackQueueDepth}`,
       );

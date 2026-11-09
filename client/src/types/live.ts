@@ -49,6 +49,56 @@ export interface LiveErrorEvent {
   message: string;
 }
 
+/** Streaming token chunks for ultra-low TTFT HUD paint. */
+export interface LiveTokenDeltaEvent {
+  type: "token_delta";
+  stream_id?: string;
+  index?: number;
+  text: string;
+}
+
+export interface LiveTokenDoneEvent {
+  type: "token_done";
+  stream_id?: string;
+  chunks?: number;
+  text?: string;
+}
+
+/** Async CoT / memory / tools decision sidecar (never gates PCM). */
+export interface LiveDecisionEvent {
+  type: "decision";
+  turn_id: string;
+  complexity: "simple" | "complex" | string;
+  skipped_heavy?: boolean;
+  preference_summary?: string;
+  plan?: Record<string, unknown>;
+  tools?: Array<Record<string, unknown>>;
+  elapsed_ms?: number;
+}
+
+export interface LiveToolResultEvent {
+  type: "tool_result";
+  name: string;
+  ok: boolean;
+  result?: Record<string, unknown>;
+  error?: string | null;
+  elapsed_ms?: number;
+}
+
+export interface LiveMultimodalAckEvent {
+  type: "multimodal_ack";
+  kind: "frame" | "telemetry" | string;
+  ok: boolean;
+  viz_mode?: string | null;
+  stats?: Record<string, unknown>;
+}
+
+export interface LiveOutboundAckEvent {
+  type: "outbound_ack";
+  client_t: number;
+  server_t?: number;
+}
+
 export type LiveServerJsonEvent =
   | LiveReadyEvent
   | LivePingEvent
@@ -57,6 +107,12 @@ export type LiveServerJsonEvent =
   | LiveGuardrailEvent
   | LiveTurnEvent
   | LiveErrorEvent
+  | LiveTokenDeltaEvent
+  | LiveTokenDoneEvent
+  | LiveDecisionEvent
+  | LiveToolResultEvent
+  | LiveMultimodalAckEvent
+  | LiveOutboundAckEvent
   | { type: string; [key: string]: unknown };
 
 export type GuardrailStatus = "secure" | "sanitizing" | "blocked";
@@ -67,6 +123,9 @@ export interface TelemetrySnapshot {
   aiLatencyMs: number | null;
   /** Last completed voice-cycle AI latency (sticky until next cycle). */
   lastAiLatencyMs: number | null;
+  /** First token_delta after outbound (text TTFT), ms. */
+  ttftMs: number | null;
+  lastTtftMs: number | null;
   wsState: WsReadyStateLabel;
   fifoDiscardCount: number;
   fifoDepthMs: number;

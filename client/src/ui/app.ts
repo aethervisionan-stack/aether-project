@@ -17,6 +17,7 @@ import {
 } from "../services/BillingService";
 import { AdvancedAudioVisualizer } from "../audio/AdvancedAudioVisualizer";
 import { LatencyMonitor } from "../audio/LatencyMonitor";
+import { FrameCapture } from "../multimodal/FrameCapture";
 import { GeminiLiveService } from "../services/GeminiLiveService";
 import type { LiveServerJsonEvent, TelemetrySnapshot, WsReadyStateLabel } from "../types/live";
 import { GuardrailIndicator } from "./GuardrailIndicator";
@@ -79,9 +80,11 @@ export class ControlApp {
   private memory: MemoryInspector | null = null;
   private toasts = new ToastHost();
   private focusBtn!: HTMLButtonElement;
+  private frameBtn!: HTMLButtonElement;
   private focusMode = false;
   private lastWsLabel: string | null = null;
   private treasuryToastArmed = false;
+  private readonly frameCapture = new FrameCapture();
 
   constructor(private readonly root: HTMLElement) {}
 
@@ -108,6 +111,7 @@ export class ControlApp {
           <div class="controls">
             <button type="button" data-action="connect">Connect Live</button>
             <button type="button" class="secondary" data-action="disconnect" disabled>Disconnect</button>
+            <button type="button" class="secondary" data-action="share-frame" disabled title="Send a screen frame (multimodal)">Frame</button>
           </div>
           <div class="live-toolbar-right">
             <div class="memory-mount" data-role="memory"></div>
@@ -121,7 +125,7 @@ export class ControlApp {
         <div class="hud-grid">
           <div class="hud-telemetry" data-role="hud-telemetry">
             <canvas class="audio-viz" data-role="audio-viz" width="640" height="110" aria-label="Advanced audio visualizer"></canvas>
-            <p class="latency" data-role="latency">PING: — | AI: —</p>
+            <p class="latency" data-role="latency">PING: — | AI: — | TTFT: —</p>
           </div>
         </div>
         <div class="warn" data-role="warn" hidden></div>
@@ -145,6 +149,7 @@ export class ControlApp {
     this.resetBtn = this.root.querySelector("[data-action=reset-sub]")!;
     this.devBtn = this.root.querySelector("[data-action=dev-unlock]")!;
     this.focusBtn = this.root.querySelector("[data-action=focus-toggle]")!;
+    this.frameBtn = this.root.querySelector("[data-action=share-frame]")!;
     this.processEl = this.root.querySelector("[data-role=process]")!;
     this.textInput = this.root.querySelector("[data-role=text]")!;
     this.sendBtn = this.root.querySelector("[data-action=send-text]")!;
@@ -196,6 +201,7 @@ export class ControlApp {
     this.resetBtn.addEventListener("click", () => void this.resetSubscriptionFlow());
     this.devBtn.addEventListener("click", () => void this.simulateUnlock());
     this.focusBtn.addEventListener("click", () => this.toggleFocusMode());
+    this.frameBtn.addEventListener("click", () => void this.shareFrame());
     this.sendBtn.addEventListener("click", () => this.sendText());
     this.textInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
@@ -552,6 +558,7 @@ export class ControlApp {
       const result = await this.service.connect();
       this.connected = true;
       this.disconnectBtn.disabled = false;
+      this.frameBtn.disabled = false;
       this.sendBtn.disabled = false;
       this.setBusy(this.connectBtn, false);
       this.setConnection("OPEN");
@@ -596,6 +603,7 @@ export class ControlApp {
     this.connected = false;
     this.connectBtn.disabled = false;
     this.disconnectBtn.disabled = true;
+    this.frameBtn.disabled = true;
     this.setBusy(this.disconnectBtn, false);
     this.sendBtn.disabled = true;
     this.textInput.placeholder = "Type a message to Aether…";
@@ -611,7 +619,26 @@ export class ControlApp {
     this.latencyMonitor = null;
     this.visualizer?.dispose();
     this.visualizer = null;
-    this.latencyEl.textContent = "PING: — | AI: —";
+    this.latencyEl.textContent = "PING: — | AI: — | TTFT: —";
+  }
+
+  private async shareFrame(): Promise<void> {
+    if (!this.service || !this.connected) {
+      return;
+    }
+    this.frameBtn.disabled = true;
+    this.pulseButton(this.frameBtn);
+    try {
+      const frame = await this.frameCapture.captureDisplay();
+      this.service.sendFrame(frame);
+      this.transcript?.push("system", `Screen frame sent (${frame.width}×${frame.height})`);
+      this.toasts.ok("Frame sent to Live");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.toasts.warn(`Frame capture: ${message}`);
+    } finally {
+      this.frameBtn.disabled = !this.connected;
+    }
   }
 
   private sendText(): void {
@@ -669,6 +696,34 @@ export class ControlApp {
         }
         break;
       }
+      case "decision": {
+        const ev = event as {
+          complexity?: string;
+          skipped_heavy?: boolean;
+          preference_summary?: string;
+          elapsed_ms?: number;
+        };
+        if (!ev.skipped_heavy) {
+          const prefs = ev.preference_summary ? ` · prefs ${ev.preference_summary}` : "";
+          this.transcript?.push(
+            "system",
+            `CoT ${ev.complexity ?? "complex"} (${Math.round(ev.elapsed_ms ?? 0)}ms)${prefs}`,
+          );
+        }
+        break;
+      }
+      case "tool_result": {
+        const ev = event as { name?: string; ok?: boolean; error?: string | null };
+        const label = ev.ok ? "ok" : `fail ${ev.error ?? ""}`.trim();
+        this.transcript?.push("system", `Tool ${ev.name ?? "?"} · ${label}`);
+        break;
+      }
+      case "token_delta":
+      case "token_done":
+      case "multimodal_ack":
+      case "outbound_ack":
+        // TTFT / multimodal acks feed LatencyTracker + buffers; no HUD spam.
+        break;
       default:
         break;
     }

@@ -15,7 +15,8 @@ function fmtMs(value: number | null | undefined): string {
 
 export function formatLatencyLine(snap: TelemetrySnapshot): string {
   const ai = snap.aiLatencyMs ?? snap.lastAiLatencyMs;
-  return `PING: ${fmtMs(snap.rttMs)} | AI: ${fmtMs(ai)}`;
+  const ttft = snap.ttftMs ?? snap.lastTtftMs;
+  return `PING: ${fmtMs(snap.rttMs)} | AI: ${fmtMs(ai)} | TTFT: ${fmtMs(ttft)}`;
 }
 
 export class LatencyMonitor {
@@ -41,5 +42,7 @@ export class LatencyMonitor {
     this.el.dataset.rtt = snap.rttMs != null ? String(Math.round(snap.rttMs)) : "";
     const ai = snap.aiLatencyMs ?? snap.lastAiLatencyMs;
     this.el.dataset.ai = ai != null ? String(Math.round(ai)) : "";
+    const ttft = snap.ttftMs ?? snap.lastTtftMs;
+    this.el.dataset.ttft = ttft != null ? String(Math.round(ttft)) : "";
   }
 }

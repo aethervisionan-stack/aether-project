@@ -11,12 +11,15 @@
  *  - mic-fallback hybrid: text chat stays available if capture fails
  */
 
-import type { AdvancedAudioVisualizer } from "../audio/AdvancedAudioVisualizer";
+import type { AdvancedAudioVisualizer, VisualizerMode } from "../audio/AdvancedAudioVisualizer";
 import { FifoRetentionBuffer } from "../audio/FifoRetentionBuffer";
 import { GaplessPcmPlayer } from "../audio/GaplessPcmPlayer";
 import { formatMicError, PcmCapture } from "../audio/PcmCapture";
 import { TelemetryMonitor } from "../audio/TelemetryMonitor";
+import { buildHudTelemetry } from "../multimodal/HudTelemetry";
+import type { CapturedFrame } from "../multimodal/FrameCapture";
 import type { LiveServerJsonEvent, WsReadyStateLabel } from "../types/live";
+import type { ToolArgumentsByName, ToolName } from "../types/tools";
 
 export type LiveEventHandler = (event: LiveServerJsonEvent) => void;
 
@@ -93,6 +96,10 @@ export class GeminiLiveService {
   private visualizer: AdvancedAudioVisualizer | null = null;
   private lastMicEnergyAt = 0;
   private voiceCycleArmed = true;
+  private vizMode: VisualizerMode = "idle";
+  private telemetryFlushTimer: number | null = null;
+  /** Latest streamed token text for HUD consumers (does not block audio). */
+  private lastTokenStream = "";
 
   constructor(options: GeminiLiveServiceOptions = {}) {
     this.url = options.url ?? resolveDefaultWsUrl();
@@ -167,17 +174,62 @@ export class GeminiLiveService {
     this.telemetry.setPlaybackQueueDepth(0);
     this.telemetry.clearAiCycle();
     this.voiceCycleArmed = true;
+    this.stopTelemetryFlushLoop();
+    this.lastTokenStream = "";
     void this.visualizer?.connectMicStream(null);
-    this.visualizer?.setMode("idle");
+    this.setVizMode("idle");
     this.detachAndCloseSocket();
     this.telemetry.setWsState("CLOSED");
   }
 
-  sendText(text: string): void {
+  sendText(text: string, options?: { forcePlan?: boolean }): void {
     const t = performance.now();
+    this.lastTokenStream = "";
     this.telemetry.markOutbound(t);
-    this.visualizer?.setMode("processing");
-    this.sendJson({ type: "text", text, client_t: t });
+    this.setVizMode("processing");
+    this.sendJson({
+      type: "text",
+      text,
+      client_t: t,
+      force_plan: Boolean(options?.forcePlan),
+    });
+  }
+
+  /** Invoke a registry tool over the Live WebSocket (async result event). */
+  callTool<N extends ToolName>(name: N, arguments_: ToolArgumentsByName[N]): void {
+    this.sendJson({
+      type: "tool_call",
+      name,
+      arguments: arguments_,
+      client_t: performance.now(),
+    });
+  }
+
+  /** Push a screen/image frame beside PCM (multimodal sidecar). */
+  sendFrame(frame: CapturedFrame): void {
+    this.sendJson({
+      type: "frame",
+      mime: frame.mime,
+      data: frame.dataBase64,
+      width: frame.width,
+      height: frame.height,
+      client_t: frame.clientT,
+    });
+  }
+
+  /** Push HUD telemetry sample (ping/AI/viz) without touching PCM flush. */
+  sendHudTelemetry(): void {
+    const snap = this.telemetry.snapshot();
+    const payload = buildHudTelemetry({ snap, vizMode: this.vizMode });
+    this.sendJson({ ...payload });
+  }
+
+  getLastTokenStream(): string {
+    return this.lastTokenStream;
+  }
+
+  getVizMode(): VisualizerMode {
+    return this.vizMode;
   }
 
   private connectResult(): LiveConnectResult {
@@ -230,6 +282,7 @@ export class GeminiLiveService {
         if (this.micEnabled) {
           this.startFlushLoop();
         }
+        this.startTelemetryFlushLoop();
         settleOk();
       };
 
@@ -243,6 +296,7 @@ export class GeminiLiveService {
       ws.onclose = () => {
         this.telemetry.stopPingLoop();
         this.stopFlushLoop();
+        this.stopTelemetryFlushLoop();
         this.telemetry.setWsState("CLOSED");
         if (!settled) {
           settleErr(new Error(`WebSocket closed before open (${this.url})`));
@@ -284,7 +338,7 @@ export class GeminiLiveService {
       this.startFlushLoop();
       try {
         await this.visualizer?.connectMicStream(this.capture.getMediaStream());
-        this.visualizer?.setMode("listening");
+        this.setVizMode("listening");
       } catch (vizErr) {
         console.warn("[aether] visualizer mic tap failed", vizErr);
       }
@@ -355,6 +409,7 @@ export class GeminiLiveService {
     console.warn(`[aether] forcing reconnect: ${reason}`);
     this.telemetry.stopPingLoop();
     this.stopFlushLoop();
+    this.stopTelemetryFlushLoop();
     // Closing triggers onclose → scheduleReconnect when wantConnected.
     if (this.ws) {
       try {
@@ -425,13 +480,40 @@ export class GeminiLiveService {
     }
     this.voiceCycleArmed = false;
     this.telemetry.markOutbound(now);
-    this.visualizer?.setMode("processing");
+    this.setVizMode("processing");
   }
 
   private stopFlushLoop(): void {
     if (this.flushTimer != null) {
       window.clearInterval(this.flushTimer);
       this.flushTimer = null;
+    }
+  }
+
+  /** Periodic HUD telemetry → server multimodal buffer (does not touch PCM). */
+  private startTelemetryFlushLoop(): void {
+    this.stopTelemetryFlushLoop();
+    this.telemetryFlushTimer = window.setInterval(() => {
+      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+        return;
+      }
+      this.sendHudTelemetry();
+    }, 2_000);
+  }
+
+  private stopTelemetryFlushLoop(): void {
+    if (this.telemetryFlushTimer != null) {
+      window.clearInterval(this.telemetryFlushTimer);
+      this.telemetryFlushTimer = null;
+    }
+  }
+
+  private setVizMode(mode: VisualizerMode): void {
+    this.vizMode = mode;
+    try {
+      this.visualizer?.setMode(mode);
+    } catch {
+      // never block WS / audio
     }
   }
 
@@ -449,7 +531,8 @@ export class GeminiLiveService {
       this.telemetry.markAiFirstChunk();
       this.voiceCycleArmed = true;
       try {
-        this.visualizer?.setMode("speaking");
+        // Expressive synthesis path: visualizer mode tracks AI speech energy.
+        this.setVizMode("speaking");
         this.visualizer?.pushPlayPcm(event.data);
       } catch {
         // ignore viz errors — never block playback/WS
@@ -492,17 +575,37 @@ export class GeminiLiveService {
       return;
     }
 
+    if (parsed.type === "token_delta") {
+      const chunk = typeof (parsed as { text?: unknown }).text === "string"
+        ? (parsed as { text: string }).text
+        : "";
+      if (chunk) {
+        this.lastTokenStream += chunk;
+        this.telemetry.markTtft();
+        // First token often arrives before audio — paint TTFT without hurting viz.
+        if (this.vizMode === "processing") {
+          this.setVizMode("speaking");
+        }
+      }
+    }
+
+    if (parsed.type === "token_done") {
+      // Keep last stream for HUD; reset on next outbound.
+    }
+
     if (parsed.type === "aether_transcript") {
       this.telemetry.markAiFirstChunk();
+      this.telemetry.markTtft();
       this.voiceCycleArmed = true;
-      this.visualizer?.setMode("speaking");
+      this.setVizMode("speaking");
     }
 
     if (parsed.type === "interrupted") {
       this.player.interrupt();
       this.telemetry.clearAiCycle();
       this.voiceCycleArmed = true;
-      this.visualizer?.setMode(this.micEnabled ? "listening" : "idle");
+      this.lastTokenStream = "";
+      this.setVizMode(this.micEnabled ? "listening" : "idle");
       try {
         await this.player.ensureStarted();
       } catch {
@@ -512,7 +615,7 @@ export class GeminiLiveService {
 
     if (parsed.type === "turn_complete") {
       this.voiceCycleArmed = true;
-      this.visualizer?.setMode(this.micEnabled ? "listening" : "idle");
+      this.setVizMode(this.micEnabled ? "listening" : "idle");
     }
 
     this.onEvent?.(parsed);
