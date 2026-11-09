@@ -20,6 +20,7 @@ import { LatencyMonitor } from "../audio/LatencyMonitor";
 import { GeminiLiveService } from "../services/GeminiLiveService";
 import type { LiveServerJsonEvent, TelemetrySnapshot, WsReadyStateLabel } from "../types/live";
 import { GuardrailIndicator } from "./GuardrailIndicator";
+import { ToastHost } from "./ToastHost";
 import { TranscriptFeed } from "./TranscriptFeed";
 import { TreasuryWidget } from "./TreasuryWidget";
 
@@ -74,6 +75,11 @@ export class ControlApp {
   private treasury: TreasuryWidget | null = null;
   private transcript: TranscriptFeed | null = null;
   private guardrail: GuardrailIndicator | null = null;
+  private toasts = new ToastHost();
+  private focusBtn!: HTMLButtonElement;
+  private focusMode = false;
+  private lastWsLabel: string | null = null;
+  private treasuryToastArmed = false;
 
   constructor(private readonly root: HTMLElement) {}
 
@@ -81,10 +87,10 @@ export class ControlApp {
     this.root.innerHTML = `
       <h1 class="brand">Aether <span>Vision</span></h1>
 
-      <section class="subscribe" data-role="subscribe">
+      <section class="subscribe glass" data-role="subscribe">
         <h2 class="subscribe-title">Subscription</h2>
         <p class="subscribe-lede">Monthly access — card checkout, no wallet required.</p>
-        <p class="access" data-role="access">Checking access…</p>
+        <p class="access is-loading skeleton" data-role="access">Checking access…</p>
         <p class="access-meta" data-role="access-meta" hidden></p>
         <div class="controls subscribe-actions">
           <button type="button" class="subscribe-cta" data-action="subscribe">Subscribe</button>
@@ -95,18 +101,23 @@ export class ControlApp {
         <div class="treasury-mount" data-role="treasury"></div>
       </section>
 
-      <section class="live-panel" data-role="live-panel" hidden>
-        <div class="controls">
-          <button type="button" data-action="connect">Connect Live</button>
-          <button type="button" class="secondary" data-action="disconnect" disabled>Disconnect</button>
+      <section class="live-panel glass" data-role="live-panel" hidden>
+        <div class="live-toolbar">
+          <div class="controls">
+            <button type="button" data-action="connect">Connect Live</button>
+            <button type="button" class="secondary" data-action="disconnect" disabled>Disconnect</button>
+          </div>
+          <button type="button" class="secondary focus-toggle" data-action="focus-toggle" aria-pressed="false">FOCUS</button>
         </div>
         <div class="live-status-row">
           <p class="connection" data-role="status" data-state="CLOSED">CLOSED</p>
           <p class="guardrail" data-role="guardrail">GUARDRAIL: SECURE</p>
         </div>
-        <div class="hud-telemetry" data-role="hud-telemetry">
-          <canvas class="audio-viz" data-role="audio-viz" width="640" height="110" aria-label="Advanced audio visualizer"></canvas>
-          <p class="latency" data-role="latency">PING: — | AI: —</p>
+        <div class="hud-grid">
+          <div class="hud-telemetry" data-role="hud-telemetry">
+            <canvas class="audio-viz" data-role="audio-viz" width="640" height="110" aria-label="Advanced audio visualizer"></canvas>
+            <p class="latency" data-role="latency">PING: — | AI: —</p>
+          </div>
         </div>
         <div class="warn" data-role="warn" hidden></div>
         <div class="text-row">
@@ -128,6 +139,7 @@ export class ControlApp {
     this.subscribeBtn = this.root.querySelector("[data-action=subscribe]")!;
     this.resetBtn = this.root.querySelector("[data-action=reset-sub]")!;
     this.devBtn = this.root.querySelector("[data-action=dev-unlock]")!;
+    this.focusBtn = this.root.querySelector("[data-action=focus-toggle]")!;
     this.processEl = this.root.querySelector("[data-role=process]")!;
     this.textInput = this.root.querySelector("[data-role=text]")!;
     this.sendBtn = this.root.querySelector("[data-action=send-text]")!;
@@ -140,6 +152,20 @@ export class ControlApp {
     this.treasury = new TreasuryWidget(treasuryMount);
     this.transcript = new TranscriptFeed(transcriptMount);
     this.guardrail = new GuardrailIndicator(guardrailEl);
+    this.treasury.setStatusHandler((status) => {
+      if (status.ok) {
+        this.treasuryToastArmed = true;
+        return;
+      }
+      if (!this.treasuryToastArmed && status.reconnecting) {
+        // First paint may reconnect — wait for a settled failure/retry.
+        this.treasuryToastArmed = true;
+        return;
+      }
+      if (status.reconnecting || !status.online) {
+        this.toasts.warn(status.error ? `Treasury RPC: ${status.error}` : "Treasury sync reconnecting…");
+      }
+    });
 
     // Never hide the payment block in Gen-1 local HUD.
     this.subscribeSection.hidden = false;
@@ -151,6 +177,7 @@ export class ControlApp {
     this.subscribeBtn.addEventListener("click", () => void this.subscribe());
     this.resetBtn.addEventListener("click", () => void this.resetSubscriptionFlow());
     this.devBtn.addEventListener("click", () => void this.simulateUnlock());
+    this.focusBtn.addEventListener("click", () => this.toggleFocusMode());
     this.sendBtn.addEventListener("click", () => this.sendText());
     this.textInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
@@ -159,6 +186,34 @@ export class ControlApp {
     });
 
     void this.bootstrapBilling();
+  }
+
+  private toggleFocusMode(force?: boolean): void {
+    this.focusMode = force ?? !this.focusMode;
+    this.root.classList.toggle("focus-mode", this.focusMode);
+    this.focusBtn.setAttribute("aria-pressed", this.focusMode ? "true" : "false");
+    this.focusBtn.textContent = this.focusMode ? "FOCUS ON" : "FOCUS";
+    if (this.focusMode) {
+      this.toasts.info("Focus mode — spectrogram + chat prioritized");
+    }
+  }
+
+  private pulseButton(btn: HTMLButtonElement): void {
+    btn.classList.remove("voice-pulse");
+    // Force reflow so repeated pulses retrigger.
+    void btn.offsetWidth;
+    btn.classList.add("voice-pulse");
+  }
+
+  private setBusy(btn: HTMLButtonElement, busy: boolean, label?: string): void {
+    btn.classList.toggle("is-busy", busy);
+    if (label) {
+      btn.dataset.label = btn.dataset.label || btn.textContent || "";
+      btn.textContent = busy ? label : btn.dataset.label || btn.textContent || "";
+      if (!busy) {
+        delete btn.dataset.label;
+      }
+    }
   }
 
   private async bootstrapBilling(): Promise<void> {
@@ -244,6 +299,7 @@ export class ControlApp {
     // TEMP AI testing: unlock Live/chat without Stripe when backend flag is on.
     if (this.billingConfig?.bypass_subscription_check) {
       this.setEntitled(true);
+      this.accessEl.classList.remove("is-loading", "skeleton");
       this.accessEl.textContent = "Access active — paywall bypassed for AI testing.";
       this.setAccessMeta("BYPASS_SUBSCRIPTION_CHECK=true · Stripe structure kept · set false to re-enable paywall");
       return;
@@ -253,6 +309,7 @@ export class ControlApp {
     if (!id) {
       this.setEntitled(false);
       this.clearAccessMeta();
+      this.accessEl.classList.remove("is-loading", "skeleton");
       if (
         !this.accessEl.textContent?.startsWith("Billing") &&
         !this.accessEl.textContent?.startsWith("Checkout") &&
@@ -277,6 +334,7 @@ export class ControlApp {
   }
 
   private renderAccessGate(status: EntitlementStatus): void {
+    this.accessEl.classList.remove("is-loading", "skeleton");
     const shortId = shortenSubscriberId(status.subscriber_id);
     const until = formatEpochLocal(status.expires_at);
     const granted = formatEpochLocal(status.granted_at);
@@ -351,9 +409,12 @@ export class ControlApp {
     }
     this.checkoutBusy = true;
     this.subscribeBtn.disabled = true;
-    this.subscribeBtn.textContent = "Processing…";
+    this.pulseButton(this.subscribeBtn);
+    this.setBusy(this.subscribeBtn, true, "Processing…");
     this.setProcess("Opening checkout…");
+    this.accessEl.classList.remove("is-loading", "skeleton");
     this.accessEl.textContent = "Starting checkout…";
+    this.toasts.info("Creating checkout session…");
     try {
       if (!canCheckout(this.billingConfig)) {
         throw new Error("Checkout unavailable (set Stripe keys or BILLING_DEV_UNLOCK=true).");
@@ -378,7 +439,9 @@ export class ControlApp {
       const message = err instanceof Error ? err.message : String(err);
       this.accessEl.textContent = `Checkout error: ${message}`;
       this.setProcess(`Checkout failed — ${message}`);
+      this.toasts.danger(`Checkout failed: ${message}`);
       this.subscribeBtn.disabled = false;
+      this.setBusy(this.subscribeBtn, false);
       this.checkoutBusy = false;
       this.renderSubscribeCta();
     }
@@ -440,11 +503,16 @@ export class ControlApp {
     }
     if (!this.entitled) {
       this.showWarn("Subscribe to unlock Live.");
+      this.toasts.warn("Subscribe to unlock Live");
       return;
     }
+    // Optimistic HUD feedback while WS opens.
     this.setConnection("CONNECTING");
     this.clearWarn();
     this.connectBtn.disabled = true;
+    this.setBusy(this.connectBtn, true, "Connecting…");
+    this.pulseButton(this.connectBtn);
+    this.toasts.info("Opening Live bridge…");
 
     this.visualizer = new AdvancedAudioVisualizer();
     this.visualizer.mount(this.vizCanvas);
@@ -463,9 +531,12 @@ export class ControlApp {
       this.connected = true;
       this.disconnectBtn.disabled = false;
       this.sendBtn.disabled = false;
+      this.setBusy(this.connectBtn, false);
       this.setConnection("OPEN");
       this.guardrail?.reset();
       this.transcript?.clear();
+      this.toasts.ok("Live connected");
+      this.toggleFocusMode(true);
 
       if (result.micEnabled) {
         this.textInput.placeholder = "Type a message to Aether…";
@@ -474,10 +545,12 @@ export class ControlApp {
         const detail = result.micWarning ?? "Microphone unavailable.";
         this.textInput.placeholder = "Type to chat with Aether…";
         this.showWarn(`${detail} You can still chat by text.`);
+        this.toasts.warn(detail);
         this.textInput.focus();
       }
     } catch (err) {
       this.connectBtn.disabled = false;
+      this.setBusy(this.connectBtn, false);
       const message = err instanceof Error ? err.message : String(err);
       this.setConnection("CLOSED");
       const hint = /websocket|network|failed to fetch|econnrefused/i.test(message)
@@ -486,6 +559,7 @@ export class ControlApp {
           ? " Mic blocked — text chat may still work after a successful connect."
           : "";
       this.showWarn(`Connect Live failed: ${message}.${hint}`);
+      this.toasts.danger(`Connect failed: ${message}`);
       await this.service.disconnect();
       this.service = null;
       this.teardownTelemetryHud();
@@ -493,16 +567,21 @@ export class ControlApp {
   }
 
   private async disconnect(): Promise<void> {
+    this.pulseButton(this.disconnectBtn);
+    this.setBusy(this.disconnectBtn, true, "Closing…");
     await this.service?.disconnect();
     this.service = null;
     this.connected = false;
     this.connectBtn.disabled = false;
     this.disconnectBtn.disabled = true;
+    this.setBusy(this.disconnectBtn, false);
     this.sendBtn.disabled = true;
     this.textInput.placeholder = "Type a message to Aether…";
     this.clearWarn();
     this.setConnection("CLOSED");
     this.teardownTelemetryHud();
+    this.toggleFocusMode(false);
+    this.toasts.info("Live disconnected");
   }
 
   private teardownTelemetryHud(): void {
@@ -518,9 +597,14 @@ export class ControlApp {
     if (!text || !this.service || !this.connected) {
       return;
     }
-    this.service.sendText(text);
+    // Optimistic: show utterance immediately, pulse send, then fire WS.
     this.transcript?.push("user", text);
     this.textInput.value = "";
+    this.pulseButton(this.sendBtn);
+    this.service.sendText(text);
+    if (!this.focusMode) {
+      this.toggleFocusMode(true);
+    }
   }
 
   private handleEvent(event: LiveServerJsonEvent): void {
@@ -536,6 +620,9 @@ export class ControlApp {
           this.guardrail?.setStatus("secure");
         }
         this.transcript?.push("aether", ev.text, ev.guardrail);
+        if (!this.focusMode) {
+          this.toggleFocusMode(true);
+        }
         break;
       }
       case "guardrail": {
@@ -547,6 +634,7 @@ export class ControlApp {
             "Guardrail blocked an AI fragment (empty/corrupt after sanitize).",
             "blocked",
           );
+          this.toasts.warn("Guardrail blocked a fragment");
         }
         break;
       }
@@ -555,6 +643,7 @@ export class ControlApp {
         const message = (event as { message: string }).message;
         if (code !== "session_retry") {
           this.showWarn(message);
+          this.toasts.danger(message);
         }
         break;
       }
@@ -574,6 +663,16 @@ export class ControlApp {
     const label = connectionLabel(state);
     this.statusEl.textContent = label;
     this.statusEl.dataset.state = label;
+    if (label !== this.lastWsLabel) {
+      if (label === "RECONNECTING") {
+        this.toasts.warn("WebSocket reconnecting…");
+      } else if (label === "OPEN" && this.lastWsLabel === "RECONNECTING") {
+        this.toasts.ok("WebSocket restored");
+      } else if (label === "CLOSED" && this.lastWsLabel === "OPEN") {
+        this.toasts.warn("WebSocket offline");
+      }
+      this.lastWsLabel = label;
+    }
   }
 
   private showWarn(text: string): void {

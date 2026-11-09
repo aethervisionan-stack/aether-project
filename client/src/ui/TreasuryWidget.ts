@@ -13,12 +13,21 @@ import {
 
 const POLL_MS = 30_000;
 
+export type TreasuryStatusHandler = (payload: {
+  ok: boolean;
+  online: boolean;
+  reconnecting?: boolean;
+  error?: string;
+  sol?: number | null;
+}) => void;
+
 export class TreasuryWidget {
   private timer: number | null = null;
   private wallet = OFFICIAL_TREASURY_WALLET;
   private rpc = "https://rpc.ankr.com/solana";
   private cfg: BillingConfig | null = null;
   private inflight = false;
+  private onStatus: TreasuryStatusHandler | null = null;
   private copyBtn: HTMLButtonElement | null = null;
   private retryBtn: HTMLButtonElement | null = null;
   private syncEl: HTMLElement | null = null;
@@ -52,6 +61,10 @@ export class TreasuryWidget {
     this.retryBtn = this.root.querySelector("[data-role=retry]");
     this.copyBtn?.addEventListener("click", () => void this.copyAddress());
     this.retryBtn?.addEventListener("click", () => void this.refresh(true));
+  }
+
+  setStatusHandler(handler: TreasuryStatusHandler | null): void {
+    this.onStatus = handler;
   }
 
   applyBillingConfig(cfg: BillingConfig): void {
@@ -94,6 +107,7 @@ export class TreasuryWidget {
     }
     this.inflight = true;
     this.setSync("reconnecting", "Blockchain Sync: Reconnecting…");
+    this.balEl?.classList.add("is-loading", "skeleton");
     if (this.retryBtn) {
       this.retryBtn.disabled = true;
       this.retryBtn.textContent = manual ? "…" : "Retry";
@@ -101,8 +115,15 @@ export class TreasuryWidget {
     try {
       const result = await fetchSolBalance(this.wallet, this.rpc);
       this.renderBalance(result);
+      this.onStatus?.({
+        ok: result.ok,
+        online: result.online,
+        reconnecting: result.reconnecting,
+        error: result.error,
+        sol: result.sol,
+      });
     } catch (err) {
-      this.renderBalance({
+      const fail: TreasuryBalanceResult = {
         ok: false,
         online: false,
         reconnecting: true,
@@ -112,8 +133,17 @@ export class TreasuryWidget {
         sol: 0,
         error: err instanceof Error ? err.message : String(err),
         fetchedAt: Date.now(),
+      };
+      this.renderBalance(fail);
+      this.onStatus?.({
+        ok: false,
+        online: false,
+        reconnecting: true,
+        error: fail.error,
+        sol: 0,
       });
     } finally {
+      this.balEl?.classList.remove("is-loading", "skeleton");
       this.inflight = false;
       if (this.retryBtn) {
         this.retryBtn.disabled = false;
