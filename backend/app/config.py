@@ -104,6 +104,12 @@ class Settings(BaseSettings):
         default="data/entitlements.json",
         alias="ENTITLEMENTS_PATH",
     )
+    # Long-term memory / preference learning (JSON; async writes only).
+    memory_path: str = Field(
+        default="data/memory.json",
+        alias="MEMORY_PATH",
+    )
+    memory_enabled: bool = Field(default=True, alias="MEMORY_ENABLED")
 
     @property
     def cors_origin_list(self) -> list[str]:

@@ -13,6 +13,9 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.config import get_settings
 from app.genai.session import GeminiLiveSession
+from app.memory.context import build_system_instruction
+from app.memory.extractor import run_extraction
+from app.memory.store import get_memory_store
 from app.safety import sanitize_outbound_event
 
 logger = logging.getLogger("aether.ws.live")
@@ -23,6 +26,7 @@ router = APIRouter()
 SERVER_HEARTBEAT_INTERVAL_S = 15.0
 # Brief pause before restarting a Gemini Live session that ended unexpectedly.
 GEMINI_RESTART_DELAY_S = 1.0
+DEFAULT_MEMORY_PROFILE = "local"
 
 
 @router.websocket("/ws/live")
@@ -40,7 +44,11 @@ async def live_websocket(websocket: WebSocket) -> None:
     """
     await websocket.accept()
     settings = get_settings()
-    logger.info("client connected path=/ws/live")
+    profile_id = (
+        (websocket.query_params.get("profile_id") or DEFAULT_MEMORY_PROFILE).strip()
+        or DEFAULT_MEMORY_PROFILE
+    )
+    logger.info("client connected path=/ws/live profile=%s", profile_id)
 
     if not settings.has_api_key():
         await websocket.send_json(
@@ -56,6 +64,30 @@ async def live_websocket(websocket: WebSocket) -> None:
     stop = asyncio.Event()
     # Mutable holder so receive loop can target the active Gemini session across restarts.
     bridge: dict[str, GeminiLiveSession | None] = {"session": None}
+    memory_turns = 0
+
+    def _schedule_memory(role: str, text: str) -> None:
+        """Fire-and-forget history append + periodic extraction (never blocks audio)."""
+        nonlocal memory_turns
+        if not settings.memory_enabled:
+            return
+        cleaned = (text or "").strip()
+        if not cleaned:
+            return
+
+        async def _bg() -> None:
+            nonlocal memory_turns
+            try:
+                store = get_memory_store()
+                await asyncio.to_thread(store.append_interaction, profile_id, role, cleaned)
+                memory_turns += 1
+                # Extract every few user turns — cheap rules, off the audio path.
+                if role == "user" and memory_turns % 3 == 0:
+                    await asyncio.to_thread(run_extraction, store, profile_id)
+            except Exception:
+                logger.debug("memory background write failed", exc_info=True)
+
+        asyncio.create_task(_bg(), name="memory-bg")
 
     async def on_audio(pcm: bytes) -> None:
         if stop.is_set():
@@ -73,6 +105,11 @@ async def live_websocket(websocket: WebSocket) -> None:
             sanitized = await sanitize_outbound_event(event)
             if sanitized is None:
                 return
+            # Learn from final transcripts without adding latency to the WS send.
+            et = sanitized.get("type")
+            if et in {"output_transcript", "input_transcript"}:
+                role = "aether" if et == "output_transcript" else "user"
+                _schedule_memory(role, str(sanitized.get("text") or ""))
             await websocket.send_json(sanitized)
         except Exception:
             stop.set()
@@ -92,7 +129,7 @@ async def live_websocket(websocket: WebSocket) -> None:
                 text = message.get("text")
                 if text is None:
                     continue
-                await _handle_control_message(bridge, websocket, text)
+                await _handle_control_message(bridge, websocket, text, schedule_memory=_schedule_memory)
         except WebSocketDisconnect:
             logger.info("client disconnected")
         except Exception as exc:
@@ -127,11 +164,22 @@ async def live_websocket(websocket: WebSocket) -> None:
 
         Upstream Live sessions can end after idle minutes; restart them without
         tearing down `/ws/live` so the client stays connected for text/mic.
+        Preference summary is loaded once per restart (async thread) so Live
+        adapts without adding ms to audio frame RTT.
         """
         attempt = 0
         while not stop.is_set():
             attempt += 1
-            session = GeminiLiveSession(settings)
+            system_instruction = build_system_instruction()
+            if settings.memory_enabled:
+                try:
+                    store = get_memory_store()
+                    snap = await asyncio.to_thread(store.snapshot, profile_id)
+                    system_instruction = build_system_instruction(snap.get("preferences"))
+                except Exception:
+                    logger.debug("memory prefs load failed; using base persona", exc_info=True)
+
+            session = GeminiLiveSession(settings, system_instruction=system_instruction)
             bridge["session"] = session
             try:
                 await session.run(on_audio=on_audio, on_event=on_event)
@@ -216,6 +264,8 @@ async def _handle_control_message(
     bridge: dict[str, GeminiLiveSession | None],
     websocket: WebSocket,
     text: str,
+    *,
+    schedule_memory: Any | None = None,
 ) -> None:
     try:
         payload = json.loads(text)
@@ -223,6 +273,8 @@ async def _handle_control_message(
         session = bridge["session"]
         if session is not None:
             await session.push_text(text)
+        if schedule_memory is not None:
+            schedule_memory("user", text)
         return
 
     if not isinstance(payload, dict):
@@ -259,8 +311,11 @@ async def _handle_control_message(
                 )
             except Exception:
                 pass
+        user_text = str(payload.get("text") or "")
         if session is not None:
-            await session.push_text(str(payload.get("text") or ""))
+            await session.push_text(user_text)
+        if schedule_memory is not None:
+            schedule_memory("user", user_text)
         return
 
     # Optional base64 PCM in JSON (fallback path)

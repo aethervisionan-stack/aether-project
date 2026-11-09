@@ -11,6 +11,7 @@ from google import genai
 from google.genai import types
 
 from app.config import AETHER_SYSTEM_INSTRUCTION, Settings
+from app.memory.context import build_system_instruction
 
 logger = logging.getLogger("aether.genai.session")
 
@@ -21,7 +22,7 @@ INPUT_SAMPLE_RATE = 16_000
 
 
 def build_live_config(*, system_instruction: str = AETHER_SYSTEM_INSTRUCTION) -> types.LiveConnectConfig:
-    """Live session config: AUDIO responses + Aether HUD persona."""
+    """Live session config: AUDIO responses + Aether HUD persona (+ optional prefs)."""
     return types.LiveConnectConfig(
         response_modalities=[types.Modality.AUDIO],
         system_instruction=types.Content(
@@ -40,7 +41,12 @@ class GeminiLiveSession:
     Gemini PCM (16-bit LE mono @ 24 kHz) → audio_out callback.
     """
 
-    def __init__(self, settings: Settings) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        *,
+        system_instruction: str | None = None,
+    ) -> None:
         self._settings = settings
         api_version = (settings.gemini_api_version or "v1beta").strip() or "v1beta"
         # Live / BidiGenerateContent WebSockets require v1beta or v1alpha.
@@ -51,6 +57,7 @@ class GeminiLiveSession:
         )
         self._model = settings.gemini_live_model.strip() or "gemini-3.8-live"
         self._api_version = api_version
+        self._system_instruction = (system_instruction or build_system_instruction()).strip()
         self._audio_in: asyncio.Queue[bytes] = asyncio.Queue(maxsize=64)
         self._text_in: asyncio.Queue[str] = asyncio.Queue(maxsize=16)
         self._session: Any | None = None
@@ -87,11 +94,12 @@ class GeminiLiveSession:
         on_audio: AudioOutCallback,
         on_event: EventOutCallback,
     ) -> None:
-        config = build_live_config()
+        config = build_live_config(system_instruction=self._system_instruction)
         logger.info(
-            "connecting Live session model=%s api_version=%s",
+            "connecting Live session model=%s api_version=%s prefs_injected=%s",
             self._model,
             self._api_version,
+            "Learned user preferences" in self._system_instruction,
         )
         async with self._client.aio.live.connect(model=self._model, config=config) as session:
             self._session = session

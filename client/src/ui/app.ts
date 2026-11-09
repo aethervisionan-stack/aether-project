@@ -20,6 +20,7 @@ import { LatencyMonitor } from "../audio/LatencyMonitor";
 import { GeminiLiveService } from "../services/GeminiLiveService";
 import type { LiveServerJsonEvent, TelemetrySnapshot, WsReadyStateLabel } from "../types/live";
 import { GuardrailIndicator } from "./GuardrailIndicator";
+import { MemoryInspector } from "./MemoryInspector";
 import { ToastHost } from "./ToastHost";
 import { TranscriptFeed } from "./TranscriptFeed";
 import { TreasuryWidget } from "./TreasuryWidget";
@@ -75,6 +76,7 @@ export class ControlApp {
   private treasury: TreasuryWidget | null = null;
   private transcript: TranscriptFeed | null = null;
   private guardrail: GuardrailIndicator | null = null;
+  private memory: MemoryInspector | null = null;
   private toasts = new ToastHost();
   private focusBtn!: HTMLButtonElement;
   private focusMode = false;
@@ -107,7 +109,10 @@ export class ControlApp {
             <button type="button" data-action="connect">Connect Live</button>
             <button type="button" class="secondary" data-action="disconnect" disabled>Disconnect</button>
           </div>
-          <button type="button" class="secondary focus-toggle" data-action="focus-toggle" aria-pressed="false">FOCUS</button>
+          <div class="live-toolbar-right">
+            <div class="memory-mount" data-role="memory"></div>
+            <button type="button" class="secondary focus-toggle" data-action="focus-toggle" aria-pressed="false">FOCUS</button>
+          </div>
         </div>
         <div class="live-status-row">
           <p class="connection" data-role="status" data-state="CLOSED">CLOSED</p>
@@ -148,10 +153,23 @@ export class ControlApp {
     const treasuryMount = this.root.querySelector<HTMLElement>("[data-role=treasury]")!;
     const transcriptMount = this.root.querySelector<HTMLElement>("[data-role=transcript]")!;
     const guardrailEl = this.root.querySelector<HTMLElement>("[data-role=guardrail]")!;
+    const memoryMount = this.root.querySelector<HTMLElement>("[data-role=memory]")!;
 
     this.treasury = new TreasuryWidget(treasuryMount);
     this.transcript = new TranscriptFeed(transcriptMount);
     this.guardrail = new GuardrailIndicator(guardrailEl);
+    this.memory = new MemoryInspector(memoryMount);
+    this.memory.setNotify((msg) => {
+      if (msg.kind === "ok") {
+        this.toasts.ok(msg.text);
+      } else if (msg.kind === "warn") {
+        this.toasts.warn(msg.text);
+      } else if (msg.kind === "danger") {
+        this.toasts.danger(msg.text);
+      } else {
+        this.toasts.info(msg.text);
+      }
+    });
     this.treasury.setStatusHandler((status) => {
       if (status.ok) {
         this.treasuryToastArmed = true;
