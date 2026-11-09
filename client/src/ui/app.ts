@@ -1,11 +1,13 @@
 import {
   clearCheckoutQuery,
+  clearSubscriberId,
   devUnlock,
   fetchBillingConfig,
   fetchEntitlement,
   formatPrice,
   loadSubscriberId,
   readCheckoutReturn,
+  resetSubscription,
   saveSubscriberId,
   startCheckout,
   type BillingConfig,
@@ -51,7 +53,9 @@ export class ControlApp {
   private connectBtn!: HTMLButtonElement;
   private disconnectBtn!: HTMLButtonElement;
   private subscribeBtn!: HTMLButtonElement;
+  private resetBtn!: HTMLButtonElement;
   private devBtn!: HTMLButtonElement;
+  private processEl!: HTMLElement;
   private textInput!: HTMLInputElement;
   private sendBtn!: HTMLButtonElement;
 
@@ -67,8 +71,10 @@ export class ControlApp {
         <p class="access" data-role="access">Checking access…</p>
         <div class="controls subscribe-actions">
           <button type="button" class="subscribe-cta" data-action="subscribe">Subscribe</button>
+          <button type="button" class="secondary" data-action="reset-sub">Reset subscription</button>
           <button type="button" class="secondary" data-action="dev-unlock">Simulate unlock</button>
         </div>
+        <p class="process" data-role="process" hidden></p>
         <p class="tokenomics" data-role="tokenomics"></p>
       </section>
 
@@ -96,7 +102,9 @@ export class ControlApp {
     this.connectBtn = this.root.querySelector("[data-action=connect]")!;
     this.disconnectBtn = this.root.querySelector("[data-action=disconnect]")!;
     this.subscribeBtn = this.root.querySelector("[data-action=subscribe]")!;
+    this.resetBtn = this.root.querySelector("[data-action=reset-sub]")!;
     this.devBtn = this.root.querySelector("[data-action=dev-unlock]")!;
+    this.processEl = this.root.querySelector("[data-role=process]")!;
     this.textInput = this.root.querySelector("[data-role=text]")!;
     this.sendBtn = this.root.querySelector("[data-action=send-text]")!;
     const tokenomicsEl = this.root.querySelector<HTMLElement>("[data-role=tokenomics]")!;
@@ -109,6 +117,7 @@ export class ControlApp {
     this.connectBtn.addEventListener("click", () => void this.connect());
     this.disconnectBtn.addEventListener("click", () => void this.disconnect());
     this.subscribeBtn.addEventListener("click", () => void this.subscribe());
+    this.resetBtn.addEventListener("click", () => void this.resetSubscriptionFlow());
     this.devBtn.addEventListener("click", () => void this.simulateUnlock());
     this.sendBtn.addEventListener("click", () => this.sendText());
     this.textInput.addEventListener("keydown", (e) => {
@@ -132,6 +141,7 @@ export class ControlApp {
       const localSim =
         this.billingConfig.dev_unlock_enabled || this.billingConfig.mock_checkout;
       this.devBtn.hidden = !localSim;
+      this.resetBtn.hidden = !localSim;
 
       if (!canCheckout(this.billingConfig)) {
         this.accessEl.textContent =
@@ -155,6 +165,7 @@ export class ControlApp {
       };
       this.renderSubscribeCta();
       this.devBtn.hidden = false;
+      this.resetBtn.hidden = false;
       this.accessEl.textContent = `Billing config error (CTA still available): ${message}`;
       tokenomicsEl.textContent = "Local mock checkout enabled after config error.";
     }
@@ -228,34 +239,87 @@ export class ControlApp {
     this.renderSubscribeCta();
   }
 
+  private setProcess(text: string | null): void {
+    if (!text) {
+      this.processEl.hidden = true;
+      this.processEl.textContent = "";
+      return;
+    }
+    this.processEl.hidden = false;
+    this.processEl.textContent = text;
+  }
+
   private async subscribe(): Promise<void> {
     this.subscribeBtn.disabled = true;
+    this.subscribeBtn.textContent = "Processing…";
+    this.setProcess("Opening checkout…");
     try {
       if (!canCheckout(this.billingConfig)) {
         throw new Error("Checkout unavailable (set Stripe keys or BILLING_DEV_UNLOCK=true).");
       }
+      this.setProcess("Creating payment session (mock or Stripe)…");
       const session = await startCheckout();
       saveSubscriberId(session.id);
-      this.accessEl.textContent = session.id.startsWith("cs_test_mock_")
-        ? "Mock payment OK — unlocking…"
-        : "Redirecting to Checkout…";
+      const isMock = Boolean(session.mock) || session.id.startsWith("cs_test_mock_");
+      if (isMock) {
+        this.setProcess("Mock checkout confirmed — unlocking AI…");
+        this.accessEl.textContent = "Mock payment OK — unlocking…";
+        // Brief visible feedback before navigation so the click feels active.
+        await new Promise((r) => window.setTimeout(r, 450));
+        this.setEntitled(true);
+        this.accessEl.textContent = "Access active — Live unlocked.";
+        this.setProcess("Mock payment complete. Live HUD unlocked.");
+        this.renderSubscribeCta();
+        // Soft refresh entitlement from server, then stay on page (no blank redirect).
+        await this.refreshEntitlement();
+        return;
+      }
+      this.setProcess("Redirecting to Stripe Checkout…");
+      this.accessEl.textContent = "Redirecting to Checkout…";
       window.location.href = session.url;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       this.accessEl.textContent = message;
+      this.setProcess(null);
       this.subscribeBtn.disabled = false;
       this.renderSubscribeCta();
     }
   }
 
+  private async resetSubscriptionFlow(): Promise<void> {
+    this.resetBtn.disabled = true;
+    this.setProcess("Resetting subscription — locking access…");
+    try {
+      await this.disconnect();
+      await resetSubscription(loadSubscriberId());
+      clearSubscriberId();
+      this.setEntitled(false);
+      this.accessEl.textContent = "Blocked — Subscribe again to unlock.";
+      this.setProcess("Subscription reset. HUD is locked.");
+      this.renderSubscribeCta();
+    } catch (err) {
+      // Still clear local state so the user is not stuck unlocked.
+      clearSubscriberId();
+      this.setEntitled(false);
+      const message = err instanceof Error ? err.message : String(err);
+      this.accessEl.textContent = `Reset forced locally (${message}).`;
+      this.setProcess("Local lock applied.");
+    } finally {
+      this.resetBtn.disabled = false;
+    }
+  }
+
   private async simulateUnlock(): Promise<void> {
     try {
+      this.setProcess("Simulating unlock…");
       const status = await devUnlock();
       this.setEntitled(Boolean(status.active));
       this.accessEl.textContent = "Access active (local simulate)";
+      this.setProcess(null);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       this.accessEl.textContent = message;
+      this.setProcess(null);
     }
   }
 

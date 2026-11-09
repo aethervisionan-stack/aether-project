@@ -170,6 +170,42 @@ class EntitlementStore:
             "granted_at": ent.granted_at,
         }
 
+    def revoke(self, key: str) -> dict[str, Any]:
+        """Deactivate entitlement for local/dev reset (blocked state)."""
+        with self._lock:
+            subscriber_id = self._aliases.get(key, key)
+            ent = self._by_id.get(subscriber_id)
+            removed_aliases = 0
+            if ent is not None:
+                ent.active = False
+                # Drop aliases that pointed at this subscriber.
+                drop = [a for a, sid in self._aliases.items() if sid == subscriber_id]
+                for a in drop:
+                    del self._aliases[a]
+                    removed_aliases += 1
+                # Also remove direct alias key if provided.
+                if key in self._aliases:
+                    del self._aliases[key]
+                    removed_aliases += 1
+                self._persist()
+                logger.info("entitlement revoked subscriber_id=%s", subscriber_id)
+                return {
+                    "subscriber_id": subscriber_id,
+                    "active": False,
+                    "revoked": True,
+                    "aliases_cleared": removed_aliases,
+                }
+            # Unknown id — still clear any alias entry.
+            if key in self._aliases:
+                del self._aliases[key]
+                self._persist()
+            return {
+                "subscriber_id": key,
+                "active": False,
+                "revoked": False,
+                "aliases_cleared": 0,
+            }
+
 
 @lru_cache
 def get_entitlement_store() -> EntitlementStore:

@@ -32,6 +32,12 @@ class DevUnlockBody(BaseModel):
     label: str = Field(default="local-dev")
 
 
+class DevLockBody(BaseModel):
+    """Local/dev reset — clear entitlement for a subscriber/session id."""
+
+    subscriber_id: str = Field(default="")
+
+
 class EntitlementQuery(BaseModel):
     subscriber_id: str
 
@@ -193,6 +199,35 @@ async def dev_unlock(
         "active": True,
         "source": "dev_unlock",
         "expires_at": expires,
+    }
+
+
+@router.post("/dev-lock")
+async def dev_lock(body: DevLockBody) -> dict[str, Any]:
+    """
+    Local/dev: revoke entitlement so the HUD returns to blocked state.
+
+    Allowed when mock checkout / BILLING_DEV_UNLOCK is active (no real Stripe).
+    """
+    settings = get_settings()
+    if settings.has_stripe() and not settings.billing_dev_unlock:
+        raise HTTPException(
+            status_code=403,
+            detail="Dev lock disabled while live Stripe is configured.",
+        )
+    if not settings.stripe_mock_checkout_enabled() and not settings.billing_dev_unlock:
+        raise HTTPException(status_code=403, detail="Dev lock unavailable.")
+
+    key = (body.subscriber_id or "").strip()
+    if not key:
+        raise HTTPException(status_code=400, detail="subscriber_id required")
+
+    store = get_entitlement_store()
+    result = store.revoke(key)
+    return {
+        **result,
+        "blocked": True,
+        "message": "Subscription reset — access blocked until Subscribe again.",
     }
 
 

@@ -80,6 +80,17 @@ button.subscribe-cta:disabled {
   opacity: 0.7;
 }
 
+.process {
+  margin: 0.35rem 0 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--cyan);
+}
+
+.process[hidden] {
+  display: none;
+}
+
 .access {
   margin: 0 0 0.85rem;
   font-size: 0.9rem;

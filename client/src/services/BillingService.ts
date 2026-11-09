@@ -50,6 +50,14 @@ export function saveSubscriberId(id: string): void {
   }
 }
 
+export function clearSubscriberId(): void {
+  try {
+    localStorage.removeItem(SUBSCRIBER_KEY);
+  } catch {
+    // ignore
+  }
+}
+
 export async function fetchBillingConfig(): Promise<BillingConfig> {
   const res = await fetch(apiUrl("/billing/config"));
   if (!res.ok) {
@@ -67,17 +75,37 @@ export async function fetchEntitlement(subscriberId: string): Promise<Entitlemen
   return (await res.json()) as EntitlementStatus;
 }
 
-export async function startCheckout(): Promise<{ id: string; url: string }> {
+export async function startCheckout(): Promise<{ id: string; url: string; mock?: boolean }> {
   const res = await fetch(apiUrl("/billing/checkout"), { method: "POST" });
   if (!res.ok) {
     const detail = await res.text();
     throw new Error(detail || `Checkout failed (${res.status})`);
   }
-  const data = (await res.json()) as { id: string; url: string };
+  const data = (await res.json()) as { id: string; url: string; mock?: boolean };
   if (!data.url) {
     throw new Error("Checkout session missing url");
   }
   return data;
+}
+
+/** Local/dev: revoke entitlement on the server and clear client id. */
+export async function resetSubscription(subscriberId?: string | null): Promise<void> {
+  const id = (subscriberId ?? loadSubscriberId() ?? "").trim();
+  if (!id) {
+    clearSubscriberId();
+    return;
+  }
+  const res = await fetch(apiUrl("/billing/dev-lock"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ subscriber_id: id }),
+  });
+  if (!res.ok) {
+    const detail = await res.text();
+    clearSubscriberId();
+    throw new Error(detail || `Reset subscription failed (${res.status})`);
+  }
+  clearSubscriberId();
 }
 
 export async function devUnlock(): Promise<EntitlementStatus> {
