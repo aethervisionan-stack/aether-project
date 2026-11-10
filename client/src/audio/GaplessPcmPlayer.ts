@@ -6,7 +6,13 @@
  * so HUD orbit can sample spectrum on rAF without a second silent PCM copy.
  */
 
-import { createAnalyser, EMPTY_SPECTRUM, sampleAnalyser, type SpectrumBands } from "./SpectrumTap";
+import {
+  createAnalyser,
+  EMPTY_SPECTRUM,
+  ORBIT_FFT_SIZE,
+  sampleAnalyser,
+  type SpectrumBands,
+} from "./SpectrumTap";
 
 const PLAYBACK_RATE = 24_000;
 
@@ -86,9 +92,10 @@ export class GaplessPcmPlayer {
     };
   }
 
-  /** Sample playback FFT on the animation thread only. */
+  /** Sample playback FFT on the animation thread only (100–2000Hz voice band). */
   sampleSpectrum(): SpectrumBands {
-    return sampleAnalyser(this.analyser, this.freqBuf);
+    const rate = this.context?.sampleRate;
+    return sampleAnalyser(this.analyser, this.freqBuf, rate);
   }
 
   /** Drop scheduled future audio (model interruption / barge-in). */
@@ -114,7 +121,7 @@ export class GaplessPcmPlayer {
   }
 
   private wireAnalyser(ctx: AudioContext): void {
-    this.analyser = createAnalyser(ctx, 256);
+    this.analyser = createAnalyser(ctx, ORBIT_FFT_SIZE);
     this.freqBuf = new Uint8Array(this.analyser.frequencyBinCount);
     if (!this.analyserWired) {
       this.analyser.connect(ctx.destination);

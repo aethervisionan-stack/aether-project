@@ -433,16 +433,18 @@ export class GeminiLiveService {
     const vadSpeech = this.isVadSpeech();
     const playbackActive = this.isPlaybackActive();
     const bands = playbackActive && play.level > 0.02 ? play : mic;
+    const voice = bands.voiceBand ?? bands.level;
     return {
       wsOpen: this.getWsState() === "OPEN",
       vadSpeech,
       playbackActive,
       mode: this.vizMode,
-      micLevel: mic.level,
-      playLevel: Math.max(play.level, playbackActive ? 0.12 : 0),
+      micLevel: mic.voiceBand ?? mic.level,
+      playLevel: Math.max(play.voiceBand ?? play.level, playbackActive ? 0.12 : 0),
       bass: bands.bass,
       mid: bands.mid,
       treble: bands.treble,
+      voiceBand: voice,
     };
   }
 

@@ -7,7 +7,13 @@
  * down to 16 kHz so Hands-Free Bluetooth headsets stay compatible.
  */
 
-import { createAnalyser, EMPTY_SPECTRUM, sampleAnalyser, type SpectrumBands } from "./SpectrumTap";
+import {
+  createAnalyser,
+  EMPTY_SPECTRUM,
+  ORBIT_FFT_SIZE,
+  sampleAnalyser,
+  type SpectrumBands,
+} from "./SpectrumTap";
 
 export type PcmFrameHandler = (pcm: ArrayBuffer) => void;
 
@@ -144,7 +150,7 @@ export class PcmCapture {
     this.mute.connect(this.context.destination);
 
     // Parallel analyser tap for orbit HUD (does not sit on PCM callback work).
-    this.analyser = createAnalyser(this.context, 256);
+    this.analyser = createAnalyser(this.context, ORBIT_FFT_SIZE);
     this.freqBuf = new Uint8Array(this.analyser.frequencyBinCount);
     this.source.connect(this.analyser);
 
@@ -162,7 +168,8 @@ export class PcmCapture {
     if (!this.running) {
       return EMPTY_SPECTRUM;
     }
-    return sampleAnalyser(this.analyser, this.freqBuf);
+    const rate = this.context?.sampleRate;
+    return sampleAnalyser(this.analyser, this.freqBuf, rate);
   }
 
   stop(): void {

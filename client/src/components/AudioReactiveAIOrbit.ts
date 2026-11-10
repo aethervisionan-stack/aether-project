@@ -1,11 +1,13 @@
 /**
  * AudioReactiveAIOrbit — single high-poly plexus sphere for the Aether HUD.
- * ONE Icosahedron wireframe (LineSegments + Points), UnrealBloomPass, HUD palette.
+ * ONE Icosahedron (shared Mesh wireframe + Points), UnrealBloomPass, HUD palette.
  * Driven by WS / VAD / playback AnalyserNode taps — never touches PCM uplink.
  *
  * Physics:
- *  - Idle: round sphere + slow axis rotation (no vertex deform).
- *  - Speaking: keep rotate + gentle sine undulation from smoothed RMS / low-mid.
+ *  - Frequency focus: 100–2000Hz voice band → lerped RMS / avg amplitude.
+ *  - Idle: perfect sphere + slow axis rotation (vertices restored to base).
+ *  - Speak: every vertex displaced with composite 3D noise × voice intensity;
+ *    Points + wireframe share one BufferGeometry (needsUpdate each speak frame).
  */
 
 import * as THREE from "three";
@@ -17,7 +19,7 @@ import type { VisualizerMode } from "../audio/AdvancedAudioVisualizer";
 
 export type OrbitPresence = "point" | "full";
 
-/** Speak mode for shader: 0 idle, 1 user/VAD, 2 assistant/playback. */
+/** Speak mode for drive: 0 idle, 1 user/VAD, 2 assistant/playback. */
 export type OrbitSpeakMode = 0 | 1 | 2;
 
 export interface OrbitDriveState {
@@ -30,38 +32,43 @@ export interface OrbitDriveState {
   bass: number;
   mid: number;
   treble: number;
+  /** Explicit 100–2000Hz voice-band energy (preferred over level). */
+  voiceBand?: number;
 }
 
 export type OrbitDriver = () => OrbitDriveState;
 
 /**
- * Constant damping via MathUtils.lerp — no hard jumps on scale / deform.
- * Energy from smoothed output RMS + low-mid; clamps keep breath subtle.
+ * Constant damping via MathUtils.lerp — coherent undulation, no tremor.
+ * maxDeform keeps the sphere recognizably 3D under peak voice.
  */
 export const ORBIT_TUNING = {
-  /** Constant lerp alphas (rAF). */
-  lerpRms: 0.06,
-  lerpSpeakMode: 0.05,
-  lerpBright: 0.04,
-  lerpScale: 0.06,
-  lerpSpin: 0.045,
-  lerpDeform: 0.055,
-  lerpBreath: 0.06,
-  maxEnergy: 0.55,
-  maxDeform: 0.055,
-  maxBreath: 0.032,
-  maxScaleDelta: 0.04,
-  maxSpinAssist: 0.12,
+  lerpRms: 0.08,
+  lerpSpeakMode: 0.06,
+  lerpBright: 0.05,
+  lerpScale: 0.07,
+  lerpSpin: 0.05,
+  lerpDeform: 0.09,
+  lerpBreath: 0.08,
+  lerpVoice: 0.1,
+  maxEnergy: 0.7,
+  /** Radial displace clamp (fraction of radius) — shape-safe. */
+  maxDeform: 0.085,
+  maxBreath: 0.028,
+  maxScaleDelta: 0.035,
+  maxSpinAssist: 0.14,
   idleSpin: 0.08,
-  speakSpin: 0.1,
-  /** Soft speech sine frequencies. */
-  breathHz: 1.25,
-  waveHz: 0.85,
+  speakSpin: 0.11,
+  breathHz: 1.35,
+  noiseHz: 1.15,
+  /** Spatial frequencies for composite 3D noise (simplex-like). */
+  noiseA: 3.1,
+  noiseB: 2.7,
+  noiseC: 4.2,
 } as const;
 
 /**
  * Single-sphere plexus look — HUD-harmonized palette + elegant bloom.
- * Hexes mirror `main.css` :root tokens (`--cyan`, `--purple`, `--bg0`).
  */
 export const ORBIT_LOOK = {
   /** Icosahedron detail: faces = 20 * 4^detail — one sphere only. */
@@ -77,24 +84,22 @@ export const ORBIT_LOOK = {
   toneExposure: 0.92,
 } as const;
 
-/** HUD `--cyan` — crest / energy-beam accents. */
 const CYAN = new THREE.Color("#00f3ff");
-/** Futuristic neon blue primary (crest→limb midtones). */
 const NEON_BLUE = new THREE.Color("#3aa7ff");
-/** HUD `--purple` — deep folds / core violet. */
 const PURPLE = new THREE.Color("#7000ff");
-/** Soft violet (not hot magenta) for inner-layer depth. */
 const VIOLET = new THREE.Color("#8b5cff");
 
+/**
+ * Vertex shading assumes CPU already deformed `position`.
+ * Fresnel / crest still animate with uniforms for luminous HUD glow.
+ */
 const VERT = /* glsl */ `
 uniform float uTime;
 uniform float uEnergy;
 uniform float uSpeakMode;
 uniform float uBright;
 uniform float uBreath;
-uniform float uDeform;
-uniform float uWaveHz;
-uniform float uIsPoint; // 1 = Points, 0 = LineSegments
+uniform float uIsPoint;
 
 varying float vGlow;
 varying float vMix;
@@ -104,32 +109,21 @@ varying float vCrest;
 void main() {
   vec3 pos = position;
   float speak = smoothstep(0.35, 1.2, uSpeakMode);
-
-  // Soft coherent sine undulation (not chaotic noise) — gated by uDeform.
-  float lat = atan(position.z, position.x);
-  float elev = asin(clamp(position.y, -1.0, 1.0));
-  float wave =
-    sin(elev * 4.0 + uTime * uWaveHz) * 0.55 +
-    sin(lat * 3.0 - uTime * uWaveHz * 0.7) * 0.35 +
-    sin((elev + lat) * 2.0 + uTime * uWaveHz * 0.45) * 0.2;
-  wave = clamp(wave, -1.0, 1.0);
-
-  float deform = wave * uDeform * speak;
-  pos *= 1.0 + uBreath;
-  pos += normalize(position + 1e-5) * deform;
+  pos *= 1.0 + uBreath * 0.35;
 
   vec4 mv = modelViewMatrix * vec4(pos, 1.0);
   vec3 viewDir = normalize(-mv.xyz);
   vec3 nView = normalize(normalMatrix * normalize(position));
   float fres = pow(1.0 - clamp(abs(dot(viewDir, nView)), 0.0, 1.0), 1.55);
 
-  // Depth from shaders only: cyan crests / violet folds via fresnel + wave.
-  float crest = clamp(wave * 0.5 + 0.5, 0.0, 1.0);
+  float lat = atan(position.z, position.x);
+  float elev = asin(clamp(position.y / max(length(position), 1e-4), -1.0, 1.0));
+  float crest = clamp(0.5 + 0.5 * sin(elev * 3.0 + lat * 2.0 + uTime * 0.9), 0.0, 1.0);
   float depth = clamp((-mv.z - 2.4) * 0.22, 0.0, 1.0);
   vCrest = crest;
   vMix = clamp(crest * 0.55 + fres * 0.55 - depth * 0.35, 0.0, 1.0);
   vFresnel = fres;
-  vGlow = 0.3 + uBright * 0.38 + fres * 0.4 + crest * 0.18 + speak * uEnergy * 0.12;
+  vGlow = 0.3 + uBright * 0.38 + fres * 0.4 + crest * 0.18 + speak * uEnergy * 0.14;
 
   gl_Position = projectionMatrix * mv;
   float pt = mix(0.0, 1.05 + uBright * 1.15 + fres * 1.2 + crest * 0.4, uIsPoint);
@@ -152,7 +146,6 @@ void main() {
   vec2 uv = gl_PointCoord - 0.5;
   float d = length(uv);
   if (d > 0.5) discard;
-  // Sharp luminous core + restrained halo (HUD-elegant, not blown out).
   float core = smoothstep(0.4, 0.03, d);
   float halo = smoothstep(0.5, 0.16, d);
   vec3 crestCol = mix(uBlue, uCyan, 0.55 + vCrest * 0.35);
@@ -176,7 +169,6 @@ varying float vFresnel;
 varying float vCrest;
 
 void main() {
-  // Refined energy beams — cyan accents on neon-blue body, violet in folds.
   vec3 crestCol = mix(uBlue, uCyan, 0.45 + vCrest * 0.4);
   vec3 foldCol = mix(uPurple, uViolet, 0.35);
   vec3 col = mix(foldCol, crestCol, vMix * 0.85 + vFresnel * 0.12);
@@ -186,13 +178,33 @@ void main() {
 `;
 
 interface LayerBundle {
+  /** Shared geometry — Points + wireframe Mesh both read these positions. */
+  geometry: THREE.BufferGeometry;
+  basePositions: Float32Array;
+  positions: THREE.BufferAttribute;
   points: THREE.Points;
-  lines: THREE.LineSegments;
+  wire: THREE.Mesh;
   pointMat: THREE.ShaderMaterial;
   lineMat: THREE.ShaderMaterial;
   baseScale: number;
   baseLineOp: number;
   basePointOp: number;
+}
+
+/** Composite 3D noise (simplex-like) — coherent organic undulation, not random tremor. */
+export function compositeVertexNoise(
+  x: number,
+  y: number,
+  z: number,
+  t: number,
+  T: typeof ORBIT_TUNING = ORBIT_TUNING,
+): number {
+  const a =
+    Math.sin(x * T.noiseA + t * 1.7) * Math.cos(y * T.noiseB - t * 1.25) * 0.45;
+  const b = Math.sin(y * T.noiseC + z * 2.1 + t * 2.05) * 0.3;
+  const c =
+    Math.sin((x + z) * 5.0 - t * 1.05) * Math.cos(y * 3.3 + t * 0.85) * 0.25;
+  return THREE.MathUtils.clamp(a + b + c, -1, 1);
 }
 
 export class AudioReactiveAIOrbit {
@@ -214,6 +226,7 @@ export class AudioReactiveAIOrbit {
   private readonly resizeObserver: ResizeObserver;
   private energySmoothed = 0;
   private rmsSmoothed = 0;
+  private voiceSmoothed = 0;
   private lowMidSmoothed = 0;
   private speakModeSmoothed = 0;
   private brightSmoothed = 0.35;
@@ -221,6 +234,7 @@ export class AudioReactiveAIOrbit {
   private spinSmoothed: number = ORBIT_TUNING.idleSpin;
   private breathSmoothed = 0;
   private deformSmoothed = 0;
+  private idleRestored = true;
 
   constructor() {
     this.resizeObserver = new ResizeObserver(() => this.resize());
@@ -243,7 +257,6 @@ export class AudioReactiveAIOrbit {
       antialias: true,
       powerPreference: "high-performance",
     });
-    // Match HUD `--bg0` so bloom sits in the same void as glass panels.
     renderer.setClearColor(ORBIT_LOOK.clearHex, 1);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, ORBIT_LOOK.maxPixelRatio));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -329,8 +342,7 @@ export class AudioReactiveAIOrbit {
 
   private disposeRenderer(): void {
     for (const layer of this.layers) {
-      layer.points.geometry.dispose();
-      layer.lines.geometry.dispose();
+      layer.geometry.dispose();
       layer.pointMat.dispose();
       layer.lineMat.dispose();
     }
@@ -355,20 +367,23 @@ export class AudioReactiveAIOrbit {
     this.canvas = null;
   }
 
-  /** Exactly one high-poly plexus sphere — depth from shaders only. */
+  /**
+   * Exactly one high-poly plexus sphere.
+   * Mesh(wireframe) + Points share one BufferGeometry so CPU deform stays coherent.
+   */
   private buildLayers(root: THREE.Group): void {
     const L = ORBIT_LOOK;
     const geo = new THREE.IcosahedronGeometry(1, L.detail);
     geo.computeVertexNormals();
-    const wire = new THREE.WireframeGeometry(geo);
+    const posAttr = geo.getAttribute("position") as THREE.BufferAttribute;
+    const basePositions = new Float32Array(posAttr.array as Float32Array);
+
     const shared = {
       uTime: { value: 0 },
       uEnergy: { value: 0 },
       uSpeakMode: { value: 0 },
       uBright: { value: 0.35 },
       uBreath: { value: 0 },
-      uDeform: { value: 0 },
-      uWaveHz: { value: ORBIT_TUNING.waveHz },
       uCyan: { value: CYAN },
       uBlue: { value: NEON_BLUE },
       uViolet: { value: VIOLET },
@@ -386,6 +401,7 @@ export class AudioReactiveAIOrbit {
       transparent: true,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
+      wireframe: true,
     });
     const pointMat = new THREE.ShaderMaterial({
       uniforms: {
@@ -400,16 +416,20 @@ export class AudioReactiveAIOrbit {
       blending: THREE.AdditiveBlending,
     });
 
-    const lines = new THREE.LineSegments(wire, lineMat);
+    // Same geometry → one needsUpdate moves every luminous node + wire edge together.
+    const wire = new THREE.Mesh(geo, lineMat);
     const points = new THREE.Points(geo, pointMat);
-    lines.scale.setScalar(L.scale);
+    wire.scale.setScalar(L.scale);
     points.scale.setScalar(L.scale);
-    root.add(lines);
+    root.add(wire);
     root.add(points);
 
     this.layers.push({
+      geometry: geo,
+      basePositions,
+      positions: posAttr,
       points,
-      lines,
+      wire,
       pointMat,
       lineMat,
       baseScale: L.scale,
@@ -456,7 +476,7 @@ export class AudioReactiveAIOrbit {
     const full = presence === "full";
     for (const layer of this.layers) {
       layer.points.visible = full;
-      layer.lines.visible = full;
+      layer.wire.visible = full;
     }
     if (this.pointCore) {
       this.pointCore.visible = !full;
@@ -476,6 +496,45 @@ export class AudioReactiveAIOrbit {
       return 1;
     }
     return 0;
+  }
+
+  /**
+   * Displace every vertex along its radial normal with clamped composite noise.
+   * Sets `position.needsUpdate` so Points + wireframe Mesh stay locked together.
+   */
+  private applyVertexDeform(layer: LayerBundle, t: number, intensity: number): void {
+    const T = ORBIT_TUNING;
+    const base = layer.basePositions;
+    const arr = layer.positions.array as Float32Array;
+    const amp = THREE.MathUtils.clamp(intensity, 0, T.maxDeform);
+
+    if (amp < 1e-5) {
+      if (!this.idleRestored) {
+        arr.set(base);
+        layer.positions.needsUpdate = true;
+        this.idleRestored = true;
+      }
+      return;
+    }
+
+    this.idleRestored = false;
+    const noiseT = t * T.noiseHz;
+    for (let i = 0; i < arr.length; i += 3) {
+      const bx = base[i];
+      const by = base[i + 1];
+      const bz = base[i + 2];
+      const len = Math.hypot(bx, by, bz) || 1;
+      const nx = bx / len;
+      const ny = by / len;
+      const nz = bz / len;
+      const n = compositeVertexNoise(nx, ny, nz, noiseT, T);
+      // Safe radial clamp — sphere keeps coherent 3D shape.
+      const d = THREE.MathUtils.clamp(n * amp, -T.maxDeform, T.maxDeform);
+      arr[i] = bx + nx * d;
+      arr[i + 1] = by + ny * d;
+      arr[i + 2] = bz + nz * d;
+    }
+    layer.positions.needsUpdate = true;
   }
 
   private frame(): void {
@@ -498,6 +557,7 @@ export class AudioReactiveAIOrbit {
       bass: 0,
       mid: 0,
       treble: 0,
+      voiceBand: 0,
     };
 
     const T = ORBIT_TUNING;
@@ -510,19 +570,27 @@ export class AudioReactiveAIOrbit {
       drive.mode === "speaking" ||
       drive.mode === "listening";
 
-    // Smoothed output RMS + low-mid — constant damping, no hard jumps.
-    const rmsRaw =
+    // 100–2000Hz voice band → smoothed RMS / avg (prefer explicit voiceBand).
+    const voiceRaw =
       speakMode === 2
-        ? drive.playLevel
+        ? (drive.voiceBand ?? drive.playLevel)
         : speakMode === 1
-          ? drive.micLevel
+          ? (drive.voiceBand ?? drive.micLevel)
           : 0;
+    const rmsRaw =
+      speakMode === 2 ? drive.playLevel : speakMode === 1 ? drive.micLevel : 0;
     const lowMidRaw =
       speakMode === 2
-        ? drive.bass * 0.55 + drive.mid * 0.45
+        ? drive.bass * 0.45 + drive.mid * 0.55
         : speakMode === 1
-          ? drive.micLevel * 0.7
+          ? (drive.voiceBand ?? drive.micLevel) * 0.75
           : 0;
+
+    this.voiceSmoothed = THREE.MathUtils.lerp(
+      this.voiceSmoothed,
+      THREE.MathUtils.clamp(voiceRaw, 0, 1),
+      T.lerpVoice,
+    );
     this.rmsSmoothed = THREE.MathUtils.lerp(
       this.rmsSmoothed,
       THREE.MathUtils.clamp(rmsRaw, 0, 1),
@@ -534,14 +602,16 @@ export class AudioReactiveAIOrbit {
       T.lerpRms,
     );
     const energyTarget = THREE.MathUtils.clamp(
-      speaking ? this.rmsSmoothed * 0.55 + this.lowMidSmoothed * 0.55 : 0,
+      speaking
+        ? this.voiceSmoothed * 0.65 + this.rmsSmoothed * 0.2 + this.lowMidSmoothed * 0.25
+        : 0,
       0,
       T.maxEnergy,
     );
     this.energySmoothed = THREE.MathUtils.lerp(this.energySmoothed, energyTarget, T.lerpRms);
     this.speakModeSmoothed = THREE.MathUtils.lerp(this.speakModeSmoothed, speakMode, T.lerpSpeakMode);
 
-    const brightTarget = speaking ? 0.4 + this.energySmoothed * 0.25 : 0.32;
+    const brightTarget = speaking ? 0.42 + this.energySmoothed * 0.28 : 0.32;
     this.brightSmoothed = THREE.MathUtils.lerp(this.brightSmoothed, brightTarget, T.lerpBright);
 
     this.applyPresence(full ? "full" : "point");
@@ -549,27 +619,30 @@ export class AudioReactiveAIOrbit {
     const t = this.clock.getElapsedTime();
     const speakBlend = THREE.MathUtils.smoothstep(this.speakModeSmoothed, 0.35, 1.2);
 
-    // Soft expand/contract breath tied to smoothed RMS / low-mid.
     const breathTarget = THREE.MathUtils.clamp(
-      speakBlend * Math.sin(t * T.breathHz) * (0.012 + this.energySmoothed * 0.028),
+      speakBlend *
+        Math.sin(t * T.breathHz) *
+        (0.01 + this.voiceSmoothed * 0.03 + this.energySmoothed * 0.012),
       -T.maxBreath,
       T.maxBreath,
     );
     this.breathSmoothed = THREE.MathUtils.lerp(this.breathSmoothed, breathTarget, T.lerpBreath);
 
-    // Idle → deform 0 (round). Speaking → gentle surface undulation.
+    // Peak radial deform amplitude from voice intensity (clamped).
     const deformTarget = THREE.MathUtils.clamp(
-      speakBlend * (0.012 + this.energySmoothed * 0.042 + this.lowMidSmoothed * 0.02),
+      speakBlend *
+        (0.018 + this.voiceSmoothed * 0.055 + this.energySmoothed * 0.028 + this.lowMidSmoothed * 0.015),
       0,
       T.maxDeform,
     );
     this.deformSmoothed = THREE.MathUtils.lerp(this.deformSmoothed, deformTarget, T.lerpDeform);
 
     const spinTarget = speaking
-      ? THREE.MathUtils.clamp(T.speakSpin + this.energySmoothed * 0.02, T.idleSpin, T.maxSpinAssist)
+      ? THREE.MathUtils.clamp(T.speakSpin + this.voiceSmoothed * 0.025, T.idleSpin, T.maxSpinAssist)
       : T.idleSpin;
     this.spinSmoothed = THREE.MathUtils.lerp(this.spinSmoothed, spinTarget, T.lerpSpin);
 
+    // Idle: slow perfect-sphere rotate. Speak: same rotate + living vertex undulation.
     root.rotation.y = t * this.spinSmoothed;
     root.rotation.x = Math.sin(t * 0.15) * 0.06;
     root.rotation.z = Math.cos(t * 0.11) * 0.04;
@@ -583,13 +656,15 @@ export class AudioReactiveAIOrbit {
     root.scale.setScalar(this.scaleSmoothed);
 
     if (this.bloomPass) {
-      const bloomStrength = ORBIT_LOOK.bloomStrength + speakBlend * 0.04;
-      this.bloomPass.strength = THREE.MathUtils.clamp(bloomStrength, 0.42, 0.6);
+      const bloomStrength = ORBIT_LOOK.bloomStrength + speakBlend * 0.05;
+      this.bloomPass.strength = THREE.MathUtils.clamp(bloomStrength, 0.42, 0.62);
       this.bloomPass.radius = ORBIT_LOOK.bloomRadius;
       this.bloomPass.threshold = ORBIT_LOOK.bloomThreshold;
     }
 
     for (const layer of this.layers) {
+      this.applyVertexDeform(layer, t, this.deformSmoothed);
+
       const brightBoost = 1 + (this.brightSmoothed - 0.35) * 0.28;
       for (const mat of [layer.pointMat, layer.lineMat]) {
         mat.uniforms.uTime.value = t;
@@ -597,8 +672,6 @@ export class AudioReactiveAIOrbit {
         mat.uniforms.uSpeakMode.value = this.speakModeSmoothed;
         mat.uniforms.uBright.value = this.brightSmoothed;
         mat.uniforms.uBreath.value = this.breathSmoothed;
-        mat.uniforms.uDeform.value = this.deformSmoothed;
-        mat.uniforms.uWaveHz.value = T.waveHz;
       }
       layer.lineMat.uniforms.uOpacity.value = Math.min(0.4, layer.baseLineOp * brightBoost);
       layer.pointMat.uniforms.uOpacity.value = Math.min(0.9, layer.basePointOp * brightBoost);
