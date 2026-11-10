@@ -133,7 +133,21 @@ export class MemoryInspector {
       if (btn.dataset.action === "toggle") {
         continue;
       }
+      // Action buttons only — never disable pref selects/inputs (local unlock must stay editable).
       btn.disabled = !this.open || busy;
+    }
+    this.setFormEnabled(this.open && !busy);
+  }
+
+  /** Pref fields stay interactive whenever the panel is open and not mid-request. */
+  private setFormEnabled(enabled: boolean): void {
+    for (const el of this.root.querySelectorAll<
+      HTMLSelectElement | HTMLInputElement | HTMLTextAreaElement
+    >(".memory-form select, .memory-form input, .memory-form textarea")) {
+      el.disabled = !enabled;
+      if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
+        el.readOnly = false;
+      }
     }
   }
 
@@ -220,6 +234,8 @@ export class MemoryInspector {
         </ul>
       </details>
     `;
+    // Pref controls must remain editable after every re-render (no unlock gating).
+    this.setFormEnabled(this.open);
   }
 
   private readForm(): Partial<LearnedPreferences> | null {
@@ -252,7 +268,19 @@ export class MemoryInspector {
     this.setBusy(true);
     this.setStatus(msg().memory.saving);
     try {
-      this.profile = await updateMemoryPreferences(patch);
+      const updated = await updateMemoryPreferences(patch);
+      const prev = this.profile;
+      // Merge so a partial PUT response never blanks history / preview.
+      this.profile = {
+        profile_id: updated.profile_id || prev?.profile_id || "local",
+        preferences: updated.preferences,
+        history: updated.history?.length ? updated.history : prev?.history ?? [],
+        created_at: updated.created_at ?? prev?.created_at,
+        updated_at: updated.updated_at ?? prev?.updated_at,
+        preference_summary: updated.preference_summary ?? prev?.preference_summary,
+        system_instruction_preview:
+          updated.system_instruction_preview ?? prev?.system_instruction_preview,
+      };
       this.renderBody();
       this.setStatus(msg().memory.saved);
       this.onNotify?.({ kind: "ok", text: msg().memory.savedToast });

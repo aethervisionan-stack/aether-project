@@ -47,16 +47,19 @@ async def get_profile(profile_id: str = "local") -> dict[str, Any]:
 async def put_profile(body: PreferenceUpdate, profile_id: str = "local") -> dict[str, Any]:
     store = get_memory_store()
     payload = body.model_dump(exclude_none=True)
-    prefs = await asyncio.to_thread(
+    await asyncio.to_thread(
         store.update_preferences,
         profile_id,
         preferences=payload,
         merge=True,
     )
+    # Return full snapshot so HUD can re-render without losing history.
+    snap = await asyncio.to_thread(store.snapshot, profile_id)
+    prefs = snap.get("preferences") or {}
     return {
-        "profile_id": profile_id,
-        "preferences": prefs.to_dict(),
+        **snap,
         "preference_summary": preferences_summary(prefs),
+        "system_instruction_preview": build_system_instruction(prefs),
     }
 
 

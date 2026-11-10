@@ -68,7 +68,17 @@ export async function updateMemoryPreferences(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(patch),
   });
-  return readJson<MemoryProfile>(res);
+  const body = await readJson<Partial<MemoryProfile> & { preferences: LearnedPreferences }>(res);
+  // Normalize so HUD always has a usable profile shape after save.
+  return {
+    profile_id: body.profile_id ?? profileId,
+    preferences: body.preferences,
+    history: Array.isArray(body.history) ? body.history : [],
+    created_at: body.created_at,
+    updated_at: body.updated_at,
+    preference_summary: body.preference_summary,
+    system_instruction_preview: body.system_instruction_preview,
+  };
 }
 
 export async function clearMemoryProfile(

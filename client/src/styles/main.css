@@ -362,7 +362,8 @@ button.subscribe-cta:disabled {
 
 .memory-inspector {
   position: relative;
-  z-index: 5;
+  /* Above orbit WebGL + live chrome so the dropdown stays clickable. */
+  z-index: 30;
 }
 
 .memory-toggle {
@@ -377,9 +378,13 @@ button.subscribe-cta:disabled {
   right: 0;
   top: calc(100% + 0.45rem);
   width: min(22rem, calc(100vw - 2.5rem));
+  max-height: min(70vh, 34rem);
+  overflow: auto;
   padding: 0.85rem 0.9rem 0.95rem;
   background: var(--glass-strong);
   box-shadow: 0 12px 36px rgba(0, 0, 0, 0.4);
+  z-index: 31;
+  pointer-events: auto;
 }
 
 .memory-panel[hidden] {
@@ -460,6 +465,22 @@ button.subscribe-cta:disabled {
   padding: 0.45rem 0.55rem;
   text-transform: none;
   letter-spacing: 0;
+  pointer-events: auto;
+  cursor: pointer;
+  -webkit-appearance: auto;
+  appearance: auto;
+}
+
+.memory-form input,
+.memory-form textarea {
+  cursor: text;
+}
+
+.memory-form select:disabled,
+.memory-form input:disabled,
+.memory-form textarea:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .memory-form textarea {
