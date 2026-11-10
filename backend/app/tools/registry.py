@@ -93,6 +93,9 @@ class ToolRegistry:
     def register(self, name: str, handler: ToolHandler) -> None:
         self._handlers[name] = handler
 
+    def has(self, name: str) -> bool:
+        return name in self._handlers
+
     def list_schemas(self) -> list[ToolSchema]:
         return list(TOOL_SCHEMAS)
 

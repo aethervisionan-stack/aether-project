@@ -12,6 +12,7 @@ from google.genai import types
 
 from app.config import AETHER_SYSTEM_INSTRUCTION, Settings
 from app.memory.context import build_system_instruction
+from app.persona.real_life_copilot import ENGINE_ACTIVATION_BANNER
 
 logger = logging.getLogger("aether.genai.session")
 
@@ -23,10 +24,11 @@ INPUT_SAMPLE_RATE = 16_000
 
 def build_live_config(*, system_instruction: str = AETHER_SYSTEM_INSTRUCTION) -> types.LiveConnectConfig:
     """
-    Live session config: AUDIO responses + Aether co-pilot persona.
+    Live session config: AUDIO + Real Life Co-Pilot Engine (v0.4.1).
 
-    System instruction carries fluent voice persona, silent CoT guidance,
-    long-term memory personalization, and mandatory system_help_tool rules.
+    System instruction carries strategic end-to-end resolution persona,
+    mandatory four-part spoken structure, silent CoT, long-term memory
+    personalization, and mandatory system_help_tool rules.
     Ultra-low-latency PCM path is unchanged — planning lives in prompt +
     async sidecar, never on the audio send/receive loops.
     """
@@ -121,14 +123,23 @@ class GeminiLiveSession:
         on_event: EventOutCallback,
     ) -> None:
         config = build_live_config(system_instruction=self._system_instruction)
+        engine_armed = (
+            ENGINE_ACTIVATION_BANNER in self._system_instruction
+            or "Real-Life Co-Pilot" in self._system_instruction
+            or "Real Life Co-Pilot" in self._system_instruction
+        )
         logger.info(
-            "connecting Live session model=%s api_version=%s memory_block=%s cot_hint=%s",
+            "connecting Live session model=%s api_version=%s engine=%s armed=%s "
+            "memory_block=%s structure_hint=%s",
             self._model,
             self._api_version,
+            ENGINE_ACTIVATION_BANNER,
+            engine_armed,
             "Long-term memory" in self._system_instruction,
-            "Silent CoT" in self._system_instruction
-            or "Internal planning" in self._system_instruction,
+            "Diagnóstico Inicial" in self._system_instruction,
         )
+        if engine_armed:
+            logger.info("Activated %s", ENGINE_ACTIVATION_BANNER)
         async with self._client.aio.live.connect(model=self._model, config=config) as session:
             self._session = session
             await on_event({"type": "ready", "model": self._model})

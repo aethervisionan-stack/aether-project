@@ -11,6 +11,7 @@ from app.introspection.prompt import (
 )
 from app.memory.store import Preferences
 from app.mobility.copilot import CopilotMode, build_copilot_guidance, parse_copilot_mode
+from app.persona.real_life_copilot import ENGINE_ACTIVATION_BANNER
 
 
 def preferences_summary(prefs: Preferences | dict[str, Any] | None) -> str:
@@ -95,11 +96,11 @@ def build_system_instruction(
     include_self_knowledge: bool = True,
 ) -> str:
     """
-    Base Aether co-pilot persona + learned preference personalization + mobility
-    + dynamic self-knowledge (capabilities manifest ∩ Tool Registry).
+    Real Life Co-Pilot Engine (v0.4.1) + learned preference personalization +
+    mobility + dynamic self-knowledge (capabilities manifest ∩ Tool Registry).
     """
     base = AETHER_SYSTEM_INSTRUCTION.strip()
-    parts: list[str] = [base]
+    parts: list[str] = [base, f"Active engine: {ENGINE_ACTIVATION_BANNER}."]
     if include_self_knowledge:
         tools = list(registered_tools) if registered_tools is not None else None
         if tools is None:

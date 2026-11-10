@@ -21,17 +21,20 @@ logger = logging.getLogger("aether.introspection.handlers")
 
 # Full product vision — returned with capabilities so replies never collapse to one app.
 AETHER_VISION_MANIFESTO = (
-    "Aether Vision is a hands-free background OS assistant for wearables and earbuds. "
-    "It filters notifications by priority and user pace, speaks through VAD Open-Mic "
-    "and Barge-In voice UX, learns long-term preferences, and requires two-step "
-    "confirmation before irreversible OS actions. Messaging (WhatsApp/Telegram/etc.) "
-    "is one hands-free channel among email, calendar, telephony, and device control — "
-    "not the product definition."
+    "Aether Vision is a Strategic Real-Life Co-Pilot (engine v0.4.1) for wearables "
+    "and earbuds — end-to-end resolution of real situations, not a task/scheduling "
+    "assistant. It filters notifications by priority and user pace, speaks through "
+    "VAD Open-Mic and Barge-In voice UX, learns long-term preferences, orchestrates "
+    "the Tool Registry in parallel/chained calls for root-cause resolution, and "
+    "requires two-step confirmation before irreversible OS actions. Messaging "
+    "(WhatsApp/Telegram/etc.) is one hands-free channel among email, calendar, "
+    "telephony, and device control — not the product definition."
 )
 
 VALUE_PROPOSITION = (
-    "Continuous co-pilot + autonomous OS agent on wearables: interrupt only when "
-    "worth speaking, act by voice with confirm safety, and remember user prefs over time."
+    "Strategic Real-Life Co-Pilot + autonomous OS agent on wearables: diagnose, "
+    "plan, orchestrate tools, deliver expected outcomes — interrupt only when "
+    "worth speaking, act by voice with confirm safety, remember user prefs."
 )
 
 
@@ -149,13 +152,14 @@ def _capabilities(args: dict[str, Any]) -> dict[str, Any]:
         "tool_sync": sync,
         "requires_confirmation": False,
         "speak": (
-            "Sou o Aether Vision — assistente OS hands-free para wearables e earbuds, "
-            "não só um gerente de WhatsApp. "
+            "Sou o Aether Vision — Co-Piloto de Vida Real v0.4.1 para wearables e earbuds, "
+            "resolução ponta a ponta, não um gerente de WhatsApp nem assistente de agenda. "
             + VALUE_PROPOSITION
             + " Pilares com exemplos: "
             + "; ".join(speak_bits)
             + "."
         ),
+        "engine": "v0.4.1 - Real Life Co-Pilot Engine",
         "source": "tool:system_help_tool",
     }
 
@@ -184,6 +188,7 @@ def _health(settings: Settings) -> dict[str, Any]:
         "status": "ok",
         "service": "aether-vision-live",
         "version": __version__,
+        "engine": "v0.4.1 - Real Life Co-Pilot Engine",
         "backend_port": settings.port,
         "model": settings.gemini_live_model,
         "latency": latency,

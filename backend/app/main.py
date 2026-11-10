@@ -7,12 +7,13 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app import __version__
+from app import ENGINE_NAME, ENGINE_VERSION, __version__
 from app.billing import routes as billing_routes
 from app.config import get_settings
 from app.introspection.manifest import build_feature_flags
 from app.introspection.telemetry import get_latency_telemetry
 from app.memory import routes as memory_routes
+from app.persona.real_life_copilot import ENGINE_ACTIVATION_BANNER
 from app.tools import routes as tools_routes
 from app.websocket import live as live_ws
 
@@ -28,6 +29,7 @@ app = FastAPI(
     description=(
         "Modular FastAPI bridge: browser WebSocket `/ws/live` ↔ "
         "Google GenAI Live (`gemini-3.8-live`) for HUD/spatial audio. "
+        f"Persona: {ENGINE_ACTIVATION_BANNER} — Strategic Real-Life Co-Pilot. "
         "Stripe subscription + Solana 70/30 tokenomics under `/billing`. "
         "Long-term memory / prefs under `/memory`. "
         "Frontier tools under `/tools`. CoT + multimodal sidecars on `/ws/live`. "
@@ -86,6 +88,10 @@ async def health() -> dict[str, object]:
             "multimodal": True,
             "memory_runtime": True,
             "token_streaming": True,
+            "real_life_copilot": True,
+            "engine": ENGINE_ACTIVATION_BANNER,
+            "engine_version": ENGINE_VERSION,
+            "engine_name": ENGINE_NAME,
         },
         "mobility": {
             "copilot_mode": True,
@@ -145,8 +151,11 @@ async def root() -> dict[str, str]:
     }
 
 
+logger.info("Activated %s", ENGINE_ACTIVATION_BANNER)
 logger.info(
-    "Aether Vision Live ready model=%s cors=%s stripe=%s solana=%s",
+    "Aether Vision Live ready version=%s engine=%s model=%s cors=%s stripe=%s solana=%s",
+    __version__,
+    ENGINE_ACTIVATION_BANNER,
     settings.gemini_live_model,
     settings.cors_origin_list,
     settings.has_stripe(),

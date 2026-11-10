@@ -72,20 +72,23 @@ class PlanningResult:
         if self.skipped or not self.steps:
             return ""
         lines = [
-            "Silent CoT prep (structure the spoken answer; do not narrate these steps):",
+            "Silent CoT prep (Real Life Co-Pilot — fold into speech; do not narrate):",
+            "Spoken shape: Diagnóstico Inicial → Plano Passo a Passo → "
+            "Orquestração de Ferramentas → Resultado Esperado.",
         ]
         for step in self.steps[:5]:
             corr = f" → corrected: {step.correction}" if step.correction else ""
             lines.append(f"{step.id}. {step.goal} [{step.status}]{corr}")
         if self.recommended_tools:
             lines.append(
-                "Call these tools now if not already used: "
-                + ", ".join(self.recommended_tools[:6])
+                "Prefer chained/parallel tool calls now if not already used: "
+                + ", ".join(self.recommended_tools[:9])
             )
         if self.self_corrections:
             lines.append("Self-check: " + "; ".join(self.self_corrections[:3]))
         lines.append(
-            "Then synthesize one fluent, complete earbud-ready answer from the prep above."
+            "Synthesize a proactive JARVIS/HUD answer from the prep above — "
+            "no 'Em que posso ajudar?', no redundant greetings."
         )
         return "\n".join(lines)
 
@@ -96,8 +99,8 @@ def _decompose(text: str) -> list[PlanStep]:
     steps.append(
         PlanStep(
             id=n,
-            goal="Clarify intent, stakes, and what a complete spoken answer needs",
-            hypothesis="User wants a fluent co-pilot reply — depth matched to the ask",
+            goal="Diagnóstico Inicial — name root cause / real stakes (not a task list)",
+            hypothesis="Strategic Real-Life Co-Pilot: end-to-end resolution over scheduling",
         )
     )
     n += 1
@@ -123,8 +126,8 @@ def _decompose(text: str) -> list[PlanStep]:
         steps.append(
             PlanStep(
                 id=n,
-                goal="Identify callable OS / registry tools without hesitation",
-                hypothesis="Prefer registry tools over free-form invention",
+                goal="Orquestração de Ferramentas — chain/parallel registry tools for evidence",
+                hypothesis="Prefer the 9 Tool Registry tools over free-form invention",
             )
         )
         n += 1
@@ -132,8 +135,8 @@ def _decompose(text: str) -> list[PlanStep]:
         steps.append(
             PlanStep(
                 id=n,
-                goal="Structure reasoning then self-correct before final voice synthesis",
-                hypothesis="Brief internal plan → complete contextual answer (not a telegram)",
+                goal="Plano Passo a Passo + Resultado Esperado before final voice synthesis",
+                hypothesis="Diagnose → plan → tools → expected outcome (proactive HUD)",
             )
         )
     return steps
@@ -180,10 +183,16 @@ def _self_correct(steps: list[PlanStep], text: str) -> tuple[list[PlanStep], lis
         if "facts" in step.goal.lower() and "guess" in step.hypothesis.lower():
             step.status = "validated"
             continue
-        if "Validate" in step.goal or "self-correct" in step.goal.lower() or "Structure" in step.goal:
+        if (
+            "Validate" in step.goal
+            or "self-correct" in step.goal.lower()
+            or "Structure" in step.goal
+            or "Plano Passo" in step.goal
+            or "Diagnóstico" in step.goal
+        ):
             step.status = "corrected"
             step.correction = (
-                "Lead with the answer; add just enough analysis for earbuds; cite tools when used"
+                "Lead with Diagnóstico; cite tools used; close with Resultado Esperado"
             )
             corrections.append(step.correction)
         elif _ACTION.search(text) and "tool" in step.goal.lower():

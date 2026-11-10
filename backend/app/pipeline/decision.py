@@ -8,6 +8,7 @@ compact context payload the Live bridge can push as text — without blocking PC
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 import uuid
@@ -20,11 +21,48 @@ from app.memory.context import build_runtime_guidance, preferences_summary
 from app.memory.store import Preferences, get_memory_store
 from app.mobility.state import MobilitySessionState
 from app.multimodal.ingest import MultimodalBuffer
+from app.persona.real_life_copilot import (
+    REGISTRY_TOOL_NAMES,
+    response_structure_reminder,
+)
 from app.reasoning.classifier import Complexity, classify_complexity
 from app.reasoning.cot import PlanningResult, plan_and_correct
 from app.tools.registry import ToolContext, ToolRegistry, ToolResult, get_tool_registry
 
 logger = logging.getLogger("aether.pipeline.decision")
+
+
+def _default_tool_args(name: str, text: str) -> dict[str, Any]:
+    """Safe default args for autonomous parallel orchestration (no irreversible sends)."""
+    lower = text.lower()
+    if name == "run_test_routine":
+        if "memory" in lower:
+            return {"routine": "memory_snapshot"}
+        if "latency" in lower or "ping" in lower:
+            return {"routine": "latency_targets"}
+        return {"routine": "health"}
+    if name == "memory_payload":
+        return {"action": "get"}
+    if name == "messaging_tool":
+        return {"action": "read", "app": "whatsapp", "limit": 5}
+    if name == "email_calendar_tool":
+        return {"action": "agenda", "day": "today"}
+    if name == "telephony_tool":
+        return {"action": "incoming"}
+    if name == "system_control_tool":
+        if "volume" in lower or "som" in lower:
+            return {"action": "volume", "level": 50}
+        if "alarm" in lower or "alarme" in lower or "timer" in lower:
+            return {"action": "timer", "minutes": 5, "label": "aether"}
+        return {"action": "battery"}
+    if name == "system_help_tool":
+        return {"action": help_tool_action(text)}
+    if name == "solana_treasury_query":
+        return {}
+    if name == "onchain_lookup":
+        # Requires an address — skip empty invoke; CoT still lists the tool for Live.
+        return {"address": "", "method": "getBalance"}
+    return {}
 
 
 @dataclass
@@ -121,45 +159,32 @@ async def run_decision_pipeline(ctx: DecisionContext) -> DecisionOutcome:
     registry: ToolRegistry = get_tool_registry()
     if ctx.auto_tools and planning.recommended_tools:
         tool_ctx = ToolContext(profile_id=ctx.profile_id, settings=settings, source="pipeline")
-        for name in planning.recommended_tools[:3]:
-            args: dict[str, Any] = {}
-            if name == "run_test_routine":
-                lower = text.lower()
-                if "memory" in lower:
-                    args = {"routine": "memory_snapshot"}
-                elif "latency" in lower or "ping" in lower:
-                    args = {"routine": "latency_targets"}
-                else:
-                    args = {"routine": "health"}
-            elif name == "memory_payload":
-                args = {"action": "get"}
-            elif name == "messaging_tool":
-                # Prefer summarize/read — never auto-send (confirm loop required).
-                args = {"action": "read", "app": "whatsapp", "limit": 5}
-            elif name == "email_calendar_tool":
-                args = {"action": "agenda", "day": "today"}
-            elif name == "telephony_tool":
-                args = {"action": "incoming"}
-            elif name == "system_control_tool":
-                lower = text.lower()
-                if "volume" in lower or "som" in lower:
-                    args = {"action": "volume", "level": 50}
-                elif "alarm" in lower or "alarme" in lower or "timer" in lower:
-                    args = {"action": "timer", "minutes": 5, "label": "aether"}
-                else:
-                    args = {"action": "battery"}
-            elif name == "system_help_tool":
-                # Read-only help — never pending_confirmation.
-                args = {"action": help_tool_action(text)}
-            result = await registry.invoke(name, args, ctx=tool_ctx)
-            tool_results.append(result)
+        # Prefer parallel/chained calls across the full 9-tool registry for root-cause.
+        names = [
+            n
+            for n in planning.recommended_tools
+            if (n in REGISTRY_TOOL_NAMES or registry.has(n))
+            and n != "onchain_lookup"  # needs address — Live/model supplies it
+        ][:9]
+
+        async def _invoke_one(name: str) -> ToolResult:
+            args = _default_tool_args(name, text)
+            return await registry.invoke(name, args, ctx=tool_ctx)
+
+        if names:
+            tool_results = list(await asyncio.gather(*[_invoke_one(n) for n in names]))
 
     plan_block = planning.context_block()
     tool_lines = [tr.context_line() for tr in tool_results]
     mm = ""
     if ctx.multimodal:
         mm = ctx.multimodal.context_snippet() or ""
-    injection = _compose_injection(plan_block, *tool_lines, mm)
+    injection = _compose_injection(
+        response_structure_reminder(),
+        plan_block,
+        *tool_lines,
+        mm,
+    )
     outcome = DecisionOutcome(
         turn_id=turn_id,
         complexity=complexity,

@@ -28,6 +28,10 @@ from app.os_bridge.confirmation import (
 )
 from app.os_bridge.listener import get_notification_listener
 from app.pipeline.decision import DecisionContext, run_decision_pipeline
+from app.persona.real_life_copilot import (
+    ENGINE_ACTIVATION_BANNER,
+    build_tool_orchestration_hint,
+)
 from app.reasoning.classifier import Complexity, classify_complexity
 from app.safety import sanitize_outbound_event
 from app.streaming.tokens import TokenStreamEmitter
@@ -257,30 +261,15 @@ async def live_websocket(websocket: WebSocket) -> None:
                 except Exception:
                     logger.debug("memory prefs load failed; using base persona", exc_info=True)
 
-            # Compact tool + CoT remind (full self-knowledge already lists registry ∩ manifest).
-            tools_hint = (
-                "Tool & reasoning discipline:\n"
-                "- Invoke tools via tool_call JSON the moment they fit — no hesitation.\n"
-                "- MANDATORY: for project vision, what you can do, value proposition, "
-                "available tools, or system health — always invoke system_help_tool "
-                "(get_system_capabilities and/or get_system_health) before answering. "
-                "Never give a shallow WhatsApp-manager pitch; use manifesto data from "
-                "the tool (wearables/earbuds OS, notification priority/pace, VAD/Barge-In, "
-                "long-term memory, two-step confirm) plus practical voice examples. "
-                "system_help_tool is read-only (no confirm).\n"
-                "- OS Agent: messaging_tool for read/summarize message notifications & threads; "
-                "email_calendar_tool for inbox/agenda; telephony_tool for calls; "
-                "system_control_tool for battery/volume/media/timers. "
-                "For send/schedule/delete/call: preview then wait for Sim / Pode enviar / Yes.\n"
-                "- Silent CoT: on non-trivial turns, briefly structure intent→facts→answer "
-                "before final voice synthesis. Skip planning on greetings and tiny confirms "
-                "so PCM latency stays ultra-low. Never narrate the plan unless asked. "
-                "Treat [runtime_context] as private prep from the async CoT sidecar.\n"
-                "- Speak as a fluent co-pilot: complete contextual answers when deserved; "
-                "match learned memory on every turn. Voice UX: open-mic / PTT — no wake word; "
-                "support barge-in."
-            )
+            # Compact tool + Real Life Co-Pilot orchestration remind.
+            tools_hint = build_tool_orchestration_hint(registry_names)
             system_instruction = f"{system_instruction}\n{tools_hint}"
+            logger.info(
+                "Live system prompt armed engine=%s tools=%s memory=%s",
+                ENGINE_ACTIVATION_BANNER,
+                len(registry_names),
+                settings.memory_enabled,
+            )
 
             session = GeminiLiveSession(settings, system_instruction=system_instruction)
             bridge["session"] = session

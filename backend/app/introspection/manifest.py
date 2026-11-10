@@ -51,9 +51,10 @@ CAPABILITIES: tuple[CapabilityEntry, ...] = (
         title="Identity & purpose",
         version=__version__,
         description=(
-            "Aether Vision is a hands-free background OS assistant for wearables and "
-            "earbuds — not a single-app WhatsApp manager. Value proposition: continuous "
-            "co-pilot + autonomous OS agent with notification priority/pace filtering, "
+            "Aether Vision is a Strategic Real-Life Co-Pilot (engine v0.4.1) for "
+            "wearables and earbuds — end-to-end resolution, not a task/scheduling "
+            "assistant or WhatsApp manager. Value: diagnose → plan → orchestrate "
+            "tools → expected outcome, with notification priority/pace filtering, "
             "VAD/Barge-In voice UX, long-term memory, and two-step confirmation safety."
         ),
         example_voice="Aether, o que você consegue fazer agora?",
