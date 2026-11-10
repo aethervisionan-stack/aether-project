@@ -1,12 +1,12 @@
 /**
- * AudioReactiveAIOrbit — cinema-grade plexus AI presence for the Aether HUD.
- * High-density neon wireframe + UnrealBloomPass, driven by WS / VAD / playback
- * AnalyserNode taps. Never touches the PCM uplink path.
+ * AudioReactiveAIOrbit — Unreal/CGI-grade plexus AI presence for the Aether HUD.
+ * Ultra-thin LineSegments + sharp Points, UnrealBloomPass, depth neon gradient.
+ * Driven by WS / VAD / playback AnalyserNode taps — never touches PCM uplink.
  *
- * Physics (preserved from 42f81af smoothing):
+ * Physics (stricter damping on top of 42f81af clamps):
  *  - Idle: slow elegant rotation ONLY — no vertex deformation.
  *  - User (VAD): brighter nodes + subtle pulse.
- *  - Assistant (playback): clamped mid/bass breath + fluid undulation.
+ *  - Assistant (playback): critically-damped mid/bass breath + fluid undulation.
  */
 
 import * as THREE from "three";
@@ -35,44 +35,54 @@ export interface OrbitDriveState {
 
 export type OrbitDriver = () => OrbitDriveState;
 
-/** Speak physics — do not regress; loud PCM cannot explode past clamps. */
+/**
+ * Ultra-smooth speak physics — stricter lerps + spring damp; clamps unchanged or tighter.
+ * Do not raise maxDeform / maxBreath / maxEnergy above prior caps.
+ */
 export const ORBIT_TUNING = {
-  lerpEnergy: 0.065,
-  lerpSpeakMode: 0.07,
-  lerpBright: 0.055,
-  lerpBands: 0.08,
-  lerpScale: 0.09,
-  lerpSpin: 0.06,
-  maxEnergy: 0.62,
-  maxDeform: 0.085,
-  maxBreath: 0.045,
-  maxScaleDelta: 0.055,
-  maxSpinAssist: 0.16,
-  idleSpin: 0.09,
-  userSpin: 0.14,
-  breathBassHz: 1.35,
-  breathMidHz: 2.1,
+  lerpEnergy: 0.038,
+  lerpSpeakMode: 0.042,
+  lerpBright: 0.035,
+  lerpBands: 0.048,
+  lerpScale: 0.05,
+  lerpSpin: 0.04,
+  /** Critically-damped spring on deform (accel + velocity damp). */
+  deformSpring: 0.045,
+  deformDamp: 0.86,
+  breathSpring: 0.055,
+  breathDamp: 0.88,
+  maxEnergy: 0.58,
+  maxDeform: 0.072,
+  maxBreath: 0.038,
+  maxScaleDelta: 0.048,
+  maxSpinAssist: 0.14,
+  idleSpin: 0.085,
+  userSpin: 0.12,
+  breathBassHz: 1.15,
+  breathMidHz: 1.75,
 } as const;
 
-/** Cinema plexus look — density + bloom (HUD-safe caps). */
+/** CGI plexus look — density + bloom (HUD-safe caps). */
 export const ORBIT_LOOK = {
   /** Icosahedron detail: faces = 20 * 4^detail. */
-  primaryDetail: 6, // 81 920 faces → dense plexus
-  shellDetail: 5, // 20 480 faces
+  primaryDetail: 6, // 81 920 faces
+  shellDetail: 5,
   coreDetail: 5,
   primaryScale: 1.0,
-  shellScale: 1.14,
-  coreScale: 0.78,
-  /** Cap DPR under bloom for HUD perf. */
+  shellScale: 1.13,
+  coreScale: 0.8,
   maxPixelRatio: 1.75,
-  bloomStrength: 0.78,
-  bloomRadius: 0.55,
-  bloomThreshold: 0.18,
+  /** Soft cinematic bloom on absolute black. */
+  bloomStrength: 0.86,
+  bloomRadius: 0.62,
+  bloomThreshold: 0.12,
+  lineOpacityPrimary: 0.32,
+  pointOpacityPrimary: 0.92,
 } as const;
 
-const CYAN = new THREE.Color("#00F3FF");
-const MAGENTA = new THREE.Color("#FF2BD6");
-const PURPLE = new THREE.Color("#5A00CC");
+const CYAN = new THREE.Color("#00F8FF");
+const MAGENTA = new THREE.Color("#FF1AC6");
+const PURPLE = new THREE.Color("#4B00B8");
 
 const VERT = /* glsl */ `
 uniform float uTime;
@@ -85,10 +95,12 @@ uniform float uBright;
 uniform float uLayer;
 uniform float uBreath;
 uniform float uDeform;
+uniform float uIsPoint; // 1 = Points, 0 = LineSegments
 
 varying float vGlow;
 varying float vMix;
 varying float vFresnel;
+varying float vCrest;
 
 float hash(vec3 p) {
   p = fract(p * 0.3183099 + vec3(0.1, 0.2, 0.3));
@@ -116,32 +128,35 @@ void main() {
   float assist = smoothstep(1.2, 1.8, mode);
   float user = smoothstep(0.2, 0.8, mode) * (1.0 - assist);
 
-  float nSpeed = mix(0.12, 0.22 + uEnergy * 0.12, assist);
-  float n1 = noise(pos * 1.55 + vec3(uTime * nSpeed, uTime * (nSpeed * 0.75), uLayer));
-  float n2 = noise(pos * 2.7 - vec3(uTime * (nSpeed * 1.1), 0.0, uTime * nSpeed));
-  float wave = (n1 * 0.7 + n2 * 0.3) * 2.0 - 1.0;
+  // Low-frequency organic field — no harsh high-freq vibration.
+  float nSpeed = mix(0.08, 0.14 + uEnergy * 0.06, assist);
+  float n1 = noise(pos * 1.35 + vec3(uTime * nSpeed, uTime * (nSpeed * 0.7), uLayer));
+  float n2 = noise(pos * 2.2 - vec3(uTime * (nSpeed * 0.9), 0.0, uTime * nSpeed * 0.85));
+  float wave = (n1 * 0.72 + n2 * 0.28) * 2.0 - 1.0;
 
-  float deform = wave * uDeform * (0.85 + uLayer * 0.2);
-  float userPulse = user * (0.012 + uEnergy * 0.02) * sin(uTime * 2.2 + uLayer);
+  float deform = wave * uDeform * (0.8 + uLayer * 0.18);
+  float userPulse = user * (0.008 + uEnergy * 0.012) * sin(uTime * 1.7 + uLayer);
 
   pos *= 1.0 + uBreath + userPulse;
   pos += normalize(position + 1e-5) * deform;
 
   vec4 mv = modelViewMatrix * vec4(pos, 1.0);
   vec3 viewDir = normalize(-mv.xyz);
-  // Sphere-space normal (works for Points + LineSegments without attr).
   vec3 nView = normalize(normalMatrix * normalize(position));
-  float fres = pow(1.0 - clamp(abs(dot(viewDir, nView)), 0.0, 1.0), 1.65);
+  float fres = pow(1.0 - clamp(abs(dot(viewDir, nView)), 0.0, 1.0), 1.55);
 
-  // Cyan on limbs/edges; purple/magenta in folds & interior.
-  float fold = clamp(0.5 - wave * 0.5, 0.0, 1.0);
-  vMix = clamp(fres * 0.75 + (1.0 - fold) * 0.35 - uLayer * 0.08, 0.0, 1.0);
+  // Crest (wave+) = cyan front; fold/core (wave−, deeper layers) = magenta/purple.
+  float crest = clamp(wave * 0.5 + 0.5, 0.0, 1.0);
+  float fold = 1.0 - crest;
+  float depth = clamp((-mv.z - 2.4) * 0.22 + uLayer * 0.35, 0.0, 1.0);
+  vCrest = crest;
+  vMix = clamp(crest * 0.7 + fres * 0.45 - fold * 0.35 - depth * 0.4, 0.0, 1.0);
   vFresnel = fres;
-  vGlow = 0.32 + uBright * 0.4 + fres * 0.35 + assist * abs(wave) * 0.15 + user * uEnergy * 0.18;
+  vGlow = 0.3 + uBright * 0.38 + fres * 0.4 + crest * 0.2 + assist * crest * 0.1;
 
   gl_Position = projectionMatrix * mv;
-  float pt = 1.15 + uBright * 1.35 + fres * 1.1 + assist * uEnergy * 0.8 + uLayer * 0.25;
-  gl_PointSize = pt * (200.0 / max(55.0, -mv.z * 38.0 + 110.0));
+  float pt = mix(0.0, 1.05 + uBright * 1.15 + fres * 1.25 + crest * 0.55, uIsPoint);
+  gl_PointSize = pt * (210.0 / max(50.0, -mv.z * 36.0 + 105.0));
 }
 `;
 
@@ -153,18 +168,20 @@ uniform float uOpacity;
 varying float vGlow;
 varying float vMix;
 varying float vFresnel;
+varying float vCrest;
 
 void main() {
   vec2 uv = gl_PointCoord - 0.5;
   float d = length(uv);
   if (d > 0.5) discard;
-  float core = smoothstep(0.5, 0.05, d);
-  float halo = smoothstep(0.5, 0.18, d);
-  vec3 col = mix(uPurple, uCyan, vMix);
-  col = mix(col, uMagenta, (1.0 - vMix) * 0.55 * (0.4 + vFresnel));
-  col += uCyan * core * 0.55;
-  float alpha = mix(halo * 0.55, core, 0.65) * uOpacity * (0.5 + vGlow * 0.55);
-  gl_FragColor = vec4(col, alpha);
+  // Sharp luminous core + soft bloom-friendly halo.
+  float core = smoothstep(0.42, 0.02, d);
+  float halo = smoothstep(0.5, 0.14, d);
+  vec3 foldCol = mix(uPurple, uMagenta, 0.55 + vFresnel * 0.25);
+  vec3 col = mix(foldCol, uCyan, vMix);
+  col += uCyan * core * (0.65 + vCrest * 0.35);
+  float alpha = (core * 0.95 + halo * 0.35) * uOpacity * (0.55 + vGlow * 0.5);
+  gl_FragColor = vec4(col, clamp(alpha, 0.0, 1.0));
 }
 `;
 
@@ -176,12 +193,14 @@ uniform float uOpacity;
 varying float vGlow;
 varying float vMix;
 varying float vFresnel;
+varying float vCrest;
 
 void main() {
-  vec3 col = mix(uPurple, uCyan, vMix * 0.85 + vFresnel * 0.2);
-  col = mix(col, uMagenta, (1.0 - vMix) * 0.45);
-  float alpha = uOpacity * (0.22 + vGlow * 0.38 + vFresnel * 0.18);
-  gl_FragColor = vec4(col, alpha);
+  // Ultra-thin filament: low alpha, cyan crests / magenta folds.
+  vec3 foldCol = mix(uPurple, uMagenta, 0.5);
+  vec3 col = mix(foldCol, uCyan, vMix * 0.9 + vFresnel * 0.15);
+  float alpha = uOpacity * (0.14 + vGlow * 0.22 + vCrest * 0.1 + vFresnel * 0.12);
+  gl_FragColor = vec4(col, clamp(alpha, 0.0, 0.55));
 }
 `;
 
@@ -221,7 +240,9 @@ export class AudioReactiveAIOrbit {
   private scaleSmoothed = 1;
   private spinSmoothed: number = ORBIT_TUNING.idleSpin;
   private breathSmoothed = 0;
+  private breathVel = 0;
   private deformSmoothed = 0;
+  private deformVel = 0;
 
   constructor() {
     this.resizeObserver = new ResizeObserver(() => this.resize());
@@ -248,15 +269,15 @@ export class AudioReactiveAIOrbit {
     renderer.setClearColor(0x000000, 1);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, ORBIT_LOOK.maxPixelRatio));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.05;
+    renderer.toneMappingExposure = 1.08;
     this.renderer = renderer;
 
     const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x000000, 0.045);
+    scene.fog = new THREE.FogExp2(0x000000, 0.038);
     this.scene = scene;
 
-    const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 40);
-    camera.position.set(0, 0.12, 4.05);
+    const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 40);
+    camera.position.set(0, 0.1, 4.0);
     this.camera = camera;
 
     const root = new THREE.Group();
@@ -359,17 +380,21 @@ export class AudioReactiveAIOrbit {
   private buildLayers(root: THREE.Group): void {
     const L = ORBIT_LOOK;
     const configs = [
-      { detail: L.primaryDetail, scale: L.primaryScale, lineOp: 0.55, pointOp: 0.82 },
-      { detail: L.coreDetail, scale: L.coreScale, lineOp: 0.38, pointOp: 0.55 },
-      { detail: L.shellDetail, scale: L.shellScale, lineOp: 0.28, pointOp: 0.42 },
+      {
+        detail: L.primaryDetail,
+        scale: L.primaryScale,
+        lineOp: L.lineOpacityPrimary,
+        pointOp: L.pointOpacityPrimary,
+      },
+      { detail: L.coreDetail, scale: L.coreScale, lineOp: 0.22, pointOp: 0.7 },
+      { detail: L.shellDetail, scale: L.shellScale, lineOp: 0.18, pointOp: 0.55 },
     ];
 
     configs.forEach((cfg, index) => {
       const geo = new THREE.IcosahedronGeometry(1, cfg.detail);
-      // Ensure normals for fresnel gradient in the shared vertex shader.
       geo.computeVertexNormals();
       const wire = new THREE.WireframeGeometry(geo);
-      const uniforms = {
+      const shared = {
         uTime: { value: 0 },
         uEnergy: { value: 0 },
         uBass: { value: 0 },
@@ -379,15 +404,18 @@ export class AudioReactiveAIOrbit {
         uBright: { value: 0.35 },
         uBreath: { value: 0 },
         uDeform: { value: 0 },
-        uLayer: { value: index * 0.45 },
+        uLayer: { value: index * 0.42 },
         uCyan: { value: CYAN },
         uMagenta: { value: MAGENTA },
         uPurple: { value: PURPLE },
-        uOpacity: { value: cfg.lineOp },
       };
 
       const lineMat = new THREE.ShaderMaterial({
-        uniforms: { ...uniforms, uOpacity: { value: cfg.lineOp } },
+        uniforms: {
+          ...shared,
+          uOpacity: { value: cfg.lineOp },
+          uIsPoint: { value: 0 },
+        },
         vertexShader: VERT,
         fragmentShader: FRAG_LINES,
         transparent: true,
@@ -395,7 +423,11 @@ export class AudioReactiveAIOrbit {
         blending: THREE.AdditiveBlending,
       });
       const pointMat = new THREE.ShaderMaterial({
-        uniforms: { ...uniforms, uOpacity: { value: cfg.pointOp } },
+        uniforms: {
+          ...shared,
+          uOpacity: { value: cfg.pointOp },
+          uIsPoint: { value: 1 },
+        },
         vertexShader: VERT,
         fragmentShader: FRAG_POINTS,
         transparent: true,
@@ -407,7 +439,7 @@ export class AudioReactiveAIOrbit {
       const points = new THREE.Points(geo, pointMat);
       lines.scale.setScalar(cfg.scale);
       points.scale.setScalar(cfg.scale);
-      // Lines first, bright nodes on top at intersections.
+      // Ultra-thin filaments under sharp luminous nodes.
       root.add(lines);
       root.add(points);
 
@@ -549,48 +581,58 @@ export class AudioReactiveAIOrbit {
     const breathWave =
       Math.sin(t * T.breathBassHz) * this.bassS * 0.55 + Math.sin(t * T.breathMidHz + 0.7) * this.midS * 0.45;
     const breathTarget = THREE.MathUtils.clamp(
-      assistBlend * breathWave * (0.028 + this.energySmoothed * 0.04) +
-        userBlend * Math.sin(t * 2.0) * (0.01 + this.energySmoothed * 0.015),
+      assistBlend * breathWave * (0.022 + this.energySmoothed * 0.028) +
+        userBlend * Math.sin(t * 1.65) * (0.008 + this.energySmoothed * 0.01),
       -T.maxBreath,
       T.maxBreath,
     );
-    this.breathSmoothed = THREE.MathUtils.lerp(this.breathSmoothed, breathTarget, T.lerpScale);
+    // Critically-damped spring — fluid breath, no harsh overshoot noise.
+    this.breathVel += (breathTarget - this.breathSmoothed) * T.breathSpring;
+    this.breathVel *= T.breathDamp;
+    this.breathSmoothed = THREE.MathUtils.clamp(
+      this.breathSmoothed + this.breathVel,
+      -T.maxBreath,
+      T.maxBreath,
+    );
 
     const deformTarget = THREE.MathUtils.clamp(
-      assistBlend * (0.02 + this.energySmoothed * 0.07 + this.bassS * 0.025),
+      assistBlend * (0.015 + this.energySmoothed * 0.055 + this.bassS * 0.018),
       0,
       T.maxDeform,
     );
-    this.deformSmoothed = THREE.MathUtils.lerp(this.deformSmoothed, deformTarget, T.lerpEnergy);
+    this.deformVel += (deformTarget - this.deformSmoothed) * T.deformSpring;
+    this.deformVel *= T.deformDamp;
+    this.deformSmoothed = THREE.MathUtils.clamp(this.deformSmoothed + this.deformVel, 0, T.maxDeform);
 
     const spinTarget =
       assistBlend > 0.5
-        ? THREE.MathUtils.clamp(T.idleSpin + 0.03 + this.energySmoothed * 0.05, T.idleSpin, T.maxSpinAssist)
+        ? THREE.MathUtils.clamp(T.idleSpin + 0.02 + this.energySmoothed * 0.035, T.idleSpin, T.maxSpinAssist)
         : userBlend > 0.5
           ? T.userSpin
           : T.idleSpin;
     this.spinSmoothed = THREE.MathUtils.lerp(this.spinSmoothed, spinTarget, T.lerpSpin);
 
     root.rotation.y = t * this.spinSmoothed;
-    root.rotation.x = Math.sin(t * 0.18) * 0.08 + assistBlend * this.breathSmoothed * 0.35;
-    root.rotation.z = Math.cos(t * 0.14) * 0.055;
+    root.rotation.x = Math.sin(t * 0.16) * 0.07 + assistBlend * this.breathSmoothed * 0.28;
+    root.rotation.z = Math.cos(t * 0.12) * 0.048;
 
     const scaleTarget = THREE.MathUtils.clamp(
-      1 + this.breathSmoothed + userBlend * this.energySmoothed * 0.02,
+      1 + this.breathSmoothed + userBlend * this.energySmoothed * 0.015,
       1 - T.maxScaleDelta,
       1 + T.maxScaleDelta,
     );
     this.scaleSmoothed = THREE.MathUtils.lerp(this.scaleSmoothed, scaleTarget, T.lerpScale);
     root.scale.setScalar(this.scaleSmoothed);
 
-    // Soft bloom lift while speaking — still capped.
     if (this.bloomPass) {
-      const bloomStrength = ORBIT_LOOK.bloomStrength + assistBlend * 0.12 + userBlend * 0.08;
-      this.bloomPass.strength = THREE.MathUtils.clamp(bloomStrength, 0.55, 0.95);
+      const bloomStrength = ORBIT_LOOK.bloomStrength + assistBlend * 0.08 + userBlend * 0.05;
+      this.bloomPass.strength = THREE.MathUtils.clamp(bloomStrength, 0.7, 1.0);
+      this.bloomPass.radius = ORBIT_LOOK.bloomRadius;
+      this.bloomPass.threshold = ORBIT_LOOK.bloomThreshold;
     }
 
     for (const layer of this.layers) {
-      const brightBoost = 1 + (this.brightSmoothed - 0.35) * 0.55;
+      const brightBoost = 1 + (this.brightSmoothed - 0.35) * 0.4;
       for (const mat of [layer.pointMat, layer.lineMat]) {
         mat.uniforms.uTime.value = t;
         mat.uniforms.uEnergy.value = this.energySmoothed;
@@ -602,7 +644,7 @@ export class AudioReactiveAIOrbit {
         mat.uniforms.uBreath.value = this.breathSmoothed;
         mat.uniforms.uDeform.value = this.deformSmoothed;
       }
-      layer.lineMat.uniforms.uOpacity.value = Math.min(1, layer.baseLineOp * brightBoost);
+      layer.lineMat.uniforms.uOpacity.value = Math.min(0.55, layer.baseLineOp * brightBoost);
       layer.pointMat.uniforms.uOpacity.value = Math.min(1, layer.basePointOp * brightBoost);
     }
 
