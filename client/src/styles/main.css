@@ -696,11 +696,8 @@ button.voice-pulse {
   padding: 0;
   overflow: hidden;
   border: 1px solid rgba(0, 243, 255, 0.12);
-  background:
-    radial-gradient(ellipse 55% 50% at 50% 48%, rgba(112, 0, 255, 0.16), transparent 62%),
-    radial-gradient(ellipse 40% 36% at 50% 52%, rgba(0, 243, 255, 0.1), transparent 58%),
-    radial-gradient(ellipse 30% 28% at 50% 50%, rgba(255, 43, 214, 0.06), transparent 55%),
-    #000;
+  /* Canvas owns the void + bloom; keep stage pure black. */
+  background: #000;
   transition: min-height 240ms var(--ease), border-color 200ms var(--ease), opacity 280ms var(--ease);
 }
 

@@ -1,15 +1,19 @@
 /**
- * AudioReactiveAIOrbit — central Aether Vision AI presence in the HUD.
- * Dense translucent neon wireframe sphere (Three.js) driven by WS / VAD / playback
- * spectrum from live AnalyserNode taps. Never touches the PCM uplink path.
+ * AudioReactiveAIOrbit — cinema-grade plexus AI presence for the Aether HUD.
+ * High-density neon wireframe + UnrealBloomPass, driven by WS / VAD / playback
+ * AnalyserNode taps. Never touches the PCM uplink path.
  *
- * Physics:
- *  - Idle (nobody speaking): slow axis rotation ONLY — no vertex deformation.
- *  - User speaking (VAD): brighter nodes + subtle faster pulse.
- *  - Assistant speaking (playback_active): gentle mid/bass breath + clamped undulation.
+ * Physics (preserved from 42f81af smoothing):
+ *  - Idle: slow elegant rotation ONLY — no vertex deformation.
+ *  - User (VAD): brighter nodes + subtle pulse.
+ *  - Assistant (playback): clamped mid/bass breath + fluid undulation.
  */
 
 import * as THREE from "three";
+import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
+import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
+import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
+import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import type { VisualizerMode } from "../audio/AdvancedAudioVisualizer";
 
 export type OrbitPresence = "point" | "full";
@@ -18,11 +22,8 @@ export type OrbitPresence = "point" | "full";
 export type OrbitSpeakMode = 0 | 1 | 2;
 
 export interface OrbitDriveState {
-  /** Conversation bridge open (ws_state === OPEN). */
   wsOpen: boolean;
-  /** VAD phase is speech (or hangover). */
   vadSpeech: boolean;
-  /** AI playback queue / assistant speaking. */
   playbackActive: boolean;
   mode: VisualizerMode | string;
   micLevel: number;
@@ -34,16 +35,14 @@ export interface OrbitDriveState {
 
 export type OrbitDriver = () => OrbitDriveState;
 
-/** Tunable speak physics — kept elegant; loud PCM cannot explode past clamps. */
+/** Speak physics — do not regress; loud PCM cannot explode past clamps. */
 export const ORBIT_TUNING = {
-  /** rAF lerp alphas (THREE.MathUtils.lerp). */
   lerpEnergy: 0.065,
   lerpSpeakMode: 0.07,
   lerpBright: 0.055,
   lerpBands: 0.08,
   lerpScale: 0.09,
   lerpSpin: 0.06,
-  /** Hard caps so loud playback never blows out the mesh. */
   maxEnergy: 0.62,
   maxDeform: 0.085,
   maxBreath: 0.045,
@@ -51,14 +50,29 @@ export const ORBIT_TUNING = {
   maxSpinAssist: 0.16,
   idleSpin: 0.09,
   userSpin: 0.14,
-  /** Mid/bass breath frequencies (rad/s-ish via sin(t * f)). */
   breathBassHz: 1.35,
   breathMidHz: 2.1,
 } as const;
 
+/** Cinema plexus look — density + bloom (HUD-safe caps). */
+export const ORBIT_LOOK = {
+  /** Icosahedron detail: faces = 20 * 4^detail. */
+  primaryDetail: 6, // 81 920 faces → dense plexus
+  shellDetail: 5, // 20 480 faces
+  coreDetail: 5,
+  primaryScale: 1.0,
+  shellScale: 1.14,
+  coreScale: 0.78,
+  /** Cap DPR under bloom for HUD perf. */
+  maxPixelRatio: 1.75,
+  bloomStrength: 0.78,
+  bloomRadius: 0.55,
+  bloomThreshold: 0.18,
+} as const;
+
 const CYAN = new THREE.Color("#00F3FF");
 const MAGENTA = new THREE.Color("#FF2BD6");
-const PURPLE = new THREE.Color("#7000FF");
+const PURPLE = new THREE.Color("#5A00CC");
 
 const VERT = /* glsl */ `
 uniform float uTime;
@@ -66,14 +80,15 @@ uniform float uEnergy;
 uniform float uBass;
 uniform float uMid;
 uniform float uTreble;
-uniform float uSpeakMode; // 0 idle, 1 user, 2 assistant
+uniform float uSpeakMode;
 uniform float uBright;
 uniform float uLayer;
-uniform float uBreath;   // pre-lerped root breath from JS (−maxBreath..+maxBreath)
-uniform float uDeform;   // pre-clamped deform intensity 0..maxDeform
+uniform float uBreath;
+uniform float uDeform;
 
 varying float vGlow;
 varying float vMix;
+varying float vFresnel;
 
 float hash(vec3 p) {
   p = fract(p * 0.3183099 + vec3(0.1, 0.2, 0.3));
@@ -101,26 +116,32 @@ void main() {
   float assist = smoothstep(1.2, 1.8, mode);
   float user = smoothstep(0.2, 0.8, mode) * (1.0 - assist);
 
-  // Slow coherent noise — assistant only; never races with loud energy.
   float nSpeed = mix(0.12, 0.22 + uEnergy * 0.12, assist);
   float n1 = noise(pos * 1.55 + vec3(uTime * nSpeed, uTime * (nSpeed * 0.75), uLayer));
   float n2 = noise(pos * 2.7 - vec3(uTime * (nSpeed * 1.1), 0.0, uTime * nSpeed));
   float wave = (n1 * 0.7 + n2 * 0.3) * 2.0 - 1.0;
 
-  // Vertex offset clamped by uDeform (JS hard-caps amplitude).
   float deform = wave * uDeform * (0.85 + uLayer * 0.2);
   float userPulse = user * (0.012 + uEnergy * 0.02) * sin(uTime * 2.2 + uLayer);
 
   pos *= 1.0 + uBreath + userPulse;
   pos += normalize(position + 1e-5) * deform;
 
-  float band = clamp(uBass * 0.5 + uMid * 0.35 + uEnergy * 0.25, 0.0, 0.85);
-  vGlow = 0.28 + uBright * 0.45 + assist * abs(wave) * 0.18 + user * uEnergy * 0.2;
-  vMix = clamp(0.3 + uBass * 0.2 + uMid * 0.2 + uLayer * 0.12 + user * 0.12, 0.0, 1.0);
+  vec4 mv = modelViewMatrix * vec4(pos, 1.0);
+  vec3 viewDir = normalize(-mv.xyz);
+  // Sphere-space normal (works for Points + LineSegments without attr).
+  vec3 nView = normalize(normalMatrix * normalize(position));
+  float fres = pow(1.0 - clamp(abs(dot(viewDir, nView)), 0.0, 1.0), 1.65);
 
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
-  float pt = 1.45 + uBright * 1.6 + assist * band * 1.2 + uLayer * 0.4;
-  gl_PointSize = pt * (180.0 / max(60.0, -gl_Position.z * 40.0 + 120.0));
+  // Cyan on limbs/edges; purple/magenta in folds & interior.
+  float fold = clamp(0.5 - wave * 0.5, 0.0, 1.0);
+  vMix = clamp(fres * 0.75 + (1.0 - fold) * 0.35 - uLayer * 0.08, 0.0, 1.0);
+  vFresnel = fres;
+  vGlow = 0.32 + uBright * 0.4 + fres * 0.35 + assist * abs(wave) * 0.15 + user * uEnergy * 0.18;
+
+  gl_Position = projectionMatrix * mv;
+  float pt = 1.15 + uBright * 1.35 + fres * 1.1 + assist * uEnergy * 0.8 + uLayer * 0.25;
+  gl_PointSize = pt * (200.0 / max(55.0, -mv.z * 38.0 + 110.0));
 }
 `;
 
@@ -131,15 +152,18 @@ uniform vec3 uPurple;
 uniform float uOpacity;
 varying float vGlow;
 varying float vMix;
+varying float vFresnel;
 
 void main() {
   vec2 uv = gl_PointCoord - 0.5;
   float d = length(uv);
   if (d > 0.5) discard;
-  float soft = smoothstep(0.5, 0.08, d);
+  float core = smoothstep(0.5, 0.05, d);
+  float halo = smoothstep(0.5, 0.18, d);
   vec3 col = mix(uPurple, uCyan, vMix);
-  col = mix(col, uMagenta, clamp(vGlow - 0.45, 0.0, 1.0) * 0.9);
-  float alpha = soft * uOpacity * (0.4 + vGlow * 0.65);
+  col = mix(col, uMagenta, (1.0 - vMix) * 0.55 * (0.4 + vFresnel));
+  col += uCyan * core * 0.55;
+  float alpha = mix(halo * 0.55, core, 0.65) * uOpacity * (0.5 + vGlow * 0.55);
   gl_FragColor = vec4(col, alpha);
 }
 `;
@@ -151,11 +175,12 @@ uniform vec3 uPurple;
 uniform float uOpacity;
 varying float vGlow;
 varying float vMix;
+varying float vFresnel;
 
 void main() {
-  vec3 col = mix(uCyan, uPurple, vMix * 0.7);
-  col = mix(col, uMagenta, clamp(vGlow * 0.55, 0.0, 0.7));
-  float alpha = uOpacity * (0.28 + vGlow * 0.5);
+  vec3 col = mix(uPurple, uCyan, vMix * 0.85 + vFresnel * 0.2);
+  col = mix(col, uMagenta, (1.0 - vMix) * 0.45);
+  float alpha = uOpacity * (0.22 + vGlow * 0.38 + vFresnel * 0.18);
   gl_FragColor = vec4(col, alpha);
 }
 `;
@@ -174,6 +199,8 @@ export class AudioReactiveAIOrbit {
   private host: HTMLElement | null = null;
   private canvas: HTMLCanvasElement | null = null;
   private renderer: THREE.WebGLRenderer | null = null;
+  private composer: EffectComposer | null = null;
+  private bloomPass: UnrealBloomPass | null = null;
   private scene: THREE.Scene | null = null;
   private camera: THREE.PerspectiveCamera | null = null;
   private root: THREE.Group | null = null;
@@ -213,19 +240,23 @@ export class AudioReactiveAIOrbit {
 
     const renderer = new THREE.WebGLRenderer({
       canvas,
-      alpha: true,
+      alpha: false,
       antialias: true,
       powerPreference: "high-performance",
     });
-    renderer.setClearColor(0x000000, 0);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    // Opaque black — required for clean UnrealBloomPass against HUD void.
+    renderer.setClearColor(0x000000, 1);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, ORBIT_LOOK.maxPixelRatio));
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.05;
     this.renderer = renderer;
 
     const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x000000, 0.045);
     this.scene = scene;
 
-    const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 40);
-    camera.position.set(0, 0.15, 4.2);
+    const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 40);
+    camera.position.set(0, 0.12, 4.05);
     this.camera = camera;
 
     const root = new THREE.Group();
@@ -234,13 +265,13 @@ export class AudioReactiveAIOrbit {
 
     this.buildLayers(root);
     this.buildIdlePoint(root);
+    this.buildComposer(renderer, scene, camera);
 
     this.resizeObserver.observe(host);
     this.resize();
     this.applyPresence("point");
   }
 
-  /** Begin rAF loop; `driver` polled each frame (analyser / VAD / WS — no PCM). */
   start(driver: OrbitDriver): void {
     this.driver = driver;
     if (this.running) {
@@ -276,6 +307,27 @@ export class AudioReactiveAIOrbit {
     this.host = null;
   }
 
+  private buildComposer(
+    renderer: THREE.WebGLRenderer,
+    scene: THREE.Scene,
+    camera: THREE.PerspectiveCamera,
+  ): void {
+    const composer = new EffectComposer(renderer);
+    composer.addPass(new RenderPass(scene, camera));
+
+    const bloom = new UnrealBloomPass(
+      new THREE.Vector2(512, 512),
+      ORBIT_LOOK.bloomStrength,
+      ORBIT_LOOK.bloomRadius,
+      ORBIT_LOOK.bloomThreshold,
+    );
+    composer.addPass(bloom);
+    composer.addPass(new OutputPass());
+
+    this.composer = composer;
+    this.bloomPass = bloom;
+  }
+
   private disposeRenderer(): void {
     for (const layer of this.layers) {
       layer.points.geometry.dispose();
@@ -290,6 +342,9 @@ export class AudioReactiveAIOrbit {
       this.pointCore = null;
       this.coreMat = null;
     }
+    this.composer?.dispose();
+    this.composer = null;
+    this.bloomPass = null;
     this.root = null;
     this.scene = null;
     this.camera = null;
@@ -302,14 +357,17 @@ export class AudioReactiveAIOrbit {
   }
 
   private buildLayers(root: THREE.Group): void {
+    const L = ORBIT_LOOK;
     const configs = [
-      { detail: 5, scale: 1.0, lineOp: 0.72, pointOp: 0.62 },
-      { detail: 4, scale: 0.82, lineOp: 0.48, pointOp: 0.42 },
-      { detail: 4, scale: 1.16, lineOp: 0.36, pointOp: 0.34 },
+      { detail: L.primaryDetail, scale: L.primaryScale, lineOp: 0.55, pointOp: 0.82 },
+      { detail: L.coreDetail, scale: L.coreScale, lineOp: 0.38, pointOp: 0.55 },
+      { detail: L.shellDetail, scale: L.shellScale, lineOp: 0.28, pointOp: 0.42 },
     ];
 
     configs.forEach((cfg, index) => {
       const geo = new THREE.IcosahedronGeometry(1, cfg.detail);
+      // Ensure normals for fresnel gradient in the shared vertex shader.
+      geo.computeVertexNormals();
       const wire = new THREE.WireframeGeometry(geo);
       const uniforms = {
         uTime: { value: 0 },
@@ -349,6 +407,7 @@ export class AudioReactiveAIOrbit {
       const points = new THREE.Points(geo, pointMat);
       lines.scale.setScalar(cfg.scale);
       points.scale.setScalar(cfg.scale);
+      // Lines first, bright nodes on top at intersections.
       root.add(lines);
       root.add(points);
 
@@ -369,10 +428,10 @@ export class AudioReactiveAIOrbit {
     geo.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0], 3));
     const mat = new THREE.PointsMaterial({
       color: CYAN,
-      size: 6,
+      size: 7,
       sizeAttenuation: false,
       transparent: true,
-      opacity: 0.85,
+      opacity: 0.9,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
     });
@@ -388,7 +447,12 @@ export class AudioReactiveAIOrbit {
     }
     const w = Math.max(1, this.host.clientWidth || 320);
     const h = Math.max(1, this.host.clientHeight || 280);
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, ORBIT_LOOK.maxPixelRatio));
     this.renderer.setSize(w, h, false);
+    this.composer?.setSize(w, h);
+    if (this.bloomPass) {
+      this.bloomPass.resolution.set(w, h);
+    }
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
   }
@@ -410,7 +474,6 @@ export class AudioReactiveAIOrbit {
   }
 
   private resolveSpeakMode(drive: OrbitDriveState): OrbitSpeakMode {
-    // Assistant undulation wins while playback is active; else user pulse on VAD.
     if (drive.playbackActive) {
       return 2;
     }
@@ -425,6 +488,7 @@ export class AudioReactiveAIOrbit {
     const scene = this.scene;
     const camera = this.camera;
     const root = this.root;
+    const composer = this.composer;
     if (!renderer || !scene || !camera || !root) {
       return;
     }
@@ -450,7 +514,6 @@ export class AudioReactiveAIOrbit {
       drive.mode === "speaking" ||
       drive.mode === "listening";
 
-    // Soft energy from mid/bass rhythm (assistant) — hard-capped.
     const energyRaw =
       speakMode === 2
         ? drive.bass * 0.55 + drive.mid * 0.4 + drive.playLevel * 0.25
@@ -483,7 +546,6 @@ export class AudioReactiveAIOrbit {
     const assistBlend = THREE.MathUtils.smoothstep(this.speakModeSmoothed, 1.2, 1.8);
     const userBlend = THREE.MathUtils.smoothstep(this.speakModeSmoothed, 0.2, 0.8) * (1 - assistBlend);
 
-    // Coherent mid/bass breath — sinusoidal, voice-like, never chaotic.
     const breathWave =
       Math.sin(t * T.breathBassHz) * this.bassS * 0.55 + Math.sin(t * T.breathMidHz + 0.7) * this.midS * 0.45;
     const breathTarget = THREE.MathUtils.clamp(
@@ -501,7 +563,6 @@ export class AudioReactiveAIOrbit {
     );
     this.deformSmoothed = THREE.MathUtils.lerp(this.deformSmoothed, deformTarget, T.lerpEnergy);
 
-    // Idle: slow elegant spin. Speak: slight lift, still capped.
     const spinTarget =
       assistBlend > 0.5
         ? THREE.MathUtils.clamp(T.idleSpin + 0.03 + this.energySmoothed * 0.05, T.idleSpin, T.maxSpinAssist)
@@ -521,6 +582,12 @@ export class AudioReactiveAIOrbit {
     );
     this.scaleSmoothed = THREE.MathUtils.lerp(this.scaleSmoothed, scaleTarget, T.lerpScale);
     root.scale.setScalar(this.scaleSmoothed);
+
+    // Soft bloom lift while speaking — still capped.
+    if (this.bloomPass) {
+      const bloomStrength = ORBIT_LOOK.bloomStrength + assistBlend * 0.12 + userBlend * 0.08;
+      this.bloomPass.strength = THREE.MathUtils.clamp(bloomStrength, 0.55, 0.95);
+    }
 
     for (const layer of this.layers) {
       const brightBoost = 1 + (this.brightSmoothed - 0.35) * 0.55;
@@ -544,6 +611,10 @@ export class AudioReactiveAIOrbit {
       this.coreMat.size = 5 + Math.sin(t * 1.8) * 1.2;
     }
 
-    renderer.render(scene, camera);
+    if (composer) {
+      composer.render();
+    } else {
+      renderer.render(scene, camera);
+    }
   }
 }
