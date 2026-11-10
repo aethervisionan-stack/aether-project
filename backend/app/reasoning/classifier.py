@@ -5,6 +5,8 @@ from __future__ import annotations
 import re
 from enum import Enum
 
+from app.introspection.intent import is_self_knowledge_intent
+
 # Heuristics for tool-heavy / analytical turns that benefit from planning.
 _COMPLEX_HINTS = re.compile(
     r"\b("
@@ -33,10 +35,15 @@ def classify_complexity(text: str) -> Complexity:
     """
     Fast, CPU-only gate. Simple voice turns stay on the Live path with no CoT.
     Complex text/tool turns get an async planning sidecar.
+
+    Self-knowledge / vision / capabilities questions are always COMPLEX so the
+    decision pipeline can mandatorily invoke system_help_tool.
     """
     cleaned = (text or "").strip()
     if not cleaned:
         return Complexity.SIMPLE
+    if is_self_knowledge_intent(cleaned):
+        return Complexity.COMPLEX
     if len(cleaned) < 28 and not _COMPLEX_HINTS.search(cleaned):
         return Complexity.SIMPLE
     if _COMPLEX_HINTS.search(cleaned) or _MULTI_STEP.search(cleaned) or len(cleaned) > 160:

@@ -260,6 +260,12 @@ async def live_websocket(websocket: WebSocket) -> None:
             # Compact tool remind (full self-knowledge already lists registry ∩ manifest).
             tools_hint = (
                 "Invoke tools via tool_call JSON when useful. "
+                "MANDATORY: for project vision, what you can do, value proposition, "
+                "available tools, or system health — always invoke system_help_tool "
+                "(get_system_capabilities and/or get_system_health) before answering. "
+                "Never give a shallow WhatsApp-manager pitch; use manifesto data from "
+                "the tool (wearables/earbuds OS, notification priority/pace, VAD/Barge-In, "
+                "long-term memory, two-step confirm) plus practical voice examples. "
                 "system_help_tool is read-only (no confirm). "
                 "Prefer short HUD answers; never narrate internal plans unless asked. "
                 "Voice UX: open-mic / PTT — no wake word. Support barge-in. "

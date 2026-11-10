@@ -204,9 +204,12 @@ TOOL_SCHEMAS: list[ToolSchema] = [
     {
         "name": "system_help_tool",
         "description": (
-            "Introspection / help: get_system_capabilities (optional category) and "
-            "get_system_health (version, TTFT telemetry, integrations). Read-only — "
-            "no two-step confirmation."
+            "REQUIRED for questions about Aether Vision project vision, what the AI can do, "
+            "value proposition, available tools, or system health. Returns the full manifesto "
+            "(hands-free wearables/earbuds OS — not a WhatsApp-manager pitch), capabilities, "
+            "practical voice examples, and/or live health (version, TTFT, integrations). "
+            "Actions: get_system_capabilities (optional category) and get_system_health. "
+            "Read-only — no two-step confirmation."
         ),
         "parameters": {
             "type": "object",

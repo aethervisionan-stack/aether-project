@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from app.config import Settings, get_settings
+from app.introspection.intent import help_tool_action, is_self_knowledge_intent
 from app.memory.context import build_runtime_guidance, preferences_summary
 from app.memory.store import Preferences, get_memory_store
 from app.mobility.state import MobilitySessionState
@@ -113,6 +114,9 @@ async def run_decision_pipeline(ctx: DecisionContext) -> DecisionOutcome:
         )
 
     planning = plan_and_correct(text)
+    # Force system_help_tool on self-knowledge / vision / value / tools asks.
+    if is_self_knowledge_intent(text) and "system_help_tool" not in planning.recommended_tools:
+        planning.recommended_tools = ["system_help_tool", *planning.recommended_tools]
     tool_results: list[ToolResult] = []
     registry: ToolRegistry = get_tool_registry()
     if ctx.auto_tools and planning.recommended_tools:
@@ -146,14 +150,7 @@ async def run_decision_pipeline(ctx: DecisionContext) -> DecisionOutcome:
                     args = {"action": "battery"}
             elif name == "system_help_tool":
                 # Read-only help — never pending_confirmation.
-                lower = text.lower()
-                if any(
-                    k in lower
-                    for k in ("health", "ttft", "latency", "status", "integra", "saúde", "saude")
-                ):
-                    args = {"action": "get_system_health"}
-                else:
-                    args = {"action": "get_system_capabilities"}
+                args = {"action": help_tool_action(text)}
             result = await registry.invoke(name, args, ctx=tool_ctx)
             tool_results.append(result)
 

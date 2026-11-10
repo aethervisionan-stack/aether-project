@@ -51,8 +51,10 @@ CAPABILITIES: tuple[CapabilityEntry, ...] = (
         title="Identity & purpose",
         version=__version__,
         description=(
-            "Aether Vision co-pilot and autonomous OS agent — hands-free intelligence "
-            "for wearables and earbuds."
+            "Aether Vision is a hands-free background OS assistant for wearables and "
+            "earbuds — not a single-app WhatsApp manager. Value proposition: continuous "
+            "co-pilot + autonomous OS agent with notification priority/pace filtering, "
+            "VAD/Barge-In voice UX, long-term memory, and two-step confirmation safety."
         ),
         example_voice="Aether, o que você consegue fazer agora?",
         tools=(),
@@ -65,9 +67,10 @@ CAPABILITIES: tuple[CapabilityEntry, ...] = (
         title="Hands-Free OS Agent",
         version="0.4.0",
         description=(
-            "WhatsApp/Telegram voice read/summarize/reply; email, calendar, and "
-            "telephony hands-free. Irreversible send/schedule/call actions use "
-            "two-step voice confirm."
+            "Full OS agent over messaging (WhatsApp/Telegram/SMS/Instagram), email, "
+            "calendar, telephony, and device controls. Messaging is one channel — "
+            "not the product. Irreversible send/schedule/call/delete actions use "
+            "two-step voice confirm (preview → Sim / Pode enviar / Yes)."
         ),
         example_voice="Resume as últimas mensagens do WhatsApp do Carlos.",
         tools=(

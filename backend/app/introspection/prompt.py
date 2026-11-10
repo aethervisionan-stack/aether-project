@@ -12,10 +12,16 @@ def build_communication_guidelines() -> str:
     """Earbud-TTS friendly help style — inject beside self-knowledge."""
     return (
         "Communication guidelines (help / capability questions):\n"
-        "- When the user asks what you can do or how a feature works: be direct, "
-        "concise, and conversational — optimized for earbud TTS.\n"
-        "- Always give one immediate example voice command when explaining a feature.\n"
-        "- Prefer 1–3 short spoken sentences; no long catalogs unless asked.\n"
+        "- When the user asks what you can do, the project vision, value proposition, "
+        "or available tools: you MUST first invoke system_help_tool "
+        "(get_system_capabilities and/or get_system_health). Do not answer from memory alone.\n"
+        "- After the tool returns, answer from that data + the manifesto — never a shallow "
+        "'WhatsApp manager' pitch. Cover hands-free background OS for wearables/earbuds, "
+        "notification priority/pace filter, voice UX (VAD/Barge-In), long-term memory, "
+        "and two-step confirmation safety.\n"
+        "- Always give at least one immediate practical voice example per pillar you mention.\n"
+        "- Prefer clear spoken sentences optimized for earbud TTS; expand when the user "
+        "asks for the full vision.\n"
         "- For irreversible OS actions, still preview + wait for confirm words."
     )
 
@@ -41,7 +47,15 @@ def build_self_knowledge_block(
 
     lines: list[str] = [
         "=== Aether Vision self-knowledge (live capabilities) ===",
-        f"Backend version: {__version__}. Role: co-pilot + autonomous OS agent for wearables/earbuds.",
+        f"Backend version: {__version__}. Role: hands-free background OS assistant "
+        "for wearables/earbuds — co-pilot + autonomous OS agent.",
+        "Manifesto (never flatten to a single app): notification priority/pace filter; "
+        "voice UX with VAD Open-Mic + Barge-In; long-term memory; two-step confirm safety; "
+        "messaging is one pillar among several — not the product definition.",
+        "MANDATORY: if the user asks about project vision, what you can do, value "
+        "proposition, available tools, or system health — you MUST invoke "
+        "system_help_tool (get_system_capabilities and/or get_system_health) before "
+        "answering. Do not improvise a simplified WhatsApp-manager answer.",
     ]
 
     for entry in CAPABILITIES:
@@ -91,8 +105,9 @@ def build_self_knowledge_block(
             )
 
     lines.append(
-        "For deeper capability or health questions, call system_help_tool "
-        "(get_system_capabilities / get_system_health) — read-only, no confirm."
+        "REQUIRED tool for vision / capabilities / value / tools / health questions: "
+        "system_help_tool (get_system_capabilities / get_system_health) — read-only, "
+        "no confirm. Speak from tool results with practical voice examples."
     )
     return "\n".join(lines)
 

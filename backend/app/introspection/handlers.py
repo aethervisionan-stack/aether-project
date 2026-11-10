@@ -8,6 +8,7 @@ from typing import Any
 from app import __version__
 from app.config import Settings, get_settings
 from app.introspection.manifest import (
+    CAPABILITIES,
     CAPABILITY_CATEGORIES,
     build_feature_flags,
     capabilities_for_category,
@@ -17,6 +18,21 @@ from app.introspection.telemetry import get_latency_telemetry
 from app.os_bridge.mock import get_os_bridge
 
 logger = logging.getLogger("aether.introspection.handlers")
+
+# Full product vision — returned with capabilities so replies never collapse to one app.
+AETHER_VISION_MANIFESTO = (
+    "Aether Vision is a hands-free background OS assistant for wearables and earbuds. "
+    "It filters notifications by priority and user pace, speaks through VAD Open-Mic "
+    "and Barge-In voice UX, learns long-term preferences, and requires two-step "
+    "confirmation before irreversible OS actions. Messaging (WhatsApp/Telegram/etc.) "
+    "is one hands-free channel among email, calendar, telephony, and device control — "
+    "not the product definition."
+)
+
+VALUE_PROPOSITION = (
+    "Continuous co-pilot + autonomous OS agent on wearables: interrupt only when "
+    "worth speaking, act by voice with confirm safety, and remember user prefs over time."
+)
 
 
 def _registry():
@@ -68,17 +84,47 @@ async def system_help_tool(
     }
 
 
+def _voice_examples(caps: list[dict[str, Any]], *, limit: int = 6) -> list[dict[str, str]]:
+    out: list[dict[str, str]] = []
+    for entry in caps:
+        title = str(entry.get("title") or entry.get("id") or "").strip()
+        example = str(entry.get("example_voice") or "").strip()
+        if title and example:
+            out.append({"title": title, "example_voice": example})
+        if len(out) >= limit:
+            break
+    return out
+
+
 def _capabilities(args: dict[str, Any]) -> dict[str, Any]:
     category = args.get("category")
     cat = str(category).strip() if category is not None else None
     caps = capabilities_for_category(cat)
-    # Practical voice examples always present on each entry.
+    voice_examples = _voice_examples(caps, limit=6)
+    # Prefer identity + non-messaging pillars first in spoken summary.
+    preferred_ids = (
+        "identity",
+        "notification_priority",
+        "hardware_ux",
+        "long_term_memory",
+        "hands_free_os_agent",
+        "frontier_ai",
+        "self_help",
+    )
+    by_id = {e.id: e for e in CAPABILITIES if e.active}
     speak_bits: list[str] = []
-    for entry in caps[:4]:
-        title = entry.get("title") or entry.get("id")
-        example = entry.get("example_voice") or ""
-        if title and example:
-            speak_bits.append(f"{title}: «{example}»")
+    for cid in preferred_ids:
+        entry = by_id.get(cid)
+        if entry is None:
+            continue
+        if cat and cat.lower() not in {"", "all", "*"} and entry.category != cat.lower():
+            continue
+        speak_bits.append(f"{entry.title}: «{entry.example_voice}»")
+        if len(speak_bits) >= 5:
+            break
+    if not speak_bits:
+        for item in voice_examples[:4]:
+            speak_bits.append(f"{item['title']}: «{item['example_voice']}»")
 
     registry = _registry()
     sync = sync_tools_with_registry(registry.list_names())
@@ -88,15 +134,27 @@ def _capabilities(args: dict[str, Any]) -> dict[str, Any]:
         "action": "get_system_capabilities",
         "category": cat or "all",
         "categories": list(CAPABILITY_CATEGORIES),
+        "vision": AETHER_VISION_MANIFESTO,
+        "value_proposition": VALUE_PROPOSITION,
+        "pillars": [
+            "hands-free background OS for wearables/earbuds",
+            "notification priority + pace filter",
+            "voice UX (VAD Open-Mic / Push-to-Talk / Barge-In)",
+            "long-term memory",
+            "two-step confirmation safety",
+            "multi-channel OS agent (messaging is one pillar, not the product)",
+        ],
         "capabilities": caps,
+        "voice_examples": voice_examples,
         "tool_sync": sync,
         "requires_confirmation": False,
         "speak": (
-            "Posso ajudar com: "
-            + "; ".join(speak_bits[:3])
-            + ". Exemplo: «"
-            + str((caps[0].get("example_voice") if caps else None) or "O que você consegue fazer?")
-            + "»."
+            "Sou o Aether Vision — assistente OS hands-free para wearables e earbuds, "
+            "não só um gerente de WhatsApp. "
+            + VALUE_PROPOSITION
+            + " Pilares com exemplos: "
+            + "; ".join(speak_bits)
+            + "."
         ),
         "source": "tool:system_help_tool",
     }
@@ -132,14 +190,18 @@ def _health(settings: Settings) -> dict[str, Any]:
         "ttft_ms": latency.get("ttft_ms"),
         "integrations": integrations,
         "introspection": build_feature_flags(),
+        "vision": AETHER_VISION_MANIFESTO,
         "requires_confirmation": False,
         "speak": (
             f"Backend {__version__} ok na porta {settings.port}. "
             + (
-                f"TTFT {latency['ttft_ms']:.0f} ms."
+                f"TTFT {latency['ttft_ms']:.0f} ms. "
                 if isinstance(latency.get("ttft_ms"), (int, float))
-                else "TTFT ainda sem amostra do LatencyTracker."
+                else "TTFT ainda sem amostra do LatencyTracker. "
             )
+            + "Introspection e system_help_tool ativos; ferramentas registradas: "
+            + str(len(sync["registered"]))
+            + "."
         ),
         "source": "tool:system_help_tool",
     }

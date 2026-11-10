@@ -1,5 +1,6 @@
 """Self-awareness / introspection: capabilities manifest + help tools + prompt sync."""
 
+from app.introspection.intent import help_tool_action, is_self_knowledge_intent
 from app.introspection.manifest import (
     CAPABILITY_CATEGORIES,
     build_feature_flags,
@@ -19,6 +20,8 @@ __all__ = [
     "build_self_knowledge_block",
     "capabilities_for_category",
     "get_latency_telemetry",
+    "help_tool_action",
+    "is_self_knowledge_intent",
     "list_capability_summaries",
     "record_latency_sample",
 ]
