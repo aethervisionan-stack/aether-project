@@ -871,10 +871,11 @@ export class ControlApp {
         playbackActive: true,
         mode: "speaking",
         micLevel: 0.08,
-        playLevel: 0.5 + 0.35 * Math.sin(t * 2.6),
-        bass: 0.55 + 0.4 * Math.sin(t * 2.1),
-        mid: 0.45 + 0.35 * Math.cos(t * 3.3),
-        treble: 0.4 + 0.4 * Math.sin(t * 5.0),
+        // Gentle mid/bass voice-like envelope for QA (matches speak clamps).
+        playLevel: 0.32 + 0.18 * Math.sin(t * 1.4),
+        bass: 0.38 + 0.22 * Math.sin(t * 1.35),
+        mid: 0.34 + 0.2 * Math.cos(t * 2.1),
+        treble: 0.2 + 0.12 * Math.sin(t * 2.8),
       };
     }
 

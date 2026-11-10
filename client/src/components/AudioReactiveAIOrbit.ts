@@ -6,7 +6,7 @@
  * Physics:
  *  - Idle (nobody speaking): slow axis rotation ONLY — no vertex deformation.
  *  - User speaking (VAD): brighter nodes + subtle faster pulse.
- *  - Assistant speaking (playback_active): surface undulation from play FFT.
+ *  - Assistant speaking (playback_active): gentle mid/bass breath + clamped undulation.
  */
 
 import * as THREE from "three";
@@ -34,6 +34,28 @@ export interface OrbitDriveState {
 
 export type OrbitDriver = () => OrbitDriveState;
 
+/** Tunable speak physics — kept elegant; loud PCM cannot explode past clamps. */
+export const ORBIT_TUNING = {
+  /** rAF lerp alphas (THREE.MathUtils.lerp). */
+  lerpEnergy: 0.065,
+  lerpSpeakMode: 0.07,
+  lerpBright: 0.055,
+  lerpBands: 0.08,
+  lerpScale: 0.09,
+  lerpSpin: 0.06,
+  /** Hard caps so loud playback never blows out the mesh. */
+  maxEnergy: 0.62,
+  maxDeform: 0.085,
+  maxBreath: 0.045,
+  maxScaleDelta: 0.055,
+  maxSpinAssist: 0.16,
+  idleSpin: 0.09,
+  userSpin: 0.14,
+  /** Mid/bass breath frequencies (rad/s-ish via sin(t * f)). */
+  breathBassHz: 1.35,
+  breathMidHz: 2.1,
+} as const;
+
 const CYAN = new THREE.Color("#00F3FF");
 const MAGENTA = new THREE.Color("#FF2BD6");
 const PURPLE = new THREE.Color("#7000FF");
@@ -47,6 +69,8 @@ uniform float uTreble;
 uniform float uSpeakMode; // 0 idle, 1 user, 2 assistant
 uniform float uBright;
 uniform float uLayer;
+uniform float uBreath;   // pre-lerped root breath from JS (−maxBreath..+maxBreath)
+uniform float uDeform;   // pre-clamped deform intensity 0..maxDeform
 
 varying float vGlow;
 varying float vMix;
@@ -74,32 +98,28 @@ void main() {
   vec3 pos = position;
   float mode = uSpeakMode;
 
-  // Noise field — only applied as deformation when assistant speaks.
-  float nSpeed = mix(0.18, 0.55 + uEnergy * 0.9, step(1.5, mode));
-  float n1 = noise(pos * 1.65 + vec3(uTime * nSpeed, uTime * (nSpeed * 0.8), uLayer));
-  float n2 = noise(pos * 3.1 - vec3(uTime * (nSpeed * 1.4), 0.0, uTime * nSpeed));
-  float wave = (n1 * 0.65 + n2 * 0.35) * 2.0 - 1.0;
-
-  // Idle: zero deform. User: tiny breath. Assistant: full undulation.
   float assist = smoothstep(1.2, 1.8, mode);
   float user = smoothstep(0.2, 0.8, mode) * (1.0 - assist);
 
-  float band = uBass * 0.55 + uMid * 0.3 + uTreble * 0.25 + uEnergy * 0.4;
-  float deformAmt = assist * (0.06 + band * 0.32) * (0.85 + uLayer * 0.3);
-  float deform = wave * deformAmt;
+  // Slow coherent noise — assistant only; never races with loud energy.
+  float nSpeed = mix(0.12, 0.22 + uEnergy * 0.12, assist);
+  float n1 = noise(pos * 1.55 + vec3(uTime * nSpeed, uTime * (nSpeed * 0.75), uLayer));
+  float n2 = noise(pos * 2.7 - vec3(uTime * (nSpeed * 1.1), 0.0, uTime * nSpeed));
+  float wave = (n1 * 0.7 + n2 * 0.3) * 2.0 - 1.0;
 
-  float userPulse = user * (0.025 + uEnergy * 0.05) * sin(uTime * (3.6 + uEnergy * 2.0) + uLayer);
-  float assistBreath = assist * (0.05 + uEnergy * 0.16) * sin(uTime * (2.8 + uBass * 3.0) + uLayer * 1.7);
-  float breathe = 1.0 + userPulse + assistBreath;
+  // Vertex offset clamped by uDeform (JS hard-caps amplitude).
+  float deform = wave * uDeform * (0.85 + uLayer * 0.2);
+  float userPulse = user * (0.012 + uEnergy * 0.02) * sin(uTime * 2.2 + uLayer);
 
-  pos *= breathe;
+  pos *= 1.0 + uBreath + userPulse;
   pos += normalize(position + 1e-5) * deform;
 
-  vGlow = 0.28 + uBright * 0.55 + assist * abs(wave) * 0.35 + user * uEnergy * 0.25;
-  vMix = clamp(0.3 + uBass * 0.25 + uTreble * 0.35 + uLayer * 0.12 + user * 0.15, 0.0, 1.0);
+  float band = clamp(uBass * 0.5 + uMid * 0.35 + uEnergy * 0.25, 0.0, 0.85);
+  vGlow = 0.28 + uBright * 0.45 + assist * abs(wave) * 0.18 + user * uEnergy * 0.2;
+  vMix = clamp(0.3 + uBass * 0.2 + uMid * 0.2 + uLayer * 0.12 + user * 0.12, 0.0, 1.0);
 
   gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
-  float pt = 1.5 + uBright * 2.4 + assist * band * 2.8 + uLayer * 0.5;
+  float pt = 1.45 + uBright * 1.6 + assist * band * 1.2 + uLayer * 0.4;
   gl_PointSize = pt * (180.0 / max(60.0, -gl_Position.z * 40.0 + 120.0));
 }
 `;
@@ -171,6 +191,10 @@ export class AudioReactiveAIOrbit {
   private bassS = 0;
   private midS = 0;
   private trebleS = 0;
+  private scaleSmoothed = 1;
+  private spinSmoothed: number = ORBIT_TUNING.idleSpin;
+  private breathSmoothed = 0;
+  private deformSmoothed = 0;
 
   constructor() {
     this.resizeObserver = new ResizeObserver(() => this.resize());
@@ -295,6 +319,8 @@ export class AudioReactiveAIOrbit {
         uTreble: { value: 0 },
         uSpeakMode: { value: 0 },
         uBright: { value: 0.35 },
+        uBreath: { value: 0 },
+        uDeform: { value: 0 },
         uLayer: { value: index * 0.45 },
         uCyan: { value: CYAN },
         uMagenta: { value: MAGENTA },
@@ -415,6 +441,7 @@ export class AudioReactiveAIOrbit {
       treble: 0,
     };
 
+    const T = ORBIT_TUNING;
     const speakMode = this.resolveSpeakMode(drive);
     const full =
       drive.wsOpen ||
@@ -423,55 +450,80 @@ export class AudioReactiveAIOrbit {
       drive.mode === "speaking" ||
       drive.mode === "listening";
 
-    const energyTarget =
+    // Soft energy from mid/bass rhythm (assistant) — hard-capped.
+    const energyRaw =
       speakMode === 2
-        ? Math.min(1, drive.playLevel * 1.15 + drive.bass * 0.35)
+        ? drive.bass * 0.55 + drive.mid * 0.4 + drive.playLevel * 0.25
         : speakMode === 1
-          ? Math.min(1, Math.max(drive.micLevel * 1.2, 0.28))
+          ? Math.max(drive.micLevel * 0.9, 0.22)
           : 0;
+    const energyTarget = THREE.MathUtils.clamp(energyRaw, 0, T.maxEnergy);
 
     const brightTarget =
       speakMode === 2
-        ? 0.55 + energyTarget * 0.45
+        ? 0.42 + energyTarget * 0.28
         : speakMode === 1
-          ? 0.7 + energyTarget * 0.3
+          ? 0.58 + energyTarget * 0.22
           : 0.32;
 
-    this.energySmoothed += (energyTarget - this.energySmoothed) * 0.18;
-    this.speakModeSmoothed += (speakMode - this.speakModeSmoothed) * 0.16;
-    this.brightSmoothed += (brightTarget - this.brightSmoothed) * 0.14;
-    this.bassS += (drive.bass - this.bassS) * 0.2;
-    this.midS += (drive.mid - this.midS) * 0.2;
-    this.trebleS += (drive.treble - this.trebleS) * 0.2;
+    this.energySmoothed = THREE.MathUtils.lerp(this.energySmoothed, energyTarget, T.lerpEnergy);
+    this.speakModeSmoothed = THREE.MathUtils.lerp(this.speakModeSmoothed, speakMode, T.lerpSpeakMode);
+    this.brightSmoothed = THREE.MathUtils.lerp(this.brightSmoothed, brightTarget, T.lerpBright);
+    this.bassS = THREE.MathUtils.lerp(this.bassS, THREE.MathUtils.clamp(drive.bass, 0, 0.85), T.lerpBands);
+    this.midS = THREE.MathUtils.lerp(this.midS, THREE.MathUtils.clamp(drive.mid, 0, 0.85), T.lerpBands);
+    this.trebleS = THREE.MathUtils.lerp(
+      this.trebleS,
+      THREE.MathUtils.clamp(drive.treble, 0, 0.75),
+      T.lerpBands,
+    );
 
     this.applyPresence(full ? "full" : "point");
 
     const t = this.clock.getElapsedTime();
+    const assistBlend = THREE.MathUtils.smoothstep(this.speakModeSmoothed, 1.2, 1.8);
+    const userBlend = THREE.MathUtils.smoothstep(this.speakModeSmoothed, 0.2, 0.8) * (1 - assistBlend);
 
-    // Idle: slow axis rotation only. User: slightly faster. Assistant: energy-linked spin.
-    const spin =
-      speakMode === 2
-        ? 0.18 + this.energySmoothed * 0.55
-        : speakMode === 1
-          ? 0.22 + this.energySmoothed * 0.2
-          : 0.11;
-    root.rotation.y = t * spin;
-    root.rotation.x =
-      Math.sin(t * 0.21) * 0.1 +
-      (speakMode === 2 ? this.energySmoothed * Math.sin(t * 2.1) * 0.06 : 0);
-    root.rotation.z = Math.cos(t * 0.17) * 0.07;
+    // Coherent mid/bass breath — sinusoidal, voice-like, never chaotic.
+    const breathWave =
+      Math.sin(t * T.breathBassHz) * this.bassS * 0.55 + Math.sin(t * T.breathMidHz + 0.7) * this.midS * 0.45;
+    const breathTarget = THREE.MathUtils.clamp(
+      assistBlend * breathWave * (0.028 + this.energySmoothed * 0.04) +
+        userBlend * Math.sin(t * 2.0) * (0.01 + this.energySmoothed * 0.015),
+      -T.maxBreath,
+      T.maxBreath,
+    );
+    this.breathSmoothed = THREE.MathUtils.lerp(this.breathSmoothed, breathTarget, T.lerpScale);
 
-    // Root scale pulse only when speaking — idle stays stable.
-    const scale =
-      speakMode === 0
-        ? 1
-        : 1 +
-          (speakMode === 1 ? 0.03 : 0.045) * this.energySmoothed +
-          (speakMode === 2 ? 0.08 * this.energySmoothed * Math.sin(t * 3.4) : 0);
-    root.scale.setScalar(scale);
+    const deformTarget = THREE.MathUtils.clamp(
+      assistBlend * (0.02 + this.energySmoothed * 0.07 + this.bassS * 0.025),
+      0,
+      T.maxDeform,
+    );
+    this.deformSmoothed = THREE.MathUtils.lerp(this.deformSmoothed, deformTarget, T.lerpEnergy);
+
+    // Idle: slow elegant spin. Speak: slight lift, still capped.
+    const spinTarget =
+      assistBlend > 0.5
+        ? THREE.MathUtils.clamp(T.idleSpin + 0.03 + this.energySmoothed * 0.05, T.idleSpin, T.maxSpinAssist)
+        : userBlend > 0.5
+          ? T.userSpin
+          : T.idleSpin;
+    this.spinSmoothed = THREE.MathUtils.lerp(this.spinSmoothed, spinTarget, T.lerpSpin);
+
+    root.rotation.y = t * this.spinSmoothed;
+    root.rotation.x = Math.sin(t * 0.18) * 0.08 + assistBlend * this.breathSmoothed * 0.35;
+    root.rotation.z = Math.cos(t * 0.14) * 0.055;
+
+    const scaleTarget = THREE.MathUtils.clamp(
+      1 + this.breathSmoothed + userBlend * this.energySmoothed * 0.02,
+      1 - T.maxScaleDelta,
+      1 + T.maxScaleDelta,
+    );
+    this.scaleSmoothed = THREE.MathUtils.lerp(this.scaleSmoothed, scaleTarget, T.lerpScale);
+    root.scale.setScalar(this.scaleSmoothed);
 
     for (const layer of this.layers) {
-      const brightBoost = 1 + (this.brightSmoothed - 0.35) * 0.85;
+      const brightBoost = 1 + (this.brightSmoothed - 0.35) * 0.55;
       for (const mat of [layer.pointMat, layer.lineMat]) {
         mat.uniforms.uTime.value = t;
         mat.uniforms.uEnergy.value = this.energySmoothed;
@@ -480,14 +532,16 @@ export class AudioReactiveAIOrbit {
         mat.uniforms.uTreble.value = this.trebleS;
         mat.uniforms.uSpeakMode.value = this.speakModeSmoothed;
         mat.uniforms.uBright.value = this.brightSmoothed;
+        mat.uniforms.uBreath.value = this.breathSmoothed;
+        mat.uniforms.uDeform.value = this.deformSmoothed;
       }
       layer.lineMat.uniforms.uOpacity.value = Math.min(1, layer.baseLineOp * brightBoost);
       layer.pointMat.uniforms.uOpacity.value = Math.min(1, layer.basePointOp * brightBoost);
     }
 
     if (this.coreMat) {
-      this.coreMat.opacity = 0.45 + 0.4 * (0.5 + 0.5 * Math.sin(t * 2.2));
-      this.coreMat.size = 5 + Math.sin(t * 2.2) * 1.5;
+      this.coreMat.opacity = 0.45 + 0.35 * (0.5 + 0.5 * Math.sin(t * 1.8));
+      this.coreMat.size = 5 + Math.sin(t * 1.8) * 1.2;
     }
 
     renderer.render(scene, camera);
