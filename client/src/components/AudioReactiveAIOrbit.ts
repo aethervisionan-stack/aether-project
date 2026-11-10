@@ -39,32 +39,39 @@ export interface OrbitDriveState {
 export type OrbitDriver = () => OrbitDriveState;
 
 /**
- * Constant damping via MathUtils.lerp — coherent undulation, no tremor.
- * maxDeform keeps the sphere recognizably 3D under peak voice.
+ * Calm elegant motion — heavy lerp damping, tiny radial deform.
+ * Idle ≈ almost still; speak = gentle breath, not wild wobble.
  */
 export const ORBIT_TUNING = {
-  lerpRms: 0.08,
-  lerpSpeakMode: 0.06,
-  lerpBright: 0.05,
-  lerpScale: 0.07,
-  lerpSpin: 0.05,
-  lerpDeform: 0.09,
-  lerpBreath: 0.08,
-  lerpVoice: 0.1,
-  maxEnergy: 0.7,
-  /** Radial displace clamp (fraction of radius) — shape-safe. */
-  maxDeform: 0.085,
-  maxBreath: 0.028,
-  maxScaleDelta: 0.035,
-  maxSpinAssist: 0.14,
-  idleSpin: 0.08,
-  speakSpin: 0.11,
-  breathHz: 1.35,
-  noiseHz: 1.15,
-  /** Spatial frequencies for composite 3D noise (simplex-like). */
-  noiseA: 3.1,
-  noiseB: 2.7,
-  noiseC: 4.2,
+  /** Low alphas = stronger damping / slower response. */
+  lerpRms: 0.035,
+  lerpSpeakMode: 0.03,
+  lerpBright: 0.025,
+  lerpScale: 0.03,
+  lerpSpin: 0.025,
+  lerpDeform: 0.04,
+  lerpBreath: 0.035,
+  lerpVoice: 0.04,
+  maxEnergy: 0.38,
+  /** Radial displace clamp — subtle surface only. */
+  maxDeform: 0.022,
+  maxBreath: 0.01,
+  maxScaleDelta: 0.012,
+  maxSpinAssist: 0.04,
+  /** Idle: almost still; speak: barely faster. */
+  idleSpin: 0.018,
+  speakSpin: 0.026,
+  breathHz: 0.55,
+  noiseHz: 0.42,
+  /** Spatial frequencies (lower = broader, calmer waves). */
+  noiseA: 2.0,
+  noiseB: 1.7,
+  noiseC: 2.4,
+  /** Peak |noise| gain before × deform amp. */
+  noiseGain: 0.55,
+  /** Secondary axis tilt (radians) — keep tiny. */
+  tiltX: 0.012,
+  tiltZ: 0.008,
 } as const;
 
 /**
@@ -191,7 +198,7 @@ interface LayerBundle {
   basePointOp: number;
 }
 
-/** Composite 3D noise (simplex-like) — coherent organic undulation, not random tremor. */
+/** Composite 3D noise — soft coherent undulation (gain-scaled, not wild). */
 export function compositeVertexNoise(
   x: number,
   y: number,
@@ -199,11 +206,12 @@ export function compositeVertexNoise(
   t: number,
   T: typeof ORBIT_TUNING = ORBIT_TUNING,
 ): number {
+  const g = T.noiseGain;
   const a =
-    Math.sin(x * T.noiseA + t * 1.7) * Math.cos(y * T.noiseB - t * 1.25) * 0.45;
-  const b = Math.sin(y * T.noiseC + z * 2.1 + t * 2.05) * 0.3;
+    Math.sin(x * T.noiseA + t * 0.9) * Math.cos(y * T.noiseB - t * 0.7) * (0.4 * g);
+  const b = Math.sin(y * T.noiseC + z * 1.4 + t * 1.05) * (0.28 * g);
   const c =
-    Math.sin((x + z) * 5.0 - t * 1.05) * Math.cos(y * 3.3 + t * 0.85) * 0.25;
+    Math.sin((x + z) * 2.8 - t * 0.55) * Math.cos(y * 2.0 + t * 0.45) * (0.22 * g);
   return THREE.MathUtils.clamp(a + b + c, -1, 1);
 }
 
@@ -603,7 +611,7 @@ export class AudioReactiveAIOrbit {
     );
     const energyTarget = THREE.MathUtils.clamp(
       speaking
-        ? this.voiceSmoothed * 0.65 + this.rmsSmoothed * 0.2 + this.lowMidSmoothed * 0.25
+        ? this.voiceSmoothed * 0.4 + this.rmsSmoothed * 0.15 + this.lowMidSmoothed * 0.15
         : 0,
       0,
       T.maxEnergy,
@@ -611,41 +619,42 @@ export class AudioReactiveAIOrbit {
     this.energySmoothed = THREE.MathUtils.lerp(this.energySmoothed, energyTarget, T.lerpRms);
     this.speakModeSmoothed = THREE.MathUtils.lerp(this.speakModeSmoothed, speakMode, T.lerpSpeakMode);
 
-    const brightTarget = speaking ? 0.42 + this.energySmoothed * 0.28 : 0.32;
+    const brightTarget = speaking ? 0.36 + this.energySmoothed * 0.12 : 0.32;
     this.brightSmoothed = THREE.MathUtils.lerp(this.brightSmoothed, brightTarget, T.lerpBright);
 
     this.applyPresence(full ? "full" : "point");
 
     const t = this.clock.getElapsedTime();
-    const speakBlend = THREE.MathUtils.smoothstep(this.speakModeSmoothed, 0.35, 1.2);
+    const speakBlend = THREE.MathUtils.smoothstep(this.speakModeSmoothed, 0.4, 1.35);
 
+    // Gentle breathing only — small scale pulse tied to voice.
     const breathTarget = THREE.MathUtils.clamp(
       speakBlend *
         Math.sin(t * T.breathHz) *
-        (0.01 + this.voiceSmoothed * 0.03 + this.energySmoothed * 0.012),
+        (0.003 + this.voiceSmoothed * 0.008 + this.energySmoothed * 0.004),
       -T.maxBreath,
       T.maxBreath,
     );
     this.breathSmoothed = THREE.MathUtils.lerp(this.breathSmoothed, breathTarget, T.lerpBreath);
 
-    // Peak radial deform amplitude from voice intensity (clamped).
+    // Subtle radial undulation (clamped hard by maxDeform).
     const deformTarget = THREE.MathUtils.clamp(
       speakBlend *
-        (0.018 + this.voiceSmoothed * 0.055 + this.energySmoothed * 0.028 + this.lowMidSmoothed * 0.015),
+        (0.004 + this.voiceSmoothed * 0.014 + this.energySmoothed * 0.008 + this.lowMidSmoothed * 0.004),
       0,
       T.maxDeform,
     );
     this.deformSmoothed = THREE.MathUtils.lerp(this.deformSmoothed, deformTarget, T.lerpDeform);
 
     const spinTarget = speaking
-      ? THREE.MathUtils.clamp(T.speakSpin + this.voiceSmoothed * 0.025, T.idleSpin, T.maxSpinAssist)
+      ? THREE.MathUtils.clamp(T.speakSpin + this.voiceSmoothed * 0.006, T.idleSpin, T.maxSpinAssist)
       : T.idleSpin;
     this.spinSmoothed = THREE.MathUtils.lerp(this.spinSmoothed, spinTarget, T.lerpSpin);
 
-    // Idle: slow perfect-sphere rotate. Speak: same rotate + living vertex undulation.
+    // Idle: almost-still slow Y rotate. Tiny tilt; speak adds soft breath via vertices.
     root.rotation.y = t * this.spinSmoothed;
-    root.rotation.x = Math.sin(t * 0.15) * 0.06;
-    root.rotation.z = Math.cos(t * 0.11) * 0.04;
+    root.rotation.x = Math.sin(t * 0.08) * T.tiltX;
+    root.rotation.z = Math.cos(t * 0.06) * T.tiltZ;
 
     const scaleTarget = THREE.MathUtils.clamp(
       1 + this.breathSmoothed,
@@ -656,8 +665,8 @@ export class AudioReactiveAIOrbit {
     root.scale.setScalar(this.scaleSmoothed);
 
     if (this.bloomPass) {
-      const bloomStrength = ORBIT_LOOK.bloomStrength + speakBlend * 0.05;
-      this.bloomPass.strength = THREE.MathUtils.clamp(bloomStrength, 0.42, 0.62);
+      const bloomStrength = ORBIT_LOOK.bloomStrength + speakBlend * 0.02;
+      this.bloomPass.strength = THREE.MathUtils.clamp(bloomStrength, 0.45, 0.56);
       this.bloomPass.radius = ORBIT_LOOK.bloomRadius;
       this.bloomPass.threshold = ORBIT_LOOK.bloomThreshold;
     }
