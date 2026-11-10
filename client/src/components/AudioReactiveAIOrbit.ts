@@ -62,7 +62,10 @@ export const ORBIT_TUNING = {
   breathMidHz: 1.75,
 } as const;
 
-/** CGI plexus look — density + bloom (HUD-safe caps). */
+/**
+ * CGI plexus look — HUD-harmonized palette + elegant bloom.
+ * Hexes mirror `main.css` :root tokens (`--cyan`, `--purple`, `--bg0`).
+ */
 export const ORBIT_LOOK = {
   /** Icosahedron detail: faces = 20 * 4^detail. */
   primaryDetail: 6, // 81 920 faces
@@ -72,17 +75,25 @@ export const ORBIT_LOOK = {
   shellScale: 1.13,
   coreScale: 0.8,
   maxPixelRatio: 1.75,
-  /** Soft cinematic bloom on absolute black. */
-  bloomStrength: 0.86,
-  bloomRadius: 0.62,
-  bloomThreshold: 0.12,
-  lineOpacityPrimary: 0.32,
-  pointOpacityPrimary: 0.92,
+  /** Soft bloom — elegant on dark HUD, not blown out. */
+  bloomStrength: 0.52,
+  bloomRadius: 0.42,
+  bloomThreshold: 0.32,
+  lineOpacityPrimary: 0.28,
+  pointOpacityPrimary: 0.78,
+  /** Clear / fog match `--bg0`. */
+  clearHex: 0x050811,
+  toneExposure: 0.92,
 } as const;
 
-const CYAN = new THREE.Color("#00F8FF");
-const MAGENTA = new THREE.Color("#FF1AC6");
-const PURPLE = new THREE.Color("#4B00B8");
+/** HUD `--cyan` — crest / energy-beam accents. */
+const CYAN = new THREE.Color("#00f3ff");
+/** Futuristic neon blue primary (crest→limb midtones). */
+const NEON_BLUE = new THREE.Color("#3aa7ff");
+/** HUD `--purple` — deep folds / core violet. */
+const PURPLE = new THREE.Color("#7000ff");
+/** Soft violet (not hot magenta) for inner-layer depth. */
+const VIOLET = new THREE.Color("#8b5cff");
 
 const VERT = /* glsl */ `
 uniform float uTime;
@@ -162,7 +173,8 @@ void main() {
 
 const FRAG_POINTS = /* glsl */ `
 uniform vec3 uCyan;
-uniform vec3 uMagenta;
+uniform vec3 uBlue;
+uniform vec3 uViolet;
 uniform vec3 uPurple;
 uniform float uOpacity;
 varying float vGlow;
@@ -174,20 +186,22 @@ void main() {
   vec2 uv = gl_PointCoord - 0.5;
   float d = length(uv);
   if (d > 0.5) discard;
-  // Sharp luminous core + soft bloom-friendly halo.
-  float core = smoothstep(0.42, 0.02, d);
-  float halo = smoothstep(0.5, 0.14, d);
-  vec3 foldCol = mix(uPurple, uMagenta, 0.55 + vFresnel * 0.25);
-  vec3 col = mix(foldCol, uCyan, vMix);
-  col += uCyan * core * (0.65 + vCrest * 0.35);
-  float alpha = (core * 0.95 + halo * 0.35) * uOpacity * (0.55 + vGlow * 0.5);
-  gl_FragColor = vec4(col, clamp(alpha, 0.0, 1.0));
+  // Sharp luminous core + restrained halo (HUD-elegant, not blown out).
+  float core = smoothstep(0.4, 0.03, d);
+  float halo = smoothstep(0.5, 0.16, d);
+  vec3 crestCol = mix(uBlue, uCyan, 0.55 + vCrest * 0.35);
+  vec3 foldCol = mix(uPurple, uViolet, 0.4 + vFresnel * 0.2);
+  vec3 col = mix(foldCol, crestCol, vMix);
+  col += uCyan * core * 0.35;
+  float alpha = (core * 0.85 + halo * 0.22) * uOpacity * (0.45 + vGlow * 0.4);
+  gl_FragColor = vec4(col, clamp(alpha, 0.0, 0.92));
 }
 `;
 
 const FRAG_LINES = /* glsl */ `
 uniform vec3 uCyan;
-uniform vec3 uMagenta;
+uniform vec3 uBlue;
+uniform vec3 uViolet;
 uniform vec3 uPurple;
 uniform float uOpacity;
 varying float vGlow;
@@ -196,11 +210,12 @@ varying float vFresnel;
 varying float vCrest;
 
 void main() {
-  // Ultra-thin filament: low alpha, cyan crests / magenta folds.
-  vec3 foldCol = mix(uPurple, uMagenta, 0.5);
-  vec3 col = mix(foldCol, uCyan, vMix * 0.9 + vFresnel * 0.15);
-  float alpha = uOpacity * (0.14 + vGlow * 0.22 + vCrest * 0.1 + vFresnel * 0.12);
-  gl_FragColor = vec4(col, clamp(alpha, 0.0, 0.55));
+  // Refined energy beams — cyan accents on neon-blue body, violet in folds.
+  vec3 crestCol = mix(uBlue, uCyan, 0.45 + vCrest * 0.4);
+  vec3 foldCol = mix(uPurple, uViolet, 0.35);
+  vec3 col = mix(foldCol, crestCol, vMix * 0.85 + vFresnel * 0.12);
+  float alpha = uOpacity * (0.12 + vGlow * 0.16 + vCrest * 0.08 + vFresnel * 0.1);
+  gl_FragColor = vec4(col, clamp(alpha, 0.0, 0.42));
 }
 `;
 
@@ -265,15 +280,15 @@ export class AudioReactiveAIOrbit {
       antialias: true,
       powerPreference: "high-performance",
     });
-    // Opaque black — required for clean UnrealBloomPass against HUD void.
-    renderer.setClearColor(0x000000, 1);
+    // Match HUD `--bg0` so bloom sits in the same void as glass panels.
+    renderer.setClearColor(ORBIT_LOOK.clearHex, 1);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, ORBIT_LOOK.maxPixelRatio));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.08;
+    renderer.toneMappingExposure = ORBIT_LOOK.toneExposure;
     this.renderer = renderer;
 
     const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x000000, 0.038);
+    scene.fog = new THREE.FogExp2(ORBIT_LOOK.clearHex, 0.04);
     this.scene = scene;
 
     const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 40);
@@ -406,7 +421,8 @@ export class AudioReactiveAIOrbit {
         uDeform: { value: 0 },
         uLayer: { value: index * 0.42 },
         uCyan: { value: CYAN },
-        uMagenta: { value: MAGENTA },
+        uBlue: { value: NEON_BLUE },
+        uViolet: { value: VIOLET },
         uPurple: { value: PURPLE },
       };
 
@@ -625,14 +641,14 @@ export class AudioReactiveAIOrbit {
     root.scale.setScalar(this.scaleSmoothed);
 
     if (this.bloomPass) {
-      const bloomStrength = ORBIT_LOOK.bloomStrength + assistBlend * 0.08 + userBlend * 0.05;
-      this.bloomPass.strength = THREE.MathUtils.clamp(bloomStrength, 0.7, 1.0);
+      const bloomStrength = ORBIT_LOOK.bloomStrength + assistBlend * 0.05 + userBlend * 0.03;
+      this.bloomPass.strength = THREE.MathUtils.clamp(bloomStrength, 0.42, 0.62);
       this.bloomPass.radius = ORBIT_LOOK.bloomRadius;
       this.bloomPass.threshold = ORBIT_LOOK.bloomThreshold;
     }
 
     for (const layer of this.layers) {
-      const brightBoost = 1 + (this.brightSmoothed - 0.35) * 0.4;
+      const brightBoost = 1 + (this.brightSmoothed - 0.35) * 0.28;
       for (const mat of [layer.pointMat, layer.lineMat]) {
         mat.uniforms.uTime.value = t;
         mat.uniforms.uEnergy.value = this.energySmoothed;
@@ -644,8 +660,8 @@ export class AudioReactiveAIOrbit {
         mat.uniforms.uBreath.value = this.breathSmoothed;
         mat.uniforms.uDeform.value = this.deformSmoothed;
       }
-      layer.lineMat.uniforms.uOpacity.value = Math.min(0.55, layer.baseLineOp * brightBoost);
-      layer.pointMat.uniforms.uOpacity.value = Math.min(1, layer.basePointOp * brightBoost);
+      layer.lineMat.uniforms.uOpacity.value = Math.min(0.4, layer.baseLineOp * brightBoost);
+      layer.pointMat.uniforms.uOpacity.value = Math.min(0.9, layer.basePointOp * brightBoost);
     }
 
     if (this.coreMat) {

@@ -696,8 +696,8 @@ button.voice-pulse {
   padding: 0;
   overflow: hidden;
   border: 1px solid rgba(0, 243, 255, 0.12);
-  /* Canvas owns the void + bloom; keep stage pure black. */
-  background: #000;
+  /* Match `--bg0` so orbit void = HUD chrome void. */
+  background: var(--bg0);
   transition: min-height 240ms var(--ease), border-color 200ms var(--ease), opacity 280ms var(--ease);
 }
 
