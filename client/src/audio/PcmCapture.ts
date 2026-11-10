@@ -7,6 +7,8 @@
  * down to 16 kHz so Hands-Free Bluetooth headsets stay compatible.
  */
 
+import { createAnalyser, EMPTY_SPECTRUM, sampleAnalyser, type SpectrumBands } from "./SpectrumTap";
+
 export type PcmFrameHandler = (pcm: ArrayBuffer) => void;
 
 const TARGET_RATE = 16_000;
@@ -88,6 +90,9 @@ export class PcmCapture {
   private source: MediaStreamAudioSourceNode | null = null;
   private processor: ScriptProcessorNode | null = null;
   private mute: GainNode | null = null;
+  /** Parallel HUD tap — never on the ScriptProcessor callback path. */
+  private analyser: AnalyserNode | null = null;
+  private freqBuf: Uint8Array | null = null;
   private running = false;
   private resampleCarry: number[] = [];
   private onFrame: PcmFrameHandler | null = null;
@@ -137,6 +142,12 @@ export class PcmCapture {
     this.source.connect(this.processor);
     this.processor.connect(this.mute);
     this.mute.connect(this.context.destination);
+
+    // Parallel analyser tap for orbit HUD (does not sit on PCM callback work).
+    this.analyser = createAnalyser(this.context, 256);
+    this.freqBuf = new Uint8Array(this.analyser.frequencyBinCount);
+    this.source.connect(this.analyser);
+
     this.running = true;
 
     if (this.context.state === "suspended") {
@@ -146,14 +157,29 @@ export class PcmCapture {
     return { label: this.stream.getAudioTracks()[0]?.label ?? null };
   }
 
+  /** Sample mic FFT on the animation thread only — never from onaudioprocess. */
+  sampleSpectrum(): SpectrumBands {
+    if (!this.running) {
+      return EMPTY_SPECTRUM;
+    }
+    return sampleAnalyser(this.analyser, this.freqBuf);
+  }
+
   stop(): void {
     this.running = false;
     this.processor?.disconnect();
     this.source?.disconnect();
     this.mute?.disconnect();
+    try {
+      this.analyser?.disconnect();
+    } catch {
+      /* ignore */
+    }
     this.processor = null;
     this.source = null;
     this.mute = null;
+    this.analyser = null;
+    this.freqBuf = null;
     this.stream?.getTracks().forEach((t) => t.stop());
     this.stream = null;
     void this.context?.close();

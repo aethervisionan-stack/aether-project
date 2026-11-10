@@ -15,7 +15,9 @@ import type { AdvancedAudioVisualizer, VisualizerMode } from "../audio/AdvancedA
 import { FifoRetentionBuffer } from "../audio/FifoRetentionBuffer";
 import { GaplessPcmPlayer } from "../audio/GaplessPcmPlayer";
 import { formatMicError, PcmCapture } from "../audio/PcmCapture";
+import { EMPTY_SPECTRUM } from "../audio/SpectrumTap";
 import { TelemetryMonitor } from "../audio/TelemetryMonitor";
+import type { OrbitDriveState } from "../components/AudioReactiveAIOrbit"; // type-only — no runtime cycle
 import { buildHudTelemetry } from "../multimodal/HudTelemetry";
 import type { CapturedFrame } from "../multimodal/FrameCapture";
 import type {
@@ -414,11 +416,34 @@ export class GeminiLiveService {
 
   /** True while AI playback queue has audio or barge-in marks assistant speaking. */
   isPlaybackActive(): boolean {
-    return this.player.queueDepth > 0 || this.bargeIn.isAssistantSpeaking();
+    return this.player.isPlaying || this.bargeIn.isAssistantSpeaking();
   }
 
   getWsState(): WsReadyStateLabel {
     return this.telemetry.snapshot().wsState;
+  }
+
+  /**
+   * Live orbit drive snapshot — samples AnalyserNodes on rAF only.
+   * Mic = PcmCapture tap; play = GaplessPcmPlayer live output tap.
+   */
+  getOrbitAudioSnapshot(): OrbitDriveState {
+    const mic = this.capture.isRunning ? this.capture.sampleSpectrum() : EMPTY_SPECTRUM;
+    const play = this.player.sampleSpectrum();
+    const vadSpeech = this.isVadSpeech();
+    const playbackActive = this.isPlaybackActive();
+    const bands = playbackActive && play.level > 0.02 ? play : mic;
+    return {
+      wsOpen: this.getWsState() === "OPEN",
+      vadSpeech,
+      playbackActive,
+      mode: this.vizMode,
+      micLevel: mic.level,
+      playLevel: Math.max(play.level, playbackActive ? 0.12 : 0),
+      bass: bands.bass,
+      mid: bands.mid,
+      treble: bands.treble,
+    };
   }
 
   private connectResult(): LiveConnectResult {

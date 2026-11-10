@@ -824,32 +824,71 @@ export class ControlApp {
     this.latencyEl.textContent = idleLatencyLine();
   }
 
-  /** Drive AudioReactiveAIOrbit from WS / VAD / playback + silent analyser snapshot. */
+  /**
+   * Drive AudioReactiveAIOrbit from live WS / VAD / GaplessPcmPlayer analyser taps.
+   * Demo query still available: ?orbit=full|pulse|user (does not replace Live binding).
+   */
   private readOrbitDrive() {
     const demo = new URLSearchParams(window.location.search).get("orbit");
-    if (demo === "full" || demo === "pulse") {
+    // Prefer real Live taps whenever the service exists (even with demo query for overlay tests).
+    if (this.service && demo !== "pulse" && demo !== "user" && demo !== "full") {
+      return this.service.getOrbitAudioSnapshot();
+    }
+
+    if (demo === "full" || demo === "pulse" || demo === "user") {
       const t = performance.now() / 1000;
-      const pulse = demo === "pulse";
+      if (demo === "full") {
+        return {
+          wsOpen: true,
+          vadSpeech: false,
+          playbackActive: false,
+          mode: "listening",
+          micLevel: 0,
+          playLevel: 0,
+          bass: 0,
+          mid: 0,
+          treble: 0,
+        };
+      }
+      if (demo === "user") {
+        const e = 0.4 + 0.35 * Math.sin(t * 4.2);
+        return {
+          wsOpen: true,
+          vadSpeech: true,
+          playbackActive: false,
+          mode: "listening",
+          micLevel: e,
+          playLevel: 0,
+          bass: e * 0.6,
+          mid: e * 0.5,
+          treble: e * 0.4,
+        };
+      }
+      // pulse = assistant undulation
       return {
         wsOpen: true,
-        vadSpeech: pulse,
-        playbackActive: pulse,
-        mode: pulse ? "speaking" : "listening",
-        micLevel: pulse ? 0.35 + 0.25 * Math.sin(t * 3.1) : 0.08,
-        playLevel: pulse ? 0.45 + 0.3 * Math.sin(t * 2.4) : 0.05,
-        bass: pulse ? 0.5 + 0.35 * Math.sin(t * 2.2) : 0.12,
-        mid: pulse ? 0.4 + 0.3 * Math.cos(t * 3.4) : 0.1,
-        treble: pulse ? 0.35 + 0.35 * Math.sin(t * 5.1) : 0.08,
+        vadSpeech: false,
+        playbackActive: true,
+        mode: "speaking",
+        micLevel: 0.08,
+        playLevel: 0.5 + 0.35 * Math.sin(t * 2.6),
+        bass: 0.55 + 0.4 * Math.sin(t * 2.1),
+        mid: 0.45 + 0.35 * Math.cos(t * 3.3),
+        treble: 0.4 + 0.4 * Math.sin(t * 5.0),
       };
     }
 
+    if (this.service) {
+      return this.service.getOrbitAudioSnapshot();
+    }
+
     const snap = this.visualizer?.getSpectrumSnapshot();
-    const wsOpen = this.service?.getWsState() === "OPEN" || this.lastWsLabel === "OPEN";
+    const wsOpen = this.lastWsLabel === "OPEN";
     return {
       wsOpen,
-      vadSpeech: this.service?.isVadSpeech() ?? false,
-      playbackActive: this.service?.isPlaybackActive() ?? false,
-      mode: snap?.mode ?? this.service?.getVizMode() ?? "idle",
+      vadSpeech: false,
+      playbackActive: false,
+      mode: snap?.mode ?? "idle",
       micLevel: snap?.micLevel ?? 0,
       playLevel: snap?.playLevel ?? 0,
       bass: snap?.bass ?? 0,

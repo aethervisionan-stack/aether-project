@@ -1,13 +1,21 @@
 /**
  * AudioReactiveAIOrbit — central Aether Vision AI presence in the HUD.
  * Dense translucent neon wireframe sphere (Three.js) driven by WS / VAD / playback
- * spectrum from AdvancedAudioVisualizer. Never touches the PCM uplink path.
+ * spectrum from live AnalyserNode taps. Never touches the PCM uplink path.
+ *
+ * Physics:
+ *  - Idle (nobody speaking): slow axis rotation ONLY — no vertex deformation.
+ *  - User speaking (VAD): brighter nodes + subtle faster pulse.
+ *  - Assistant speaking (playback_active): surface undulation from play FFT.
  */
 
 import * as THREE from "three";
 import type { VisualizerMode } from "../audio/AdvancedAudioVisualizer";
 
 export type OrbitPresence = "point" | "full";
+
+/** Speak mode for shader: 0 idle, 1 user/VAD, 2 assistant/playback. */
+export type OrbitSpeakMode = 0 | 1 | 2;
 
 export interface OrbitDriveState {
   /** Conversation bridge open (ws_state === OPEN). */
@@ -36,7 +44,8 @@ uniform float uEnergy;
 uniform float uBass;
 uniform float uMid;
 uniform float uTreble;
-uniform float uReactive;
+uniform float uSpeakMode; // 0 idle, 1 user, 2 assistant
+uniform float uBright;
 uniform float uLayer;
 
 varying float vGlow;
@@ -63,23 +72,35 @@ float noise(vec3 p) {
 
 void main() {
   vec3 pos = position;
-  float n1 = noise(pos * 1.65 + vec3(uTime * 0.22, uTime * 0.18, uLayer));
-  float n2 = noise(pos * 3.1 - vec3(uTime * 0.31, 0.0, uTime * 0.27));
+  float mode = uSpeakMode;
+
+  // Noise field — only applied as deformation when assistant speaks.
+  float nSpeed = mix(0.18, 0.55 + uEnergy * 0.9, step(1.5, mode));
+  float n1 = noise(pos * 1.65 + vec3(uTime * nSpeed, uTime * (nSpeed * 0.8), uLayer));
+  float n2 = noise(pos * 3.1 - vec3(uTime * (nSpeed * 1.4), 0.0, uTime * nSpeed));
   float wave = (n1 * 0.65 + n2 * 0.35) * 2.0 - 1.0;
 
-  float pulse = uReactive * (
-    uBass * 0.55 + uMid * 0.28 + uTreble * 0.22 + uEnergy * 0.35
-  );
-  float deform = wave * (0.045 + pulse * 0.22) * (0.85 + uLayer * 0.25);
-  float breathe = 1.0 + uReactive * (0.04 + uEnergy * 0.12) * sin(uTime * 2.4 + uLayer * 1.7);
+  // Idle: zero deform. User: tiny breath. Assistant: full undulation.
+  float assist = smoothstep(1.2, 1.8, mode);
+  float user = smoothstep(0.2, 0.8, mode) * (1.0 - assist);
+
+  float band = uBass * 0.55 + uMid * 0.3 + uTreble * 0.25 + uEnergy * 0.4;
+  float deformAmt = assist * (0.06 + band * 0.32) * (0.85 + uLayer * 0.3);
+  float deform = wave * deformAmt;
+
+  float userPulse = user * (0.025 + uEnergy * 0.05) * sin(uTime * (3.6 + uEnergy * 2.0) + uLayer);
+  float assistBreath = assist * (0.05 + uEnergy * 0.16) * sin(uTime * (2.8 + uBass * 3.0) + uLayer * 1.7);
+  float breathe = 1.0 + userPulse + assistBreath;
+
   pos *= breathe;
   pos += normalize(position + 1e-5) * deform;
 
-  vGlow = 0.35 + pulse * 0.55 + abs(wave) * 0.25;
-  vMix = clamp(0.35 + uBass * 0.25 + uTreble * 0.4 + uLayer * 0.15, 0.0, 1.0);
+  vGlow = 0.28 + uBright * 0.55 + assist * abs(wave) * 0.35 + user * uEnergy * 0.25;
+  vMix = clamp(0.3 + uBass * 0.25 + uTreble * 0.35 + uLayer * 0.12 + user * 0.15, 0.0, 1.0);
 
   gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
-  gl_PointSize = (1.6 + pulse * 3.2 + uLayer * 0.6) * (180.0 / max(60.0, -gl_Position.z * 40.0 + 120.0));
+  float pt = 1.5 + uBright * 2.4 + assist * band * 2.8 + uLayer * 0.5;
+  gl_PointSize = pt * (180.0 / max(60.0, -gl_Position.z * 40.0 + 120.0));
 }
 `;
 
@@ -97,8 +118,8 @@ void main() {
   if (d > 0.5) discard;
   float soft = smoothstep(0.5, 0.08, d);
   vec3 col = mix(uPurple, uCyan, vMix);
-  col = mix(col, uMagenta, clamp(vGlow - 0.55, 0.0, 1.0) * 0.85);
-  float alpha = soft * uOpacity * (0.45 + vGlow * 0.55);
+  col = mix(col, uMagenta, clamp(vGlow - 0.45, 0.0, 1.0) * 0.9);
+  float alpha = soft * uOpacity * (0.4 + vGlow * 0.65);
   gl_FragColor = vec4(col, alpha);
 }
 `;
@@ -113,8 +134,8 @@ varying float vMix;
 
 void main() {
   vec3 col = mix(uCyan, uPurple, vMix * 0.7);
-  col = mix(col, uMagenta, clamp(vGlow * 0.5, 0.0, 0.65));
-  float alpha = uOpacity * (0.32 + vGlow * 0.45);
+  col = mix(col, uMagenta, clamp(vGlow * 0.55, 0.0, 0.7));
+  float alpha = uOpacity * (0.28 + vGlow * 0.5);
   gl_FragColor = vec4(col, alpha);
 }
 `;
@@ -125,6 +146,8 @@ interface LayerBundle {
   pointMat: THREE.ShaderMaterial;
   lineMat: THREE.ShaderMaterial;
   baseScale: number;
+  baseLineOp: number;
+  basePointOp: number;
 }
 
 export class AudioReactiveAIOrbit {
@@ -143,7 +166,11 @@ export class AudioReactiveAIOrbit {
   private readonly clock = new THREE.Clock();
   private readonly resizeObserver: ResizeObserver;
   private energySmoothed = 0;
-  private reactiveSmoothed = 0;
+  private speakModeSmoothed = 0;
+  private brightSmoothed = 0.35;
+  private bassS = 0;
+  private midS = 0;
+  private trebleS = 0;
 
   constructor() {
     this.resizeObserver = new ResizeObserver(() => this.resize());
@@ -266,7 +293,8 @@ export class AudioReactiveAIOrbit {
         uBass: { value: 0 },
         uMid: { value: 0 },
         uTreble: { value: 0 },
-        uReactive: { value: 0 },
+        uSpeakMode: { value: 0 },
+        uBright: { value: 0.35 },
         uLayer: { value: index * 0.45 },
         uCyan: { value: CYAN },
         uMagenta: { value: MAGENTA },
@@ -304,6 +332,8 @@ export class AudioReactiveAIOrbit {
         pointMat,
         lineMat,
         baseScale: cfg.scale,
+        baseLineOp: cfg.lineOp,
+        basePointOp: cfg.pointOp,
       });
     });
   }
@@ -348,7 +378,20 @@ export class AudioReactiveAIOrbit {
     }
     if (this.host) {
       this.host.dataset.presence = presence;
+      this.host.dataset.speak =
+        this.speakModeSmoothed > 1.4 ? "assistant" : this.speakModeSmoothed > 0.4 ? "user" : "idle";
     }
+  }
+
+  private resolveSpeakMode(drive: OrbitDriveState): OrbitSpeakMode {
+    // Assistant undulation wins while playback is active; else user pulse on VAD.
+    if (drive.playbackActive) {
+      return 2;
+    }
+    if (drive.vadSpeech) {
+      return 1;
+    }
+    return 0;
   }
 
   private frame(): void {
@@ -372,38 +415,74 @@ export class AudioReactiveAIOrbit {
       treble: 0,
     };
 
-    const reactiveWanted = drive.vadSpeech || drive.playbackActive;
+    const speakMode = this.resolveSpeakMode(drive);
     const full =
-      drive.wsOpen || drive.vadSpeech || drive.playbackActive || drive.mode === "speaking" || drive.mode === "listening";
-    this.applyPresence(full ? "full" : "point");
+      drive.wsOpen ||
+      drive.vadSpeech ||
+      drive.playbackActive ||
+      drive.mode === "speaking" ||
+      drive.mode === "listening";
 
-    const energy = Math.min(1, drive.micLevel * 0.55 + drive.playLevel * 0.9);
-    this.energySmoothed += (energy - this.energySmoothed) * 0.12;
-    this.reactiveSmoothed += ((reactiveWanted ? 1 : 0) - this.reactiveSmoothed) * 0.1;
+    const energyTarget =
+      speakMode === 2
+        ? Math.min(1, drive.playLevel * 1.15 + drive.bass * 0.35)
+        : speakMode === 1
+          ? Math.min(1, Math.max(drive.micLevel * 1.2, 0.28))
+          : 0;
+
+    const brightTarget =
+      speakMode === 2
+        ? 0.55 + energyTarget * 0.45
+        : speakMode === 1
+          ? 0.7 + energyTarget * 0.3
+          : 0.32;
+
+    this.energySmoothed += (energyTarget - this.energySmoothed) * 0.18;
+    this.speakModeSmoothed += (speakMode - this.speakModeSmoothed) * 0.16;
+    this.brightSmoothed += (brightTarget - this.brightSmoothed) * 0.14;
+    this.bassS += (drive.bass - this.bassS) * 0.2;
+    this.midS += (drive.mid - this.midS) * 0.2;
+    this.trebleS += (drive.treble - this.trebleS) * 0.2;
+
+    this.applyPresence(full ? "full" : "point");
 
     const t = this.clock.getElapsedTime();
 
-    // Slow idle axis rotation; speed up slightly when reactive.
-    const spin = 0.12 + this.reactiveSmoothed * 0.35;
+    // Idle: slow axis rotation only. User: slightly faster. Assistant: energy-linked spin.
+    const spin =
+      speakMode === 2
+        ? 0.18 + this.energySmoothed * 0.55
+        : speakMode === 1
+          ? 0.22 + this.energySmoothed * 0.2
+          : 0.11;
     root.rotation.y = t * spin;
-    root.rotation.x = Math.sin(t * 0.21) * 0.12 + this.reactiveSmoothed * Math.sin(t * 1.7) * 0.05;
-    root.rotation.z = Math.cos(t * 0.17) * 0.08;
+    root.rotation.x =
+      Math.sin(t * 0.21) * 0.1 +
+      (speakMode === 2 ? this.energySmoothed * Math.sin(t * 2.1) * 0.06 : 0);
+    root.rotation.z = Math.cos(t * 0.17) * 0.07;
 
-    const scaleBreath =
-      1 +
-      (full ? 0.02 : 0) +
-      this.reactiveSmoothed * (0.06 + this.energySmoothed * 0.14) * Math.sin(t * 3.1);
-    root.scale.setScalar(scaleBreath);
+    // Root scale pulse only when speaking — idle stays stable.
+    const scale =
+      speakMode === 0
+        ? 1
+        : 1 +
+          (speakMode === 1 ? 0.03 : 0.045) * this.energySmoothed +
+          (speakMode === 2 ? 0.08 * this.energySmoothed * Math.sin(t * 3.4) : 0);
+    root.scale.setScalar(scale);
 
     for (const layer of this.layers) {
+      const brightBoost = 1 + (this.brightSmoothed - 0.35) * 0.85;
       for (const mat of [layer.pointMat, layer.lineMat]) {
         mat.uniforms.uTime.value = t;
         mat.uniforms.uEnergy.value = this.energySmoothed;
-        mat.uniforms.uBass.value = drive.bass;
-        mat.uniforms.uMid.value = drive.mid;
-        mat.uniforms.uTreble.value = drive.treble;
-        mat.uniforms.uReactive.value = this.reactiveSmoothed;
+        mat.uniforms.uBass.value = this.bassS;
+        mat.uniforms.uMid.value = this.midS;
+        mat.uniforms.uTreble.value = this.trebleS;
+        mat.uniforms.uSpeakMode.value = this.speakModeSmoothed;
+        mat.uniforms.uBright.value = this.brightSmoothed;
       }
+      layer.lineMat.uniforms.uOpacity.value = Math.min(1, layer.baseLineOp * brightBoost);
+      layer.pointMat.uniforms.uOpacity.value = Math.min(1, layer.basePointOp * brightBoost);
     }
 
     if (this.coreMat) {
