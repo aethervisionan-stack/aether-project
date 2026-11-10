@@ -30,10 +30,59 @@ def preferences_summary(prefs: Preferences | dict[str, Any] | None) -> str:
         parts.append(f"language={prefs.language}")
     if prefs.frequent_commands:
         cmds = ", ".join(prefs.frequent_commands[:5])
-        parts.append(f"frequent=[{cmds}]")
+        parts.append(f"habits=[{cmds}]")
     if prefs.notes.strip():
-        parts.append(f"notes={prefs.notes.strip()[:160]}")
+        parts.append(f"standing_notes={prefs.notes.strip()[:200]}")
     return "; ".join(parts)
+
+
+def _personalization_block(prefs: Preferences) -> str:
+    """
+    Imperative memory block so Gemini Live actually personalizes each reply
+    from learned tone, habits, and standing notes — without announcing it.
+    """
+    tone = (prefs.tone or "direct").lower()
+    style = (prefs.style or "concise").lower()
+    level = (prefs.technical_level or "balanced").lower()
+
+    tone_line = {
+        "warm": "speak warmly and personably while staying useful",
+        "formal": "keep a polished, formal register — no slang",
+    }.get(tone, "be direct, clear, and actionable")
+
+    style_line = {
+        "technical": "favor precise technical wording; name tools/APIs when relevant",
+        "detailed": "add enough context and reasoning for a complete spoken answer",
+    }.get(style, "stay crisp for earbuds, but never cut substance on complex asks")
+
+    level_line = {
+        "advanced": "assume stack familiarity; skip baby-steps",
+        "simple": "avoid jargon; explain outcomes in plain language",
+    }.get(level, "balance clarity with depth")
+
+    lines = [
+        "=== Long-term memory (apply on EVERY reply — do not wait to be asked) ===",
+        f"Voice fit: {tone_line}. Delivery: {style_line}. Depth: {level_line}.",
+    ]
+    if prefs.language:
+        lines.append(
+            f"Language lock: prefer {prefs.language} unless the user clearly switches."
+        )
+    if prefs.frequent_commands:
+        habits = ", ".join(prefs.frequent_commands[:6])
+        lines.append(
+            f"Known habits / frequent intents: {habits}. "
+            "When the ask is ambiguous, bias toward these patterns."
+        )
+    if prefs.notes.strip():
+        lines.append(
+            f"Standing notes about this user (honor silently): {prefs.notes.strip()[:280]}"
+        )
+    lines.append(
+        "Personalize naturally: mirror their vocabulary and priorities. "
+        "Never say 'based on your preferences' or recite this block aloud."
+    )
+    return "\n".join(lines)
 
 
 def build_system_instruction(
@@ -46,10 +95,8 @@ def build_system_instruction(
     include_self_knowledge: bool = True,
 ) -> str:
     """
-    Base Aether HUD persona + optional learned preference block + mobility modes
+    Base Aether co-pilot persona + learned preference personalization + mobility
     + dynamic self-knowledge (capabilities manifest ∩ Tool Registry).
-
-    Keeps replies short; preferences adapt tone/depth without breaking HUD style.
     """
     base = AETHER_SYSTEM_INSTRUCTION.strip()
     parts: list[str] = [base]
@@ -69,15 +116,12 @@ def build_system_instruction(
             )
         )
         parts.append(build_communication_guidelines())
-    summary = preferences_summary(prefs)
-    if summary:
-        adapt = (
-            "Learned user preferences (adapt quietly; still reply in 1–3 short HUD sentences): "
-            f"{summary}. "
-            "If language is set, prefer that language. "
-            "If technical_level=advanced, use precise terms; if simple, avoid jargon."
-        )
-        parts.append(adapt)
+    if prefs is not None:
+        if isinstance(prefs, dict):
+            prefs = Preferences.from_dict(prefs)
+        # Always inject a directive block when a profile exists — even defaults —
+        # so Live treats personalization as a first-class duty.
+        parts.append(_personalization_block(prefs))
     if copilot_mode is not None:
         parts.append(build_copilot_guidance(parse_copilot_mode(copilot_mode)))
     if mobility_extra and mobility_extra.strip():
@@ -89,43 +133,52 @@ def build_runtime_guidance(prefs: Preferences | dict[str, Any] | None = None) ->
     """
     Per-turn decision guidance for the AI pipeline (not only session-start inject).
 
-    Influences tone, technical level, and operational choices at runtime.
+    Influences tone, technical level, habits, and operational choices at runtime.
     """
     if prefs is None:
         return ""
     if isinstance(prefs, dict):
         prefs = Preferences.from_dict(prefs)
 
-    lines: list[str] = ["Runtime user profile (apply now to tone, depth, and decisions):"]
+    lines: list[str] = [
+        "Runtime memory (fold into this turn's spoken answer — silent, mandatory):",
+    ]
     tone = (prefs.tone or "direct").lower()
     style = (prefs.style or "concise").lower()
     level = (prefs.technical_level or "balanced").lower()
 
     if tone == "warm":
-        lines.append("- Tone: warm but still glanceable; no filler.")
+        lines.append("- Tone: warm, human, still purposeful.")
     elif tone == "formal":
-        lines.append("- Tone: formal, precise, no slang.")
+        lines.append("- Tone: formal and precise; no slang.")
     else:
         lines.append("- Tone: direct and actionable.")
 
     if style == "technical":
-        lines.append("- Style: technical precision; name APIs/RPC fields when relevant.")
+        lines.append("- Style: technical precision; name tools/APIs when relevant.")
     elif style == "detailed":
-        lines.append("- Style: slightly more detail, still ≤3 short sentences.")
+        lines.append("- Style: complete spoken answer with enough context to act.")
     else:
-        lines.append("- Style: concise HUD lines.")
+        lines.append("- Style: crisp earbud delivery; expand when the ask is complex.")
 
     if level == "advanced":
-        lines.append("- Technical level: advanced — assume stack familiarity.")
+        lines.append("- Technical level: advanced — assume familiarity.")
     elif level == "simple":
-        lines.append("- Technical level: simple — avoid jargon; explain outcomes.")
+        lines.append("- Technical level: simple — plain outcomes, no jargon.")
     else:
         lines.append("- Technical level: balanced.")
 
     if prefs.language:
         lines.append(f"- Prefer language: {prefs.language}.")
     if prefs.frequent_commands:
-        lines.append("- Frequent intents: " + ", ".join(prefs.frequent_commands[:5]) + ".")
+        lines.append(
+            "- Habit bias (use when ambiguous): "
+            + ", ".join(prefs.frequent_commands[:6])
+            + "."
+        )
     if prefs.notes.strip():
-        lines.append(f"- Notes: {prefs.notes.strip()[:200]}")
+        lines.append(f"- Standing notes: {prefs.notes.strip()[:240]}")
+    lines.append(
+        "- Do not announce memory use; just answer as if you already know this person."
+    )
     return "\n".join(lines)

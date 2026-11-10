@@ -257,20 +257,28 @@ async def live_websocket(websocket: WebSocket) -> None:
                 except Exception:
                     logger.debug("memory prefs load failed; using base persona", exc_info=True)
 
-            # Compact tool remind (full self-knowledge already lists registry ∩ manifest).
+            # Compact tool + CoT remind (full self-knowledge already lists registry ∩ manifest).
             tools_hint = (
-                "Invoke tools via tool_call JSON when useful. "
-                "MANDATORY: for project vision, what you can do, value proposition, "
+                "Tool & reasoning discipline:\n"
+                "- Invoke tools via tool_call JSON the moment they fit — no hesitation.\n"
+                "- MANDATORY: for project vision, what you can do, value proposition, "
                 "available tools, or system health — always invoke system_help_tool "
                 "(get_system_capabilities and/or get_system_health) before answering. "
                 "Never give a shallow WhatsApp-manager pitch; use manifesto data from "
                 "the tool (wearables/earbuds OS, notification priority/pace, VAD/Barge-In, "
                 "long-term memory, two-step confirm) plus practical voice examples. "
-                "system_help_tool is read-only (no confirm). "
-                "Prefer short HUD answers; never narrate internal plans unless asked. "
-                "Voice UX: open-mic / PTT — no wake word. Support barge-in. "
-                "Hands-free OS agent: for send/schedule/delete/call actions, speak what you "
-                "will do and wait for confirm words (Sim / Pode enviar / Yes) before executing."
+                "system_help_tool is read-only (no confirm).\n"
+                "- OS Agent: messaging_tool for read/summarize message notifications & threads; "
+                "email_calendar_tool for inbox/agenda; telephony_tool for calls; "
+                "system_control_tool for battery/volume/media/timers. "
+                "For send/schedule/delete/call: preview then wait for Sim / Pode enviar / Yes.\n"
+                "- Silent CoT: on non-trivial turns, briefly structure intent→facts→answer "
+                "before final voice synthesis. Skip planning on greetings and tiny confirms "
+                "so PCM latency stays ultra-low. Never narrate the plan unless asked. "
+                "Treat [runtime_context] as private prep from the async CoT sidecar.\n"
+                "- Speak as a fluent co-pilot: complete contextual answers when deserved; "
+                "match learned memory on every turn. Voice UX: open-mic / PTT — no wake word; "
+                "support barge-in."
             )
             system_instruction = f"{system_instruction}\n{tools_hint}"
 
@@ -762,6 +770,8 @@ async def _handle_control_message(
             await session.push_text(user_text)
 
         # Heavy path: CoT + memory + tools as async sidecar (does not gate audio).
+        # Trivial turns stay on the Live PCM path; session-start instruction already
+        # carries long-term memory personalization for every reply.
         complexity = classify_complexity(user_text)
         force_plan = bool(payload.get("force_plan"))
         if complexity is Complexity.COMPLEX or force_plan:

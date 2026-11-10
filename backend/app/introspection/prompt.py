@@ -20,8 +20,8 @@ def build_communication_guidelines() -> str:
         "notification priority/pace filter, voice UX (VAD/Barge-In), long-term memory, "
         "and two-step confirmation safety.\n"
         "- Always give at least one immediate practical voice example per pillar you mention.\n"
-        "- Prefer clear spoken sentences optimized for earbud TTS; expand when the user "
-        "asks for the full vision.\n"
+        "- Speak like a fluent co-pilot over earbuds: clear sentences, natural cadence, "
+        "analytical depth when the ask deserves it — not stiff terminal replies.\n"
         "- For irreversible OS actions, still preview + wait for confirm words."
     )
 

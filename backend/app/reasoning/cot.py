@@ -68,17 +68,25 @@ class PlanningResult:
         }
 
     def context_block(self) -> str:
-        """Compact block for Live injection — HUD-friendly, not a monologue."""
+        """Compact silent-prep block for Live — fold into speech, never narrate."""
         if self.skipped or not self.steps:
             return ""
-        lines = ["Internal plan (do not narrate step-by-step unless asked):"]
+        lines = [
+            "Silent CoT prep (structure the spoken answer; do not narrate these steps):",
+        ]
         for step in self.steps[:5]:
             corr = f" → corrected: {step.correction}" if step.correction else ""
             lines.append(f"{step.id}. {step.goal} [{step.status}]{corr}")
         if self.recommended_tools:
-            lines.append("Preferred tools: " + ", ".join(self.recommended_tools[:6]))
+            lines.append(
+                "Call these tools now if not already used: "
+                + ", ".join(self.recommended_tools[:6])
+            )
         if self.self_corrections:
             lines.append("Self-check: " + "; ".join(self.self_corrections[:3]))
+        lines.append(
+            "Then synthesize one fluent, complete earbud-ready answer from the prep above."
+        )
         return "\n".join(lines)
 
 
@@ -88,8 +96,8 @@ def _decompose(text: str) -> list[PlanStep]:
     steps.append(
         PlanStep(
             id=n,
-            goal="Clarify user intent and success criteria",
-            hypothesis="User wants a precise, actionable HUD answer",
+            goal="Clarify intent, stakes, and what a complete spoken answer needs",
+            hypothesis="User wants a fluent co-pilot reply — depth matched to the ask",
         )
     )
     n += 1
@@ -115,7 +123,7 @@ def _decompose(text: str) -> list[PlanStep]:
         steps.append(
             PlanStep(
                 id=n,
-                goal="Identify callable tools / routines",
+                goal="Identify callable OS / registry tools without hesitation",
                 hypothesis="Prefer registry tools over free-form invention",
             )
         )
@@ -124,8 +132,8 @@ def _decompose(text: str) -> list[PlanStep]:
         steps.append(
             PlanStep(
                 id=n,
-                goal="Validate assumptions and self-correct before final reply",
-                hypothesis="First draft may overclaim — verify constraints",
+                goal="Structure reasoning then self-correct before final voice synthesis",
+                hypothesis="Brief internal plan → complete contextual answer (not a telegram)",
             )
         )
     return steps
@@ -172,16 +180,20 @@ def _self_correct(steps: list[PlanStep], text: str) -> tuple[list[PlanStep], lis
         if "facts" in step.goal.lower() and "guess" in step.hypothesis.lower():
             step.status = "validated"
             continue
-        if "Validate" in step.goal or "self-correct" in step.goal.lower():
+        if "Validate" in step.goal or "self-correct" in step.goal.lower() or "Structure" in step.goal:
             step.status = "corrected"
-            step.correction = "Keep reply to 1–3 HUD sentences; cite tools when used"
+            step.correction = (
+                "Lead with the answer; add just enough analysis for earbuds; cite tools when used"
+            )
             corrections.append(step.correction)
         elif _ACTION.search(text) and "tool" in step.goal.lower():
             step.status = "validated"
         else:
             step.status = "validated"
-    if len(text) > 220 and not any("self-correct" in c.lower() for c in corrections):
-        corrections.append("Long prompt — prioritize the single most actionable outcome")
+    if len(text) > 220 and not any("self-correct" in c.lower() or "Lead with" in c for c in corrections):
+        corrections.append(
+            "Long prompt — prioritize the most actionable outcome, then one clarifying beat"
+        )
     return steps, corrections
 
 

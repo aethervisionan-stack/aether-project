@@ -67,7 +67,11 @@ TOOL_SCHEMAS: list[ToolSchema] = [
     },
     {
         "name": "memory_payload",
-        "description": "Read or patch long-term memory preferences / history for the active profile.",
+        "description": (
+            "Long-term memory. Trigger when the user asks what you remember, to change "
+            "tone/style/language preferences, clear history, or inspect learned habits. "
+            "action=get to read; patch_prefs to update; clear_history to wipe turns."
+        ),
         "parameters": {
             "type": "object",
             "properties": {
@@ -87,8 +91,11 @@ TOOL_SCHEMAS: list[ToolSchema] = [
     {
         "name": "messaging_tool",
         "description": (
-            "Read/summarize/voice-reply WhatsApp, Telegram, SMS, Instagram Direct. "
-            "Send/voice_reply require two-step voice confirmation."
+            "OS Agent — messaging & notification threads. Trigger immediately (no hesitation) "
+            "when the user asks to read, check, summarize, catch up on, or reply to "
+            "WhatsApp / Telegram / SMS / Instagram DMs, or to review message notifications. "
+            "Default to action=read or summarize with the named contact/app. "
+            "action=send or voice_reply ONLY after two-step voice confirm (confirmed=true)."
         ),
         "parameters": {
             "type": "object",
@@ -96,6 +103,10 @@ TOOL_SCHEMAS: list[ToolSchema] = [
                 "action": {
                     "type": "string",
                     "enum": ["read", "summarize", "send", "voice_reply"],
+                    "description": (
+                        "read/summarize = safe notification/thread intake; "
+                        "send/voice_reply = irreversible, needs confirmed=true."
+                    ),
                 },
                 "app": {
                     "type": "string",
@@ -116,8 +127,10 @@ TOOL_SCHEMAS: list[ToolSchema] = [
     {
         "name": "email_calendar_tool",
         "description": (
-            "Priority email read, dictation drafts, schedule appointments, agenda query. "
-            "send_draft/schedule/delete require two-step confirmation."
+            "OS Agent — email & calendar. Trigger immediately when the user asks about "
+            "inbox priority, draft/dictate email, today's agenda, schedule, or cancel "
+            "appointments. Prefer read_email / priority_email / agenda / query_agenda first. "
+            "send_draft / schedule / delete require two-step confirmation (confirmed=true)."
         ),
         "parameters": {
             "type": "object",
@@ -156,8 +169,9 @@ TOOL_SCHEMAS: list[ToolSchema] = [
     {
         "name": "telephony_tool",
         "description": (
-            "Incoming call ID ('Carlos is calling. Speaker or decline?'), "
-            "answer/decline, place calls. Mutating call actions need confirmation."
+            "OS Agent — calls. Trigger immediately on incoming-call identity "
+            "('who is calling'), answer/decline, or place a call. "
+            "Mutating answer/decline/place_call need confirmation (confirmed=true)."
         ),
         "parameters": {
             "type": "object",
@@ -176,7 +190,11 @@ TOOL_SCHEMAS: list[ToolSchema] = [
     },
     {
         "name": "system_control_tool",
-        "description": "Media playback, battery, volume/sound modes, timers/alarms via OS adapters.",
+        "description": (
+            "OS Agent — device controls. Trigger immediately for battery level, volume, "
+            "sound mode, media play/pause/skip, timers, or alarms. No confirm for read/"
+            "benign controls; still preview irreversible device changes when unsure."
+        ),
         "parameters": {
             "type": "object",
             "properties": {
@@ -204,12 +222,13 @@ TOOL_SCHEMAS: list[ToolSchema] = [
     {
         "name": "system_help_tool",
         "description": (
-            "REQUIRED for questions about Aether Vision project vision, what the AI can do, "
-            "value proposition, available tools, or system health. Returns the full manifesto "
-            "(hands-free wearables/earbuds OS — not a WhatsApp-manager pitch), capabilities, "
-            "practical voice examples, and/or live health (version, TTFT, integrations). "
+            "Introspection manifesto — MANDATORY, trigger with zero hesitation whenever the "
+            "user asks about Aether Vision project vision, what you can do, value proposition, "
+            "available tools/capabilities, or system health. Returns the full wearables/"
+            "earbuds OS manifesto (never a shallow WhatsApp-manager pitch), practical voice "
+            "examples, and/or live health (version, TTFT, integrations). "
             "Actions: get_system_capabilities (optional category) and get_system_health. "
-            "Read-only — no two-step confirmation."
+            "Read-only — no two-step confirmation. Do not improvise self-knowledge without it."
         ),
         "parameters": {
             "type": "object",

@@ -22,7 +22,14 @@ INPUT_SAMPLE_RATE = 16_000
 
 
 def build_live_config(*, system_instruction: str = AETHER_SYSTEM_INSTRUCTION) -> types.LiveConnectConfig:
-    """Live session config: AUDIO responses + Aether HUD persona (+ optional prefs)."""
+    """
+    Live session config: AUDIO responses + Aether co-pilot persona.
+
+    System instruction carries fluent voice persona, silent CoT guidance,
+    long-term memory personalization, and mandatory system_help_tool rules.
+    Ultra-low-latency PCM path is unchanged — planning lives in prompt +
+    async sidecar, never on the audio send/receive loops.
+    """
     return types.LiveConnectConfig(
         response_modalities=[types.Modality.AUDIO],
         system_instruction=types.Content(
@@ -115,10 +122,12 @@ class GeminiLiveSession:
     ) -> None:
         config = build_live_config(system_instruction=self._system_instruction)
         logger.info(
-            "connecting Live session model=%s api_version=%s prefs_injected=%s",
+            "connecting Live session model=%s api_version=%s memory_block=%s cot_hint=%s",
             self._model,
             self._api_version,
-            "Learned user preferences" in self._system_instruction,
+            "Long-term memory" in self._system_instruction,
+            "Silent CoT" in self._system_instruction
+            or "Internal planning" in self._system_instruction,
         )
         async with self._client.aio.live.connect(model=self._model, config=config) as session:
             self._session = session
