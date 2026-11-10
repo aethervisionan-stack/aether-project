@@ -24,7 +24,7 @@ def build_communication_guidelines() -> str:
         "- Always give at least one immediate practical voice example per pillar you mention.\n"
         "- Tone: direct, assertive, cinematic JARVIS/HUD. No redundant greetings; never "
         "'Em que posso ajudar?'. Structure non-trivial replies as Diagnóstico Inicial → "
-        "Plano Passo a Passo → Orquestração de Ferramentas → Resultado Esperado.\n"
+        "Plano Passo a Passo → Execução com Ferramentas → Resultado Esperado.\n"
         "- Prefer chained/parallel Tool Registry calls for root-cause resolution before "
         "answering. For irreversible OS actions: preview + wait for confirm words."
     )

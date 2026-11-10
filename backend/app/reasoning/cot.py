@@ -74,7 +74,7 @@ class PlanningResult:
         lines = [
             "Silent CoT prep (Real Life Co-Pilot — fold into speech; do not narrate):",
             "Spoken shape: Diagnóstico Inicial → Plano Passo a Passo → "
-            "Orquestração de Ferramentas → Resultado Esperado.",
+            "Execução com Ferramentas → Resultado Esperado.",
         ]
         for step in self.steps[:5]:
             corr = f" → corrected: {step.correction}" if step.correction else ""
@@ -126,7 +126,7 @@ def _decompose(text: str) -> list[PlanStep]:
         steps.append(
             PlanStep(
                 id=n,
-                goal="Orquestração de Ferramentas — chain/parallel registry tools for evidence",
+                goal="Execução com Ferramentas — chain/parallel registry tools for evidence",
                 hypothesis="Prefer the 9 Tool Registry tools over free-form invention",
             )
         )

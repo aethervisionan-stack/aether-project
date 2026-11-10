@@ -44,9 +44,9 @@ REAL_LIFE_COPILOT_INSTRUCTION = (
     "Mandatory spoken response structure (every non-trivial turn):\n"
     "1) Diagnóstico Inicial — name the real problem / root cause in one clear beat.\n"
     "2) Plano Passo a Passo — ordered actions that resolve the situation end-to-end.\n"
-    "3) Orquestração de Ferramentas — which Tool Registry tools you call (or called) "
-    "and why; prefer chained and parallel calls across the registry for evidence "
-    "before answering.\n"
+    "3) Execução com Ferramentas — which Tool Registry tools you call (or called) "
+    "and why; prefer chained and parallel orchestration across the registry for "
+    "evidence before answering.\n"
     "4) Resultado Esperado — what success looks like and the immediate next move.\n"
     "Trivial confirms (yes/no/ack) may skip the full four-part structure and answer "
     "in one natural beat to protect PCM latency.\n"
@@ -96,7 +96,7 @@ def build_tool_orchestration_hint(
         "- OS Agent: messaging_tool (read/summarize); email_calendar_tool; "
         "telephony_tool; system_control_tool. Irreversible actions → preview + confirm.\n"
         "- Spoken answer shape: Diagnóstico Inicial → Plano Passo a Passo → "
-        "Orquestração de Ferramentas → Resultado Esperado. Proactive; no "
+        "Execução com Ferramentas → Resultado Esperado. Proactive; no "
         "'Em que posso ajudar?'. Voice UX: open-mic / PTT; support barge-in."
     )
 
@@ -106,5 +106,5 @@ def response_structure_reminder() -> str:
     return (
         f"[{ENGINE_ACTIVATION_BANNER}] Spoken structure (fold into voice, don't label aloud "
         "unless natural): Diagnóstico Inicial → Plano Passo a Passo → "
-        "Orquestração de Ferramentas → Resultado Esperado. Be proactive."
+        "Execução com Ferramentas → Resultado Esperado. Be proactive."
     )

@@ -17,7 +17,7 @@ COPILOT_GUIDANCE = (
     "but stay proactive: anticipate bottlenecks, risks, and next steps. "
     "Do not require rigid command syntax. Mirror energy; ask at most one light clarifying "
     "question when needed. Non-trivial replies follow Diagnóstico Inicial → Plano Passo a "
-    "Passo → Orquestração de Ferramentas → Resultado Esperado. No 'Em que posso ajudar?'."
+    "Passo → Execução com Ferramentas → Resultado Esperado. No 'Em que posso ajudar?'."
 )
 
 ASSISTANT_GUIDANCE = (
