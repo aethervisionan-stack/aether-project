@@ -110,6 +110,30 @@ export class AdvancedAudioVisualizer {
   }
 
   /**
+   * Non-destructive analyser snapshot for AudioReactiveAIOrbit.
+   * Samples existing mic/play AnalyserNodes only — never touches PCM / WS paths.
+   */
+  getSpectrumSnapshot(): {
+    micLevel: number;
+    playLevel: number;
+    bass: number;
+    mid: number;
+    treble: number;
+    mode: VisualizerMode;
+  } {
+    const { micLevel, playLevel } = this.sampleAnalysers();
+    const bands = bandEnergy(playLevel > 0.04 ? this.playFreq : this.micFreq);
+    return {
+      micLevel,
+      playLevel,
+      bass: bands.bass,
+      mid: bands.mid,
+      treble: bands.treble,
+      mode: this.mode,
+    };
+  }
+
+  /**
    * Tap live mic MediaStream into a dedicated Analyser (no speaker output).
    * Safe to call again when the stream changes.
    */
@@ -544,6 +568,30 @@ function average(data: Uint8Array): number {
     sum += data[i];
   }
   return sum / data.length;
+}
+
+/** Split FFT bins into coarse bass / mid / treble (0–1). */
+function bandEnergy(data: Uint8Array): { bass: number; mid: number; treble: number } {
+  const n = data.length;
+  if (!n) {
+    return { bass: 0, mid: 0, treble: 0 };
+  }
+  const bEnd = Math.max(1, Math.floor(n * 0.14));
+  const mEnd = Math.max(bEnd + 1, Math.floor(n * 0.48));
+  let bass = 0;
+  let mid = 0;
+  let treble = 0;
+  for (let i = 0; i < n; i += 1) {
+    const v = data[i] / 255;
+    if (i < bEnd) bass += v;
+    else if (i < mEnd) mid += v;
+    else treble += v;
+  }
+  return {
+    bass: bass / bEnd,
+    mid: mid / Math.max(1, mEnd - bEnd),
+    treble: treble / Math.max(1, n - mEnd),
+  };
 }
 
 /** Back-compat alias used by older imports. */

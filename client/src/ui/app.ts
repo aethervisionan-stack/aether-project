@@ -17,6 +17,7 @@ import {
 } from "../services/BillingService";
 import { AdvancedAudioVisualizer } from "../audio/AdvancedAudioVisualizer";
 import { idleLatencyLine, LatencyMonitor } from "../audio/LatencyMonitor";
+import { AudioReactiveAIOrbit } from "../components/AudioReactiveAIOrbit";
 import { envDevUnlock, isFeatureUnlock } from "../dev/unlock";
 import { classifyPace } from "../hardware/NotificationPriority";
 import { initI18n, msg, onLocaleChange, t } from "../i18n";
@@ -83,8 +84,10 @@ export class ControlApp {
   private sendBtn!: HTMLButtonElement;
   private checkoutBusy = false;
   private vizCanvas!: HTMLCanvasElement;
+  private orbitHost!: HTMLElement;
   private latencyEl!: HTMLElement;
   private visualizer: AdvancedAudioVisualizer | null = null;
+  private orbit: AudioReactiveAIOrbit | null = null;
   private latencyMonitor: LatencyMonitor | null = null;
   private treasury: TreasuryWidget | null = null;
   private transcript: TranscriptFeed | null = null;
@@ -146,8 +149,9 @@ export class ControlApp {
           <p class="guardrail" data-role="guardrail">${m.guardrail.prefix}: ${m.guardrail.secure}</p>
         </div>
         <div class="hud-grid">
+          <div class="ai-orbit-stage" data-role="ai-orbit" aria-label="${m.live.vizLabel}"></div>
           <div class="hud-telemetry" data-role="hud-telemetry">
-            <canvas class="audio-viz" data-role="audio-viz" width="640" height="110" aria-label="${m.live.vizLabel}"></canvas>
+            <canvas class="audio-viz audio-viz--analysis" data-role="audio-viz" width="64" height="32" aria-hidden="true"></canvas>
             <p class="latency" data-role="latency">${m.latency.idle}</p>
           </div>
         </div>
@@ -179,6 +183,7 @@ export class ControlApp {
     this.textInput = this.root.querySelector("[data-role=text]")!;
     this.sendBtn = this.root.querySelector("[data-action=send-text]")!;
     this.vizCanvas = this.root.querySelector("[data-role=audio-viz]")!;
+    this.orbitHost = this.root.querySelector("[data-role=ai-orbit]")!;
     this.latencyEl = this.root.querySelector("[data-role=latency]")!;
     const langMount = this.root.querySelector<HTMLElement>("[data-role=lang]")!;
     const treasuryMount = this.root.querySelector<HTMLElement>("[data-role=treasury]")!;
@@ -187,6 +192,10 @@ export class ControlApp {
     const memoryMount = this.root.querySelector<HTMLElement>("[data-role=memory]")!;
     const mobilityMount = this.root.querySelector<HTMLElement>("[data-role=mobility]")!;
     const devtoolsMount = this.root.querySelector<HTMLElement>("[data-role=devtools]")!;
+
+    this.orbit = new AudioReactiveAIOrbit();
+    this.orbit.mount(this.orbitHost);
+    this.orbit.start(() => this.readOrbitDrive());
 
     new LanguageToggle(langMount);
     this.treasury = new TreasuryWidget(treasuryMount);
@@ -683,9 +692,10 @@ export class ControlApp {
     this.pulseButton(this.connectBtn);
     this.toasts.info(live.openingBridge);
 
+    // Analyser taps only (hidden canvas) — orbit is the visible AI presence.
+    this.visualizer?.dispose();
     this.visualizer = new AdvancedAudioVisualizer();
     this.visualizer.mount(this.vizCanvas);
-    this.visualizer.start();
 
     this.service = new GeminiLiveService({
       onEvent: (event) => this.handleEvent(event),
@@ -812,6 +822,40 @@ export class ControlApp {
     this.visualizer?.dispose();
     this.visualizer = null;
     this.latencyEl.textContent = idleLatencyLine();
+  }
+
+  /** Drive AudioReactiveAIOrbit from WS / VAD / playback + silent analyser snapshot. */
+  private readOrbitDrive() {
+    const demo = new URLSearchParams(window.location.search).get("orbit");
+    if (demo === "full" || demo === "pulse") {
+      const t = performance.now() / 1000;
+      const pulse = demo === "pulse";
+      return {
+        wsOpen: true,
+        vadSpeech: pulse,
+        playbackActive: pulse,
+        mode: pulse ? "speaking" : "listening",
+        micLevel: pulse ? 0.35 + 0.25 * Math.sin(t * 3.1) : 0.08,
+        playLevel: pulse ? 0.45 + 0.3 * Math.sin(t * 2.4) : 0.05,
+        bass: pulse ? 0.5 + 0.35 * Math.sin(t * 2.2) : 0.12,
+        mid: pulse ? 0.4 + 0.3 * Math.cos(t * 3.4) : 0.1,
+        treble: pulse ? 0.35 + 0.35 * Math.sin(t * 5.1) : 0.08,
+      };
+    }
+
+    const snap = this.visualizer?.getSpectrumSnapshot();
+    const wsOpen = this.service?.getWsState() === "OPEN" || this.lastWsLabel === "OPEN";
+    return {
+      wsOpen,
+      vadSpeech: this.service?.isVadSpeech() ?? false,
+      playbackActive: this.service?.isPlaybackActive() ?? false,
+      mode: snap?.mode ?? this.service?.getVizMode() ?? "idle",
+      micLevel: snap?.micLevel ?? 0,
+      playLevel: snap?.playLevel ?? 0,
+      bass: snap?.bass ?? 0,
+      mid: snap?.mid ?? 0,
+      treble: snap?.treble ?? 0,
+    };
   }
 
   private async shareFrame(): Promise<void> {

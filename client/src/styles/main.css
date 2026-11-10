@@ -685,11 +685,49 @@ button.voice-pulse {
   margin-bottom: 0.85rem;
 }
 
-.hud-telemetry {
+.ai-orbit-stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  min-height: 280px;
+  height: clamp(260px, 42vh, 420px);
   margin: 0;
-  padding: 0.55rem 0.65rem 0.45rem;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid rgba(0, 243, 255, 0.12);
   background:
-    linear-gradient(180deg, rgba(0, 243, 255, 0.07), transparent 55%),
+    radial-gradient(ellipse 55% 50% at 50% 48%, rgba(112, 0, 255, 0.16), transparent 62%),
+    radial-gradient(ellipse 40% 36% at 50% 52%, rgba(0, 243, 255, 0.1), transparent 58%),
+    radial-gradient(ellipse 30% 28% at 50% 50%, rgba(255, 43, 214, 0.06), transparent 55%),
+    #000;
+  transition: min-height 240ms var(--ease), border-color 200ms var(--ease), opacity 280ms var(--ease);
+}
+
+.ai-orbit-stage[data-presence="point"] {
+  opacity: 0.72;
+}
+
+.ai-orbit-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  transform: translateZ(0);
+}
+
+.focus-mode .ai-orbit-stage {
+  min-height: 320px;
+  height: clamp(300px, 48vh, 480px);
+  border-color: rgba(0, 243, 255, 0.22);
+}
+
+.hud-telemetry {
+  position: relative;
+  margin: 0;
+  padding: 0.35rem 0.65rem 0.35rem;
+  background:
+    linear-gradient(180deg, rgba(0, 243, 255, 0.05), transparent 55%),
     var(--glass-strong);
   transition: min-height 240ms var(--ease), border-color 200ms var(--ease);
   will-change: contents;
@@ -703,8 +741,22 @@ button.voice-pulse {
   transform: translateZ(0);
 }
 
+/* Analysis-only canvas for AdvancedAudioVisualizer taps (orbit is the visible HUD). */
+.audio-viz--analysis {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
 .focus-mode .audio-viz {
   height: 150px;
+}
+
+.focus-mode .audio-viz--analysis {
+  height: 1px;
 }
 
 .latency {

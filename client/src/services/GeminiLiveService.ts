@@ -29,7 +29,7 @@ import type { LiveServerJsonEvent, WsReadyStateLabel } from "../types/live";
 import type { ToolArgumentsByName, ToolName } from "../types/tools";
 import { BargeInController } from "../voice/BargeInController";
 import { PushToTalk } from "../voice/PushToTalk";
-import { VadController } from "../voice/VadController";
+import { VadController, type VadPhase } from "../voice/VadController";
 
 export type LiveEventHandler = (event: LiveServerJsonEvent) => void;
 
@@ -400,6 +400,25 @@ export class GeminiLiveService {
 
   getVizMode(): VisualizerMode {
     return this.vizMode;
+  }
+
+  /** Current energy-VAD phase (speech includes hangover). */
+  getVadPhase(): VadPhase {
+    return this.vad.getPhase();
+  }
+
+  /** True while VAD reports active speech (incl. hangover). */
+  isVadSpeech(): boolean {
+    return this.vad.getPhase() !== "silence";
+  }
+
+  /** True while AI playback queue has audio or barge-in marks assistant speaking. */
+  isPlaybackActive(): boolean {
+    return this.player.queueDepth > 0 || this.bargeIn.isAssistantSpeaking();
+  }
+
+  getWsState(): WsReadyStateLabel {
+    return this.telemetry.snapshot().wsState;
   }
 
   private connectResult(): LiveConnectResult {
