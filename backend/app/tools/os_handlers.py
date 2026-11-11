@@ -97,14 +97,107 @@ async def email_calendar_tool(
     profile_id: str = "local",
 ) -> dict[str, Any]:
     del settings
+    import asyncio
+
     bridge = get_os_bridge().calendar
     action = _action_of(args, "agenda")
     confirmed = bool(args.get("confirmed"))
     pending_id = str(args.get("pending_id") or "").strip() or None
+    limit = int(args.get("limit") or 5)
+
+    if action in {"list_threads", "threads", "unread"}:
+        from app.tools.google import gmail_ops
+        from app.tools.google.bridge import google_credentials_ready
+        from app.tools.google.clients import credentials_for
+
+        if google_credentials_ready(profile_id):
+            try:
+                creds = credentials_for(profile_id)
+                assert creds is not None
+                if action == "unread":
+                    payload = await asyncio.to_thread(gmail_ops.list_unread, creds, limit=limit)
+                else:
+                    query = str(args.get("query") or "in:inbox").strip() or "in:inbox"
+                    payload = await asyncio.to_thread(
+                        gmail_ops.list_threads, creds, query=query, limit=limit
+                    )
+                return {**payload, "tool": "email_calendar_tool", "status": "ok"}
+            except Exception as exc:  # noqa: BLE001
+                return {
+                    "ok": False,
+                    "error": str(exc)[:240],
+                    "tool": "email_calendar_tool",
+                    "action": action,
+                }
+        result = await bridge.list_priority_email(limit=limit)
+        return {**result.to_dict(), "tool": "email_calendar_tool", "status": "ok"}
 
     if action in {"read_email", "priority_email"}:
-        result = await bridge.list_priority_email(limit=int(args.get("limit") or 5))
+        result = await bridge.list_priority_email(limit=limit)
         return {**result.to_dict(), "tool": "email_calendar_tool", "status": "ok"}
+
+    if action == "send":
+        to = str(args.get("to") or "").strip()
+        subject = str(args.get("subject") or "").strip() or "(no subject)"
+        body = str(args.get("body") or args.get("text") or "").strip()
+        if not to or not body:
+            return {"ok": False, "error": "to and body required", "tool": "email_calendar_tool"}
+        if requires_confirmation("email_calendar_tool", "send", confirmed=confirmed):
+            pending = get_confirmation_engine().create(
+                tool="email_calendar_tool",
+                action="send",
+                arguments={
+                    "action": "send",
+                    "to": to,
+                    "subject": subject,
+                    "body": body,
+                    "confirmed": True,
+                },
+                profile_id=profile_id,
+            )
+            return {
+                "ok": True,
+                "status": "pending_confirmation",
+                "tool": "email_calendar_tool",
+                "action": "send",
+                "pending_id": pending.id,
+                "speak": pending.speak,
+                "requires_confirmation": True,
+            }
+        from app.tools.google import gmail_ops
+        from app.tools.google.bridge import google_credentials_ready
+        from app.tools.google.clients import credentials_for
+
+        if google_credentials_ready(profile_id):
+            try:
+                creds = credentials_for(profile_id)
+                assert creds is not None
+                payload = await asyncio.to_thread(
+                    gmail_ops.send_message, creds, to=to, subject=subject, body=body
+                )
+                return {
+                    **payload,
+                    "tool": "email_calendar_tool",
+                    "status": "executed",
+                    "pending_id": pending_id,
+                    "success_beep": True,
+                    "speak": "E-mail enviado.",
+                }
+            except Exception as exc:  # noqa: BLE001
+                return {"ok": False, "error": str(exc)[:240], "tool": "email_calendar_tool"}
+        drafted = await bridge.draft_email(to=to, subject=subject, body=body)
+        draft_id = str((drafted.data or {}).get("draft", {}).get("id") or "")
+        if not draft_id:
+            return {**drafted.to_dict(), "tool": "email_calendar_tool", "status": "error"}
+        result = await bridge.send_draft(draft_id=draft_id)
+        return {
+            **result.to_dict(),
+            "tool": "email_calendar_tool",
+            "status": "executed",
+            "pending_id": pending_id,
+            "success_beep": True,
+            "speak": "E-mail enviado.",
+        }
 
     if action == "draft":
         to = str(args.get("to") or "").strip()

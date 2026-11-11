@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Strict TypeScript tool schemas mirroring backend `app/tools/schemas.py`.
  */
 
@@ -11,7 +11,7 @@ export type ToolName =
   | "email_calendar_tool"
   | "telephony_tool"
   | "system_control_tool"
-  | "system_help_tool";
+  | "system_help_tool"\n  | "google_drive_tool"\n  | "google_maps_tool";
 
 export type TestRoutine = "health" | "memory_snapshot" | "latency_targets";
 
@@ -326,8 +326,7 @@ export const OS_TOOL_NAMES: readonly ToolName[] = [
   "messaging_tool",
   "email_calendar_tool",
   "telephony_tool",
-  "system_control_tool",
-];
+  "system_control_tool",\n  "google_drive_tool",\n  "google_maps_tool",\n];
 
-/** Read-only help tools — never enter the two-step confirm loop. */
+/** Read-only help tools â€” never enter the two-step confirm loop. */
 export const HELP_TOOL_NAMES: readonly ToolName[] = ["system_help_tool"];

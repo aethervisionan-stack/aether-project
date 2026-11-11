@@ -5,7 +5,7 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.persona.real_life_copilot import REAL_LIFE_COPILOT_INSTRUCTION
@@ -109,6 +109,22 @@ class Settings(BaseSettings):
         alias="MEMORY_PATH",
     )
     memory_enabled: bool = Field(default=True, alias="MEMORY_ENABLED")
+
+    # --- Google OAuth (Gmail / Calendar / Drive) — never invent secret values ---
+    google_oauth_client_id: str = Field(default="", alias="GOOGLE_OAUTH_CLIENT_ID")
+    google_oauth_client_secret: str = Field(default="", alias="GOOGLE_OAUTH_CLIENT_SECRET")
+    google_oauth_client_secrets_file: str = Field(default="", alias="GOOGLE_OAUTH_CLIENT_SECRETS_FILE")
+    # Canonical: GOOGLE_OAUTH_REDIRECT_URI. Also accepts GOOGLE_REDIRECT_URI.
+    google_oauth_redirect_uri: str = Field(
+        default="http://127.0.0.1:8000/auth/google/callback",
+        validation_alias=AliasChoices(
+            "GOOGLE_OAUTH_REDIRECT_URI",
+            "GOOGLE_REDIRECT_URI",
+        ),
+    )
+    google_token_fernet_key: str = Field(default="", alias="GOOGLE_TOKEN_FERNET_KEY")
+    google_token_dir: str = Field(default="data/google_tokens", alias="GOOGLE_TOKEN_DIR")
+    google_maps_api_key: str = Field(default="", alias="GOOGLE_MAPS_API_KEY")
 
     @property
     def cors_origin_list(self) -> list[str]:
@@ -214,6 +230,26 @@ class Settings(BaseSettings):
     def solana_live_transfers_enabled(self) -> bool:
         """Real on-chain transfers require an explicit payer secret (never invent one)."""
         return bool(self.solana_payer_secret_key.strip())
+
+    def google_oauth_configured(self) -> bool:
+        secrets_file = self.google_oauth_client_secrets_file.strip()
+        if secrets_file:
+            return True
+        cid = self.google_oauth_client_id.strip()
+        secret = self.google_oauth_client_secret.strip()
+        if not cid or not secret:
+            return False
+        lowered = f"{cid} {secret}".lower()
+        if "placeholder" in lowered or "replace_me" in lowered:
+            return False
+        return True
+
+    def google_maps_configured(self) -> bool:
+        key = self.google_maps_api_key.strip()
+        if not key:
+            return False
+        lowered = key.lower()
+        return "placeholder" not in lowered and "replace_me" not in lowered
 
 
 @lru_cache

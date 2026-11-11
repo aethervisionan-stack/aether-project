@@ -91,6 +91,11 @@ Open [http://127.0.0.1:5173](http://127.0.0.1:5173), pair a Bluetooth headset as
 | `SOLANA_RPC_URL` | `backend/.env` | Operational / distribution RPC (default devnet) |
 | `TREASURY_RPC_URL` | `backend/.env` | Preferred mainnet RPC for treasury HUD; backend proxies `/billing/treasury-balance` with Ankr/PublicNode fallbacks |
 | `SOLANA_PAYER_SECRET_KEY` | `backend/.env` | Empty = **stub mode** (no real transfers) |
+| `GOOGLE_OAUTH_CLIENT_ID` | `backend/.env` | OAuth Web client id — do not invent |
+| `GOOGLE_OAUTH_CLIENT_SECRET` | `backend/.env` | OAuth Web client secret — do not invent |
+| `GOOGLE_OAUTH_REDIRECT_URI` | `backend/.env` | Default callback URL |
+| `GOOGLE_TOKEN_FERNET_KEY` | `backend/.env` | Fernet key for encrypted tokens |
+| `GOOGLE_MAPS_API_KEY` | `backend/.env` | Maps Platform key |
 
 Persona: **Aether** — 1–3 sentence, direct, actionable replies for HUD / spatial audio.
 

@@ -75,6 +75,8 @@ async def tool_catalog() -> dict[str, Any]:
             "email_calendar_tool": True,
             "telephony_tool": True,
             "system_control_tool": True,
+            "google_drive_tool": True,
+            "google_maps_tool": True,
             "two_step_confirm": True,
             "notification_listener": True,
         },
