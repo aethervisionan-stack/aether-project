@@ -75,15 +75,47 @@ class TelephonyArgs(StrictModel):
 
 
 class SystemControlArgs(StrictModel):
-    action: Literal["media", "battery", "volume", "sound_mode", "timer", "alarm"]
+    action: Literal[
+        "media",
+        "battery",
+        "volume",
+        "sound_mode",
+        "timer",
+        "alarm",
+        "delete_alarm",
+        "desktop_capture",
+        "capture",
+        "screenshot",
+        "notification_read",
+        "notifications",
+        "read_notifications",
+        "keyboard",
+        "type",
+        "hotkey",
+        "mouse",
+        "click",
+        "move",
+        "scroll",
+    ]
     media_action: Literal["play", "pause", "next", "previous", "stop"] | None = None
     level: int | None = Field(default=None, ge=0, le=100)
-    mode: Literal["normal", "vibrate", "silent"] | None = None
+    mode: str | None = None
     minutes: int | None = Field(default=None, ge=1, le=180)
     time: str | None = None
     time_hhmm: str | None = None
     label: str | None = None
     media: str | None = None
+    alarm_id: str | None = None
+    max_width: int | None = Field(default=None, ge=160, le=3840)
+    limit: int | None = Field(default=None, ge=1, le=50)
+    text: str | None = None
+    keys: list[str] | None = None
+    x: int | None = None
+    y: int | None = None
+    button: Literal["left", "right"] | None = None
+    delta: int | None = None
+    confirmed: bool | None = None
+    pending_id: str | None = None
 
 
 class SystemHelpArgs(StrictModel):

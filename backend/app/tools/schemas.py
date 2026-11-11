@@ -191,29 +191,54 @@ TOOL_SCHEMAS: list[ToolSchema] = [
     {
         "name": "system_control_tool",
         "description": (
-            "OS Agent — device controls. Trigger immediately for battery level, volume, "
-            "sound mode, media play/pause/skip, timers, or alarms. No confirm for read/"
-            "benign controls; still preview irreversible device changes when unsure."
+            "OS Agent — device / desktop controls. Battery, volume, sound mode, media, "
+            "timers/alarms, plus scoped desktopCapture, notification read, keyboard/mouse. "
+            "Benign reads execute immediately; capture/input/notification require two-step "
+            "confirm + scope grant when AETHER_OS_BRIDGE=desktop."
         ),
         "parameters": {
             "type": "object",
             "properties": {
                 "action": {
                     "type": "string",
-                    "enum": ["media", "battery", "volume", "sound_mode", "timer", "alarm"],
+                    "enum": [
+                        "media",
+                        "battery",
+                        "volume",
+                        "sound_mode",
+                        "timer",
+                        "alarm",
+                        "delete_alarm",
+                        "desktop_capture",
+                        "notification_read",
+                        "keyboard",
+                        "mouse",
+                        "type",
+                        "hotkey",
+                        "click",
+                        "move",
+                        "scroll",
+                    ],
                 },
                 "media_action": {
                     "type": "string",
                     "enum": ["play", "pause", "next", "previous", "stop"],
                 },
                 "level": {"type": "integer", "description": "Volume 0–100."},
-                "mode": {
-                    "type": "string",
-                    "enum": ["normal", "vibrate", "silent"],
-                },
+                "mode": {"type": "string"},
                 "minutes": {"type": "integer"},
                 "time": {"type": "string", "description": "Alarm HH:MM."},
                 "label": {"type": "string"},
+                "alarm_id": {"type": "string"},
+                "max_width": {"type": "integer"},
+                "limit": {"type": "integer"},
+                "text": {"type": "string"},
+                "keys": {"type": "array", "items": {"type": "string"}},
+                "x": {"type": "integer"},
+                "y": {"type": "integer"},
+                "button": {"type": "string", "enum": ["left", "right"]},
+                "delta": {"type": "integer"},
+                "confirmed": {"type": "boolean"},
             },
             "required": ["action"],
             "additionalProperties": False,

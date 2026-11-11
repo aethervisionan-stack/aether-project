@@ -71,6 +71,10 @@ export interface OsBridgeStatus {
   system_control: boolean;
   accessibility: boolean;
   mock: boolean;
+  desktop_capture?: boolean;
+  keyboard?: boolean;
+  mouse?: boolean;
+  notification_read?: boolean;
 }
 
 /** Native accessibility entry — stubbed on web/desktop. */

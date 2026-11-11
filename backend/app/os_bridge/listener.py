@@ -16,7 +16,7 @@ from app.hardware.audio_profile import AudioProfile, interruption_allows
 from app.hardware.priority import PaceClass, PriorityPolicy, priority_policy
 from app.mobility.notifications import NotificationAction, parse_notification
 from app.os_bridge.contracts import NotificationEvent
-from app.os_bridge.mock import get_os_bridge
+from app.os_bridge.factory import get_os_bridge
 
 # Extended levels used by the hands-free filter (maps onto critical/normal/secondary).
 PriorityLevel = str  # low | medium | high | critical

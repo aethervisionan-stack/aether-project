@@ -110,6 +110,23 @@ class Settings(BaseSettings):
     )
     memory_enabled: bool = Field(default=True, alias="MEMORY_ENABLED")
 
+    # --- Native OS Bridge (desktop Win32 / Android Accessibility) ---
+    aether_os_bridge: str = Field(default="mock", alias="AETHER_OS_BRIDGE")
+    aether_os_bridge_token: str = Field(default="", alias="AETHER_OS_BRIDGE_TOKEN")
+    aether_desktop_capture_enabled: bool = Field(
+        default=False, alias="AETHER_DESKTOP_CAPTURE_ENABLED"
+    )
+    aether_desktop_input_enabled: bool = Field(
+        default=False, alias="AETHER_DESKTOP_INPUT_ENABLED"
+    )
+    aether_desktop_notifications_enabled: bool = Field(
+        default=False, alias="AETHER_DESKTOP_NOTIFICATIONS_ENABLED"
+    )
+    aether_mobile_bridge_url: str = Field(
+        default="ws://127.0.0.1:8000/ws/live",
+        alias="AETHER_MOBILE_BRIDGE_URL",
+    )
+
     @property
     def cors_origin_list(self) -> list[str]:
         raw = {o.strip() for o in self.cors_origins.split(",") if o.strip()}

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import time
 import uuid
-from functools import lru_cache
 from typing import Any
 
 from app.os_bridge.contracts import (
@@ -311,7 +310,3 @@ class MockOsBridgeBundle(OsBridgeBundle):
         )
 
 
-@lru_cache
-def get_os_bridge() -> OsBridgeBundle:
-    """Process-wide mock bundle (swap for native adapters on device builds)."""
-    return MockOsBridgeBundle()

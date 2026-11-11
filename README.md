@@ -91,6 +91,14 @@ Open [http://127.0.0.1:5173](http://127.0.0.1:5173), pair a Bluetooth headset as
 | `SOLANA_RPC_URL` | `backend/.env` | Operational / distribution RPC (default devnet) |
 | `TREASURY_RPC_URL` | `backend/.env` | Preferred mainnet RPC for treasury HUD; backend proxies `/billing/treasury-balance` with Ankr/PublicNode fallbacks |
 | `SOLANA_PAYER_SECRET_KEY` | `backend/.env` | Empty = **stub mode** (no real transfers) |
+| `AETHER_OS_BRIDGE` | `backend/.env` | `mock` \| `desktop` \| `android` — see [docs/os-bridge.md](docs/os-bridge.md) |
+| `AETHER_OS_BRIDGE_TOKEN` | `backend/.env` | Optional Bearer for `/tools/os-bridge/*` (never commit) |
+| `AETHER_DESKTOP_CAPTURE_ENABLED` | `backend/.env` | Enable desktopCapture (scoped confirm) |
+| `AETHER_DESKTOP_INPUT_ENABLED` | `backend/.env` | Enable keyboard/mouse (scoped confirm) |
+| `AETHER_DESKTOP_NOTIFICATIONS_ENABLED` | `backend/.env` | Enable notification read |
+| `AETHER_MOBILE_BRIDGE_URL` | `backend/.env` | Android AccessibilityService WS target |
+
+Native OS Bridge docs: [docs/os-bridge.md](docs/os-bridge.md).
 
 Persona: **Aether** — 1–3 sentence, direct, actionable replies for HUD / spatial audio.
 

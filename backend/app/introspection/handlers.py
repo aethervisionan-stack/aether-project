@@ -15,7 +15,7 @@ from app.introspection.manifest import (
     sync_tools_with_registry,
 )
 from app.introspection.telemetry import get_latency_telemetry
-from app.os_bridge.mock import get_os_bridge
+from app.os_bridge.factory import get_os_bridge
 
 logger = logging.getLogger("aether.introspection.handlers")
 

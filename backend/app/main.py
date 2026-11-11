@@ -14,6 +14,8 @@ from app.introspection.manifest import build_feature_flags
 from app.introspection.telemetry import get_latency_telemetry
 from app.memory import routes as memory_routes
 from app.persona.real_life_copilot import ENGINE_ACTIVATION_BANNER
+from app.os_bridge import bridge_routes as os_bridge_routes
+from app.os_bridge.factory import get_os_bridge
 from app.tools import routes as tools_routes
 from app.websocket import live as live_ws
 
@@ -51,6 +53,7 @@ app.include_router(live_ws.router)
 app.include_router(billing_routes.router)
 app.include_router(memory_routes.router)
 app.include_router(tools_routes.router)
+app.include_router(os_bridge_routes.router)
 
 
 @app.get("/verify-subscription")
@@ -112,7 +115,10 @@ async def health() -> dict[str, object]:
             "system_control_tool": True,
             "two_step_confirm": True,
             "notification_listener": True,
-            "os_bridge": "mock",
+            "os_bridge": get_os_bridge().platform,
+            "desktop_capture": settings.aether_desktop_capture_enabled,
+            "desktop_input": settings.aether_desktop_input_enabled,
+            "scoped_confirm": True,
         },
         "introspection": {
             **build_feature_flags(),
@@ -133,6 +139,12 @@ async def health() -> dict[str, object]:
             "/tools/listener/poll",
             "/tools/listener/ingest",
             "/tools/os-bridge",
+            "/tools/os-bridge/status",
+            "/tools/os-bridge/desktop-capture",
+            "/tools/os-bridge/notifications/read",
+            "/tools/os-bridge/keyboard",
+            "/tools/os-bridge/mouse",
+            "/tools/os-bridge/mobile/inject",
         ],
     }
 
