@@ -3,11 +3,11 @@
  * ONE Icosahedron (shared Mesh wireframe + Points), UnrealBloomPass, HUD palette.
  * Driven by WS / VAD / playback AnalyserNode taps — never touches PCM uplink.
  *
- * Physics:
- *  - Frequency focus: 100–2000Hz voice band → lerped RMS / avg amplitude.
- *  - Idle: perfect sphere + slow axis rotation (vertices restored to base).
- *  - Speak: every vertex displaced with composite 3D noise × voice intensity;
- *    Points + wireframe share one BufferGeometry (needsUpdate each speak frame).
+ * Cognitive states (60fps bloom, calm clamps):
+ *  - Idle: slow clean sphere
+ *  - Thinking/tools: slightly faster spin + density/focus tint
+ *  - Listening (VAD): controlled expand on input freqs
+ *  - Playback: organic FFT/RMS waves via lerp
  */
 
 import * as THREE from "three";
@@ -22,6 +22,9 @@ export type OrbitPresence = "point" | "full";
 /** Speak mode for drive: 0 idle, 1 user/VAD, 2 assistant/playback. */
 export type OrbitSpeakMode = 0 | 1 | 2;
 
+/** High-level cognitive presence for orbit look. */
+export type OrbitCognitiveState = "idle" | "thinking" | "listening" | "playback";
+
 export interface OrbitDriveState {
   wsOpen: boolean;
   vadSpeech: boolean;
@@ -34,6 +37,8 @@ export interface OrbitDriveState {
   treble: number;
   /** Explicit 100–2000Hz voice-band energy (preferred over level). */
   voiceBand?: number;
+  cognitive?: OrbitCognitiveState;
+  toolsActive?: boolean;
 }
 
 export type OrbitDriver = () => OrbitDriveState;
@@ -58,11 +63,16 @@ export const ORBIT_TUNING = {
   maxBreath: 0.01,
   maxScaleDelta: 0.012,
   maxSpinAssist: 0.04,
-  /** Idle: almost still; speak: barely faster. */
+  /** Idle: almost still; speak/think: barely faster. */
   idleSpin: 0.018,
   speakSpin: 0.026,
+  thinkSpin: 0.034,
+  listenSpin: 0.022,
   breathHz: 0.55,
   noiseHz: 0.42,
+  listenDeform: 0.014,
+  thinkDeform: 0.01,
+  playbackDeform: 0.022,
   /** Spatial frequencies (lower = broader, calmer waves). */
   noiseA: 2.0,
   noiseB: 1.7,
@@ -570,27 +580,32 @@ export class AudioReactiveAIOrbit {
 
     const T = ORBIT_TUNING;
     const speakMode = this.resolveSpeakMode(drive);
-    const speaking = speakMode !== 0;
+    const cognitive = resolveCognitive(drive, speakMode);
+    const speaking = speakMode !== 0 || cognitive === "thinking";
     const full =
       drive.wsOpen ||
       drive.vadSpeech ||
       drive.playbackActive ||
       drive.mode === "speaking" ||
-      drive.mode === "listening";
+      drive.mode === "listening" ||
+      drive.mode === "processing" ||
+      Boolean(drive.toolsActive);
 
     // 100–2000Hz voice band → smoothed RMS / avg (prefer explicit voiceBand).
     const voiceRaw =
-      speakMode === 2
+      cognitive === "playback"
         ? (drive.voiceBand ?? drive.playLevel)
-        : speakMode === 1
+        : cognitive === "listening"
           ? (drive.voiceBand ?? drive.micLevel)
-          : 0;
+          : cognitive === "thinking"
+            ? 0.22
+            : 0;
     const rmsRaw =
-      speakMode === 2 ? drive.playLevel : speakMode === 1 ? drive.micLevel : 0;
+      cognitive === "playback" ? drive.playLevel : cognitive === "listening" ? drive.micLevel : 0;
     const lowMidRaw =
-      speakMode === 2
+      cognitive === "playback"
         ? drive.bass * 0.45 + drive.mid * 0.55
-        : speakMode === 1
+        : cognitive === "listening"
           ? (drive.voiceBand ?? drive.micLevel) * 0.75
           : 0;
 
@@ -619,17 +634,26 @@ export class AudioReactiveAIOrbit {
     this.energySmoothed = THREE.MathUtils.lerp(this.energySmoothed, energyTarget, T.lerpRms);
     this.speakModeSmoothed = THREE.MathUtils.lerp(this.speakModeSmoothed, speakMode, T.lerpSpeakMode);
 
-    const brightTarget = speaking ? 0.36 + this.energySmoothed * 0.12 : 0.32;
+    const brightTarget =
+      cognitive === "thinking"
+        ? 0.4 + this.energySmoothed * 0.08
+        : speaking
+          ? 0.36 + this.energySmoothed * 0.12
+          : 0.32;
     this.brightSmoothed = THREE.MathUtils.lerp(this.brightSmoothed, brightTarget, T.lerpBright);
 
     this.applyPresence(full ? "full" : "point");
+    if (this.host) {
+      this.host.dataset.cognitive = cognitive;
+    }
 
     const t = this.clock.getElapsedTime();
     const speakBlend = THREE.MathUtils.smoothstep(this.speakModeSmoothed, 0.4, 1.35);
+    const thinkBlend = cognitive === "thinking" ? 1 : 0;
 
-    // Gentle breathing only — small scale pulse tied to voice.
+    // Gentle breathing only — small scale pulse tied to voice / listen expand.
     const breathTarget = THREE.MathUtils.clamp(
-      speakBlend *
+      (speakBlend || thinkBlend * 0.35) *
         Math.sin(t * T.breathHz) *
         (0.003 + this.voiceSmoothed * 0.008 + this.energySmoothed * 0.004),
       -T.maxBreath,
@@ -637,18 +661,36 @@ export class AudioReactiveAIOrbit {
     );
     this.breathSmoothed = THREE.MathUtils.lerp(this.breathSmoothed, breathTarget, T.lerpBreath);
 
-    // Subtle radial undulation (clamped hard by maxDeform).
+    // State-specific radial undulation (still clamped by maxDeform).
+    const deformCap =
+      cognitive === "playback"
+        ? T.playbackDeform
+        : cognitive === "listening"
+          ? T.listenDeform
+          : cognitive === "thinking"
+            ? T.thinkDeform
+            : 0;
     const deformTarget = THREE.MathUtils.clamp(
-      speakBlend *
-        (0.004 + this.voiceSmoothed * 0.014 + this.energySmoothed * 0.008 + this.lowMidSmoothed * 0.004),
+      (speakBlend || thinkBlend) *
+        (0.003 + this.voiceSmoothed * 0.012 + this.energySmoothed * 0.007 + this.lowMidSmoothed * 0.004),
       0,
-      T.maxDeform,
+      Math.min(T.maxDeform, deformCap || T.maxDeform),
     );
     this.deformSmoothed = THREE.MathUtils.lerp(this.deformSmoothed, deformTarget, T.lerpDeform);
 
-    const spinTarget = speaking
-      ? THREE.MathUtils.clamp(T.speakSpin + this.voiceSmoothed * 0.006, T.idleSpin, T.maxSpinAssist)
-      : T.idleSpin;
+    const spinBase =
+      cognitive === "thinking"
+        ? T.thinkSpin
+        : cognitive === "playback"
+          ? T.speakSpin
+          : cognitive === "listening"
+            ? T.listenSpin
+            : T.idleSpin;
+    const spinTarget = THREE.MathUtils.clamp(
+      spinBase + (cognitive !== "idle" ? this.voiceSmoothed * 0.005 : 0),
+      T.idleSpin,
+      T.maxSpinAssist,
+    );
     this.spinSmoothed = THREE.MathUtils.lerp(this.spinSmoothed, spinTarget, T.lerpSpin);
 
     // Idle: almost-still slow Y rotate. Tiny tilt; speak adds soft breath via vertices.
@@ -697,4 +739,20 @@ export class AudioReactiveAIOrbit {
       renderer.render(scene, camera);
     }
   }
+}
+
+function resolveCognitive(drive: OrbitDriveState, speakMode: OrbitSpeakMode): OrbitCognitiveState {
+  if (drive.cognitive) {
+    return drive.cognitive;
+  }
+  if (drive.toolsActive || drive.mode === "processing") {
+    return "thinking";
+  }
+  if (speakMode === 2 || drive.playbackActive || drive.mode === "speaking") {
+    return "playback";
+  }
+  if (speakMode === 1 || drive.vadSpeech || drive.mode === "listening") {
+    return "listening";
+  }
+  return "idle";
 }

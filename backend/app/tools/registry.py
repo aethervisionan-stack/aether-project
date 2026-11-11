@@ -1,10 +1,11 @@
-"""Backend tool registry with clear invoke interfaces."""
+"""Backend tool registry with clear invoke interfaces + parallel async calling."""
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import Any
@@ -13,6 +14,7 @@ from app.config import Settings, get_settings
 from app.introspection import handlers as help_handlers
 from app.tools import handlers, os_handlers
 from app.tools.schemas import TOOL_SCHEMAS, ToolSchema, schema_by_name, schemas_for_prompt
+from app.tools.validation import validate_tool_args
 
 logger = logging.getLogger("aether.tools.registry")
 
@@ -114,6 +116,7 @@ class ToolRegistry:
         args: dict[str, Any] | None = None,
         *,
         ctx: ToolContext | None = None,
+        validate: bool = True,
     ) -> ToolResult:
         started = time.perf_counter()
         handler = self._handlers.get(name)
@@ -124,11 +127,21 @@ class ToolRegistry:
                 error=f"unknown tool: {name}",
                 elapsed_ms=(time.perf_counter() - started) * 1000.0,
             )
+        normalized = args or {}
+        if validate:
+            normalized, verr = validate_tool_args(name, normalized)
+            if verr:
+                return ToolResult(
+                    name=name,
+                    ok=False,
+                    error=f"invalid args: {verr}",
+                    elapsed_ms=(time.perf_counter() - started) * 1000.0,
+                )
         context = ctx or ToolContext()
         settings = context.settings or get_settings()
         try:
             payload = await handler(
-                args or {},
+                normalized or {},
                 settings=settings,
                 profile_id=context.profile_id,
             )
@@ -148,6 +161,23 @@ class ToolRegistry:
                 error=str(exc)[:240],
                 elapsed_ms=(time.perf_counter() - started) * 1000.0,
             )
+
+    async def invoke_many(
+        self,
+        calls: Iterable[tuple[str, dict[str, Any] | None]],
+        *,
+        ctx: ToolContext | None = None,
+        limit: int = 9,
+    ) -> list[ToolResult]:
+        """Async parallel invoke across the registry (capped to 9 tools)."""
+        batch = list(calls)[: max(1, min(int(limit), 9))]
+        if not batch:
+            return []
+        return list(
+            await asyncio.gather(
+                *[self.invoke(name, args, ctx=ctx) for name, args in batch]
+            )
+        )
 
 
 @lru_cache

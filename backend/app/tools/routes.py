@@ -28,6 +28,17 @@ class ToolInvokeBody(BaseModel):
     profile_id: str = "local"
 
 
+class ToolInvokeManyBody(BaseModel):
+    calls: list[ToolInvokeBody] = Field(default_factory=list)
+    profile_id: str = "local"
+
+
+class SandboxBody(BaseModel):
+    source: str
+    timeout_s: float = 2.5
+    profile_id: str = "local"
+
+
 class ToolConfirmBody(BaseModel):
     pending_id: str | None = None
     utterance: str | None = None
@@ -84,6 +95,34 @@ async def tool_invoke(body: ToolInvokeBody) -> dict[str, Any]:
         ctx=ToolContext(profile_id=body.profile_id, settings=settings, source="http"),
     )
     return result.to_dict()
+
+
+@router.post("/invoke_many")
+async def tool_invoke_many(body: ToolInvokeManyBody) -> dict[str, Any]:
+    """Async parallel invoke of up to 9 registry tools."""
+    registry = get_tool_registry()
+    settings = get_settings()
+    profile = body.profile_id or "local"
+    calls = [(c.name, c.arguments) for c in body.calls[:9]]
+    results = await registry.invoke_many(
+        calls,
+        ctx=ToolContext(profile_id=profile, settings=settings, source="http"),
+        limit=9,
+    )
+    return {
+        "ok": all(r.ok for r in results) if results else False,
+        "count": len(results),
+        "results": [r.to_dict() for r in results],
+    }
+
+
+@router.post("/sandbox")
+async def tool_sandbox(body: SandboxBody) -> dict[str, Any]:
+    """Run a tiny Python snippet in the constrained local sandbox."""
+    from app.sandbox import run_python_snippet
+
+    result = run_python_snippet(body.source, timeout_s=body.timeout_s)
+    return {"profile_id": body.profile_id, **result.to_dict()}
 
 
 @router.get("/pending")

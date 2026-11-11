@@ -9,6 +9,8 @@ import logging
 import time
 from typing import Any
 
+# base64 used for AVF1 → MultimodalBuffer bridge
+
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.config import get_settings
@@ -20,12 +22,14 @@ from app.memory.store import get_memory_store
 from app.mobility.geo import PlacePoint, build_nav_guidance, suggest_places
 from app.mobility.productivity import parse_productivity_command
 from app.mobility.state import MobilitySessionState
+from app.memory.summarizer import maybe_summarize_after_turn
 from app.multimodal.ingest import MultimodalBuffer
 from app.os_bridge.confirmation import (
     get_confirmation_engine,
     is_confirmation_utterance,
     is_rejection_utterance,
 )
+from app.websocket.av_frames import try_parse_av_frame
 from app.os_bridge.listener import get_notification_listener
 from app.pipeline.decision import DecisionContext, run_decision_pipeline
 from app.persona.real_life_copilot import (
@@ -60,9 +64,11 @@ async def live_websocket(websocket: WebSocket) -> None:
     Bidirectional Live bridge.
 
     Client → server:
-      - binary frames: PCM 16-bit LE mono @ 16 kHz
+      - binary frames:
+          • PCM 16-bit LE mono @ 16 kHz (raw; lowest-latency voice path)
+          • AVF1 envelope: magic + mime + compressed image (camera/screen sideband)
       - JSON text:
-          ping | pong | text | audio | frame | telemetry | tool_call |
+          ping | pong | text | audio | frame | frame_meta | telemetry | tool_call |
           tool_confirm | mobility_config | notification | notification_reply |
           listener_poll | productivity | geo | place | nav_request | barge_in | ptt
 
@@ -117,6 +123,20 @@ async def live_websocket(websocket: WebSocket) -> None:
                 memory_turns += 1
                 if role == "user" and memory_turns % 3 == 0:
                     await asyncio.to_thread(run_extraction, store, profile_id)
+                # Index interaction embeddings off the audio path.
+                try:
+                    from app.memory.vector_store import get_vector_store
+
+                    vs = get_vector_store()
+                    await asyncio.to_thread(
+                        vs.upsert,
+                        profile_id=profile_id,
+                        text=cleaned[:800],
+                        kind="interaction",
+                        meta={"role": role},
+                    )
+                except Exception:
+                    logger.debug("vector memory upsert skipped", exc_info=True)
             except Exception:
                 logger.debug("memory background write failed", exc_info=True)
 
@@ -140,8 +160,10 @@ async def live_websocket(websocket: WebSocket) -> None:
             et = sanitized.get("type")
             if et in _AETHER_TRANSCRIPT_TYPES:
                 _schedule_memory("aether", str(sanitized.get("text") or ""))
+                maybe_summarize_after_turn(profile_id)
             elif et in _USER_TRANSCRIPT_TYPES:
                 _schedule_memory("user", str(sanitized.get("text") or ""))
+                maybe_summarize_after_turn(profile_id)
             await websocket.send_json(sanitized)
         except Exception:
             stop.set()
@@ -155,6 +177,28 @@ async def live_websocket(websocket: WebSocket) -> None:
                 raw_bytes = message.get("bytes")
                 if raw_bytes is not None:
                     session = bridge["session"]
+                    # Mixed binary: AVF1 video sideband OR raw PCM uplink.
+                    av = try_parse_av_frame(raw_bytes if isinstance(raw_bytes, (bytes, bytearray)) else bytes(raw_bytes))
+                    if av is not None:
+                        frame = multimodal.push_frame(
+                            mime=av.mime,
+                            data_b64=base64.b64encode(av.data).decode("ascii"),
+                            client_t=None,
+                        )
+                        try:
+                            await websocket.send_json(
+                                {
+                                    "type": "multimodal_ack",
+                                    "kind": "frame_bin",
+                                    "ok": frame is not None,
+                                    "stats": multimodal.stats(),
+                                }
+                            )
+                        except Exception:
+                            pass
+                        if frame is not None and session is not None:
+                            await session.push_image(av.data, mime=av.mime)
+                        continue
                     if session is not None:
                         await session.push_audio(raw_bytes)
                     continue
@@ -260,6 +304,30 @@ async def live_websocket(websocket: WebSocket) -> None:
                     )
                 except Exception:
                     logger.debug("memory prefs load failed; using base persona", exc_info=True)
+                # Compact semantic recall (summary + top hits) keeps Live context lean.
+                try:
+                    from app.memory.vector_store import get_vector_store
+
+                    vs = get_vector_store()
+                    hits = await asyncio.to_thread(
+                        vs.query,
+                        "preferences habits standing notes recent themes",
+                        profile_id=profile_id,
+                        limit=4,
+                        kinds=["summary", "preference", "interaction"],
+                    )
+                    if hits:
+                        lines = [
+                            "=== Vector memory recall (silent — do not recite) ===",
+                        ]
+                        for h in hits[:4]:
+                            kind = h.get("kind") or "context"
+                            text = str(h.get("text") or "").strip()[:220]
+                            if text:
+                                lines.append(f"- [{kind}] {text}")
+                        system_instruction = f"{system_instruction}\n" + "\n".join(lines)
+                except Exception:
+                    logger.debug("vector memory recall skipped", exc_info=True)
 
             # Compact tool + Real Life Co-Pilot orchestration remind.
             tools_hint = build_tool_orchestration_hint(registry_names)
@@ -640,6 +708,23 @@ async def _handle_control_message(
             mobility.updated_at = time.time()
         if session is not None and active:
             await session.push_text("[ptt] Mic gate open — user is speaking.")
+        return
+
+    # Lightweight frame metadata (binary AVF1 already delivered pixels).
+    if msg_type == "frame_meta" and multimodal is not None:
+        try:
+            await websocket.send_json(
+                {
+                    "type": "multimodal_ack",
+                    "kind": "frame_meta",
+                    "ok": True,
+                    "delta": bool(payload.get("delta")),
+                    "hash": payload.get("hash"),
+                    "stats": multimodal.stats(),
+                }
+            )
+        except Exception:
+            pass
         return
 
     # --- Multimodal: screen/image frames (sidecar; never blocks PCM) ---

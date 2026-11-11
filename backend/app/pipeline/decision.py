@@ -8,7 +8,6 @@ compact context payload the Live bridge can push as text — without blocking PC
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import time
 import uuid
@@ -166,13 +165,9 @@ async def run_decision_pipeline(ctx: DecisionContext) -> DecisionOutcome:
             if (n in REGISTRY_TOOL_NAMES or registry.has(n))
             and n != "onchain_lookup"  # needs address — Live/model supplies it
         ][:9]
-
-        async def _invoke_one(name: str) -> ToolResult:
-            args = _default_tool_args(name, text)
-            return await registry.invoke(name, args, ctx=tool_ctx)
-
         if names:
-            tool_results = list(await asyncio.gather(*[_invoke_one(n) for n in names]))
+            calls = [(n, _default_tool_args(n, text)) for n in names]
+            tool_results = await registry.invoke_many(calls, ctx=tool_ctx, limit=9)
 
     plan_block = planning.context_block()
     tool_lines = [tr.context_line() for tr in tool_results]

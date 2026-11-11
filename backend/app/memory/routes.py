@@ -12,6 +12,8 @@ from pydantic import BaseModel, Field
 from app.memory.context import build_system_instruction, preferences_summary
 from app.memory.extractor import run_extraction
 from app.memory.store import get_memory_store
+from app.memory.summarizer import summarize_profile
+from app.memory.vector_store import get_vector_store
 
 logger = logging.getLogger("aether.memory.routes")
 
@@ -90,3 +92,27 @@ async def extract_now(profile_id: str = "local") -> dict[str, Any]:
         "preferences": prefs.to_dict(),
         "preference_summary": preferences_summary(prefs),
     }
+
+
+@router.get("/vector/search")
+async def vector_search(
+    q: str,
+    profile_id: str = "local",
+    k: int = 8,
+) -> dict[str, Any]:
+    """Semantic recall over indexed interaction embeddings."""
+    vs = get_vector_store()
+    hits = await asyncio.to_thread(
+        vs.query,
+        q,
+        profile_id=profile_id,
+        limit=max(1, min(k, 32)),
+    )
+    return {"profile_id": profile_id, "query": q, "hits": hits}
+
+
+@router.post("/vector/summarize")
+async def vector_summarize(profile_id: str = "local") -> dict[str, Any]:
+    """Force a semantic summary pass for long-chat context hygiene."""
+    result = await asyncio.to_thread(summarize_profile, profile_id)
+    return {"profile_id": profile_id, **result}
