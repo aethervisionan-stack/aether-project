@@ -178,3 +178,14 @@ logger.info(
     settings.has_stripe(),
     "live_prepared" if settings.solana_live_transfers_enabled() else "stub",
 )
+if settings.google_oauth_configured():
+    logger.info(
+        "Google OAuth configured redirect=%s",
+        settings.google_oauth_redirect_uri,
+    )
+else:
+    logger.warning(
+        "Google OAuth not configured — set GOOGLE_OAUTH_CLIENT_ID and "
+        "GOOGLE_OAUTH_CLIENT_SECRET in backend/.env (see backend/.env.example). "
+        "Gmail/Calendar stay mock; Drive/Maps tools require auth."
+    )

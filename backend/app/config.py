@@ -5,7 +5,7 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.persona.real_life_copilot import REAL_LIFE_COPILOT_INSTRUCTION
@@ -114,9 +114,13 @@ class Settings(BaseSettings):
     google_oauth_client_id: str = Field(default="", alias="GOOGLE_OAUTH_CLIENT_ID")
     google_oauth_client_secret: str = Field(default="", alias="GOOGLE_OAUTH_CLIENT_SECRET")
     google_oauth_client_secrets_file: str = Field(default="", alias="GOOGLE_OAUTH_CLIENT_SECRETS_FILE")
+    # Canonical: GOOGLE_OAUTH_REDIRECT_URI. Also accepts GOOGLE_REDIRECT_URI.
     google_oauth_redirect_uri: str = Field(
         default="http://127.0.0.1:8000/auth/google/callback",
-        alias="GOOGLE_OAUTH_REDIRECT_URI",
+        validation_alias=AliasChoices(
+            "GOOGLE_OAUTH_REDIRECT_URI",
+            "GOOGLE_REDIRECT_URI",
+        ),
     )
     google_token_fernet_key: str = Field(default="", alias="GOOGLE_TOKEN_FERNET_KEY")
     google_token_dir: str = Field(default="data/google_tokens", alias="GOOGLE_TOKEN_DIR")
