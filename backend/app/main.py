@@ -8,7 +8,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import ENGINE_NAME, ENGINE_VERSION, __version__
+from app.agent import routes as research_routes
 from app.billing import routes as billing_routes
+from app.canvas import routes as canvas_routes
 from app.config import get_settings
 from app.introspection.manifest import build_feature_flags
 from app.introspection.telemetry import get_latency_telemetry
@@ -34,7 +36,8 @@ app = FastAPI(
         "Long-term memory / prefs under `/memory`. "
         "Frontier tools under `/tools`. CoT + multimodal sidecars on `/ws/live`. "
         "Hands-free OS agent: messaging/email/telephony/system + two-step confirm. "
-        "Introspection: dynamic self-knowledge + system_help_tool."
+        "Introspection: dynamic self-knowledge + system_help_tool. "
+        "Deep Research under `/research`. Collaborative Canvas under `/canvas`."
     ),
     version=__version__,
 )
@@ -51,6 +54,8 @@ app.include_router(live_ws.router)
 app.include_router(billing_routes.router)
 app.include_router(memory_routes.router)
 app.include_router(tools_routes.router)
+app.include_router(research_routes.router)
+app.include_router(canvas_routes.router)
 
 
 @app.get("/verify-subscription")
@@ -79,6 +84,8 @@ async def health() -> dict[str, object]:
         "memory": "/memory/profile",
         "memory_enabled": settings.memory_enabled,
         "tools": "/tools/catalog",
+        "research": "/research/run",
+        "canvas": "/canvas/docs",
         "bypass_subscription_check": settings.subscription_check_bypassed(),
         "feature_unlock": feature_unlock,
         "unlocked_surfaces": settings.unlocked_surfaces(),
@@ -89,6 +96,8 @@ async def health() -> dict[str, object]:
             "memory_runtime": True,
             "token_streaming": True,
             "real_life_copilot": True,
+            "deep_research": True,
+            "canvas_editor": True,
             "engine": ENGINE_ACTIVATION_BANNER,
             "engine_version": ENGINE_VERSION,
             "engine_name": ENGINE_NAME,
@@ -133,6 +142,10 @@ async def health() -> dict[str, object]:
             "/tools/listener/poll",
             "/tools/listener/ingest",
             "/tools/os-bridge",
+            "/research/run",
+            "/research/health",
+            "/canvas/docs",
+            "/canvas/preview",
         ],
     }
 
@@ -148,6 +161,8 @@ async def root() -> dict[str, str]:
         "billing": "/billing/config",
         "memory": "/memory/profile",
         "tools": "/tools/catalog",
+        "research": "/research/run",
+        "canvas": "/canvas/docs",
     }
 
 

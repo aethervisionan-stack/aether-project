@@ -205,6 +205,8 @@ class Settings(BaseSettings):
             "multimodal_ws": unlocked,
             "geolocation": unlocked,
             "productivity": unlocked,
+            "deep_research": unlocked,
+            "canvas_editor": unlocked,
             "vad_open_mic": unlocked,
             "push_to_talk": unlocked,
             "test_routes": unlocked,

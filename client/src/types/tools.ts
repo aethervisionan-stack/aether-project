@@ -11,7 +11,9 @@ export type ToolName =
   | "email_calendar_tool"
   | "telephony_tool"
   | "system_control_tool"
-  | "system_help_tool";
+  | "system_help_tool"
+  | "deep_research_tool"
+  | "canvas_edit_tool";
 
 export type TestRoutine = "health" | "memory_snapshot" | "latency_targets";
 
@@ -94,6 +96,24 @@ export interface SystemHelpToolArgs {
   category?: string;
 }
 
+export interface DeepResearchToolArgs {
+  topic: string;
+  open_in_canvas?: boolean;
+  max_subquestions?: number;
+  canvas_doc_id?: string;
+}
+
+export interface CanvasEditToolArgs {
+  action: "list" | "create" | "get" | "propose" | "accept" | "reject";
+  doc_id?: string;
+  title?: string;
+  markdown?: string;
+  kind?: "article" | "code" | "docs" | "research";
+  instruction?: string;
+  text?: string;
+  diff_id?: string;
+}
+
 export type ToolArgumentsByName = {
   solana_treasury_query: SolanaTreasuryArgs;
   onchain_lookup: OnchainLookupArgs;
@@ -104,6 +124,8 @@ export type ToolArgumentsByName = {
   telephony_tool: TelephonyToolArgs;
   system_control_tool: SystemControlToolArgs;
   system_help_tool: SystemHelpToolArgs;
+  deep_research_tool: DeepResearchToolArgs;
+  canvas_edit_tool: CanvasEditToolArgs;
 };
 
 export interface ToolParamProperty {
@@ -302,6 +324,44 @@ export const TOOL_SCHEMAS: readonly ToolSchema[] = [
           enum: ["get_system_capabilities", "get_system_health"],
         },
         category: { type: "string" },
+      },
+      required: ["action"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "deep_research_tool",
+    description:
+      "Deep Research: topic → sub-questions → parallel search → trusted sources → Markdown report.",
+    parameters: {
+      type: "object",
+      properties: {
+        topic: { type: "string" },
+        open_in_canvas: { type: "boolean", default: true },
+        max_subquestions: { type: "integer" },
+        canvas_doc_id: { type: "string" },
+      },
+      required: ["topic"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "canvas_edit_tool",
+    description: "Canvas docs + semantic diffs (list/create/get/propose/accept/reject).",
+    parameters: {
+      type: "object",
+      properties: {
+        action: {
+          type: "string",
+          enum: ["list", "create", "get", "propose", "accept", "reject"],
+        },
+        doc_id: { type: "string" },
+        title: { type: "string" },
+        markdown: { type: "string" },
+        kind: { type: "string", enum: ["article", "code", "docs", "research"] },
+        instruction: { type: "string" },
+        text: { type: "string" },
+        diff_id: { type: "string" },
       },
       required: ["action"],
       additionalProperties: false,

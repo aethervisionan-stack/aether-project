@@ -250,6 +250,64 @@ TOOL_SCHEMAS: list[ToolSchema] = [
             "additionalProperties": False,
         },
     },
+    {
+        "name": "deep_research_tool",
+        "description": (
+            "Deep Research productivity. Trigger when the user asks to research, investigate, "
+            "survey sources, or produce a detailed report on a topic. Pipeline: topic → "
+            "sub-questions → parallel web search → trusted sources filter → Markdown report "
+            "(opened in HUD Canvas when open_in_canvas=true)."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "topic": {"type": "string", "description": "Research topic or question."},
+                "open_in_canvas": {
+                    "type": "boolean",
+                    "description": "Open the Markdown report in the HUD Canvas editor.",
+                    "default": True,
+                },
+                "max_subquestions": {
+                    "type": "integer",
+                    "description": "Number of sub-questions (2–8).",
+                },
+                "canvas_doc_id": {
+                    "type": "string",
+                    "description": "Optional existing Canvas doc id to overwrite.",
+                },
+            },
+            "required": ["topic"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "canvas_edit_tool",
+        "description": (
+            "Collaborative Canvas editor. Trigger to list/create docs or propose/accept/"
+            "reject semantic diffs so AI and user edit the same article/code/docs file."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["list", "create", "get", "propose", "accept", "reject"],
+                },
+                "doc_id": {"type": "string"},
+                "title": {"type": "string"},
+                "markdown": {"type": "string"},
+                "kind": {
+                    "type": "string",
+                    "enum": ["article", "code", "docs", "research"],
+                },
+                "instruction": {"type": "string"},
+                "text": {"type": "string"},
+                "diff_id": {"type": "string"},
+            },
+            "required": ["action"],
+            "additionalProperties": False,
+        },
+    },
 ]
 
 ToolName = Literal[
@@ -262,6 +320,8 @@ ToolName = Literal[
     "telephony_tool",
     "system_control_tool",
     "system_help_tool",
+    "deep_research_tool",
+    "canvas_edit_tool",
 ]
 
 

@@ -12,7 +12,7 @@ from typing import Any
 
 from app.config import Settings, get_settings
 from app.introspection import handlers as help_handlers
-from app.tools import handlers, os_handlers
+from app.tools import handlers, os_handlers, research_handlers
 from app.tools.schemas import TOOL_SCHEMAS, ToolSchema, schema_by_name, schemas_for_prompt
 from app.tools.validation import validate_tool_args
 
@@ -91,6 +91,9 @@ class ToolRegistry:
         self.register("system_control_tool", os_handlers.system_control_tool)
         # Introspection / help (read-only — never pending_confirmation).
         self.register("system_help_tool", help_handlers.system_help_tool)
+        # Gemini-level productivity: Deep Research + Canvas semantic edits.
+        self.register("deep_research_tool", research_handlers.deep_research_tool)
+        self.register("canvas_edit_tool", research_handlers.canvas_edit_tool)
 
     def register(self, name: str, handler: ToolHandler) -> None:
         self._handlers[name] = handler

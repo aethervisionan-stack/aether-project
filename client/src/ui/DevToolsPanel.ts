@@ -165,6 +165,14 @@ export class DevToolsPanel {
         res = await invokeToolHttp("system_help_tool", {
           action: "get_system_capabilities",
         });
+      } else if (name === "deep_research_tool") {
+        res = await invokeToolHttp("deep_research_tool", {
+          topic: "Aether Vision wearable AI OS",
+          open_in_canvas: true,
+          max_subquestions: 3,
+        });
+      } else if (name === "canvas_edit_tool") {
+        res = await invokeToolHttp("canvas_edit_tool", { action: "list" });
       } else {
         this.statusEl.textContent = t(d.unknownTool, { name });
         return;

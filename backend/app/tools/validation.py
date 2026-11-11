@@ -92,6 +92,24 @@ class SystemHelpArgs(StrictModel):
     op: str | None = None
 
 
+class DeepResearchArgs(StrictModel):
+    topic: str
+    open_in_canvas: bool | None = True
+    max_subquestions: int | None = Field(default=None, ge=2, le=8)
+    canvas_doc_id: str | None = None
+
+
+class CanvasEditArgs(StrictModel):
+    action: Literal["list", "create", "get", "propose", "accept", "reject"]
+    doc_id: str | None = None
+    title: str | None = None
+    markdown: str | None = None
+    kind: Literal["article", "code", "docs", "research"] | None = None
+    instruction: str | None = None
+    text: str | None = None
+    diff_id: str | None = None
+
+
 TOOL_ARG_MODELS: dict[str, type[StrictModel]] = {
     "solana_treasury_query": SolanaTreasuryArgs,
     "onchain_lookup": OnchainLookupArgs,
@@ -102,6 +120,8 @@ TOOL_ARG_MODELS: dict[str, type[StrictModel]] = {
     "telephony_tool": TelephonyArgs,
     "system_control_tool": SystemControlArgs,
     "system_help_tool": SystemHelpArgs,
+    "deep_research_tool": DeepResearchArgs,
+    "canvas_edit_tool": CanvasEditArgs,
 }
 
 

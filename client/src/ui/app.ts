@@ -29,6 +29,7 @@ import { playSuccessBeep } from "../os/SuccessBeep";
 import { GeminiLiveService } from "../services/GeminiLiveService";
 import type { LiveServerJsonEvent, TelemetrySnapshot, WsReadyStateLabel } from "../types/live";
 import type { NotificationActionView } from "../types/mobility";
+import { CanvasPanel } from "./CanvasPanel";
 import { DevToolsPanel } from "./DevToolsPanel";
 import { GuardrailIndicator } from "./GuardrailIndicator";
 import { LanguageToggle } from "./LanguageToggle";
@@ -95,6 +96,7 @@ export class ControlApp {
   private memory: MemoryInspector | null = null;
   private mobility: MobilityPanel | null = null;
   private devTools: DevToolsPanel | null = null;
+  private canvas: CanvasPanel | null = null;
   private toasts = new ToastHost();
   private focusBtn!: HTMLButtonElement;
   private frameBtn!: HTMLButtonElement;
@@ -148,8 +150,9 @@ export class ControlApp {
           <p class="connection" data-role="status" data-state="CLOSED">${m.connection.closed}</p>
           <p class="guardrail" data-role="guardrail">${m.guardrail.prefix}: ${m.guardrail.secure}</p>
         </div>
-        <div class="hud-grid">
+        <div class="hud-grid hud-grid--with-canvas">
           <div class="ai-orbit-stage" data-role="ai-orbit" aria-label="${m.live.vizLabel}"></div>
+          <div class="canvas-mount" data-role="canvas"></div>
           <div class="hud-telemetry" data-role="hud-telemetry">
             <canvas class="audio-viz audio-viz--analysis" data-role="audio-viz" width="64" height="32" aria-hidden="true"></canvas>
             <p class="latency" data-role="latency">${m.latency.idle}</p>
@@ -192,6 +195,7 @@ export class ControlApp {
     const memoryMount = this.root.querySelector<HTMLElement>("[data-role=memory]")!;
     const mobilityMount = this.root.querySelector<HTMLElement>("[data-role=mobility]")!;
     const devtoolsMount = this.root.querySelector<HTMLElement>("[data-role=devtools]")!;
+    const canvasMount = this.root.querySelector<HTMLElement>("[data-role=canvas]")!;
 
     this.orbit = new AetherVisualCoreHost();
     this.orbit.mount(this.orbitHost);
@@ -205,6 +209,7 @@ export class ControlApp {
     this.mobility = new MobilityPanel(mobilityMount);
     this.mobility.setUnlockMode(optimisticUnlock);
     this.devTools = new DevToolsPanel(devtoolsMount);
+    this.canvas = new CanvasPanel(canvasMount);
     this.mobility.setNotify((kind, text) => {
       if (kind === "ok") this.toasts.ok(text);
       else if (kind === "warn") this.toasts.warn(text);
@@ -212,6 +217,12 @@ export class ControlApp {
       else this.toasts.info(text);
     });
     this.devTools.setNotify((kind, text) => {
+      if (kind === "ok") this.toasts.ok(text);
+      else if (kind === "warn") this.toasts.warn(text);
+      else if (kind === "danger") this.toasts.danger(text);
+      else this.toasts.info(text);
+    });
+    this.canvas.setNotify((kind, text) => {
       if (kind === "ok") this.toasts.ok(text);
       else if (kind === "warn") this.toasts.warn(text);
       else if (kind === "danger") this.toasts.danger(text);
@@ -343,6 +354,7 @@ export class ControlApp {
     this.memory?.applyLocale();
     this.mobility?.applyLocale();
     this.devTools?.applyLocale();
+    this.canvas?.applyLocale();
     this.treasury?.applyLocale();
   }
 
