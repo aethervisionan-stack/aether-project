@@ -34,6 +34,7 @@ import type { ToolArgumentsByName, ToolName } from "../types/tools";
 import { PushToTalk } from "../voice/PushToTalk";
 import type { VadPhase } from "../voice/VadController";
 import { SidebandCapture } from "../vision/sidebandCapture";
+import { getCloudSync, loadCloudUserId } from "./CloudSyncService";
 
 export type LiveEventHandler = (event: LiveServerJsonEvent) => void;
 
@@ -44,6 +45,8 @@ export interface GeminiLiveServiceOptions {
   onEvent?: LiveEventHandler;
   /** Optional advanced HUD visualizer (Analyser taps + silent AI spectrum). */
   visualizer?: AdvancedAudioVisualizer | null;
+  /** Memory / cloud profile id (defaults to cloud user or local). */
+  profileId?: string;
 }
 
 /** RMS threshold (0–1) to treat a mic flush as the start of a voice cycle. */
@@ -93,6 +96,7 @@ function readyStateLabel(ws: WebSocket | null): WsReadyStateLabel {
 export class GeminiLiveService {
   readonly telemetry: TelemetryMonitor;
   private readonly url: string;
+  private readonly profileId: string;
   private readonly onEvent?: LiveEventHandler;
   private readonly fifo = new FifoRetentionBuffer(1500, 16_000 * 2);
   private readonly capture = new PcmCapture();
@@ -124,6 +128,7 @@ export class GeminiLiveService {
   private toolsActive = false;
 
   constructor(options: GeminiLiveServiceOptions = {}) {
+    this.profileId = (options.profileId || loadCloudUserId() || "local").trim() || "local";
     this.url = options.url ?? resolveDefaultWsUrl();
     this.telemetry = options.telemetry ?? new TelemetryMonitor({ logToConsole: true });
     this.onEvent = options.onEvent;
@@ -437,6 +442,7 @@ export class GeminiLiveService {
     const snap = this.telemetry.snapshot();
     const payload = buildHudTelemetry({ snap, vizMode: this.vizMode });
     this.sendJson({ ...payload });
+    getCloudSync().syncHudTelemetry({ ...payload });
   }
 
   getLastTokenStream(): string {
@@ -521,7 +527,19 @@ export class GeminiLiveService {
         this.telemetry.setWsState("CONNECTING");
       }
 
-      const ws = new WebSocket(this.url);
+      const wsUrl = (() => {
+        try {
+          const u = new URL(this.url, window.location.href);
+          if (!u.searchParams.get("profile_id")) {
+            u.searchParams.set("profile_id", this.profileId);
+          }
+          return u.toString();
+        } catch {
+          const join = this.url.includes("?") ? "&" : "?";
+          return `${this.url}${join}profile_id=${encodeURIComponent(this.profileId)}`;
+        }
+      })();
+      const ws = new WebSocket(wsUrl);
       ws.binaryType = "arraybuffer";
       this.ws = ws;
       let settled = false;

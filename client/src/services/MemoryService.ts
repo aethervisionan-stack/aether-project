@@ -2,6 +2,8 @@
  * Gen-1 long-term memory API client — prefs / profile via Vite `/api` proxy.
  */
 
+import { loadCloudUserId } from "./CloudSyncService";
+
 export interface LearnedPreferences {
   tone: string;
   style: string;
@@ -36,7 +38,8 @@ export type PreferencePatch = Partial<
   >
 >;
 
-const DEFAULT_PROFILE = "local";
+
+const DEFAULT_PROFILE = loadCloudUserId() || "local";
 
 function apiUrl(path: string): string {
   return `/api${path.startsWith("/") ? path : `/${path}`}`;

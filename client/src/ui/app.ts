@@ -26,6 +26,7 @@ import { parseProductivityLocal } from "../mobility/ProductivityVoice";
 import { FrameCapture } from "../multimodal/FrameCapture";
 import { ConfirmationLoop } from "../os/ConfirmationLoop";
 import { playSuccessBeep } from "../os/SuccessBeep";
+import { getCloudSync, loadCloudUserId } from "../services/CloudSyncService";
 import { GeminiLiveService } from "../services/GeminiLiveService";
 import type { LiveServerJsonEvent, TelemetrySnapshot, WsReadyStateLabel } from "../types/live";
 import type { NotificationActionView } from "../types/mobility";
@@ -307,6 +308,19 @@ export class ControlApp {
     }
 
     void this.bootstrapBilling();
+    void this.bootstrapCloudSync();
+  }
+
+  private async bootstrapCloudSync(): Promise<void> {
+    try {
+      const uid = loadCloudUserId();
+      if (uid && uid !== "local") {
+        // keep MemoryInspector / Live on the same profile id
+      }
+      getCloudSync().start();
+    } catch {
+      // cloud optional
+    }
   }
 
   private applyLocale(): void {
@@ -700,6 +714,7 @@ export class ControlApp {
     this.service = new GeminiLiveService({
       onEvent: (event) => this.handleEvent(event),
       visualizer: this.visualizer,
+      profileId: loadCloudUserId() || "local",
     });
     this.latencyMonitor = new LatencyMonitor(this.latencyEl, this.service.telemetry);
     this.latencyMonitor.start();

@@ -144,6 +144,22 @@ class Settings(BaseSettings):
         alias="AETHER_MOBILE_BRIDGE_URL",
     )
 
+    # --- Supabase cloud sync (empty = disabled; never invent secrets) ---
+    supabase_url: str = Field(default="", alias="SUPABASE_URL")
+    supabase_anon_key: str = Field(default="", alias="SUPABASE_ANON_KEY")
+    supabase_service_role_key: str = Field(default="", alias="SUPABASE_SERVICE_ROLE_KEY")
+
+    # --- Cloud episodic vectors (Pinecone namespace or Qdrant payload filter) ---
+    cloud_vector_backend: str = Field(default="auto", alias="CLOUD_VECTOR_BACKEND")
+    pinecone_api_key: str = Field(default="", alias="PINECONE_API_KEY")
+    pinecone_host: str = Field(default="", alias="PINECONE_HOST")
+    pinecone_index: str = Field(default="aether-episodic", alias="PINECONE_INDEX")
+    qdrant_url: str = Field(default="", alias="QDRANT_URL")
+    qdrant_api_key: str = Field(default="", alias="QDRANT_API_KEY")
+    qdrant_collection: str = Field(default="aether_episodic", alias="QDRANT_COLLECTION")
+    # Local vector store backend hint (local | chroma); cloud is separate.
+    vector_backend: str = Field(default="local", alias="AETHER_VECTOR_BACKEND")
+
     @property
     def cors_origin_list(self) -> list[str]:
         raw = {o.strip() for o in self.cors_origins.split(",") if o.strip()}
@@ -152,6 +168,69 @@ class Settings(BaseSettings):
 
     def has_api_key(self) -> bool:
         return bool(self.gemini_api_key.strip())
+
+    def supabase_configured(self) -> bool:
+        """True when URL + at least one key look real (no placeholders)."""
+        url = self.supabase_url.strip()
+        key = self.supabase_anon_key.strip() or self.supabase_service_role_key.strip()
+        if not url or not key:
+            return False
+        lowered = f"{url} {key}".lower()
+        if (
+            "placeholder" in lowered
+            or "replace_me" in lowered
+            or "your-project" in lowered
+            or url.endswith("...")
+            or key.endswith("...")
+        ):
+            return False
+        return url.startswith("http://") or url.startswith("https://")
+
+    def pinecone_configured(self) -> bool:
+        key = self.pinecone_api_key.strip()
+        host = self.pinecone_host.strip()
+        if not key or not host:
+            return False
+        lowered = f"{key} {host}".lower()
+        if "placeholder" in lowered or "replace_me" in lowered:
+            return False
+        return True
+
+    def qdrant_configured(self) -> bool:
+        url = self.qdrant_url.strip()
+        if not url:
+            return False
+        lowered = url.lower()
+        if "placeholder" in lowered or "replace_me" in lowered:
+            return False
+        return url.startswith("http://") or url.startswith("https://")
+
+    def cloud_vector_backend_resolved(self) -> str:
+        """
+        Resolved cloud vector backend: pinecone | qdrant | off.
+        CLOUD_VECTOR_BACKEND=auto picks the first configured provider.
+        """
+        raw = (self.cloud_vector_backend or "auto").strip().lower()
+        if raw in {"off", "none", "disabled", "local"}:
+            return "off"
+        if raw == "pinecone":
+            return "pinecone" if self.pinecone_configured() else "off"
+        if raw == "qdrant":
+            return "qdrant" if self.qdrant_configured() else "off"
+        # auto
+        if self.pinecone_configured():
+            return "pinecone"
+        if self.qdrant_configured():
+            return "qdrant"
+        return "off"
+
+    def supabase_url_host(self) -> str | None:
+        if not self.supabase_configured():
+            return None
+        from urllib.parse import urlparse
+
+        host = urlparse(self.supabase_url.strip()).hostname
+        return host or None
 
     def has_stripe(self) -> bool:
         """True for a real-looking secret (sk_test_ or sk_live_). Placeholders do not count."""

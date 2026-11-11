@@ -79,6 +79,41 @@ def summarize_profile(profile_id: str = "local", *, force: bool = False) -> dict
             meta={"turns": len(history), "source": "summarizer"},
             record_id=f"summary-{pid}",
         )
+        try:
+            from app.memory.cloud_vector import mirror_local_upsert
+
+            mirror_local_upsert(
+                profile_id=pid,
+                text=summary,
+                kind="summary",
+                meta={"turns": len(history), "source": "summarizer"},
+                record_id=f"summary-{pid}",
+            )
+        except Exception:
+            logger.debug("cloud summary mirror skipped", exc_info=True)
+
+        if prefs:
+            pref_text = pref_line or str(prefs)
+            try:
+                vectors.upsert(
+                    profile_id=pid,
+                    text=f"User preferences: {pref_text}",
+                    kind="preference",
+                    meta={"source": "summarizer"},
+                    record_id=f"pref-{pid}",
+                )
+                from app.memory.cloud_vector import mirror_local_upsert
+
+                mirror_local_upsert(
+                    profile_id=pid,
+                    text=f"User preferences: {pref_text}",
+                    kind="preference",
+                    meta={"source": "summarizer"},
+                    record_id=f"pref-{pid}",
+                )
+            except Exception:
+                logger.debug("preference vector mirror skipped", exc_info=True)
+
         # Also index last user turns for retrieval.
         for item in recent[-6:]:
             if not isinstance(item, dict):
@@ -92,6 +127,17 @@ def summarize_profile(profile_id: str = "local", *, force: bool = False) -> dict
                 kind="interaction",
                 meta={"role": item.get("role"), "at": item.get("at")},
             )
+            try:
+                from app.memory.cloud_vector import mirror_local_upsert
+
+                mirror_local_upsert(
+                    profile_id=pid,
+                    text=text,
+                    kind="interaction",
+                    meta={"role": item.get("role"), "at": item.get("at")},
+                )
+            except Exception:
+                logger.debug("cloud interaction mirror skipped", exc_info=True)
 
         return {
             "ok": True,

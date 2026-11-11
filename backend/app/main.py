@@ -10,6 +10,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from app import ENGINE_NAME, ENGINE_VERSION, __version__
 from app.auth import routes as google_auth_routes
 from app.billing import routes as billing_routes
+from app.cloud import routes as cloud_routes
+from app.cloud.status import cloud_status
 from app.config import get_settings
 from app.introspection.manifest import build_feature_flags
 from app.introspection.telemetry import get_latency_telemetry
@@ -37,6 +39,7 @@ app = FastAPI(
         f"Persona: {ENGINE_ACTIVATION_BANNER} — Strategic Real-Life Co-Pilot. "
         "Stripe subscription + Solana 70/30 tokenomics under `/billing`. "
         "Long-term memory / prefs under `/memory`. "
+        "Cloud sync + vector memory under `/cloud`. "
         "Frontier tools under `/tools`. CoT + multimodal sidecars on `/ws/live`. "
         "Hands-free OS agent: messaging/email/telephony/system + two-step confirm. "
         "Google OAuth: Gmail/Calendar/Drive + Maps tools under `/auth/google`. "
@@ -57,6 +60,7 @@ app.add_middleware(
 app.include_router(live_ws.router)
 app.include_router(billing_routes.router)
 app.include_router(memory_routes.router)
+app.include_router(cloud_routes.router)
 app.include_router(tools_routes.router)
 app.include_router(google_test_routes.router)
 app.include_router(google_auth_routes.router)
@@ -91,6 +95,8 @@ async def health() -> dict[str, object]:
         "billing": "/billing/config",
         "memory": "/memory/profile",
         "memory_enabled": settings.memory_enabled,
+        "cloud": "/cloud/status",
+        "cloud_status": cloud_status(settings),
         "tools": "/tools/catalog",
         "bypass_subscription_check": settings.subscription_check_bypassed(),
         "feature_unlock": feature_unlock,
@@ -152,6 +158,11 @@ async def health() -> dict[str, object]:
             "/billing/entitlement",
             "/billing/dev-unlock",
             "/memory/profile",
+            "/cloud/status",
+            "/cloud/me",
+            "/cloud/session",
+            "/cloud/hud",
+            "/cloud/vector/stats",
             "/tools/catalog",
             "/tools/invoke",
             "/tools/confirm",
@@ -191,6 +202,7 @@ async def root() -> dict[str, str]:
         "websocket": "/ws/live",
         "billing": "/billing/config",
         "memory": "/memory/profile",
+        "cloud": "/cloud/status",
         "tools": "/tools/catalog",
         "google_auth": "/auth/google/status",
         "google_login": "/auth/google/login",

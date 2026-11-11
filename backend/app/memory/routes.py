@@ -58,6 +58,35 @@ async def put_profile(body: PreferenceUpdate, profile_id: str = "local") -> dict
     # Return full snapshot so HUD can re-render without losing history.
     snap = await asyncio.to_thread(store.snapshot, profile_id)
     prefs = snap.get("preferences") or {}
+    # Dual-write cloud session + preference vector (no-op when unset / local).
+    try:
+        from app.cloud.session import push_session
+        from app.memory.cloud_vector import mirror_local_upsert
+
+        await asyncio.to_thread(
+            push_session,
+            profile_id,
+            preferences=prefs if isinstance(prefs, dict) else {},
+            hud={},
+            device_id=None,
+        )
+        pref_bits = []
+        if isinstance(prefs, dict):
+            for key in ("tone", "style", "technical_level", "language", "notes"):
+                val = prefs.get(key)
+                if val:
+                    pref_bits.append(f"{key}={val}")
+        if pref_bits:
+            await asyncio.to_thread(
+                mirror_local_upsert,
+                profile_id=profile_id,
+                text="User preferences: " + "; ".join(pref_bits),
+                kind="preference",
+                meta={"source": "memory_put"},
+                record_id=f"pref-{profile_id}",
+            )
+    except Exception:
+        logger.debug("cloud preference push skipped", exc_info=True)
     return {
         **snap,
         "preference_summary": preferences_summary(prefs),
