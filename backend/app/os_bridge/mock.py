@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import time
 import uuid
-from functools import lru_cache
 from typing import Any
 
 from app.os_bridge.contracts import (
@@ -311,27 +310,6 @@ class MockOsBridgeBundle(OsBridgeBundle):
         )
 
 
-@lru_cache
-def get_os_bridge() -> OsBridgeBundle:
-    """Process-wide OS bridge — Google calendar/email when OAuth tokens exist."""
-    from app.auth.google_oauth import get_google_oauth_service
-    from app.tools.google.bridge import HybridCalendarBridge, google_credentials_ready
-
-    bundle = MockOsBridgeBundle()
-    bundle.calendar = HybridCalendarBridge(profile_id="local")
-    original_status = bundle.status
-
-    def status_with_google():
-        base = original_status()
-        live = google_credentials_ready("local")
-        base["google"] = {
-            "email_calendar_live": live,
-            "oauth": get_google_oauth_service().status("local"),
-        }
-        if live:
-            base["platform"] = "google"
-            base["mock"] = False
-        return base
-
-    bundle.status = status_with_google  # type: ignore[method-assign]
-    return bundle
+# Process-wide bridge selection lives in app.os_bridge.factory.get_os_bridge
+# (mock DEV fallback | desktop Win32 | android). Hybrid Google calendar is
+# attached there when OAuth session tokens exist.

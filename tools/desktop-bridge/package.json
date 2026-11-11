@@ -1,0 +1,15 @@
+{
+  "name": "@aether/desktop-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Optional nut-js companion for Aether desktop automation",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "doctor": "node src/doctor.js"
+  },
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "@nut-tree-fork/nut-js": "^4.2.6"
+  }
+}

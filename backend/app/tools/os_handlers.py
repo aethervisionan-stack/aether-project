@@ -10,7 +10,8 @@ from app.os_bridge.confirmation import (
     get_confirmation_engine,
     requires_confirmation,
 )
-from app.os_bridge.mock import get_os_bridge
+from app.os_bridge.factory import get_os_bridge
+from app.os_bridge.scope import get_scope_registry
 
 
 def _action_of(args: dict[str, Any], default: str) -> str:
@@ -392,15 +393,50 @@ async def telephony_tool(
     return {"ok": False, "error": f"unknown action: {action}", "tool": "telephony_tool"}
 
 
+def _scope_gate(
+    *,
+    action: str,
+    args: dict[str, Any],
+    profile_id: str,
+    confirmed: bool,
+    scope: str,
+) -> dict[str, Any] | None:
+    scopes = get_scope_registry()
+    if scopes.has(scope=scope, profile_id=profile_id):  # type: ignore[arg-type]
+        return None
+    if requires_confirmation("system_control_tool", action, confirmed=confirmed):
+        pending = get_confirmation_engine().create(
+            tool="system_control_tool",
+            action=action,
+            arguments={**args, "action": action, "confirmed": True},
+            profile_id=profile_id,
+        )
+        return {
+            "ok": True,
+            "status": "pending_confirmation",
+            "tool": "system_control_tool",
+            "action": action,
+            "pending_id": pending.id,
+            "speak": pending.speak,
+            "requires_confirmation": True,
+            "scope": scope,
+        }
+    scopes.grant(scope=scope, profile_id=profile_id, source="confirm")  # type: ignore[arg-type]
+    return None
+
+
 async def system_control_tool(
     args: dict[str, Any],
     *,
     settings: Settings | None = None,
     profile_id: str = "local",
 ) -> dict[str, Any]:
-    del settings, profile_id
-    bridge = get_os_bridge().system
+    del settings
+    bundle = get_os_bridge()
+    bridge = bundle.system
     action = _action_of(args, "battery")
+    confirmed = bool(args.get("confirmed"))
+    pending_id = str(args.get("pending_id") or "").strip() or None
 
     if action == "media":
         media_action = str(args.get("media_action") or args.get("media") or "pause").strip()
@@ -434,5 +470,168 @@ async def system_control_tool(
         label = str(args.get("label") or "")
         result = await bridge.set_alarm(time_hhmm=time_hhmm, label=label)
         return {**result.to_dict(), "tool": "system_control_tool", "status": "ok"}
+
+    if action == "delete_alarm":
+        alarm_id = str(args.get("alarm_id") or "").strip()
+        if not alarm_id:
+            return {"ok": False, "error": "alarm_id required", "tool": "system_control_tool"}
+        if requires_confirmation("system_control_tool", "delete_alarm", confirmed=confirmed):
+            pending = get_confirmation_engine().create(
+                tool="system_control_tool",
+                action="delete_alarm",
+                arguments={"action": "delete_alarm", "alarm_id": alarm_id, "confirmed": True},
+                profile_id=profile_id,
+            )
+            return {
+                "ok": True,
+                "status": "pending_confirmation",
+                "tool": "system_control_tool",
+                "action": "delete_alarm",
+                "pending_id": pending.id,
+                "speak": pending.speak,
+                "requires_confirmation": True,
+            }
+        native = getattr(bridge, "delete_alarm", None)
+        if native is None:
+            return {"ok": False, "error": "delete_alarm unsupported", "tool": "system_control_tool"}
+        result = await native(alarm_id=alarm_id)
+        return {
+            **result.to_dict(),
+            "tool": "system_control_tool",
+            "status": "executed",
+            "pending_id": pending_id,
+            "success_beep": True,
+        }
+
+    if action in {"desktop_capture", "capture", "screenshot"}:
+        gate = _scope_gate(
+            action="desktop_capture",
+            args={"max_width": int(args.get("max_width") or 1280)},
+            profile_id=profile_id,
+            confirmed=confirmed,
+            scope="desktop_capture",
+        )
+        if gate:
+            return gate
+        capture = getattr(bundle, "capture", None)
+        if capture is None:
+            return {
+                "ok": False,
+                "error": "desktop capture unavailable (set AETHER_OS_BRIDGE=desktop)",
+                "tool": "system_control_tool",
+            }
+        result = capture.capture(max_width=int(args.get("max_width") or 1280))
+        return {
+            **result.to_dict(),
+            "tool": "system_control_tool",
+            "status": "executed" if result.ok else "failed",
+            "pending_id": pending_id,
+            "success_beep": bool(result.ok),
+        }
+
+    if action in {"notification_read", "notifications", "read_notifications"}:
+        gate = _scope_gate(
+            action="notification_read",
+            args={"limit": int(args.get("limit") or 10)},
+            profile_id=profile_id,
+            confirmed=confirmed,
+            scope="notification_read",
+        )
+        if gate:
+            return gate
+        reader = getattr(bundle, "notifications", None)
+        if reader is not None:
+            result = await reader.read(limit=int(args.get("limit") or 10))
+        else:
+            events = await bundle.accessibility.poll_notifications()
+            from app.os_bridge.contracts import BridgeResult
+
+            result = BridgeResult(
+                ok=True,
+                action="notification_read",
+                detail=f"{len(events)} notifications",
+                data={"notifications": [e.to_dict() for e in events], "count": len(events)},
+                mock=bundle.platform in {"mock", "web"},
+            )
+        return {
+            **result.to_dict(),
+            "tool": "system_control_tool",
+            "status": "executed" if result.ok else "failed",
+            "pending_id": pending_id,
+            "success_beep": bool(result.ok),
+        }
+
+    if action in {"keyboard", "type", "hotkey"}:
+        gate = _scope_gate(
+            action="keyboard",
+            args={"mode": args.get("mode") or action, "text": args.get("text"), "keys": args.get("keys")},
+            profile_id=profile_id,
+            confirmed=confirmed,
+            scope="keyboard",
+        )
+        if gate:
+            return gate
+        controller = getattr(bundle, "input", None)
+        if controller is None:
+            return {
+                "ok": False,
+                "error": "keyboard unavailable (set AETHER_OS_BRIDGE=desktop)",
+                "tool": "system_control_tool",
+            }
+        mode = str(args.get("mode") or action).strip().lower()
+        if mode == "hotkey" or action == "hotkey":
+            keys = args.get("keys") if isinstance(args.get("keys"), list) else []
+            result = controller.hotkey(keys=[str(k) for k in keys])
+        else:
+            result = controller.type_text(text=str(args.get("text") or ""))
+        return {
+            **result.to_dict(),
+            "tool": "system_control_tool",
+            "status": "executed" if result.ok else "failed",
+            "pending_id": pending_id,
+            "success_beep": bool(result.ok),
+        }
+
+    if action in {"mouse", "click", "move", "scroll"}:
+        gate = _scope_gate(
+            action="mouse",
+            args={
+                "mode": args.get("mode") or action,
+                "x": args.get("x"),
+                "y": args.get("y"),
+                "button": args.get("button"),
+                "delta": args.get("delta"),
+            },
+            profile_id=profile_id,
+            confirmed=confirmed,
+            scope="mouse",
+        )
+        if gate:
+            return gate
+        controller = getattr(bundle, "input", None)
+        if controller is None:
+            return {
+                "ok": False,
+                "error": "mouse unavailable (set AETHER_OS_BRIDGE=desktop)",
+                "tool": "system_control_tool",
+            }
+        mode = str(args.get("mode") or action).strip().lower()
+        if mode == "scroll" or action == "scroll":
+            result = controller.scroll(delta=int(args.get("delta") or 0))
+        elif mode == "move" or action == "move":
+            result = controller.move(x=int(args.get("x") or 0), y=int(args.get("y") or 0))
+        else:
+            result = controller.click(
+                x=int(args.get("x") or 0),
+                y=int(args.get("y") or 0),
+                button=str(args.get("button") or "left"),
+            )
+        return {
+            **result.to_dict(),
+            "tool": "system_control_tool",
+            "status": "executed" if result.ok else "failed",
+            "pending_id": pending_id,
+            "success_beep": bool(result.ok),
+        }
 
     return {"ok": False, "error": f"unknown action: {action}", "tool": "system_control_tool"}

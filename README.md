@@ -93,9 +93,17 @@ Open [http://127.0.0.1:5173](http://127.0.0.1:5173), pair a Bluetooth headset as
 | `SOLANA_PAYER_SECRET_KEY` | `backend/.env` | Empty = **stub mode** (no real transfers) |
 | `GOOGLE_OAUTH_CLIENT_ID` | `backend/.env` | OAuth Web client id — do not invent |
 | `GOOGLE_OAUTH_CLIENT_SECRET` | `backend/.env` | OAuth Web client secret — do not invent |
-| `GOOGLE_OAUTH_REDIRECT_URI` | `backend/.env` | Default callback URL |
-| `GOOGLE_TOKEN_FERNET_KEY` | `backend/.env` | Fernet key for encrypted tokens |
+| `GOOGLE_OAUTH_REDIRECT_URI` | `backend/.env` | Default callback URL (`/auth/google/callback`) |
+| `GOOGLE_TOKEN_FERNET_KEY` | `backend/.env` | Fernet key for encrypted session tokens |
 | `GOOGLE_MAPS_API_KEY` | `backend/.env` | Maps Platform key |
+| `AETHER_OS_BRIDGE` | `backend/.env` | `mock` (DEV default) \| `desktop` \| `android` — see [docs/os-bridge.md](docs/os-bridge.md) |
+| `AETHER_OS_BRIDGE_TOKEN` | `backend/.env` | Optional Bearer for `/tools/os-bridge/*` (never commit) |
+| `AETHER_DESKTOP_CAPTURE_ENABLED` | `backend/.env` | Enable desktopCapture (scoped confirm); off by default |
+| `AETHER_DESKTOP_INPUT_ENABLED` | `backend/.env` | Enable keyboard/mouse (scoped confirm); off by default |
+| `AETHER_DESKTOP_NOTIFICATIONS_ENABLED` | `backend/.env` | Enable notification read; off by default |
+| `AETHER_MOBILE_BRIDGE_URL` | `backend/.env` | Android AccessibilityService WS target |
+
+Google OAuth: [docs/google-oauth.md](docs/google-oauth.md). Native OS Bridge: [docs/os-bridge.md](docs/os-bridge.md).
 
 Persona: **Aether** — 1–3 sentence, direct, actionable replies for HUD / spatial audio.
 

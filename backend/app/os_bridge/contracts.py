@@ -146,5 +146,9 @@ class OsBridgeBundle:
             "telephony": True,
             "system_control": True,
             "accessibility": True,
-            "mock": self.platform in {"mock", "web", "desktop"},
+            "mock": self.platform in {"mock", "web"},
+            "desktop_capture": self.platform == "desktop",
+            "keyboard": self.platform == "desktop",
+            "mouse": self.platform == "desktop",
+            "notification_read": self.platform in {"desktop", "android", "mock"},
         }

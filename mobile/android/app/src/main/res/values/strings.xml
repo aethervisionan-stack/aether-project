@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Aether Bridge</string>
+    <string name="aether_accessibility_description">Aether Vision OS Bridge reads on-screen text/notifications and performs confirmed gestures.</string>
+</resources>

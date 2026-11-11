@@ -14,7 +14,8 @@ from app.config import get_settings
 from app.introspection.manifest import build_feature_flags
 from app.introspection.telemetry import get_latency_telemetry
 from app.memory import routes as memory_routes
-from app.os_bridge.mock import get_os_bridge
+from app.os_bridge import bridge_routes as os_bridge_routes
+from app.os_bridge.factory import get_os_bridge
 from app.persona.real_life_copilot import ENGINE_ACTIVATION_BANNER
 from app.tools import routes as tools_routes
 from app.websocket import live as live_ws
@@ -37,6 +38,7 @@ app = FastAPI(
         "Frontier tools under `/tools`. CoT + multimodal sidecars on `/ws/live`. "
         "Hands-free OS agent: messaging/email/telephony/system + two-step confirm. "
         "Google OAuth: Gmail/Calendar/Drive + Maps tools under `/auth/google`. "
+        "Native OS Bridge under `/tools/os-bridge` (desktop/android; mock DEV fallback). "
         "Introspection: dynamic self-knowledge + system_help_tool."
     ),
     version=__version__,
@@ -55,6 +57,7 @@ app.include_router(billing_routes.router)
 app.include_router(memory_routes.router)
 app.include_router(tools_routes.router)
 app.include_router(google_auth_routes.router)
+app.include_router(os_bridge_routes.router)
 
 
 @app.get("/verify-subscription")
@@ -66,6 +69,8 @@ async def verify_subscription_alias(session_id: str):
 @app.get("/health")
 async def health() -> dict[str, object]:
     feature_unlock = settings.local_feature_unlock()
+    bridge = get_os_bridge()
+    bridge_status = bridge.status()
     return {
         "status": "ok",
         "service": "aether-vision-live",
@@ -116,16 +121,21 @@ async def health() -> dict[str, object]:
             "system_control_tool": True,
             "two_step_confirm": True,
             "notification_listener": True,
-            "os_bridge": get_os_bridge().status().get("platform", "mock"),
+            "os_bridge": bridge_status.get("platform", getattr(bridge, "platform", "mock")),
+            "desktop_capture": settings.aether_desktop_capture_enabled,
+            "desktop_input": settings.aether_desktop_input_enabled,
+            "scoped_confirm": True,
             "google_drive_tool": True,
             "google_maps_tool": True,
         },
         "google": {
             "oauth_configured": settings.google_oauth_configured(),
             "maps_api_key_configured": settings.google_maps_configured(),
+            "auth_login": "/auth/google/login",
             "auth_start": "/auth/google/start",
+            "auth_callback": "/auth/google/callback",
             "auth_status": "/auth/google/status",
-            "os_bridge": get_os_bridge().status().get("google"),
+            "os_bridge": bridge_status.get("google"),
         },
         "introspection": {
             **build_feature_flags(),
@@ -145,6 +155,13 @@ async def health() -> dict[str, object]:
             "/tools/listener/poll",
             "/tools/listener/ingest",
             "/tools/os-bridge",
+            "/tools/os-bridge/status",
+            "/tools/os-bridge/desktop-capture",
+            "/tools/os-bridge/notifications/read",
+            "/tools/os-bridge/keyboard",
+            "/tools/os-bridge/mouse",
+            "/tools/os-bridge/mobile/inject",
+            "/auth/google/login",
             "/auth/google/start",
             "/auth/google/callback",
             "/auth/google/status",
@@ -165,18 +182,20 @@ async def root() -> dict[str, str]:
         "memory": "/memory/profile",
         "tools": "/tools/catalog",
         "google_auth": "/auth/google/status",
+        "os_bridge": "/tools/os-bridge/status",
     }
 
 
 logger.info("Activated %s", ENGINE_ACTIVATION_BANNER)
 logger.info(
-    "Aether Vision Live ready version=%s engine=%s model=%s cors=%s stripe=%s solana=%s",
+    "Aether Vision Live ready version=%s engine=%s model=%s cors=%s stripe=%s solana=%s os_bridge=%s",
     __version__,
     ENGINE_ACTIVATION_BANNER,
     settings.gemini_live_model,
     settings.cors_origin_list,
     settings.has_stripe(),
     "live_prepared" if settings.solana_live_transfers_enabled() else "stub",
+    (settings.aether_os_bridge or "mock").strip().lower() or "mock",
 )
 if settings.google_oauth_configured():
     logger.info(
@@ -187,5 +206,15 @@ else:
     logger.warning(
         "Google OAuth not configured — set GOOGLE_OAUTH_CLIENT_ID and "
         "GOOGLE_OAUTH_CLIENT_SECRET in backend/.env (see backend/.env.example). "
-        "Gmail/Calendar stay mock; Drive/Maps tools require auth."
+        "Gmail/Calendar stay mock DEV fallback; Drive/Maps tools require auth."
+    )
+if (settings.aether_os_bridge or "mock").strip().lower() in {"", "mock"}:
+    logger.info(
+        "OS Bridge mode=mock (DEV fallback). Set AETHER_OS_BRIDGE=desktop|android "
+        "for real system_control_tool mapping — see docs/os-bridge.md."
+    )
+else:
+    logger.info(
+        "OS Bridge mode=%s (system_control_tool → native bridge)",
+        settings.aether_os_bridge,
     )

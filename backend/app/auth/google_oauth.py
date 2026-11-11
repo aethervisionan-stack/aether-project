@@ -168,12 +168,15 @@ class GoogleOAuthService:
                 (self.settings.google_maps_api_key or "").strip()
                 and "placeholder" not in (self.settings.google_maps_api_key or "").lower()
             ),
+            "login_path": "/auth/google/login",
             "start_path": "/auth/google/start",
             "callback_path": "/auth/google/callback",
+            "uses_env_client_credentials": True,
+            "workspace_uses_session_token": True,
         }
 
     def start_url_query(self, profile_id: str = "local") -> str:
-        return "/auth/google/start?" + urlencode({"profile_id": profile_id})
+        return "/auth/google/login?" + urlencode({"profile_id": profile_id})
 
     @staticmethod
     def _creds_to_dict(creds: Credentials, *, email: str | None = None) -> dict[str, Any]:

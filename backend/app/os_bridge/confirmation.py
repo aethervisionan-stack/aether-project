@@ -71,6 +71,13 @@ IRREVERSIBLE: frozenset[tuple[str, str]] = frozenset(
         ("telephony_tool", "answer"),
         ("telephony_tool", "decline"),
         ("system_control_tool", "delete_alarm"),
+        ("system_control_tool", "desktop_capture"),
+        ("system_control_tool", "notification_read"),
+        ("system_control_tool", "keyboard"),
+        ("system_control_tool", "mouse"),
+        ("system_control_tool", "click"),
+        ("system_control_tool", "type"),
+        ("system_control_tool", "hotkey"),
     }
 )
 
@@ -132,8 +139,24 @@ def build_speak_summary(tool: str, action: str, args: dict[str, Any]) -> str:
             return f"Vou atender{speaker}. Confirma?"
         if action == "decline":
             return "Vou recusar a chamada. Confirma?"
-    if tool == "system_control_tool" and action == "delete_alarm":
-        return f"Vou apagar o alarme {args.get('alarm_id') or ''}. Confirma?"
+    if tool == "system_control_tool":
+        if action == "delete_alarm":
+            return f"Vou apagar o alarme {args.get('alarm_id') or ''}. Confirma?"
+        if action in {"desktop_capture", "capture", "screenshot"}:
+            return "Vou capturar a tela do desktop. Confirma?"
+        if action in {"notification_read", "notifications", "read_notifications"}:
+            return "Vou ler as notificações visíveis. Confirma?"
+        if action in {"keyboard", "type", "hotkey"}:
+            preview = str(args.get("text") or "+".join(args.get("keys") or []) or "")
+            clip = preview if len(preview) <= 60 else preview[:57] + "…"
+            return f"Vou usar o teclado{(': «' + clip + '»') if clip else ''}. Confirma?"
+        if action in {"mouse", "click", "move", "scroll"}:
+            return (
+                f"Vou controlar o mouse"
+                f" ({args.get('mode') or action}"
+                f"{(' @' + str(args.get('x')) + ',' + str(args.get('y'))) if args.get('x') is not None else ''}"
+                f"). Confirma?"
+            )
     return f"Vou executar {tool}.{action}. Confirma?"
 
 

@@ -16,7 +16,7 @@ from app.os_bridge.confirmation import (
     is_rejection_utterance,
 )
 from app.os_bridge.listener import get_notification_listener
-from app.os_bridge.mock import get_os_bridge
+from app.os_bridge.factory import get_os_bridge
 from app.tools.registry import ToolContext, get_tool_registry
 
 router = APIRouter(prefix="/tools", tags=["tools"])
@@ -191,6 +191,35 @@ async def tool_confirm(body: ToolConfirmBody) -> dict[str, Any]:
         }
 
     engine.pop(pending.id)
+    if pending.action.startswith("grant_scope:"):
+        from app.os_bridge.scope import get_scope_registry
+
+        scope_name = pending.action.split(":", 1)[1]
+        grant = get_scope_registry().grant(
+            scope=scope_name,  # type: ignore[arg-type]
+            profile_id=body.profile_id,
+            ttl_s=pending.arguments.get("ttl_s"),
+            source="confirm",
+        )
+        return {
+            "ok": True,
+            "status": "executed",
+            "pending_id": pending.id,
+            "tool": pending.tool,
+            "action": pending.action,
+            "speak": f"Escopo {scope_name} liberado.",
+            "success_beep": True,
+            "grant": grant.to_dict(),
+        }
+
+    from app.os_bridge.scope import action_to_scope, get_scope_registry
+
+    scope = action_to_scope(pending.action)
+    if scope:
+        get_scope_registry().grant(
+            scope=scope, profile_id=body.profile_id, source="confirm"
+        )
+
     args = dict(pending.arguments)
     args["confirmed"] = True
     args["pending_id"] = pending.id

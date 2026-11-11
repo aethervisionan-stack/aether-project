@@ -110,7 +110,7 @@ class Settings(BaseSettings):
     )
     memory_enabled: bool = Field(default=True, alias="MEMORY_ENABLED")
 
-    # --- Google OAuth (Gmail / Calendar / Drive) — never invent secret values ---
+# --- Google OAuth (Gmail / Calendar / Drive) — never invent secret values ---
     google_oauth_client_id: str = Field(default="", alias="GOOGLE_OAUTH_CLIENT_ID")
     google_oauth_client_secret: str = Field(default="", alias="GOOGLE_OAUTH_CLIENT_SECRET")
     google_oauth_client_secrets_file: str = Field(default="", alias="GOOGLE_OAUTH_CLIENT_SECRETS_FILE")
@@ -125,6 +125,24 @@ class Settings(BaseSettings):
     google_token_fernet_key: str = Field(default="", alias="GOOGLE_TOKEN_FERNET_KEY")
     google_token_dir: str = Field(default="data/google_tokens", alias="GOOGLE_TOKEN_DIR")
     google_maps_api_key: str = Field(default="", alias="GOOGLE_MAPS_API_KEY")
+
+    # --- Native OS Bridge (desktop Win32 / Android Accessibility) ---
+    # Default mock is DEV-only fallback; production sets desktop|android.
+    aether_os_bridge: str = Field(default="mock", alias="AETHER_OS_BRIDGE")
+    aether_os_bridge_token: str = Field(default="", alias="AETHER_OS_BRIDGE_TOKEN")
+    aether_desktop_capture_enabled: bool = Field(
+        default=False, alias="AETHER_DESKTOP_CAPTURE_ENABLED"
+    )
+    aether_desktop_input_enabled: bool = Field(
+        default=False, alias="AETHER_DESKTOP_INPUT_ENABLED"
+    )
+    aether_desktop_notifications_enabled: bool = Field(
+        default=False, alias="AETHER_DESKTOP_NOTIFICATIONS_ENABLED"
+    )
+    aether_mobile_bridge_url: str = Field(
+        default="ws://127.0.0.1:8000/ws/live",
+        alias="AETHER_MOBILE_BRIDGE_URL",
+    )
 
     @property
     def cors_origin_list(self) -> list[str]:

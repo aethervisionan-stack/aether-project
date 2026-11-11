@@ -18,11 +18,14 @@ async def google_auth_status(profile_id: str = "local") -> dict[str, Any]:
     return get_google_oauth_service().status(profile_id)
 
 
-@router.get("/start")
-async def google_auth_start(
+async def _google_auth_login(
     profile_id: str = "local",
-    redirect: bool = Query(default=True),
+    redirect: bool = True,
 ) -> Any:
+    """
+    Begin OAuth using ONLY env CLIENT_ID/SECRET (or CLIENT_SECRETS_FILE).
+    Workspace APIs later use the encrypted session token from credential_store.
+    """
     service = get_google_oauth_service()
     if not service.configured():
         raise HTTPException(
@@ -40,6 +43,23 @@ async def google_auth_start(
     if redirect:
         return RedirectResponse(url=payload["authorization_url"], status_code=302)
     return payload
+
+
+@router.get("/login")
+async def google_auth_login(
+    profile_id: str = "local",
+    redirect: bool = Query(default=True),
+) -> Any:
+    return await _google_auth_login(profile_id=profile_id, redirect=redirect)
+
+
+@router.get("/start")
+async def google_auth_start(
+    profile_id: str = "local",
+    redirect: bool = Query(default=True),
+) -> Any:
+    """Alias for `/auth/google/login` (kept for older clients)."""
+    return await _google_auth_login(profile_id=profile_id, redirect=redirect)
 
 
 @router.get("/callback")
@@ -89,8 +109,12 @@ async def google_auth_config() -> dict[str, Any]:
             and "placeholder" not in (settings.google_maps_api_key or "").lower()
         ),
         "scopes": list(service.status().get("scopes_requested") or []),
+        "login": "/auth/google/login",
         "start": "/auth/google/start",
+        "callback": "/auth/google/callback",
         "status": "/auth/google/status",
+        "uses_env_client_credentials": True,
+        "workspace_uses_session_token": True,
     }
 
 
