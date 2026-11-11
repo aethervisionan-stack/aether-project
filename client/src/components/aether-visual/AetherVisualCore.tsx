@@ -1,7 +1,8 @@
 /**
  * AetherVisualCore — React Three Fiber holographic AI presence.
  * Faithful port of the pasted HolographicSphere (icosahedron wireframe,
- * cyan/violet, core glow, data rings, particles, status strip).
+ * cyan/violet, core glow, particles, status strip). Orbital ringGeometry
+ * HUD rings removed per product feedback.
  * Soft-FPS: reused temps, capped DPR, modest icosa detail for HUD daily use.
  */
 import { Canvas, useFrame } from "@react-three/fiber";
@@ -23,8 +24,6 @@ const ICOSA_DETAIL = 12;
 function HolographicSphere({ drive }: { drive: VisualCoreDriveRef }) {
   const meshRef = useRef<THREE.Mesh>(null);
   const particlesRef = useRef<THREE.Points>(null);
-  const ring1Ref = useRef<THREE.Mesh>(null);
-  const ring2Ref = useRef<THREE.Mesh>(null);
   const coreMatRef = useRef<THREE.MeshBasicMaterial>(null);
   const wireMatRef = useRef<THREE.MeshStandardMaterial>(null);
   const vertex = useMemo(() => new THREE.Vector3(), []);
@@ -56,9 +55,6 @@ function HolographicSphere({ drive }: { drive: VisualCoreDriveRef }) {
     const time = clock.getElapsedTime();
     const { isSpeaking, audioIntensity } = drive.current;
     const intensity = isSpeaking ? Math.max(0.2, audioIntensity) : 0.05;
-
-    if (ring1Ref.current) ring1Ref.current.rotation.z = time * 0.3;
-    if (ring2Ref.current) ring2Ref.current.rotation.x = time * -0.2;
 
     if (wireMatRef.current) {
       wireMatRef.current.emissiveIntensity = isSpeaking ? 0.8 : 0.3;
@@ -113,16 +109,6 @@ function HolographicSphere({ drive }: { drive: VisualCoreDriveRef }) {
       <mesh>
         <sphereGeometry args={[1.3, 16, 16]} />
         <meshBasicMaterial ref={coreMatRef} color="#00f0ff" transparent opacity={0.05} />
-      </mesh>
-
-      <mesh ref={ring1Ref}>
-        <ringGeometry args={[2.2, 2.25, 64]} />
-        <meshBasicMaterial color="#00f0ff" side={THREE.DoubleSide} transparent opacity={0.4} />
-      </mesh>
-
-      <mesh ref={ring2Ref} rotation={[Math.PI / 3, 0, 0]}>
-        <ringGeometry args={[2.5, 2.53, 64]} />
-        <meshBasicMaterial color="#7000ff" side={THREE.DoubleSide} transparent opacity={0.3} />
       </mesh>
 
       <points ref={particlesRef}>
