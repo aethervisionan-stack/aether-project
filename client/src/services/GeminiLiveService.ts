@@ -17,9 +17,11 @@ import { GaplessPcmPlayer } from "../audio/GaplessPcmPlayer";
 import { formatMicError, PcmCapture } from "../audio/PcmCapture";
 import { EMPTY_SPECTRUM } from "../audio/SpectrumTap";
 import { TelemetryMonitor } from "../audio/TelemetryMonitor";
+import { VadManager } from "../audio/vadManager";
 import type { OrbitDriveState } from "../components/AudioReactiveAIOrbit"; // type-only — no runtime cycle
 import { buildHudTelemetry } from "../multimodal/HudTelemetry";
 import type { CapturedFrame } from "../multimodal/FrameCapture";
+import { MultimodalStream } from "./multimodalStream";
 import type {
   GeoFixPayload,
   MobilityConfig,
@@ -29,9 +31,9 @@ import type {
 import { DEFAULT_MOBILITY_CONFIG } from "../types/mobility";
 import type { LiveServerJsonEvent, WsReadyStateLabel } from "../types/live";
 import type { ToolArgumentsByName, ToolName } from "../types/tools";
-import { BargeInController } from "../voice/BargeInController";
 import { PushToTalk } from "../voice/PushToTalk";
-import { VadController, type VadPhase } from "../voice/VadController";
+import type { VadPhase } from "../voice/VadController";
+import { SidebandCapture } from "../vision/sidebandCapture";
 
 export type LiveEventHandler = (event: LiveServerJsonEvent) => void;
 
@@ -115,9 +117,11 @@ export class GeminiLiveService {
   private mobilityConfig: MobilityConfig = { ...DEFAULT_MOBILITY_CONFIG };
   /** When PTT is enabled, PCM only flushes while gate is open. */
   private pttGateOpen = true;
-  private readonly vad: VadController;
+  private readonly vad: VadManager;
   private readonly ptt: PushToTalk;
-  private readonly bargeIn: BargeInController;
+  private readonly stream: MultimodalStream;
+  private sideband: SidebandCapture | null = null;
+  private toolsActive = false;
 
   constructor(options: GeminiLiveServiceOptions = {}) {
     this.url = options.url ?? resolveDefaultWsUrl();
@@ -127,21 +131,34 @@ export class GeminiLiveService {
     this.player = new GaplessPcmPlayer({
       onDepth: (depth) => this.telemetry.setPlaybackQueueDepth(depth),
     });
-    this.bargeIn = new BargeInController({
-      interruptPlayback: () => this.abortPlaybackQueue(),
+    this.stream = new MultimodalStream({
+      sendBinary: (data) => {
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+          this.ws.send(data);
+        }
+      },
+      sendJson: (payload) => this.sendJson(payload),
+      isSocketOpen: () => Boolean(this.ws && this.ws.readyState === WebSocket.OPEN),
+      onTtftHint: () => {
+        this.telemetry.markTtft(performance.now());
+      },
+    });
+    this.vad = new VadManager({
+      abortPlayback: () => this.abortPlaybackQueue(),
+      resetOutboundAudio: () => {
+        this.fifo.clear();
+        this.stream.resetOutboundAudio();
+        this.telemetry.setFifo(this.fifo.stats());
+      },
+      notifyServer: () => this.sendJson({ type: "barge_in", client_t: performance.now() }),
       clearTokenStream: () => {
         this.lastTokenStream = "";
       },
-      notifyServer: () => this.sendJson({ type: "barge_in", client_t: performance.now() }),
       onBargeIn: () => {
         this.telemetry.clearAiCycle();
         this.voiceCycleArmed = true;
+        this.toolsActive = false;
         this.setVizMode(this.micEnabled ? "listening" : "idle");
-      },
-    });
-    this.vad = new VadController({
-      onSpeechStart: () => {
-        this.bargeIn.tryBargeIn();
       },
     });
     this.ptt = new PushToTalk({
@@ -154,7 +171,7 @@ export class GeminiLiveService {
           client_t: performance.now(),
         });
         if (active) {
-          this.bargeIn.tryBargeIn();
+          this.vad.forceBargeIn();
           this.setVizMode("listening");
         }
       },
@@ -169,7 +186,7 @@ export class GeminiLiveService {
   applyMobilityConfig(partial: Partial<MobilityConfig>): void {
     this.mobilityConfig = { ...this.mobilityConfig, ...partial };
     const cfg = this.mobilityConfig;
-    this.vad.setEnabled(cfg.openMic && !cfg.pttEnabled);
+    this.vad.setEnabled(Boolean(cfg.openMic && !cfg.pttEnabled));
     this.ptt.setEnabled(cfg.pttEnabled);
     this.pttGateOpen = !cfg.pttEnabled;
     this.sendJson({
@@ -254,6 +271,37 @@ export class GeminiLiveService {
   abortPlaybackQueue(): void {
     this.player.clearOutputQueue();
     this.lastTokenStream = "";
+    this.stream.resetOutboundAudio();
+  }
+
+  /** Start / stop background vision sideband (camera ~2s / motion deltas). */
+  async startSideband(opts?: { allowDisplayFallback?: boolean }): Promise<void> {
+    this.stopSideband();
+    this.sideband = new SidebandCapture({
+      intervalMs: 2000,
+      preferCamera: true,
+      allowDisplayFallback: opts?.allowDisplayFallback === true,
+      onFrame: (frame, meta) => this.stream.pushFrame(frame, meta),
+      onError: (err) => console.warn("[aether] sideband frame error", err),
+    });
+    await this.sideband.start();
+  }
+
+  stopSideband(): void {
+    this.sideband?.stop();
+    this.sideband = null;
+  }
+
+  getMultimodalStats() {
+    return this.stream.getStats();
+  }
+
+  /** Mark tool-calling cognitive state for orbit tint (cleared on turn_complete). */
+  setToolsActive(active: boolean): void {
+    this.toolsActive = active;
+    if (active) {
+      this.setVizMode("processing");
+    }
   }
 
   /** Attach / detach the Gen-1 audio HUD visualizer without reconnecting. */
@@ -323,7 +371,9 @@ export class GeminiLiveService {
     this.lastTokenStream = "";
     this.ptt.setEnabled(false);
     this.vad.reset();
-    this.bargeIn.markAssistantIdle();
+    this.stopSideband();
+    this.stream.clear();
+    this.toolsActive = false;
     void this.visualizer?.connectMicStream(null);
     this.setVizMode("idle");
     this.detachAndCloseSocket();
@@ -377,16 +427,9 @@ export class GeminiLiveService {
     });
   }
 
-  /** Push a screen/image frame beside PCM (multimodal sidecar). */
+  /** Push a screen/image frame beside PCM (multimodal sidecar / AVF1). */
   sendFrame(frame: CapturedFrame): void {
-    this.sendJson({
-      type: "frame",
-      mime: frame.mime,
-      data: frame.dataBase64,
-      width: frame.width,
-      height: frame.height,
-      client_t: frame.clientT,
-    });
+    this.stream.pushFrame(frame, { delta: false });
   }
 
   /** Push HUD telemetry sample (ping/AI/viz) without touching PCM flush. */
@@ -411,12 +454,12 @@ export class GeminiLiveService {
 
   /** True while VAD reports active speech (incl. hangover). */
   isVadSpeech(): boolean {
-    return this.vad.getPhase() !== "silence";
+    return this.vad.isSpeech();
   }
 
   /** True while AI playback queue has audio or barge-in marks assistant speaking. */
   isPlaybackActive(): boolean {
-    return this.player.isPlaying || this.bargeIn.isAssistantSpeaking();
+    return this.player.isPlaying || this.vad.isAssistantSpeaking();
   }
 
   getWsState(): WsReadyStateLabel {
@@ -434,6 +477,14 @@ export class GeminiLiveService {
     const playbackActive = this.isPlaybackActive();
     const bands = playbackActive && play.level > 0.02 ? play : mic;
     const voice = bands.voiceBand ?? bands.level;
+    const cognitive =
+      this.toolsActive || this.vizMode === "processing"
+        ? "thinking"
+        : playbackActive
+          ? "playback"
+          : vadSpeech
+            ? "listening"
+            : "idle";
     return {
       wsOpen: this.getWsState() === "OPEN",
       vadSpeech,
@@ -445,6 +496,8 @@ export class GeminiLiveService {
       mid: bands.mid,
       treble: bands.treble,
       voiceBand: voice,
+      cognitive,
+      toolsActive: this.toolsActive,
     };
   }
 
@@ -490,6 +543,7 @@ export class GeminiLiveService {
 
       ws.onopen = () => {
         this.telemetry.setWsState("OPEN");
+        this.stream.onSocketOpen();
         this.telemetry.startPingLoop((t) => this.sendJson({ type: "ping", t }), {
           intervalMs: CLIENT_PING_INTERVAL_MS,
           timeoutMs: CLIENT_PONG_TIMEOUT_MS,
@@ -545,7 +599,7 @@ export class GeminiLiveService {
 
     try {
       const { label } = await this.capture.start((pcm) => {
-        // Full-duplex VAD (open mic, no wake word) — barge-in before enqueue when AI speaks.
+        // Continuous perception VAD — barge-in + soft outbound restart when AI speaks.
         this.vad.pushPcm16(pcm);
         // PTT gate: drop uplink PCM when hold-to-talk is idle (still run VAD locally).
         if (this.mobilityConfig.pttEnabled && !this.pttGateOpen) {
@@ -674,14 +728,11 @@ export class GeminiLiveService {
 
   private startFlushLoop(): void {
     this.stopFlushLoop();
-    // Flush FIFO → socket ~ every 20 ms
+    // Flush FIFO → multimodal stream (~20 ms) — buffers across brief reconnects.
     this.flushTimer = window.setInterval(() => {
-      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-        return;
-      }
       let frame = this.fifo.shift();
       while (frame) {
-        this.ws.send(frame);
+        this.stream.pushPcm(frame);
         this.telemetry.setFifo(this.fifo.stats());
         frame = this.fifo.shift();
       }
@@ -752,8 +803,9 @@ export class GeminiLiveService {
 
     if (event.data instanceof ArrayBuffer) {
       this.telemetry.markAiFirstChunk();
+      this.stream.markFirstAudioIn();
       this.voiceCycleArmed = true;
-      this.bargeIn.markAssistantSpeaking();
+      this.vad.markAssistantSpeaking();
       try {
         // Expressive synthesis path: visualizer mode tracks AI speech energy.
         this.setVizMode("speaking");
@@ -821,15 +873,21 @@ export class GeminiLiveService {
       this.telemetry.markAiFirstChunk();
       this.telemetry.markTtft();
       this.voiceCycleArmed = true;
-      this.bargeIn.markAssistantSpeaking();
+      this.vad.markAssistantSpeaking();
       this.setVizMode("speaking");
+    }
+
+    if (parsed.type === "tool_result" || parsed.type === "decision") {
+      this.toolsActive = true;
+      this.setVizMode("processing");
     }
 
     if (parsed.type === "interrupted") {
       this.abortPlaybackQueue();
       this.telemetry.clearAiCycle();
       this.voiceCycleArmed = true;
-      this.bargeIn.markAssistantIdle();
+      this.toolsActive = false;
+      this.vad.markAssistantIdle();
       this.setVizMode(this.micEnabled ? "listening" : "idle");
       try {
         await this.player.ensureStarted();
@@ -840,7 +898,8 @@ export class GeminiLiveService {
 
     if (parsed.type === "turn_complete") {
       this.voiceCycleArmed = true;
-      this.bargeIn.markAssistantIdle();
+      this.toolsActive = false;
+      this.vad.markAssistantIdle();
       this.setVizMode(this.micEnabled ? "listening" : "idle");
     }
 
