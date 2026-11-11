@@ -730,12 +730,53 @@ button.voice-pulse {
   opacity: 0.72;
 }
 
+.ai-orbit-react-root,
+.ai-orbit-visual-root {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
 .ai-orbit-canvas {
   display: block;
   width: 100%;
   height: 100%;
   margin: 0;
   transform: translateZ(0);
+}
+
+.ai-orbit-status {
+  position: absolute;
+  bottom: 1rem;
+  left: 1rem;
+  z-index: 2;
+  margin: 0;
+  font-family: ui-monospace, "Cascadia Code", "SF Mono", Consolas, monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  color: #22d3ee;
+  pointer-events: none;
+  user-select: none;
+}
+
+.ai-orbit-status-val {
+  color: #22d3ee;
+}
+
+.ai-orbit-status[data-speaking="true"] .ai-orbit-status-val {
+  color: #4ade80;
+  animation: ai-orbit-status-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes ai-orbit-status-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
 }
 
 .focus-mode .ai-orbit-stage {
