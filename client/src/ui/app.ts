@@ -17,7 +17,7 @@ import {
 } from "../services/BillingService";
 import { AdvancedAudioVisualizer } from "../audio/AdvancedAudioVisualizer";
 import { idleLatencyLine, LatencyMonitor } from "../audio/LatencyMonitor";
-import { AudioReactiveAIOrbit } from "../components/AudioReactiveAIOrbit";
+import { AetherVisualCoreHost } from "../components/aether-visual/AetherVisualCoreHost";
 import { envDevUnlock, isFeatureUnlock } from "../dev/unlock";
 import { classifyPace } from "../hardware/NotificationPriority";
 import { initI18n, msg, onLocaleChange, t } from "../i18n";
@@ -87,7 +87,7 @@ export class ControlApp {
   private orbitHost!: HTMLElement;
   private latencyEl!: HTMLElement;
   private visualizer: AdvancedAudioVisualizer | null = null;
-  private orbit: AudioReactiveAIOrbit | null = null;
+  private orbit: AetherVisualCoreHost | null = null;
   private latencyMonitor: LatencyMonitor | null = null;
   private treasury: TreasuryWidget | null = null;
   private transcript: TranscriptFeed | null = null;
@@ -193,7 +193,7 @@ export class ControlApp {
     const mobilityMount = this.root.querySelector<HTMLElement>("[data-role=mobility]")!;
     const devtoolsMount = this.root.querySelector<HTMLElement>("[data-role=devtools]")!;
 
-    this.orbit = new AudioReactiveAIOrbit();
+    this.orbit = new AetherVisualCoreHost();
     this.orbit.mount(this.orbitHost);
     this.orbit.start(() => this.readOrbitDrive());
 
@@ -825,7 +825,8 @@ export class ControlApp {
   }
 
   /**
-   * Drive AudioReactiveAIOrbit from live WS / VAD / GaplessPcmPlayer analyser taps.
+   * Drive AetherVisualCore (R3F island) from live WS / VAD / GaplessPcmPlayer analyser taps.
+   * Maps playbackActive → isSpeaking, playLevel → audioIntensity (0–1).
    * Demo query still available: ?orbit=full|pulse|user (does not replace Live binding).
    */
   private readOrbitDrive() {
