@@ -848,7 +848,6 @@ export class ControlApp {
           bass: 0,
           mid: 0,
           treble: 0,
-          voiceBand: 0,
         };
       }
       if (demo === "user") {
@@ -863,10 +862,9 @@ export class ControlApp {
           bass: e * 0.6,
           mid: e * 0.5,
           treble: e * 0.4,
-          voiceBand: e,
         };
       }
-      // pulse = assistant undulation (100–2000Hz-like envelope)
+      // pulse = assistant undulation
       const voice = 0.36 + 0.22 * Math.sin(t * 1.4) + 0.1 * Math.sin(t * 2.6);
       return {
         wsOpen: true,
@@ -878,7 +876,6 @@ export class ControlApp {
         bass: 0.38 + 0.22 * Math.sin(t * 1.35),
         mid: 0.34 + 0.2 * Math.cos(t * 2.1),
         treble: 0.2 + 0.12 * Math.sin(t * 2.8),
-        voiceBand: voice,
       };
     }
 
@@ -898,7 +895,6 @@ export class ControlApp {
       bass: snap?.bass ?? 0,
       mid: snap?.mid ?? 0,
       treble: snap?.treble ?? 0,
-      voiceBand: snap?.playLevel ?? snap?.micLevel ?? 0,
     };
   }
 

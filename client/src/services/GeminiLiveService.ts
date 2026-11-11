@@ -121,7 +121,6 @@ export class GeminiLiveService {
   private readonly ptt: PushToTalk;
   private readonly stream: MultimodalStream;
   private sideband: SidebandCapture | null = null;
-  private toolsActive = false;
 
   constructor(options: GeminiLiveServiceOptions = {}) {
     this.url = options.url ?? resolveDefaultWsUrl();
@@ -157,7 +156,6 @@ export class GeminiLiveService {
       onBargeIn: () => {
         this.telemetry.clearAiCycle();
         this.voiceCycleArmed = true;
-        this.toolsActive = false;
         this.setVizMode(this.micEnabled ? "listening" : "idle");
       },
     });
@@ -296,11 +294,12 @@ export class GeminiLiveService {
     return this.stream.getStats();
   }
 
-  /** Mark tool-calling cognitive state for orbit tint (cleared on turn_complete). */
+  /** Mark tool-calling / processing phase for HUD viz mode (cleared on turn_complete). */
   setToolsActive(active: boolean): void {
-    this.toolsActive = active;
     if (active) {
       this.setVizMode("processing");
+    } else {
+      this.setVizMode(this.micEnabled ? "listening" : "idle");
     }
   }
 
@@ -373,7 +372,6 @@ export class GeminiLiveService {
     this.vad.reset();
     this.stopSideband();
     this.stream.clear();
-    this.toolsActive = false;
     void this.visualizer?.connectMicStream(null);
     this.setVizMode("idle");
     this.detachAndCloseSocket();
@@ -469,6 +467,7 @@ export class GeminiLiveService {
   /**
    * Live orbit drive snapshot — samples AnalyserNodes on rAF only.
    * Mic = PcmCapture tap; play = GaplessPcmPlayer live output tap.
+   * Matches original AudioReactiveAIOrbit drive fields (no cognitive mesh).
    */
   getOrbitAudioSnapshot(): OrbitDriveState {
     const mic = this.capture.isRunning ? this.capture.sampleSpectrum() : EMPTY_SPECTRUM;
@@ -476,28 +475,16 @@ export class GeminiLiveService {
     const vadSpeech = this.isVadSpeech();
     const playbackActive = this.isPlaybackActive();
     const bands = playbackActive && play.level > 0.02 ? play : mic;
-    const voice = bands.voiceBand ?? bands.level;
-    const cognitive =
-      this.toolsActive || this.vizMode === "processing"
-        ? "thinking"
-        : playbackActive
-          ? "playback"
-          : vadSpeech
-            ? "listening"
-            : "idle";
     return {
       wsOpen: this.getWsState() === "OPEN",
       vadSpeech,
       playbackActive,
       mode: this.vizMode,
-      micLevel: mic.voiceBand ?? mic.level,
-      playLevel: Math.max(play.voiceBand ?? play.level, playbackActive ? 0.12 : 0),
+      micLevel: mic.level,
+      playLevel: Math.max(play.level, playbackActive ? 0.12 : 0),
       bass: bands.bass,
       mid: bands.mid,
       treble: bands.treble,
-      voiceBand: voice,
-      cognitive,
-      toolsActive: this.toolsActive,
     };
   }
 
@@ -878,7 +865,6 @@ export class GeminiLiveService {
     }
 
     if (parsed.type === "tool_result" || parsed.type === "decision") {
-      this.toolsActive = true;
       this.setVizMode("processing");
     }
 
@@ -886,7 +872,6 @@ export class GeminiLiveService {
       this.abortPlaybackQueue();
       this.telemetry.clearAiCycle();
       this.voiceCycleArmed = true;
-      this.toolsActive = false;
       this.vad.markAssistantIdle();
       this.setVizMode(this.micEnabled ? "listening" : "idle");
       try {
@@ -898,7 +883,6 @@ export class GeminiLiveService {
 
     if (parsed.type === "turn_complete") {
       this.voiceCycleArmed = true;
-      this.toolsActive = false;
       this.vad.markAssistantIdle();
       this.setVizMode(this.micEnabled ? "listening" : "idle");
     }
