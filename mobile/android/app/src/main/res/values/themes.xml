@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.AetherVision" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">#0B1F2A</item>
+        <item name="colorPrimaryVariant">#163A4A</item>
+        <item name="colorOnPrimary">#E8F4F8</item>
+        <item name="android:statusBarColor">#0B1F2A</item>
+        <item name="android:navigationBarColor">#0B1F2A</item>
+        <item name="android:windowBackground">#07141C</item>
+    </style>
+</resources>

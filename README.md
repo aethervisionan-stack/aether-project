@@ -6,6 +6,7 @@ Monorepo root keeps the existing Next.js landing. This document covers the **Gem
 | --- | --- |
 | `backend/` | FastAPI + official `google-genai` Live session |
 | `client/` | Vite 6 + TypeScript Vanilla (PCM mic / playback + telemetry) |
+| `mobile/` | Native hands-free Android/iOS (wake word, VAD, GPS, vision sideband, FCM) — see `mobile/README.md` + `mobile/ENV.md` |
 
 ```
 Headset mic (PCM 16-bit mono @ 16 kHz)

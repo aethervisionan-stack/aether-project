@@ -1,6 +1,7 @@
-package com.aethervision.bridge
+package com.aethervision.mobile.osbridge
 
 import android.util.Log
+import com.aethervision.mobile.BuildConfig
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -11,42 +12,75 @@ import okhttp3.WebSocketListener
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
+/**
+ * IPC bridge from AccessibilityService → Aether FastAPI agent engine.
+ *
+ * - HTTP POST `/tools/os-bridge/mobile/inject` for notifications / UI snapshots
+ * - Optional WebSocket to `/ws/live` for keepalive / agent gesture events
+ *
+ * Unified under `com.aethervision.mobile.osbridge` (no separate bridge package).
+ */
 object BridgeWebSocketClient {
     private const val TAG = "AetherBridge"
-    @Volatile var httpBase: String = BuildConfig.BRIDGE_HTTP_BASE
-    @Volatile var wsUrl: String = BuildConfig.BRIDGE_WS_URL
-    @Volatile var bridgeToken: String = ""
-    private val client = OkHttpClient.Builder()
+
+    @Volatile
+    var httpBase: String = BuildConfig.BRIDGE_HTTP_BASE
+
+    @Volatile
+    var wsUrl: String = BuildConfig.BRIDGE_WS_URL
+
+    /** Optional Bearer matching backend AETHER_OS_BRIDGE_TOKEN (never hardcode secrets). */
+    @Volatile
+    var bridgeToken: String = ""
+
+    private val client: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(8, TimeUnit.SECONDS)
         .readTimeout(0, TimeUnit.SECONDS)
         .build()
+
     private var socket: WebSocket? = null
 
-    fun log(message: String) = Log.i(TAG, message)
+    fun log(message: String) {
+        Log.i(TAG, message)
+    }
 
     fun connect() {
         disconnect()
-        socket = client.newWebSocket(Request.Builder().url(wsUrl).build(), object : WebSocketListener() {
+        val req = Request.Builder().url(wsUrl).build()
+        socket = client.newWebSocket(req, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 log("WS open ${response.code}")
-                webSocket.send(JSONObject().put("type", "client_hello").put("source", "android_accessibility").toString())
+                webSocket.send(
+                    JSONObject()
+                        .put("type", "client_hello")
+                        .put("source", "android_accessibility")
+                        .toString(),
+                )
             }
+
             override fun onMessage(webSocket: WebSocket, text: String) {
+                log("WS message ${text.take(200)}")
                 try {
                     val msg = JSONObject(text)
                     if (msg.optString("type") != "os_gesture") return
                     val svc = AetherAccessibilityService.instance ?: return
                     when (msg.optString("mode")) {
-                        "tap" -> svc.tap(msg.optDouble("x").toFloat(), msg.optDouble("y").toFloat())
+                        "tap" -> svc.tap(
+                            msg.optDouble("x").toFloat(),
+                            msg.optDouble("y").toFloat(),
+                        )
                         "swipe" -> svc.swipe(
-                            msg.optDouble("x1").toFloat(), msg.optDouble("y1").toFloat(),
-                            msg.optDouble("x2").toFloat(), msg.optDouble("y2").toFloat(),
+                            msg.optDouble("x1").toFloat(),
+                            msg.optDouble("y1").toFloat(),
+                            msg.optDouble("x2").toFloat(),
+                            msg.optDouble("y2").toFloat(),
                         )
                     }
                 } catch (e: Exception) {
                     log("WS parse error: ${e.message}")
                 }
             }
+
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 log("WS failure: ${t.message}")
             }
@@ -58,7 +92,12 @@ object BridgeWebSocketClient {
         socket = null
     }
 
-    fun injectNotification(packageName: String, title: String, body: String, sender: String?) {
+    fun injectNotification(
+        packageName: String,
+        title: String,
+        body: String,
+        sender: String?,
+    ) {
         postInject(
             JSONObject()
                 .put("package", packageName)
@@ -89,10 +128,16 @@ object BridgeWebSocketClient {
         Thread {
             try {
                 val url = httpBase.trimEnd('/') + "/tools/os-bridge/mobile/inject"
-                val body = payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
+                val body = payload.toString()
+                    .toRequestBody("application/json; charset=utf-8".toMediaType())
                 val builder = Request.Builder().url(url).post(body)
-                if (bridgeToken.isNotBlank()) builder.header("Authorization", "Bearer $bridgeToken")
-                client.newCall(builder.build()).execute().use { resp -> log("inject HTTP ${resp.code}") }
+                val token = bridgeToken.trim()
+                if (token.isNotEmpty()) {
+                    builder.header("Authorization", "Bearer $token")
+                }
+                client.newCall(builder.build()).execute().use { resp ->
+                    log("inject HTTP ${resp.code}")
+                }
             } catch (e: Exception) {
                 log("inject failed: ${e.message}")
             }

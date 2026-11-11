@@ -7,4 +7,4 @@
     android:canRetrieveWindowContent="true"
     android:description="@string/aether_accessibility_description"
     android:notificationTimeout="100"
-    android:settingsActivity="com.aethervision.bridge.MainActivity" />
+    android:settingsActivity="com.aethervision.mobile.MainActivity" />

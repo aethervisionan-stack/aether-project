@@ -1,4 +1,4 @@
-package com.aethervision.bridge
+package com.aethervision.mobile.osbridge
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
@@ -9,7 +9,13 @@ import android.view.accessibility.AccessibilityNodeInfo
 import org.json.JSONArray
 import org.json.JSONObject
 
+/**
+ * Native OS Bridge entry (unified under `com.aethervision.mobile`).
+ * Walks AccessibilityNodeInfo trees, collects visible text, and dispatches
+ * agent-confirmed taps/swipes. Consolidated from former `com.aethervision.bridge`.
+ */
 class AetherAccessibilityService : AccessibilityService() {
+
     override fun onServiceConnected() {
         super.onServiceConnected()
         instance = this
@@ -36,7 +42,7 @@ class AetherAccessibilityService : AccessibilityService() {
     }
 
     override fun onInterrupt() {
-        BridgeWebSocketClient.log("interrupted")
+        BridgeWebSocketClient.log("AetherAccessibilityService interrupted")
     }
 
     override fun onDestroy() {
@@ -48,6 +54,7 @@ class AetherAccessibilityService : AccessibilityService() {
         val visible = JSONArray()
         val summary = StringBuilder()
         var count = 0
+
         fun walk(node: AccessibilityNodeInfo?) {
             if (node == null || count >= maxNodes) return
             count += 1
@@ -61,8 +68,11 @@ class AetherAccessibilityService : AccessibilityService() {
                     summary.append(text)
                 }
             }
-            for (i in 0 until node.childCount) walk(node.getChild(i))
+            for (i in 0 until node.childCount) {
+                walk(node.getChild(i))
+            }
         }
+
         walk(root)
         return JSONObject()
             .put("package", root.packageName?.toString() ?: "unknown")
@@ -73,6 +83,7 @@ class AetherAccessibilityService : AccessibilityService() {
             .put("body", "UI snapshot (${visible.length()} texts)")
     }
 
+    /** Agent-driven tap via dispatchGesture (requires canPerformGestures). */
     fun tap(x: Float, y: Float, durationMs: Long = 50L): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return false
         val path = Path().apply { moveTo(x, y) }
@@ -82,9 +93,18 @@ class AetherAccessibilityService : AccessibilityService() {
         return dispatchGesture(gesture, null, null)
     }
 
-    fun swipe(x1: Float, y1: Float, x2: Float, y2: Float, durationMs: Long = 300L): Boolean {
+    fun swipe(
+        x1: Float,
+        y1: Float,
+        x2: Float,
+        y2: Float,
+        durationMs: Long = 300L,
+    ): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return false
-        val path = Path().apply { moveTo(x1, y1); lineTo(x2, y2) }
+        val path = Path().apply {
+            moveTo(x1, y1)
+            lineTo(x2, y2)
+        }
         val gesture = GestureDescription.Builder()
             .addStroke(GestureDescription.StrokeDescription(path, 0, durationMs))
             .build()
@@ -92,7 +112,8 @@ class AetherAccessibilityService : AccessibilityService() {
     }
 
     companion object {
-        @Volatile var instance: AetherAccessibilityService? = null
+        @Volatile
+        var instance: AetherAccessibilityService? = null
             private set
     }
 }

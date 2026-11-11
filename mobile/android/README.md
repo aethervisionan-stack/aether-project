@@ -1,14 +1,37 @@
-# Aether Vision — Android OS Bridge
+# Aether Vision — Android (hands-free + OS Bridge)
 
-`AetherAccessibilityService` walks `AccessibilityNodeInfo`, collects visible text,
-and can `dispatchGesture`. Events POST to `/tools/os-bridge/mobile/inject` and
-optionally keep a Live WS open for agent gesture commands.
+**One** Gradle app / `applicationId` / namespace: `com.aethervision.mobile`.
+OS Bridge Accessibility + IPC live under `com.aethervision.mobile.osbridge`
+(consolidated from former `com.aethervision.bridge`). Do **not** add a second
+Android module or package tree.
+
+## Packages
+
+| Package | Role |
+| --- | --- |
+| `com.aethervision.mobile.handsfree` | Foreground Service, Porcupine wake, continuous VAD, PCM capture |
+| `com.aethervision.mobile.sensors` | Continuous GPS + periodic camera sideband |
+| `com.aethervision.mobile.push` | FCM service + token registrar |
+| `com.aethervision.mobile.osbridge` | AccessibilityService, BridgeWebSocketClient, NotificationListener |
 
 ## Enable
 
-1. Build/install debug APK (`./gradlew :app:installDebug`).
-2. Settings → Accessibility → Aether Vision Bridge → On.
-3. Backend `.env`: `AETHER_OS_BRIDGE=android`, optional `AETHER_OS_BRIDGE_TOKEN`.
-4. Emulator HTTP base default: `http://10.0.2.2:8000`.
+1. Copy `secrets.properties.example` → `secrets.properties` (Picovoice + URLs).
+2. Optional: `google-services.json` into `app/` (see `../ENV.md`).
+3. Open `mobile/android` in Android Studio → sync → `assembleDebug`.
+4. Grant mic / location / camera; tap **Start hands-free**.
+5. **Settings → Accessibility → Aether Vision → On** for OS Bridge.
+6. Tap **Connect OS Bridge** (HTTP/WS targets; emulator defaults use `10.0.2.2`).
 
-Never embed API secrets in the APK — use local network + Bearer token.
+| Setting | Purpose |
+| --- | --- |
+| `PICOVOICE_ACCESS_KEY` | Porcupine wake word |
+| `AETHER_LIVE_WS_URL` / `BRIDGE_WS_URL` | Live WS |
+| `AETHER_OS_BRIDGE_BASE_URL` / `BRIDGE_HTTP_BASE` | REST inject base |
+| `AETHER_OS_BRIDGE_TOKEN` | Optional Bearer for `/tools/os-bridge/mobile/inject` |
+| `AETHER_PUSH_REGISTER_URL` | FCM token POST |
+
+## Security
+
+Accessibility can read on-screen text and inject gestures — treat as full device control.
+Backend scopes + two-step confirm still gate irreversible agent actions.
