@@ -64,6 +64,7 @@ IRREVERSIBLE: frozenset[tuple[str, str]] = frozenset(
         ("messaging_tool", "send"),
         ("messaging_tool", "voice_reply"),
         ("email_calendar_tool", "send_draft"),
+        ("email_calendar_tool", "send"),
         ("email_calendar_tool", "schedule"),
         ("email_calendar_tool", "delete"),
         ("telephony_tool", "place_call"),
@@ -117,6 +118,11 @@ def build_speak_summary(tool: str, action: str, args: dict[str, Any]) -> str:
             return f"Vou apagar o evento {args.get('event_id') or ''}. Confirma?"
         if action == "send_draft":
             return f"Vou enviar o rascunho {args.get('draft_id') or ''}. Posso enviar?"
+        if action == "send":
+            to = str(args.get("to") or "destinatário")
+            subject = str(args.get("subject") or "").strip()
+            clip = f" «{subject}»" if subject else ""
+            return f"Vou enviar e-mail para {to}{clip}. Posso enviar?"
     if tool == "telephony_tool":
         contact = str(args.get("contact") or "the caller")
         if action == "place_call":

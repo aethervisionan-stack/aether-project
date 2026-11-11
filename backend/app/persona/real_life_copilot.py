@@ -13,7 +13,7 @@ ENGINE_VERSION = "0.4.1"
 ENGINE_ID = "Real Life Co-Pilot Engine"
 ENGINE_ACTIVATION_BANNER = f"v{ENGINE_VERSION} - {ENGINE_ID}"
 
-# The 9 Tool Registry tools — prefer chained / parallel calling for root-cause.
+# Tool Registry names — prefer chained / parallel calling for root-cause.
 REGISTRY_TOOL_NAMES: tuple[str, ...] = (
     "solana_treasury_query",
     "onchain_lookup",
@@ -24,6 +24,8 @@ REGISTRY_TOOL_NAMES: tuple[str, ...] = (
     "telephony_tool",
     "system_control_tool",
     "system_help_tool",
+    "google_drive_tool",
+    "google_maps_tool",
 )
 
 REAL_LIFE_COPILOT_INSTRUCTION = (
@@ -54,7 +56,7 @@ REAL_LIFE_COPILOT_INSTRUCTION = (
     "Autonomous tool discipline:\n"
     "- Prefer calling tools for root-cause resolution BEFORE final voice synthesis "
     "when facts, OS state, memory, treasury, or system health matter.\n"
-    "- Chain or parallelize across the nine registry tools when useful: "
+    "- Chain or parallelize across the registry tools when useful: "
     + ", ".join(REGISTRY_TOOL_NAMES)
     + ".\n"
     "- MANDATORY: for project vision, what you can do, value proposition, available "

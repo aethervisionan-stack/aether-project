@@ -164,6 +164,10 @@ def _recommend_tools(text: str) -> list[str]:
         for k in ("email", "e-mail", "agenda", "calendar", "reuni", "appointment", "schedule")
     ):
         tools.append("email_calendar_tool")
+    if any(k in lower for k in ("drive", "google drive", "arquivo", "pdf", "documento")):
+        tools.append("google_drive_tool")
+    if any(k in lower for k in ("maps", "rota", "route", "directions", "naveg", "geoloc", "gps", "mapa")):
+        tools.append("google_maps_tool")
     if any(k in lower for k in ("call", "ligar", "telefone", "telephony", "chamada")):
         tools.append("telephony_tool")
     if any(

@@ -46,6 +46,10 @@ def _default_tool_args(name: str, text: str) -> dict[str, Any]:
         return {"action": "read", "app": "whatsapp", "limit": 5}
     if name == "email_calendar_tool":
         return {"action": "agenda", "day": "today"}
+    if name == "google_drive_tool":
+        return {"action": "search", "query": "aether", "limit": 5}
+    if name == "google_maps_tool":
+        return {"action": "geolocate"}
     if name == "telephony_tool":
         return {"action": "incoming"}
     if name == "system_control_tool":

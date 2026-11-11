@@ -110,6 +110,18 @@ class Settings(BaseSettings):
     )
     memory_enabled: bool = Field(default=True, alias="MEMORY_ENABLED")
 
+    # --- Google OAuth (Gmail / Calendar / Drive) — never invent secret values ---
+    google_oauth_client_id: str = Field(default="", alias="GOOGLE_OAUTH_CLIENT_ID")
+    google_oauth_client_secret: str = Field(default="", alias="GOOGLE_OAUTH_CLIENT_SECRET")
+    google_oauth_client_secrets_file: str = Field(default="", alias="GOOGLE_OAUTH_CLIENT_SECRETS_FILE")
+    google_oauth_redirect_uri: str = Field(
+        default="http://127.0.0.1:8000/auth/google/callback",
+        alias="GOOGLE_OAUTH_REDIRECT_URI",
+    )
+    google_token_fernet_key: str = Field(default="", alias="GOOGLE_TOKEN_FERNET_KEY")
+    google_token_dir: str = Field(default="data/google_tokens", alias="GOOGLE_TOKEN_DIR")
+    google_maps_api_key: str = Field(default="", alias="GOOGLE_MAPS_API_KEY")
+
     @property
     def cors_origin_list(self) -> list[str]:
         raw = {o.strip() for o in self.cors_origins.split(",") if o.strip()}
@@ -214,6 +226,26 @@ class Settings(BaseSettings):
     def solana_live_transfers_enabled(self) -> bool:
         """Real on-chain transfers require an explicit payer secret (never invent one)."""
         return bool(self.solana_payer_secret_key.strip())
+
+    def google_oauth_configured(self) -> bool:
+        secrets_file = self.google_oauth_client_secrets_file.strip()
+        if secrets_file:
+            return True
+        cid = self.google_oauth_client_id.strip()
+        secret = self.google_oauth_client_secret.strip()
+        if not cid or not secret:
+            return False
+        lowered = f"{cid} {secret}".lower()
+        if "placeholder" in lowered or "replace_me" in lowered:
+            return False
+        return True
+
+    def google_maps_configured(self) -> bool:
+        key = self.google_maps_api_key.strip()
+        if not key:
+            return False
+        lowered = key.lower()
+        return "placeholder" not in lowered and "replace_me" not in lowered
 
 
 @lru_cache

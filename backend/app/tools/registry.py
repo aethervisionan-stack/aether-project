@@ -13,6 +13,7 @@ from typing import Any
 from app.config import Settings, get_settings
 from app.introspection import handlers as help_handlers
 from app.tools import handlers, os_handlers
+from app.tools.google import handlers as google_handlers
 from app.tools.schemas import TOOL_SCHEMAS, ToolSchema, schema_by_name, schemas_for_prompt
 from app.tools.validation import validate_tool_args
 
@@ -89,6 +90,8 @@ class ToolRegistry:
         self.register("email_calendar_tool", os_handlers.email_calendar_tool)
         self.register("telephony_tool", os_handlers.telephony_tool)
         self.register("system_control_tool", os_handlers.system_control_tool)
+        self.register("google_drive_tool", google_handlers.google_drive_tool)
+        self.register("google_maps_tool", google_handlers.google_maps_tool)
         # Introspection / help (read-only — never pending_confirmation).
         self.register("system_help_tool", help_handlers.system_help_tool)
 

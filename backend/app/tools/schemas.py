@@ -140,7 +140,11 @@ TOOL_SCHEMAS: list[ToolSchema] = [
                     "enum": [
                         "read_email",
                         "priority_email",
+                        "list_threads",
+                        "threads",
+                        "unread",
                         "draft",
+                        "send",
                         "send_draft",
                         "schedule",
                         "agenda",
@@ -159,6 +163,7 @@ TOOL_SCHEMAS: list[ToolSchema] = [
                 "attendees": {"type": "array", "description": "Attendee names/emails."},
                 "day": {"type": "string"},
                 "event_id": {"type": "string"},
+                "query": {"type": "string"},
                 "limit": {"type": "integer"},
                 "confirmed": {"type": "boolean"},
             },
@@ -250,6 +255,42 @@ TOOL_SCHEMAS: list[ToolSchema] = [
             "additionalProperties": False,
         },
     },
+    {
+        "name": "google_drive_tool",
+        "description": "Search Google Drive (readonly OAuth). Actions: search/get.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "action": {"type": "string", "enum": ["search", "find", "get", "metadata"]},
+                "query": {"type": "string"},
+                "q": {"type": "string"},
+                "file_id": {"type": "string"},
+                "limit": {"type": "integer"},
+            },
+            "required": ["action"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "google_maps_tool",
+        "description": "Maps routes/geocode/geolocate via GOOGLE_MAPS_API_KEY.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "action": {"type": "string", "enum": ["route", "directions", "geocode", "reverse_geocode", "geolocate", "locate", "user_location"]},
+                "origin": {"type": "string"},
+                "destination": {"type": "string"},
+                "dest": {"type": "string"},
+                "mode": {"type": "string", "enum": ["driving", "walking", "bicycling", "transit"]},
+                "address": {"type": "string"},
+                "lat": {"type": "number"},
+                "lon": {"type": "number"},
+                "lng": {"type": "number"},
+            },
+            "required": ["action"],
+            "additionalProperties": False,
+        },
+    },
 ]
 
 ToolName = Literal[
@@ -262,6 +303,8 @@ ToolName = Literal[
     "telephony_tool",
     "system_control_tool",
     "system_help_tool",
+    "google_drive_tool",
+    "google_maps_tool",
 ]
 
 

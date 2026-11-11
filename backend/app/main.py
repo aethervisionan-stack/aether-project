@@ -8,11 +8,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import ENGINE_NAME, ENGINE_VERSION, __version__
+from app.auth import routes as google_auth_routes
 from app.billing import routes as billing_routes
 from app.config import get_settings
 from app.introspection.manifest import build_feature_flags
 from app.introspection.telemetry import get_latency_telemetry
 from app.memory import routes as memory_routes
+from app.os_bridge.mock import get_os_bridge
 from app.persona.real_life_copilot import ENGINE_ACTIVATION_BANNER
 from app.tools import routes as tools_routes
 from app.websocket import live as live_ws
@@ -34,6 +36,7 @@ app = FastAPI(
         "Long-term memory / prefs under `/memory`. "
         "Frontier tools under `/tools`. CoT + multimodal sidecars on `/ws/live`. "
         "Hands-free OS agent: messaging/email/telephony/system + two-step confirm. "
+        "Google OAuth: Gmail/Calendar/Drive + Maps tools under `/auth/google`. "
         "Introspection: dynamic self-knowledge + system_help_tool."
     ),
     version=__version__,
@@ -51,6 +54,7 @@ app.include_router(live_ws.router)
 app.include_router(billing_routes.router)
 app.include_router(memory_routes.router)
 app.include_router(tools_routes.router)
+app.include_router(google_auth_routes.router)
 
 
 @app.get("/verify-subscription")
@@ -112,13 +116,21 @@ async def health() -> dict[str, object]:
             "system_control_tool": True,
             "two_step_confirm": True,
             "notification_listener": True,
-            "os_bridge": "mock",
+            "os_bridge": get_os_bridge().status().get("platform", "mock"),
+            "google_drive_tool": True,
+            "google_maps_tool": True,
+        },
+        "google": {
+            "oauth_configured": settings.google_oauth_configured(),
+            "maps_api_key_configured": settings.google_maps_configured(),
+            "auth_start": "/auth/google/start",
+            "auth_status": "/auth/google/status",
+            "os_bridge": get_os_bridge().status().get("google"),
         },
         "introspection": {
             **build_feature_flags(),
             "latency": get_latency_telemetry(),
         },
-        # Explicit route map for local unlock verification (no auth middleware).
         "unlocked_routes": [
             "/health",
             "/ws/live",
@@ -133,6 +145,10 @@ async def health() -> dict[str, object]:
             "/tools/listener/poll",
             "/tools/listener/ingest",
             "/tools/os-bridge",
+            "/auth/google/start",
+            "/auth/google/callback",
+            "/auth/google/status",
+            "/auth/google/config",
         ],
     }
 
@@ -148,6 +164,7 @@ async def root() -> dict[str, str]:
         "billing": "/billing/config",
         "memory": "/memory/profile",
         "tools": "/tools/catalog",
+        "google_auth": "/auth/google/status",
     }
 
 

@@ -43,7 +43,11 @@ class EmailCalendarArgs(StrictModel):
     action: Literal[
         "read_email",
         "priority_email",
+        "list_threads",
+        "threads",
+        "unread",
         "draft",
+        "send",
         "send_draft",
         "schedule",
         "agenda",
@@ -61,9 +65,30 @@ class EmailCalendarArgs(StrictModel):
     attendees: list[str] | None = None
     day: str | None = None
     event_id: str | None = None
+    query: str | None = None
     limit: int | None = Field(default=None, ge=1, le=50)
     confirmed: bool | None = None
     pending_id: str | None = None
+
+
+class GoogleDriveArgs(StrictModel):
+    action: Literal["search", "find", "get", "metadata"]
+    query: str | None = None
+    q: str | None = None
+    file_id: str | None = None
+    limit: int | None = Field(default=None, ge=1, le=50)
+
+
+class GoogleMapsArgs(StrictModel):
+    action: Literal["route", "directions", "geocode", "reverse_geocode", "geolocate", "locate", "user_location"]
+    origin: str | None = None
+    destination: str | None = None
+    dest: str | None = None
+    mode: Literal["driving", "walking", "bicycling", "transit"] | None = None
+    address: str | None = None
+    lat: float | None = None
+    lon: float | None = None
+    lng: float | None = None
 
 
 class TelephonyArgs(StrictModel):
@@ -102,6 +127,8 @@ TOOL_ARG_MODELS: dict[str, type[StrictModel]] = {
     "telephony_tool": TelephonyArgs,
     "system_control_tool": SystemControlArgs,
     "system_help_tool": SystemHelpArgs,
+    "google_drive_tool": GoogleDriveArgs,
+    "google_maps_tool": GoogleMapsArgs,
 }
 
 
