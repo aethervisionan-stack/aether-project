@@ -78,6 +78,13 @@ export type HudMessages = {
     micUnavailable: string;
     textStillWorks: string;
   };
+  orbitMode: {
+    label: string;
+    classic: string;
+    advanced: string;
+    classicTitle: string;
+    advancedTitle: string;
+  };
   latency: {
     idle: string;
     ping: string;

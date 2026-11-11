@@ -18,6 +18,13 @@ import {
 import { AdvancedAudioVisualizer } from "../audio/AdvancedAudioVisualizer";
 import { idleLatencyLine, LatencyMonitor } from "../audio/LatencyMonitor";
 import { AudioReactiveAIOrbit } from "../components/AudioReactiveAIOrbit";
+import type { OrbitDriver } from "../components/AudioReactiveAIOrbit";
+import { OriginalAIOrbit } from "../components/OriginalAIOrbit";
+import {
+  loadOrbitVisualMode,
+  saveOrbitVisualMode,
+  type OrbitVisualMode,
+} from "../components/orbitMode";
 import { envDevUnlock, isFeatureUnlock } from "../dev/unlock";
 import { classifyPace } from "../hardware/NotificationPriority";
 import { initI18n, msg, onLocaleChange, t } from "../i18n";
@@ -34,9 +41,18 @@ import { GuardrailIndicator } from "./GuardrailIndicator";
 import { LanguageToggle } from "./LanguageToggle";
 import { MemoryInspector } from "./MemoryInspector";
 import { MobilityPanel } from "./MobilityPanel";
+import { OrbitModeToggle } from "./OrbitModeToggle";
 import { ToastHost } from "./ToastHost";
 import { TranscriptFeed } from "./TranscriptFeed";
 import { TreasuryWidget } from "./TreasuryWidget";
+
+/** Shared mount API for classic + advanced-mesh orbit visuals. */
+type OrbitVisual = {
+  mount(host: HTMLElement): void;
+  start(driver: OrbitDriver): void;
+  stop(): void;
+  dispose(): void;
+};
 
 /** Generation-1 connection labels — no PCM/path/telemetry prose. */
 function connectionLabel(state: WsReadyStateLabel): string {
@@ -85,9 +101,12 @@ export class ControlApp {
   private checkoutBusy = false;
   private vizCanvas!: HTMLCanvasElement;
   private orbitHost!: HTMLElement;
+  private orbitModeMount!: HTMLElement;
   private latencyEl!: HTMLElement;
   private visualizer: AdvancedAudioVisualizer | null = null;
-  private orbit: AudioReactiveAIOrbit | null = null;
+  private orbit: OrbitVisual | null = null;
+  private orbitMode: OrbitVisualMode = loadOrbitVisualMode();
+  private orbitModeToggle: OrbitModeToggle | null = null;
   private latencyMonitor: LatencyMonitor | null = null;
   private treasury: TreasuryWidget | null = null;
   private transcript: TranscriptFeed | null = null;
@@ -149,7 +168,10 @@ export class ControlApp {
           <p class="guardrail" data-role="guardrail">${m.guardrail.prefix}: ${m.guardrail.secure}</p>
         </div>
         <div class="hud-grid">
-          <div class="ai-orbit-stage" data-role="ai-orbit" aria-label="${m.live.vizLabel}"></div>
+          <div class="ai-orbit-wrap" data-role="ai-orbit-wrap">
+            <div class="ai-orbit-stage" data-role="ai-orbit" aria-label="${m.live.vizLabel}"></div>
+            <div class="orbit-mode-mount" data-role="orbit-mode"></div>
+          </div>
           <div class="hud-telemetry" data-role="hud-telemetry">
             <canvas class="audio-viz audio-viz--analysis" data-role="audio-viz" width="64" height="32" aria-hidden="true"></canvas>
             <p class="latency" data-role="latency">${m.latency.idle}</p>
@@ -184,6 +206,7 @@ export class ControlApp {
     this.sendBtn = this.root.querySelector("[data-action=send-text]")!;
     this.vizCanvas = this.root.querySelector("[data-role=audio-viz]")!;
     this.orbitHost = this.root.querySelector("[data-role=ai-orbit]")!;
+    this.orbitModeMount = this.root.querySelector("[data-role=orbit-mode]")!;
     this.latencyEl = this.root.querySelector("[data-role=latency]")!;
     const langMount = this.root.querySelector<HTMLElement>("[data-role=lang]")!;
     const treasuryMount = this.root.querySelector<HTMLElement>("[data-role=treasury]")!;
@@ -193,9 +216,10 @@ export class ControlApp {
     const mobilityMount = this.root.querySelector<HTMLElement>("[data-role=mobility]")!;
     const devtoolsMount = this.root.querySelector<HTMLElement>("[data-role=devtools]")!;
 
-    this.orbit = new AudioReactiveAIOrbit();
-    this.orbit.mount(this.orbitHost);
-    this.orbit.start(() => this.readOrbitDrive());
+    this.mountOrbitVisual(this.orbitMode);
+    this.orbitModeToggle = new OrbitModeToggle(this.orbitModeMount, this.orbitMode, (mode) => {
+      this.setOrbitVisualMode(mode);
+    });
 
     new LanguageToggle(langMount);
     this.treasury = new TreasuryWidget(treasuryMount);
@@ -354,6 +378,31 @@ export class ControlApp {
     if (this.focusMode) {
       this.toasts.info(msg().live.focusToast);
     }
+  }
+
+  /** Instantly swap classic ↔ advanced-mesh; only one WebGL orbit runs. */
+  private setOrbitVisualMode(mode: OrbitVisualMode): void {
+    if (mode === this.orbitMode && this.orbit) return;
+    this.orbitMode = mode;
+    saveOrbitVisualMode(mode);
+    this.mountOrbitVisual(mode);
+    this.orbitModeToggle?.setMode(mode);
+    this.orbitHost.dataset.orbitMode = mode;
+  }
+
+  private mountOrbitVisual(mode: OrbitVisualMode): void {
+    this.orbit?.stop();
+    this.orbit?.dispose();
+    this.orbit = null;
+    this.orbitHost.replaceChildren();
+    this.orbitHost.dataset.orbitMode = mode;
+    this.orbitHost.dataset.presence = "";
+
+    const next: OrbitVisual =
+      mode === "classic" ? new OriginalAIOrbit() : new AudioReactiveAIOrbit();
+    next.mount(this.orbitHost);
+    next.start(() => this.readOrbitDrive());
+    this.orbit = next;
   }
 
   private pulseButton(btn: HTMLButtonElement): void {

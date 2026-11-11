@@ -70,6 +70,13 @@ export const en: HudMessages = {
     micUnavailable: "Microphone unavailable.",
     textStillWorks: "{detail} You can still chat by text.",
   },
+  orbitMode: {
+    label: "Orbit",
+    classic: "Original",
+    advanced: "Advanced",
+    classicTitle: "Original layered sphere",
+    advancedTitle: "Advanced Co-pilot (v0.4.5) — single mesh",
+  },
   latency: {
     idle: "PING: — | AI: — | TTFT: —",
     ping: "PING",

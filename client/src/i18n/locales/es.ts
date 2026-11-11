@@ -71,6 +71,13 @@ export const es: HudMessages = {
     micUnavailable: "Micrófono no disponible.",
     textStillWorks: "{detail} Aún puedes chatear por texto.",
   },
+  orbitMode: {
+    label: "Órbita",
+    classic: "Original",
+    advanced: "Avanzado",
+    classicTitle: "Esfera original en capas",
+    advancedTitle: "Co-piloto Avanzado (v0.4.5) — malla única",
+  },
   latency: {
     idle: "PING: — | AI: — | TTFT: —",
     ping: "PING",

@@ -706,6 +706,11 @@ button.voice-pulse {
   margin-bottom: 0.85rem;
 }
 
+.ai-orbit-wrap {
+  position: relative;
+  width: 100%;
+}
+
 .ai-orbit-stage {
   position: relative;
   display: grid;
@@ -720,6 +725,66 @@ button.voice-pulse {
   /* Match `--bg0` so orbit void = HUD chrome void. */
   background: var(--bg0);
   transition: min-height 240ms var(--ease), border-color 200ms var(--ease), opacity 280ms var(--ease);
+}
+
+.orbit-mode-mount {
+  position: absolute;
+  z-index: 8;
+  left: 0.55rem;
+  bottom: 0.55rem;
+  pointer-events: none;
+}
+
+.orbit-mode-toggle {
+  pointer-events: auto;
+}
+
+.orbit-mode-toggle-inner {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.22rem 0.35rem 0.22rem 0.45rem;
+  border: 1px solid rgba(0, 243, 255, 0.14);
+  background: rgba(5, 8, 17, 0.72);
+  backdrop-filter: blur(8px);
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.orbit-mode-toggle-label {
+  opacity: 0.75;
+  text-transform: uppercase;
+  font-size: 0.62rem;
+}
+
+.orbit-mode-toggle-options {
+  display: inline-flex;
+  gap: 0.15rem;
+}
+
+.orbit-mode-option {
+  appearance: none;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  padding: 0.18rem 0.42rem;
+  font: inherit;
+  font-size: 0.68rem;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: color 160ms var(--ease), border-color 160ms var(--ease), background 160ms var(--ease);
+}
+
+.orbit-mode-option:hover {
+  color: var(--text);
+  border-color: rgba(0, 243, 255, 0.18);
+}
+
+.orbit-mode-option.is-active {
+  color: var(--cyan, #00f3ff);
+  border-color: rgba(0, 243, 255, 0.28);
+  background: rgba(0, 243, 255, 0.08);
 }
 
 .ai-orbit-stage[data-presence="point"] {
