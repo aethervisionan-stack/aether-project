@@ -34,11 +34,17 @@ cd backend
 python -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-cp .env.example .env        # set GEMINI_API_KEY
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+cp .env.example .env        # set GEMINI_API_KEY + Google OAuth (never commit)
+python scripts/verify_env.py
+uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-Health: [http://127.0.0.1:8000/health](http://127.0.0.1:8000/health)
+Health: [http://127.0.0.1:8000/health](http://127.0.0.1:8000/health)  
+Google login: [http://127.0.0.1:8000/auth/google/login](http://127.0.0.1:8000/auth/google/login)  
+OS Bridge inspector: [http://127.0.0.1:8000/tools/os-bridge/inspector](http://127.0.0.1:8000/tools/os-bridge/inspector)
+
+Windows verify runbook: [docs/verify-integration.md](docs/verify-integration.md).
+
 
 ### 2. Client
 

@@ -18,7 +18,9 @@ from app.os_bridge import bridge_routes as os_bridge_routes
 from app.os_bridge.factory import get_os_bridge
 from app.persona.real_life_copilot import ENGINE_ACTIVATION_BANNER
 from app.tools import routes as tools_routes
+from app.tools.google import test_routes as google_test_routes
 from app.websocket import live as live_ws
+
 
 settings = get_settings()
 logging.basicConfig(
@@ -56,8 +58,10 @@ app.include_router(live_ws.router)
 app.include_router(billing_routes.router)
 app.include_router(memory_routes.router)
 app.include_router(tools_routes.router)
+app.include_router(google_test_routes.router)
 app.include_router(google_auth_routes.router)
 app.include_router(os_bridge_routes.router)
+
 
 
 @app.get("/verify-subscription")
@@ -156,11 +160,17 @@ async def health() -> dict[str, object]:
             "/tools/listener/ingest",
             "/tools/os-bridge",
             "/tools/os-bridge/status",
+            "/tools/os-bridge/inspector",
             "/tools/os-bridge/desktop-capture",
             "/tools/os-bridge/notifications/read",
             "/tools/os-bridge/keyboard",
             "/tools/os-bridge/mouse",
             "/tools/os-bridge/mobile/inject",
+            "/tools/gmail/test",
+            "/tools/calendar/test",
+            "/tools/drive/test",
+            "/tools/maps/test",
+            "/tools/google/test",
             "/auth/google/login",
             "/auth/google/start",
             "/auth/google/callback",
@@ -168,6 +178,7 @@ async def health() -> dict[str, object]:
             "/auth/google/config",
         ],
     }
+
 
 
 @app.get("/")
@@ -182,8 +193,12 @@ async def root() -> dict[str, str]:
         "memory": "/memory/profile",
         "tools": "/tools/catalog",
         "google_auth": "/auth/google/status",
+        "google_login": "/auth/google/login",
         "os_bridge": "/tools/os-bridge/status",
+        "os_bridge_inspector": "/tools/os-bridge/inspector",
+        "verify_env": "python scripts/verify_env.py",
     }
+
 
 
 logger.info("Activated %s", ENGINE_ACTIVATION_BANNER)

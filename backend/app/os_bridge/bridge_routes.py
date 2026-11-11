@@ -130,17 +130,32 @@ def _pending_or_scope(
     }
 
 
-@router.get("/status")
-async def bridge_status(
-    profile_id: str = "local",
-    authorization: str | None = Header(default=None),
-) -> dict[str, Any]:
-    _check_bridge_token(authorization)
+def _active_driver(settings_mode: str, platform: str | None) -> str:
+    """Normalize inspector label to mock | desktop | android."""
+    mode = (settings_mode or "mock").strip().lower() or "mock"
+    if mode in {"mock", "desktop", "android"}:
+        return mode
+    plat = (platform or "").strip().lower()
+    if plat in {"mock", "desktop", "android", "web"}:
+        return "mock" if plat == "web" else plat
+    return "mock"
+
+
+def _bridge_inspector_payload(profile_id: str = "local") -> dict[str, Any]:
     settings = get_settings()
     bridge = get_os_bridge()
+    bridge_status = bridge.status()
+    platform = str(bridge_status.get("platform") or getattr(bridge, "platform", "mock"))
+    configured = (settings.aether_os_bridge or "mock").strip().lower() or "mock"
+    active = _active_driver(configured, platform)
     return {
-        **bridge.status(),
-        "mode": settings.aether_os_bridge,
+        **bridge_status,
+        "ok": True,
+        "mode": configured,
+        "configured_driver": configured,
+        "active_driver": active,
+        "platform": platform,
+        "driver": active,
         "flags": {
             "capture": settings.aether_desktop_capture_enabled,
             "input": settings.aether_desktop_input_enabled,
@@ -148,7 +163,41 @@ async def bridge_status(
         },
         "scopes": get_scope_registry().status(profile_id),
         "token_required": bool((settings.aether_os_bridge_token or "").strip()),
+        "routes": {
+            "inspector": "/tools/os-bridge/inspector",
+            "status": "/tools/os-bridge/status",
+        },
     }
+
+
+
+@router.get("/status")
+async def bridge_status(
+    profile_id: str = "local",
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    _check_bridge_token(authorization)
+    return _bridge_inspector_payload(profile_id)
+
+
+@router.get("/inspector")
+async def bridge_inspector(
+    profile_id: str = "local",
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    """
+    Bridge status inspector — shows active driver as mock | desktop | android.
+    Same payload as /status with an explicit active_driver field for ops/UI.
+    """
+    _check_bridge_token(authorization)
+    payload = _bridge_inspector_payload(profile_id)
+    payload["summary"] = (
+        f"active_driver={payload['active_driver']} "
+        f"configured={payload['configured_driver']} "
+        f"platform={payload['platform']}"
+    )
+    return payload
+
 
 
 @router.get("/scopes")

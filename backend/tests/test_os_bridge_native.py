@@ -142,9 +142,27 @@ def test_bridge_token_enforced(monkeypatch: pytest.MonkeyPatch):
             headers={"Authorization": "Bearer test-token-not-a-secret-example"},
         )
         assert ok.status_code == 200
+        assert ok.json().get("active_driver") in {"mock", "desktop", "android"}
+        insp = client.get(
+            "/tools/os-bridge/inspector",
+            headers={"Authorization": "Bearer test-token-not-a-secret-example"},
+        )
+        assert insp.status_code == 200
+        assert insp.json()["active_driver"] in {"mock", "desktop", "android"}
     get_settings.cache_clear()
     reset_os_bridge_cache()
     monkeypatch.delenv("AETHER_OS_BRIDGE_TOKEN", raising=False)
+
+
+def test_bridge_inspector_active_driver(client: TestClient):
+    body = client.get("/tools/os-bridge/inspector").json()
+    assert body["ok"] is True
+    assert body["active_driver"] == "mock"
+    assert body["configured_driver"] == "mock"
+    assert body["driver"] == "mock"
+    status = client.get("/tools/os-bridge/status").json()
+    assert status["active_driver"] == "mock"
+
 
 
 def test_confirmation_phrases_cover_desktop():

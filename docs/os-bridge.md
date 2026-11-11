@@ -45,13 +45,20 @@ Capture / input / notification flags default **false** (off). Enable explicitly 
 
 ## Routes
 
-- `GET  /tools/os-bridge/status`
+- `GET  /tools/os-bridge/status` — includes `active_driver` (`mock` \| `desktop` \| `android`)
+- `GET  /tools/os-bridge/inspector` — same payload + `summary` string for ops/UI
 - `POST /tools/os-bridge/desktop-capture`
 - `POST /tools/os-bridge/notifications/read`
 - `POST /tools/os-bridge/keyboard`
 - `POST /tools/os-bridge/mouse`
 - `POST /tools/os-bridge/scopes/grant`
 - `POST /tools/os-bridge/mobile/inject`
+
+```powershell
+pytest tests\test_os_bridge_native.py -q
+# curl http://127.0.0.1:8000/tools/os-bridge/inspector
+```
+
 
 ## Android
 
