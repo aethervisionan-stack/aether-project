@@ -40,10 +40,14 @@ export interface BillingConfig {
 export interface EntitlementStatus {
   subscriber_id: string;
   active: boolean;
+  /** Production gate — Tool Registry advanced routes require "active". */
+  payment_status?: string | null;
   source: string | null;
   email?: string | null;
+  interval?: string | null;
   expires_at?: number | null;
   granted_at?: number | null;
+  bypassed?: boolean;
 }
 
 function apiUrl(path: string): string {
@@ -91,13 +95,16 @@ export async function fetchEntitlement(subscriberId: string): Promise<Entitlemen
   return (await res.json()) as EntitlementStatus;
 }
 
-export async function startCheckout(): Promise<{ id: string; url: string; mock?: boolean }> {
+export async function startCheckout(
+  interval: "month" | "year" = "month",
+): Promise<{ id: string; url: string; mock?: boolean; interval?: string }> {
   const endpoint = apiUrl("/billing/checkout");
   let res: Response;
   try {
     res = await fetch(endpoint, {
       method: "POST",
-      headers: { Accept: "application/json" },
+      headers: { Accept: "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify({ interval }),
     });
   } catch (err) {
     console.error("[aether:billing] checkout network error", endpoint, err);
