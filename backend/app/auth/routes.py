@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
@@ -9,6 +10,8 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 
 from app.auth.google_oauth import get_google_oauth_service
 from app.config import get_settings
+
+logger = logging.getLogger("aether.auth.routes")
 
 router = APIRouter(prefix="/auth/google", tags=["auth-google"])
 
@@ -69,8 +72,10 @@ async def google_auth_callback(
     error: str | None = None,
 ) -> HTMLResponse:
     if error:
+        logger.warning("Google OAuth callback error from provider: %s", error)
         return HTMLResponse(content=_page("Google OAuth error", f"<p>{error}</p>"), status_code=400)
     if not code:
+        logger.warning("Google OAuth callback missing code (state=%s)", state or "-")
         return HTMLResponse(
             content=_page("Missing code", "<p>OAuth callback missing <code>code</code>.</p>"),
             status_code=400,
@@ -79,13 +84,29 @@ async def google_auth_callback(
     try:
         result = service.exchange_code(code=code, state=state)
     except Exception as exc:  # noqa: BLE001
+        logger.exception("Google OAuth token exchange failed")
+        print(
+            f"\n=== Aether Google login FAILED ===\n"
+            f"  reason: {exc}\n"
+            f"  tip:    re-open /auth/google/login and try again\n"
+            f"==================================\n",
+            flush=True,
+        )
         return HTMLResponse(content=_page("Token exchange failed", f"<p>{exc}</p>"), status_code=400)
     email = result.get("email") or "(unknown)"
     refresh = "yes" if result.get("has_refresh_token") else "no"
+    profile = result.get("profile_id") or "local"
+    logger.info(
+        "OAuth callback OK — session stored for %s (profile=%s, refresh=%s). "
+        "Workspace tools ready at /tools/gmail|calendar|drive/test",
+        email,
+        profile,
+        refresh,
+    )
     body = (
         f"<p>Connected as <strong>{email}</strong>.</p>"
         f"<p>refresh_token stored (encrypted): <code>{refresh}</code></p>"
-        f"<p>profile: <code>{result.get('profile_id')}</code></p>"
+        f"<p>profile: <code>{profile}</code></p>"
         "<p>You can close this tab and return to the Aether HUD.</p>"
     )
     return HTMLResponse(content=_page("Google connected", body))

@@ -119,12 +119,31 @@ class GoogleOAuthService:
         if email:
             payload["email"] = email
         self.store.save(resolved_profile, payload)
+        has_refresh = bool(payload.get("refresh_token"))
+        # Friendly terminal success — never log tokens/code/secrets.
+        logger.info(
+            "Google login SUCCESS — connected as %s | profile=%s | "
+            "refresh_token_stored=%s | scopes=%s | session=encrypted Fernet store",
+            email or "(unknown)",
+            resolved_profile,
+            "yes" if has_refresh else "no",
+            ",".join(payload.get("scopes") or list(GOOGLE_SCOPES)),
+        )
+        print(
+            f"\n=== Aether Google login SUCCESS ===\n"
+            f"  email:    {email or '(unknown)'}\n"
+            f"  profile:  {resolved_profile}\n"
+            f"  refresh:  {'stored (encrypted)' if has_refresh else 'missing'}\n"
+            f"  next:     GET /tools/gmail|calendar|drive/test\n"
+            f"===================================\n",
+            flush=True,
+        )
         return {
             "ok": True,
             "profile_id": resolved_profile,
             "email": email,
             "scopes": payload.get("scopes") or list(GOOGLE_SCOPES),
-            "has_refresh_token": bool(payload.get("refresh_token")),
+            "has_refresh_token": has_refresh,
         }
 
     def load_credentials(self, profile_id: str = "local") -> Credentials | None:
