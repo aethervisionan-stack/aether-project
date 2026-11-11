@@ -151,3 +151,14 @@ Waiting on MEI fiscal docs before pasting production keys. When ready:
 - `backend/app/billing/solana_distribution.py` — 70/30 stub / prepared live
 - `backend/app/billing/entitlements.py` — Gen-1 access flag store
 - `client/src/services/BillingService.ts` — Subscribe + entitlement client
+
+## Cloud sync + vector memory
+
+Optional Supabase session/HUD sync and per-user Pinecone/Qdrant vectors (ackend/app/cloud/, ackend/app/memory/cloud_vector.py).
+
+- Empty SUPABASE_* / vector keys keep local JSON memory working offline.
+- HTTP: /cloud/status, /cloud/session, /cloud/hud, /cloud/vector/*.
+- Sub-100ms HUD needs same-region Supabase Realtime WS (VITE_SUPABASE_*); HTTP poll is typically 80–250ms+.
+- Live PCM stays on /ws/live and is not routed through Supabase.
+- See ackend/app/cloud/README.md and ackend/app/cloud/schema.sql.
+

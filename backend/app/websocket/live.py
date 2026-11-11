@@ -135,6 +135,15 @@ async def live_websocket(websocket: WebSocket) -> None:
                         kind="interaction",
                         meta={"role": role},
                     )
+                    from app.memory.cloud_vector import mirror_local_upsert
+
+                    await asyncio.to_thread(
+                        mirror_local_upsert,
+                        profile_id=profile_id,
+                        text=cleaned[:800],
+                        kind="interaction",
+                        meta={"role": role},
+                    )
                 except Exception:
                     logger.debug("vector memory upsert skipped", exc_info=True)
             except Exception:
@@ -316,11 +325,30 @@ async def live_websocket(websocket: WebSocket) -> None:
                         limit=4,
                         kinds=["summary", "preference", "interaction"],
                     )
+                    try:
+                        from app.memory.cloud_vector import query_cloud_vectors
+
+                        cloud_hits = await asyncio.to_thread(
+                            query_cloud_vectors,
+                            profile_id,
+                            text="preferences habits standing notes recent themes",
+                            limit=4,
+                            kinds=["summary", "preference", "interaction"],
+                        )
+                        if cloud_hits:
+                            seen = {str(h.get("text") or "") for h in hits}
+                            for ch in cloud_hits:
+                                ct = str(ch.get("text") or "")
+                                if ct and ct not in seen:
+                                    hits.append(ch)
+                                    seen.add(ct)
+                    except Exception:
+                        logger.debug("cloud vector recall merge skipped", exc_info=True)
                     if hits:
                         lines = [
                             "=== Vector memory recall (silent — do not recite) ===",
                         ]
-                        for h in hits[:4]:
+                        for h in hits[:6]:
                             kind = h.get("kind") or "context"
                             text = str(h.get("text") or "").strip()[:220]
                             if text:
