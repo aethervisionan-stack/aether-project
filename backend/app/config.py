@@ -45,6 +45,14 @@ class Settings(BaseSettings):
     stripe_publishable_key: str = Field(default="", alias="STRIPE_PUBLISHABLE_KEY")
     stripe_webhook_secret: str = Field(default="", alias="STRIPE_WEBHOOK_SECRET")
     stripe_price_id: str = Field(default="", alias="STRIPE_PRICE_ID")
+    stripe_price_id_monthly: str = Field(default="", alias="STRIPE_PRICE_ID_MONTHLY")
+    stripe_price_id_annual: str = Field(default="", alias="STRIPE_PRICE_ID_ANNUAL")
+    stripe_annual_price_id: str = Field(default="", alias="STRIPE_ANNUAL_PRICE_ID")
+    stripe_annual_currency: str = Field(default="usd", alias="STRIPE_ANNUAL_CURRENCY")
+    stripe_annual_unit_amount_cents: int = Field(
+        default=19900,
+        alias="STRIPE_ANNUAL_UNIT_AMOUNT_CENTS",
+    )
     stripe_success_url: str = Field(
         default="http://127.0.0.1:5173/?checkout=success&session_id={CHECKOUT_SESSION_ID}",
         alias="STRIPE_SUCCESS_URL",
@@ -63,11 +71,9 @@ class Settings(BaseSettings):
     stripe_force_unit_amount: bool = Field(default=True, alias="STRIPE_FORCE_UNIT_AMOUNT")
 
     # Local Gen-1 bypass when Stripe keys are absent (never enable in production).
-    billing_dev_unlock: bool = Field(default=True, alias="BILLING_DEV_UNLOCK")
-    # Local-dev default: unlock Live/HUD/tools without Subscribe.
-    # Set BYPASS_SUBSCRIPTION_CHECK=false before sk_live_ / production — Stripe code stays intact.
+    billing_dev_unlock: bool = Field(default=False, alias="BILLING_DEV_UNLOCK")
     bypass_subscription_check: bool = Field(
-        default=True,
+        default=False,
         alias="BYPASS_SUBSCRIPTION_CHECK",
     )
 
@@ -98,6 +104,13 @@ class Settings(BaseSettings):
     solana_payer_secret_key: str = Field(default="", alias="SOLANA_PAYER_SECRET_KEY")
     # Rough VISION tokens credited per USD of subscription for Gen-1 distribution math.
     vision_tokens_per_usd: float = Field(default=100.0, alias="VISION_TOKENS_PER_USD")
+
+    solana_usdc_mint: str = Field(default="", alias="SOLANA_USDC_MINT")
+    solana_pay_amount_usdc: float = Field(default=19.99, alias="SOLANA_PAY_AMOUNT_USDC")
+    solana_pay_amount_sol: float = Field(default=0.15, alias="SOLANA_PAY_AMOUNT_SOL")
+    solana_pay_ttl_seconds: int = Field(default=1800, alias="SOLANA_PAY_TTL_SECONDS")
+    solana_pay_scan_limit: int = Field(default=25, alias="SOLANA_PAY_SCAN_LIMIT")
+    solana_pay_webhook_secret: str = Field(default="", alias="SOLANA_PAY_WEBHOOK_SECRET")
 
     entitlements_path: str = Field(
         default="data/entitlements.json",

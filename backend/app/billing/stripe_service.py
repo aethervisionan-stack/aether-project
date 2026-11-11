@@ -1,10 +1,10 @@
-"""Stripe Checkout session helpers for monthly Aether Vision subscriptions."""
+"""Stripe Checkout, subscription lifecycle, receipts."""
 
 from __future__ import annotations
 
 import logging
 import uuid
-from typing import Any
+from typing import Any, Literal
 
 import stripe
 
@@ -12,56 +12,63 @@ from app.config import Settings
 
 logger = logging.getLogger("aether.billing.stripe")
 
+BillingInterval = Literal["month", "year"]
+
 
 class StripeNotConfiguredError(RuntimeError):
     pass
-
-
-def expected_price(settings: Settings) -> dict[str, Any]:
-    """Canonical Checkout amount used for create + verify (TEMP TEST aware)."""
-    return {
-        "currency": (settings.stripe_currency or "brl").strip().lower(),
-        "unit_amount_cents": int(settings.stripe_unit_amount_cents),
-        # TEMP TEST marker for operators restoring official pricing.
-        "temp_test": bool(settings.stripe_force_unit_amount)
-        and int(settings.stripe_unit_amount_cents) == 1
-        and (settings.stripe_currency or "").strip().lower() == "brl",
-    }
 
 
 def _configure(settings: Settings) -> None:
     if not settings.has_stripe():
         raise StripeNotConfiguredError(
             "STRIPE_SECRET_KEY is not set (or is a placeholder). "
-            "Add a real sk_test_/sk_live_ key, or keep BILLING_DEV_UNLOCK=true "
-            "for mock Checkout."
+            "Add a real sk_test_/sk_live_ key, or set BILLING_DEV_UNLOCK=true "
+            "for mock Checkout only in non-live environments."
         )
     stripe.api_key = settings.stripe_secret_key.strip()
 
 
-def create_mock_checkout_session(settings: Settings) -> dict[str, Any]:
-    """
-    Local/dev Checkout stand-in when Stripe is not configured.
+def expected_price(settings: Settings, interval: BillingInterval = "month") -> dict[str, Any]:
+    iv = (interval or "month").strip().lower()
+    if iv not in {"month", "year"}:
+        iv = "month"
+    if iv == "year":
+        currency = (settings.stripe_annual_currency or settings.stripe_currency or "usd").strip().lower()
+        unit_amount_cents = int(settings.stripe_annual_unit_amount_cents)
+        price_id = (
+            settings.stripe_price_id_annual.strip()
+            or settings.stripe_annual_price_id.strip()
+        )
+        temp_test = False
+    else:
+        currency = (settings.stripe_currency or "usd").strip().lower()
+        unit_amount_cents = int(settings.stripe_unit_amount_cents)
+        price_id = (
+            settings.stripe_price_id_monthly.strip() or settings.stripe_price_id.strip()
+        )
+        temp_test = bool(settings.stripe_force_unit_amount) and unit_amount_cents <= 1
+    return {
+        "interval": iv,
+        "currency": currency,
+        "unit_amount_cents": unit_amount_cents,
+        "price_id": price_id or None,
+        "temp_test": temp_test,
+    }
 
-    Returns a session id + success URL the UI can open (same shape as live Checkout).
-    Does not call Stripe and never invents API keys.
-    """
-    price = expected_price(settings)
+
+def create_mock_checkout_session(
+    settings: Settings,
+    interval: BillingInterval = "month",
+) -> dict[str, Any]:
+    price = expected_price(settings, interval)
     session_id = f"cs_test_mock_{uuid.uuid4().hex[:20]}"
-    success = settings.stripe_success_url.replace(
-        "{CHECKOUT_SESSION_ID}",
-        session_id,
-    )
-    logger.info(
-        "MOCK checkout session id=%s amount=%s %s (Stripe not configured)",
-        session_id,
-        price["unit_amount_cents"],
-        price["currency"],
-    )
+    success = settings.stripe_success_url.replace("{CHECKOUT_SESSION_ID}", session_id)
     return {
         "id": session_id,
         "url": success,
         "checkout_url": success,
+        "interval": price["interval"],
         "currency": price["currency"],
         "unit_amount_cents": price["unit_amount_cents"],
         "temp_test": price["temp_test"],
@@ -70,59 +77,39 @@ def create_mock_checkout_session(settings: Settings) -> dict[str, Any]:
     }
 
 
-def create_checkout_session(settings: Settings) -> dict[str, Any]:
-    """Create a Stripe Checkout Session, or a mock session in local/dev fallback."""
+def create_checkout_session(
+    settings: Settings,
+    interval: BillingInterval = "month",
+) -> dict[str, Any]:
     if not settings.has_stripe():
         if settings.stripe_mock_checkout_enabled():
-            return create_mock_checkout_session(settings)
+            return create_mock_checkout_session(settings, interval)
         raise StripeNotConfiguredError(
             "STRIPE_SECRET_KEY missing and BILLING_DEV_UNLOCK is false."
         )
 
     _configure(settings)
-    price = expected_price(settings)
-
-    use_dynamic = settings.stripe_force_unit_amount or not settings.stripe_price_id.strip()
-    line_items: list[dict[str, Any]]
+    price = expected_price(settings, interval)
+    iv = price["interval"]
+    use_dynamic = settings.stripe_force_unit_amount or not (price.get("price_id") or "")
     if use_dynamic:
-        if settings.stripe_price_id.strip() and settings.stripe_force_unit_amount:
-            logger.warning(
-                "TEMP TEST: ignoring STRIPE_PRICE_ID — using dynamic %s %s",
-                price["unit_amount_cents"],
-                price["currency"],
-            )
         line_items = [
             {
                 "price_data": {
                     "currency": price["currency"],
                     "unit_amount": price["unit_amount_cents"],
-                    "recurring": {"interval": "month"},
+                    "recurring": {"interval": iv},
                     "product_data": {
                         "name": "Aether Vision",
-                        "description": (
-                            "TEMP TEST R$0,01"
-                            if price["temp_test"]
-                            else "Monthly HUD + Live copiloto access"
-                        ),
+                        "description": f"{'Annual' if iv == 'year' else 'Monthly'} subscription",
                     },
                 },
                 "quantity": 1,
             }
         ]
     else:
-        line_items = [
-            {
-                "price": settings.stripe_price_id.strip(),
-                "quantity": 1,
-            }
-        ]
+        line_items = [{"price": price["price_id"], "quantity": 1}]
 
-    # Global Checkout (US + any Stripe-supported country):
-    # - billing_address_collection=auto → country/region selector includes United States
-    # - intentionally omit shipping_address_collection / allowed_countries so we do
-    #   not narrow the country list with a shipping allowlist
-    # Currency: keep TEMP TEST R$0,01 BRL. International (incl. US) cards still work;
-    # Stripe settles in BRL and the issuer handles FX — no multi-currency Prices invented.
     session = stripe.checkout.Session.create(
         mode="subscription",
         line_items=line_items,
@@ -132,31 +119,19 @@ def create_checkout_session(settings: Settings) -> dict[str, Any]:
         billing_address_collection="auto",
         locale="auto",
         metadata={
-            "product": "aether_vision_monthly",
-            "treasury_share": "0.70",
-            "burn_share": "0.30",
+            "billing_interval": iv,
             "expected_currency": price["currency"],
             "expected_unit_amount_cents": str(price["unit_amount_cents"]),
-            "temp_test": "true" if price["temp_test"] else "false",
-            "billing_countries": "global",
         },
     )
     checkout_url = session.url
     if not checkout_url:
         raise RuntimeError("Stripe Checkout Session missing hosted url")
-    logger.info(
-        "stripe checkout session created id=%s amount=%s %s temp_test=%s",
-        session.id,
-        price["unit_amount_cents"],
-        price["currency"],
-        price["temp_test"],
-    )
-    # Session.create only needs STRIPE_SECRET_KEY. Publishable key is optional
-    # (used by Stripe.js / Elements, not by hosted Checkout redirect).
     return {
         "id": session.id,
         "url": checkout_url,
         "checkout_url": checkout_url,
+        "interval": iv,
         "currency": price["currency"],
         "unit_amount_cents": price["unit_amount_cents"],
         "temp_test": price["temp_test"],
@@ -174,19 +149,94 @@ def construct_webhook_event(
     _configure(settings)
     secret = settings.stripe_webhook_secret.strip()
     if not secret:
-        raise StripeNotConfiguredError(
-            "STRIPE_WEBHOOK_SECRET is not set — cannot verify webhooks."
-        )
+        raise StripeNotConfiguredError("STRIPE_WEBHOOK_SECRET is not set.")
     return stripe.Webhook.construct_event(payload, sig_header or "", secret)
 
 
+def retrieve_checkout_session(settings: Settings, session_id: str) -> Any:
+    _configure(settings)
+    return stripe.checkout.Session.retrieve(session_id)
+
+
+def cancel_subscription(
+    settings: Settings,
+    *,
+    subscription_id: str | None = None,
+    customer_id: str | None = None,
+    at_period_end: bool = True,
+) -> dict[str, Any]:
+    _configure(settings)
+    sub_id = (subscription_id or "").strip()
+    if not sub_id and customer_id:
+        subs = stripe.Subscription.list(customer=customer_id.strip(), status="active", limit=1)
+        data = subs.get("data") if isinstance(subs, dict) else getattr(subs, "data", None)
+        if data:
+            first = data[0]
+            sub_id = str(first.get("id") if isinstance(first, dict) else getattr(first, "id", ""))
+    if not sub_id:
+        raise ValueError("subscription_id or active customer subscription required")
+    if at_period_end:
+        sub = stripe.Subscription.modify(sub_id, cancel_at_period_end=True)
+        sid = sub.get("id") if isinstance(sub, dict) else getattr(sub, "id", sub_id)
+        return {"subscription_id": sid, "status": "cancel_scheduled", "cancel_at_period_end": True}
+    sub = stripe.Subscription.cancel(sub_id)
+    sid = sub.get("id") if isinstance(sub, dict) else getattr(sub, "id", sub_id)
+    return {"subscription_id": sid, "status": "canceled", "cancel_at_period_end": False}
+
+
+def invoice_receipt_summary(invoice: Any) -> dict[str, Any]:
+    if isinstance(invoice, dict):
+        inv_id = invoice.get("id")
+        amount_paid = invoice.get("amount_paid")
+        currency = invoice.get("currency")
+        status = invoice.get("status")
+        created = invoice.get("created")
+        customer = invoice.get("customer")
+        subscription = invoice.get("subscription")
+        hosted = invoice.get("hosted_invoice_url")
+        pdf = invoice.get("invoice_pdf")
+    else:
+        inv_id = getattr(invoice, "id", None)
+        amount_paid = getattr(invoice, "amount_paid", None)
+        currency = getattr(invoice, "currency", None)
+        status = getattr(invoice, "status", None)
+        created = getattr(invoice, "created", None)
+        customer = getattr(invoice, "customer", None)
+        subscription = getattr(invoice, "subscription", None)
+        hosted = getattr(invoice, "hosted_invoice_url", None)
+        pdf = getattr(invoice, "invoice_pdf", None)
+    return {
+        "invoice_id": inv_id,
+        "amount_paid_cents": amount_paid,
+        "currency": currency,
+        "status": status,
+        "created": created,
+        "customer_id": customer,
+        "subscription_id": subscription,
+        "hosted_invoice_url": hosted,
+        "invoice_pdf": pdf,
+        "source": "stripe",
+    }
+
+
+def list_receipts(
+    settings: Settings,
+    *,
+    customer_id: str,
+    limit: int = 12,
+) -> list[dict[str, Any]]:
+    _configure(settings)
+    cid = (customer_id or "").strip()
+    if not cid:
+        return []
+    invoices = stripe.Invoice.list(customer=cid, limit=min(max(limit, 1), 24))
+    data = invoices.get("data") if isinstance(invoices, dict) else getattr(invoices, "data", [])
+    return [invoice_receipt_summary(inv) for inv in (data or [])]
+
+
 def session_amount_major(session: Any) -> float:
-    """Best-effort major-unit amount (e.g. BRL/USD) from a Checkout Session."""
     try:
-        if isinstance(session, dict):
-            total = session.get("amount_total")
-        else:
-            total = getattr(session, "amount_total", None)
+        total = session.get("amount_total") if isinstance(session, dict) else getattr(session, "amount_total", None)
         if total is not None:
             return float(total) / 100.0
     except Exception:
@@ -194,41 +244,41 @@ def session_amount_major(session: Any) -> float:
     return 0.0
 
 
-# Back-compat alias used by routes/Solana scaling.
 def session_amount_usd(session: Any) -> float:
     return session_amount_major(session)
 
 
-def session_matches_expected_price(settings: Settings, session: Any) -> dict[str, Any]:
-    """
-    Compare paid Checkout Session totals to configured TEMP/official price.
-
-    Returns a verification payload for `/billing/verify-subscription`.
-    """
-    expected = expected_price(settings)
+def session_matches_expected_price(
+    settings: Settings,
+    session: Any,
+    interval: BillingInterval = "month",
+) -> dict[str, Any]:
+    expected = expected_price(settings, interval)
     if isinstance(session, dict):
         amount_total = session.get("amount_total")
         currency = (session.get("currency") or "").lower()
         payment_status = session.get("payment_status")
         status = session.get("status")
         session_id = session.get("id")
+        meta = session.get("metadata") or {}
     else:
         amount_total = getattr(session, "amount_total", None)
         currency = (getattr(session, "currency", None) or "").lower()
         payment_status = getattr(session, "payment_status", None)
         status = getattr(session, "status", None)
         session_id = getattr(session, "id", None)
+        meta = getattr(session, "metadata", None) or {}
+
+    iv = (meta.get("billing_interval") if isinstance(meta, dict) else None) or interval
+    if iv in {"month", "year"} and iv != expected["interval"]:
+        expected = expected_price(settings, iv)
 
     paid_ok = payment_status in {None, "paid", "no_payment_required"} or status == "complete"
-    amount_ok = amount_total is not None and int(amount_total) == int(
-        expected["unit_amount_cents"]
-    )
+    amount_ok = amount_total is not None and int(amount_total) == int(expected["unit_amount_cents"])
     currency_ok = currency == expected["currency"]
-    matched = bool(amount_ok and currency_ok)
-
     return {
         "session_id": session_id,
-        "matched": matched,
+        "matched": bool(amount_ok and currency_ok),
         "paid_ok": bool(paid_ok),
         "expected": expected,
         "actual": {
@@ -239,8 +289,3 @@ def session_matches_expected_price(settings: Settings, session: Any) -> dict[str
         },
         "temp_test": expected["temp_test"],
     }
-
-
-def retrieve_checkout_session(settings: Settings, session_id: str) -> Any:
-    _configure(settings)
-    return stripe.checkout.Session.retrieve(session_id)

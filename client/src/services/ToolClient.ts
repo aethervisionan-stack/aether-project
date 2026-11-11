@@ -1,7 +1,9 @@
 /**
  * Client helper for the modular tool-use layer (HTTP catalog + WS invoke).
+ * Advanced invoke/confirm require payment_status=active (X-Subscriber-Id).
  */
 
+import { loadSubscriberId } from "./BillingService";
 import {
   TOOL_SCHEMAS,
   type ToolArgumentsByName,
@@ -11,6 +13,11 @@ import {
 
 function apiUrl(path: string): string {
   return `/api${path.startsWith("/") ? path : `/${path}`}`;
+}
+
+function subscriberHeaders(): Record<string, string> {
+  const id = loadSubscriberId();
+  return id ? { "X-Subscriber-Id": id } : {};
 }
 
 export interface ToolCatalogResponse {
@@ -27,8 +34,10 @@ export interface ToolInvokeResponse {
 }
 
 export async function fetchToolCatalog(): Promise<ToolCatalogResponse> {
-  const res = await fetch(apiUrl("/tools/catalog"), {
-    headers: { Accept: "application/json" },
+  const id = loadSubscriberId();
+  const q = id ? `?subscriber_id=${encodeURIComponent(id)}` : "";
+  const res = await fetch(apiUrl(`/tools/catalog${q}`), {
+    headers: { Accept: "application/json", ...subscriberHeaders() },
   });
   if (!res.ok) {
     throw new Error(`tools catalog HTTP ${res.status}`);
@@ -46,6 +55,7 @@ export async function invokeToolHttp<N extends ToolName>(
     headers: {
       Accept: "application/json",
       "Content-Type": "application/json",
+      ...subscriberHeaders(),
     },
     body: JSON.stringify({
       name,
@@ -89,6 +99,7 @@ export async function confirmToolHttp(body: {
     headers: {
       Accept: "application/json",
       "Content-Type": "application/json",
+      ...subscriberHeaders(),
     },
     body: JSON.stringify({
       pending_id: body.pending_id,

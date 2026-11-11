@@ -79,12 +79,16 @@ Open [http://127.0.0.1:5173](http://127.0.0.1:5173), pair a Bluetooth headset as
 | `STRIPE_SECRET_KEY` | `backend/.env` | Required for hosted Checkout `Session.create` + webhook |
 | `STRIPE_PUBLISHABLE_KEY` | `backend/.env` | Optional for redirect Checkout (Stripe.js / Elements only); incomplete `pk_test_` is fine |
 | `STRIPE_WEBHOOK_SECRET` | `backend/.env` | Stripe CLI / Dashboard signing secret |
-| `STRIPE_PRICE_ID` | `backend/.env` | Optional; ignored while `STRIPE_FORCE_UNIT_AMOUNT=true` |
-| `STRIPE_CURRENCY` | `backend/.env` | **TEMP TEST:** `brl` (restore `usd`) |
-| `STRIPE_UNIT_AMOUNT_CENTS` | `backend/.env` | **TEMP TEST:** `1` = R$0,01 (restore e.g. `1999`) |
-| `STRIPE_FORCE_UNIT_AMOUNT` | `backend/.env` | **TEMP TEST:** `true` forces dynamic price_data |
-| `BILLING_DEV_UNLOCK` | `backend/.env` | Local simulate unlock when Stripe unset |
-| `BYPASS_SUBSCRIPTION_CHECK` | `backend/.env` | **TEMP:** `true` unlocks Live/AI without Subscribe (set `false` before `sk_live_`) |
+| `STRIPE_PRICE_ID` / `STRIPE_PRICE_ID_MONTHLY` | `backend/.env` | Monthly Dashboard Price |
+| `STRIPE_PRICE_ID_ANNUAL` / `STRIPE_ANNUAL_PRICE_ID` | `backend/.env` | Annual Price id |
+| `STRIPE_CURRENCY` | `backend/.env` | Monthly currency |
+| `STRIPE_UNIT_AMOUNT_CENTS` | `backend/.env` | Monthly amount (dynamic mode) |
+| `STRIPE_ANNUAL_CURRENCY` / `STRIPE_ANNUAL_UNIT_AMOUNT_CENTS` | `backend/.env` | Annual pricing (default `19900`) |
+| `STRIPE_FORCE_UNIT_AMOUNT` | `backend/.env` | Force `price_data` instead of Price ids |
+| `BILLING_DEV_UNLOCK` | `backend/.env` | Default `false` |
+| `BYPASS_SUBSCRIPTION_CHECK` | `backend/.env` | Default `false` |
+| `SOLANA_PAY_*` | `backend/.env` | Solana Pay amounts, TTL, webhook secret |
+| `VITE_DEV_UNLOCK` | `client/.env` | Default `false` (`true`/`1`/`on` for local HUD) |
 | `TREASURY_WALLET_ADDRESS` | `backend/.env` | 70% Solana destination |
 | `VISION_BURN_ADDRESS` | `backend/.env` | 30% burn destination |
 | `VISION_MINT_ADDRESS` | `backend/.env` | VISION mint |
@@ -94,60 +98,22 @@ Open [http://127.0.0.1:5173](http://127.0.0.1:5173), pair a Bluetooth headset as
 
 Persona: **Aether** — 1–3 sentence, direct, actionable replies for HUD / spatial audio.
 
-## Subscription (Stripe) + tokenomics (Solana)
+## Subscription (Stripe + Solana Pay) + tokenomics
 
-Traditional **card** checkout unlocks the Gen-1 Live HUD — no crypto wallet required.
+Stripe (`month`/`year`) or Solana Pay unlocks entitlements with `payment_status=active`. Advanced Tool Registry routes require active payment (HTTP 402).
 
-### Flow
+### Stripe
 
-1. Client **Subscribe** → `POST /billing/checkout` → Stripe Checkout (subscription).
-2. Stripe webhook `POST /billing/webhook` (`checkout.session.completed`) → entitlement granted instantly.
-3. Background job plans **70% treasury / 30% burn** VISION distribution on Solana.
-4. Client stores `subscriber_id` in `localStorage` and shows Connect Live + chat.
+`POST /billing/checkout` · webhooks (`checkout.session.completed`, `invoice.paid`, subscription lifecycle) · `POST /billing/cancel` · `GET /billing/receipts`.
 
-### Gen-1 entitlement assumptions
+### Solana Pay
 
-- Access key = Stripe customer id (preferred), else Checkout session id, else `dev_*`.
-- Stored in `backend/data/entitlements.json` (gitignored). Not multi-device auth.
-- Instant unlock on webhook; ~31-day expiry placeholder unless you wire subscription periods.
+`POST /billing/solana/create-payment` · `POST /billing/solana/verify` · `POST /billing/solana/webhook`.
 
-### Local without Stripe keys
+### Tool gating
 
-Leave `STRIPE_*` empty and keep `BILLING_DEV_UNLOCK=true`. The UI shows **Simulate unlock**, which grants access and runs the Solana job in **stub** mode.
+`POST /tools/invoke`, `/invoke_many`, `/sandbox`, `/confirm` need `payment_status=active` via `X-Subscriber-Id` or `subscriber_id`. Catalog includes `access.advanced_unlocked`.
 
-### TEMP: bypass subscription paywall (AI testing)
+### DEV bypasses (off by default)
 
-Set `BYPASS_SUBSCRIPTION_CHECK=true` in `backend/.env` and restart uvicorn. The HUD unlocks Connect Live + chat without Subscribe; `/billing/entitlement` returns granted. Stripe Checkout routes stay in place — flip the flag to `false` when `sk_live_` arrives to restore the real paywall.
-
-### Enable real Stripe (test)
-
-1. Copy a real `STRIPE_SECRET_KEY` (`sk_test_…`) into `backend/.env` (never commit it). Mock Checkout turns off automatically. Publishable key is not required for hosted Checkout redirect.
-2. `stripe listen --forward-to localhost:8000/billing/webhook` and set `STRIPE_WEBHOOK_SECRET`.
-3. Restart uvicorn. Client **Subscribe** redirects to Stripe-hosted Checkout (`checkout.stripe.com`).
-4. Checkout uses `billing_address_collection=auto` and **no** `shipping_address_collection` / `allowed_countries` allowlist, so the country/region selector stays global (United States included). TEMP TEST amount stays **R$0,01 BRL** — US/international cards work via issuer FX; we do not invent multi-currency Prices.
-
-### Flip test → live (`.env` only — no code changes)
-
-Waiting on MEI fiscal docs before pasting production keys. When ready:
-
-1. In `backend/.env` replace `STRIPE_SECRET_KEY=sk_test_…` with your real `sk_live_…` (never invent keys; never commit).
-2. Optionally set `STRIPE_PUBLISHABLE_KEY=pk_live_…` (only needed for Stripe.js / Elements — hosted Checkout redirect works with secret alone).
-3. Set production `STRIPE_WEBHOOK_SECRET=whsec_…` for the live webhook endpoint.
-4. Restore official pricing (example): `STRIPE_CURRENCY=usd`, `STRIPE_UNIT_AMOUNT_CENTS=1999`, `STRIPE_FORCE_UNIT_AMOUNT=false`, optional `STRIPE_PRICE_ID=price_…`.
-5. Set `BILLING_DEV_UNLOCK=false` for production.
-6. Restart uvicorn. `/billing/config` reports `stripe_mode: "live"` (vs `"test"` / `"off"`). No app code edits required.
-
-### Enable real Solana transfers
-
-1. Set `TREASURY_WALLET_ADDRESS`, `VISION_BURN_ADDRESS`, `VISION_MINT_ADDRESS`, `SOLANA_RPC_URL`.
-2. Set `SOLANA_PAYER_SECRET_KEY` to a real base58 payer secret you control (**do not invent keys**).
-3. `pip install solders solana` (optional deps).
-4. Gen-1 validates the payer and prepares the 70/30 plan (`live_prepared`). Extend `app/billing/solana_distribution.py` with SPL transfer instructions once mint decimals are confirmed. With an empty payer secret, the stack stays in safe **stub** mode and logs the planned split.
-
-### Billing modules
-
-- `backend/app/billing/routes.py` — `/billing/config|checkout|webhook|entitlement|dev-unlock`
-- `backend/app/billing/stripe_service.py` — Checkout Session helpers
-- `backend/app/billing/solana_distribution.py` — 70/30 stub / prepared live
-- `backend/app/billing/entitlements.py` — Gen-1 access flag store
-- `client/src/services/BillingService.ts` — Subscribe + entitlement client
+`BILLING_DEV_UNLOCK`, `BYPASS_SUBSCRIPTION_CHECK`, `VITE_DEV_UNLOCK` — set explicitly for local testing. `/billing/dev-unlock` is blocked with `sk_live_`.

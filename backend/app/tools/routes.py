@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 
+from app.billing.access import require_active_payment, resolve_access
 from app.config import get_settings
 from app.hardware.audio_profile import parse_audio_profile
 from app.hardware.priority import PaceClass, classify_pace
@@ -63,13 +64,22 @@ class ListenerIngestBody(BaseModel):
 
 
 @router.get("/catalog")
-async def tool_catalog() -> dict[str, Any]:
+async def tool_catalog(
+    subscriber_id: str = Query(default="", alias="subscriber_id"),
+) -> dict[str, Any]:
     registry = get_tool_registry()
     bridge = get_os_bridge()
+    access = resolve_access(subscriber_id=subscriber_id.strip() or None)
     return {
         "tools": registry.prompt_catalog(),
         "names": registry.list_names(),
         "os_bridge": bridge.status(),
+        "access": {
+            "advanced_unlocked": bool(access.get("allowed")),
+            "payment_status": access.get("payment_status"),
+            "reason": access.get("reason"),
+            "bypassed": access.get("bypassed"),
+        },
         "hands_free": {
             "messaging_tool": True,
             "email_calendar_tool": True,
@@ -86,7 +96,10 @@ async def tool_catalog() -> dict[str, Any]:
 
 
 @router.post("/invoke")
-async def tool_invoke(body: ToolInvokeBody) -> dict[str, Any]:
+async def tool_invoke(
+    body: ToolInvokeBody,
+    _access: dict[str, Any] = Depends(require_active_payment),
+) -> dict[str, Any]:
     registry = get_tool_registry()
     settings = get_settings()
     result = await registry.invoke(
@@ -98,7 +111,10 @@ async def tool_invoke(body: ToolInvokeBody) -> dict[str, Any]:
 
 
 @router.post("/invoke_many")
-async def tool_invoke_many(body: ToolInvokeManyBody) -> dict[str, Any]:
+async def tool_invoke_many(
+    body: ToolInvokeManyBody,
+    _access: dict[str, Any] = Depends(require_active_payment),
+) -> dict[str, Any]:
     """Async parallel invoke of up to 9 registry tools."""
     registry = get_tool_registry()
     settings = get_settings()
@@ -117,7 +133,10 @@ async def tool_invoke_many(body: ToolInvokeManyBody) -> dict[str, Any]:
 
 
 @router.post("/sandbox")
-async def tool_sandbox(body: SandboxBody) -> dict[str, Any]:
+async def tool_sandbox(
+    body: SandboxBody,
+    _access: dict[str, Any] = Depends(require_active_payment),
+) -> dict[str, Any]:
     """Run a tiny Python snippet in the constrained local sandbox."""
     from app.sandbox import run_python_snippet
 
@@ -133,7 +152,10 @@ async def tool_pending(profile_id: str = "local") -> dict[str, Any]:
 
 
 @router.post("/confirm")
-async def tool_confirm(body: ToolConfirmBody) -> dict[str, Any]:
+async def tool_confirm(
+    body: ToolConfirmBody,
+    _access: dict[str, Any] = Depends(require_active_payment),
+) -> dict[str, Any]:
     """
     Complete the two-step confirmation loop.
 

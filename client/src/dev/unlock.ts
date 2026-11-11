@@ -1,18 +1,17 @@
 /**
- * Local-dev feature unlock — paywall / permission gates stay off for HUD + tools.
+ * Local-dev feature unlock — OFF by default for production path.
  *
  * Priority:
  *  1. Backend billing config (`bypass_subscription_check` / `feature_unlock`)
- *  2. VITE_DEV_UNLOCK env (defaults on unless explicitly "false")
+ *  2. VITE_DEV_UNLOCK env — must be explicitly true/1/on (default off)
  */
 
 import type { BillingConfig } from "../services/BillingService";
 
 export function envDevUnlock(): boolean {
   const raw = (import.meta.env.VITE_DEV_UNLOCK as string | undefined)?.trim().toLowerCase();
-  if (raw === "false" || raw === "0" || raw === "off") return false;
-  // Default ON for local Vite so a missing backend config never hides Live HUD.
-  return true;
+  // Production-safe default: locked unless explicitly enabled for local testing.
+  return raw === "true" || raw === "1" || raw === "on";
 }
 
 export function isFeatureUnlock(cfg: BillingConfig | null | undefined): boolean {
