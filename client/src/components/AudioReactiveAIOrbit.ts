@@ -2,6 +2,10 @@
  * AudioReactiveAIOrbit — central Aether Vision AI presence in the HUD.
  * Dense translucent neon wireframe sphere (Three.js) driven by WS / VAD / playback
  * spectrum from AdvancedAudioVisualizer. Never touches the PCM uplink path.
+ *
+ * Visual tuning: soft additive glow, holographic opacity, heavily damped lerps
+ * so Idle↔Playback and vertex/scale reactivity stay gradual (no jitter/jumps).
+ * Spectrum is sampled only from the rAF driver callback each frame.
  */
 
 import * as THREE from "three";
@@ -26,9 +30,32 @@ export interface OrbitDriveState {
 
 export type OrbitDriver = () => OrbitDriveState;
 
-const CYAN = new THREE.Color("#00F3FF");
-const MAGENTA = new THREE.Color("#FF2BD6");
-const PURPLE = new THREE.Color("#7000FF");
+/** Soft holographic palette — slightly desaturated vs raw neon to avoid blowouts. */
+const CYAN = new THREE.Color("#5AD8E8");
+const MAGENTA = new THREE.Color("#D46AB8");
+const PURPLE = new THREE.Color("#6B4AD4");
+
+/**
+ * Frame-rate independent damping factors (smaller = heavier damping / smoother).
+ * Applied via THREE.MathUtils.lerp each rAF tick.
+ */
+const ORBIT_DAMP = {
+  energy: 0.045,
+  reactive: 0.038,
+  bass: 0.055,
+  mid: 0.05,
+  treble: 0.048,
+  presence: 0.042,
+  scale: 0.05,
+  spin: 0.04,
+} as const;
+
+/** Layer base opacities — translucent holographic wireframe. */
+const LAYER_OPACITY = [
+  { lineOp: 0.34, pointOp: 0.28 },
+  { lineOp: 0.22, pointOp: 0.18 },
+  { lineOp: 0.16, pointOp: 0.14 },
+] as const;
 
 const VERT = /* glsl */ `
 uniform float uTime;
@@ -63,23 +90,24 @@ float noise(vec3 p) {
 
 void main() {
   vec3 pos = position;
-  float n1 = noise(pos * 1.65 + vec3(uTime * 0.22, uTime * 0.18, uLayer));
-  float n2 = noise(pos * 3.1 - vec3(uTime * 0.31, 0.0, uTime * 0.27));
+  float n1 = noise(pos * 1.65 + vec3(uTime * 0.18, uTime * 0.14, uLayer));
+  float n2 = noise(pos * 3.1 - vec3(uTime * 0.24, 0.0, uTime * 0.2));
   float wave = (n1 * 0.65 + n2 * 0.35) * 2.0 - 1.0;
 
+  // Softened audio pulse — elegant deform, no blowout-scale displacement.
   float pulse = uReactive * (
-    uBass * 0.55 + uMid * 0.28 + uTreble * 0.22 + uEnergy * 0.35
+    uBass * 0.42 + uMid * 0.24 + uTreble * 0.18 + uEnergy * 0.28
   );
-  float deform = wave * (0.045 + pulse * 0.22) * (0.85 + uLayer * 0.25);
-  float breathe = 1.0 + uReactive * (0.04 + uEnergy * 0.12) * sin(uTime * 2.4 + uLayer * 1.7);
+  float deform = wave * (0.028 + pulse * 0.12) * (0.85 + uLayer * 0.2);
+  float breathe = 1.0 + uReactive * (0.025 + uEnergy * 0.07) * sin(uTime * 1.85 + uLayer * 1.4);
   pos *= breathe;
   pos += normalize(position + 1e-5) * deform;
 
-  vGlow = 0.35 + pulse * 0.55 + abs(wave) * 0.25;
-  vMix = clamp(0.35 + uBass * 0.25 + uTreble * 0.4 + uLayer * 0.15, 0.0, 1.0);
+  vGlow = 0.28 + pulse * 0.38 + abs(wave) * 0.18;
+  vMix = clamp(0.32 + uBass * 0.2 + uTreble * 0.32 + uLayer * 0.12, 0.0, 1.0);
 
   gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
-  gl_PointSize = (1.6 + pulse * 3.2 + uLayer * 0.6) * (180.0 / max(60.0, -gl_Position.z * 40.0 + 120.0));
+  gl_PointSize = (1.35 + pulse * 1.8 + uLayer * 0.45) * (180.0 / max(60.0, -gl_Position.z * 40.0 + 120.0));
 }
 `;
 
@@ -95,10 +123,12 @@ void main() {
   vec2 uv = gl_PointCoord - 0.5;
   float d = length(uv);
   if (d > 0.5) discard;
-  float soft = smoothstep(0.5, 0.08, d);
+  float soft = smoothstep(0.5, 0.12, d);
   vec3 col = mix(uPurple, uCyan, vMix);
-  col = mix(col, uMagenta, clamp(vGlow - 0.55, 0.0, 1.0) * 0.85);
-  float alpha = soft * uOpacity * (0.45 + vGlow * 0.55);
+  // Soft magenta lift — capped so additive blend cannot oversaturate.
+  col = mix(col, uMagenta, clamp(vGlow - 0.55, 0.0, 1.0) * 0.45);
+  col = clamp(col, 0.0, 0.92);
+  float alpha = soft * uOpacity * (0.38 + vGlow * 0.4);
   gl_FragColor = vec4(col, alpha);
 }
 `;
@@ -112,9 +142,10 @@ varying float vGlow;
 varying float vMix;
 
 void main() {
-  vec3 col = mix(uCyan, uPurple, vMix * 0.7);
-  col = mix(col, uMagenta, clamp(vGlow * 0.5, 0.0, 0.65));
-  float alpha = uOpacity * (0.32 + vGlow * 0.45);
+  vec3 col = mix(uCyan, uPurple, vMix * 0.65);
+  col = mix(col, uMagenta, clamp(vGlow * 0.35, 0.0, 0.4));
+  col = clamp(col, 0.0, 0.9);
+  float alpha = uOpacity * (0.26 + vGlow * 0.32);
   gl_FragColor = vec4(col, alpha);
 }
 `;
@@ -125,6 +156,8 @@ interface LayerBundle {
   pointMat: THREE.ShaderMaterial;
   lineMat: THREE.ShaderMaterial;
   baseScale: number;
+  basePointOp: number;
+  baseLineOp: number;
 }
 
 export class AudioReactiveAIOrbit {
@@ -144,6 +177,13 @@ export class AudioReactiveAIOrbit {
   private readonly resizeObserver: ResizeObserver;
   private energySmoothed = 0;
   private reactiveSmoothed = 0;
+  private bassSmoothed = 0;
+  private midSmoothed = 0;
+  private trebleSmoothed = 0;
+  /** 0 = idle point, 1 = full sphere — lerped for gradual Idle↔Playback. */
+  private presenceSmoothed = 0;
+  private scaleSmoothed = 1;
+  private spinSmoothed = 0.1;
 
   constructor() {
     this.resizeObserver = new ResizeObserver(() => this.resize());
@@ -252,9 +292,9 @@ export class AudioReactiveAIOrbit {
 
   private buildLayers(root: THREE.Group): void {
     const configs = [
-      { detail: 5, scale: 1.0, lineOp: 0.72, pointOp: 0.62 },
-      { detail: 4, scale: 0.82, lineOp: 0.48, pointOp: 0.42 },
-      { detail: 4, scale: 1.16, lineOp: 0.36, pointOp: 0.34 },
+      { detail: 5, scale: 1.0, ...LAYER_OPACITY[0] },
+      { detail: 4, scale: 0.82, ...LAYER_OPACITY[1] },
+      { detail: 4, scale: 1.16, ...LAYER_OPACITY[2] },
     ];
 
     configs.forEach((cfg, index) => {
@@ -304,6 +344,8 @@ export class AudioReactiveAIOrbit {
         pointMat,
         lineMat,
         baseScale: cfg.scale,
+        basePointOp: cfg.pointOp,
+        baseLineOp: cfg.lineOp,
       });
     });
   }
@@ -313,10 +355,10 @@ export class AudioReactiveAIOrbit {
     geo.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0], 3));
     const mat = new THREE.PointsMaterial({
       color: CYAN,
-      size: 6,
+      size: 5,
       sizeAttenuation: false,
       transparent: true,
-      opacity: 0.85,
+      opacity: 0.55,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
     });
@@ -338,14 +380,7 @@ export class AudioReactiveAIOrbit {
   }
 
   private applyPresence(presence: OrbitPresence): void {
-    const full = presence === "full";
-    for (const layer of this.layers) {
-      layer.points.visible = full;
-      layer.lines.visible = full;
-    }
-    if (this.pointCore) {
-      this.pointCore.visible = !full;
-    }
+    // Layers stay mounted; opacity is lerped in frame() for gradual Idle↔Playback.
     if (this.host) {
       this.host.dataset.presence = presence;
     }
@@ -360,6 +395,7 @@ export class AudioReactiveAIOrbit {
       return;
     }
 
+    // Sample audio / VAD / WS once per rAF tick — keeps deformation in lockstep with paint.
     const drive = this.driver?.() ?? {
       wsOpen: false,
       vadSpeech: false,
@@ -373,42 +409,70 @@ export class AudioReactiveAIOrbit {
     };
 
     const reactiveWanted = drive.vadSpeech || drive.playbackActive;
-    const full =
-      drive.wsOpen || drive.vadSpeech || drive.playbackActive || drive.mode === "speaking" || drive.mode === "listening";
-    this.applyPresence(full ? "full" : "point");
+    const fullWanted =
+      drive.wsOpen ||
+      drive.vadSpeech ||
+      drive.playbackActive ||
+      drive.mode === "speaking" ||
+      drive.mode === "listening";
+    this.applyPresence(fullWanted ? "full" : "point");
 
     const energy = Math.min(1, drive.micLevel * 0.55 + drive.playLevel * 0.9);
-    this.energySmoothed += (energy - this.energySmoothed) * 0.12;
-    this.reactiveSmoothed += ((reactiveWanted ? 1 : 0) - this.reactiveSmoothed) * 0.1;
+
+    // Heavy lerp damping — organic follow, no jumps between Idle and Playback.
+    this.energySmoothed = THREE.MathUtils.lerp(this.energySmoothed, energy, ORBIT_DAMP.energy);
+    this.reactiveSmoothed = THREE.MathUtils.lerp(
+      this.reactiveSmoothed,
+      reactiveWanted ? 1 : 0,
+      ORBIT_DAMP.reactive,
+    );
+    this.bassSmoothed = THREE.MathUtils.lerp(this.bassSmoothed, drive.bass, ORBIT_DAMP.bass);
+    this.midSmoothed = THREE.MathUtils.lerp(this.midSmoothed, drive.mid, ORBIT_DAMP.mid);
+    this.trebleSmoothed = THREE.MathUtils.lerp(this.trebleSmoothed, drive.treble, ORBIT_DAMP.treble);
+    this.presenceSmoothed = THREE.MathUtils.lerp(
+      this.presenceSmoothed,
+      fullWanted ? 1 : 0,
+      ORBIT_DAMP.presence,
+    );
 
     const t = this.clock.getElapsedTime();
 
-    // Slow idle axis rotation; speed up slightly when reactive.
-    const spin = 0.12 + this.reactiveSmoothed * 0.35;
-    root.rotation.y = t * spin;
-    root.rotation.x = Math.sin(t * 0.21) * 0.12 + this.reactiveSmoothed * Math.sin(t * 1.7) * 0.05;
-    root.rotation.z = Math.cos(t * 0.17) * 0.08;
+    const spinTarget = 0.08 + this.reactiveSmoothed * 0.18;
+    this.spinSmoothed = THREE.MathUtils.lerp(this.spinSmoothed, spinTarget, ORBIT_DAMP.spin);
+    root.rotation.y = t * this.spinSmoothed;
+    root.rotation.x =
+      Math.sin(t * 0.18) * 0.08 + this.reactiveSmoothed * Math.sin(t * 1.2) * 0.028;
+    root.rotation.z = Math.cos(t * 0.14) * 0.055;
 
-    const scaleBreath =
+    const scaleTarget =
       1 +
-      (full ? 0.02 : 0) +
-      this.reactiveSmoothed * (0.06 + this.energySmoothed * 0.14) * Math.sin(t * 3.1);
-    root.scale.setScalar(scaleBreath);
+      this.presenceSmoothed * 0.015 +
+      this.reactiveSmoothed * (0.035 + this.energySmoothed * 0.08) * Math.sin(t * 2.2);
+    this.scaleSmoothed = THREE.MathUtils.lerp(this.scaleSmoothed, scaleTarget, ORBIT_DAMP.scale);
+    root.scale.setScalar(this.scaleSmoothed);
+
+    const sphereFade = this.presenceSmoothed;
+    const pointFade = 1 - this.presenceSmoothed;
 
     for (const layer of this.layers) {
+      layer.points.visible = sphereFade > 0.01;
+      layer.lines.visible = sphereFade > 0.01;
       for (const mat of [layer.pointMat, layer.lineMat]) {
         mat.uniforms.uTime.value = t;
         mat.uniforms.uEnergy.value = this.energySmoothed;
-        mat.uniforms.uBass.value = drive.bass;
-        mat.uniforms.uMid.value = drive.mid;
-        mat.uniforms.uTreble.value = drive.treble;
+        mat.uniforms.uBass.value = this.bassSmoothed;
+        mat.uniforms.uMid.value = this.midSmoothed;
+        mat.uniforms.uTreble.value = this.trebleSmoothed;
         mat.uniforms.uReactive.value = this.reactiveSmoothed;
       }
+      layer.pointMat.uniforms.uOpacity.value = layer.basePointOp * sphereFade;
+      layer.lineMat.uniforms.uOpacity.value = layer.baseLineOp * sphereFade;
     }
 
-    if (this.coreMat) {
-      this.coreMat.opacity = 0.45 + 0.4 * (0.5 + 0.5 * Math.sin(t * 2.2));
-      this.coreMat.size = 5 + Math.sin(t * 2.2) * 1.5;
+    if (this.pointCore && this.coreMat) {
+      this.pointCore.visible = pointFade > 0.01;
+      this.coreMat.opacity = (0.32 + 0.28 * (0.5 + 0.5 * Math.sin(t * 1.8))) * pointFade;
+      this.coreMat.size = 4.5 + Math.sin(t * 1.8) * 1.1;
     }
 
     renderer.render(scene, camera);
