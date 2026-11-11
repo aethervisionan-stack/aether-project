@@ -34,7 +34,8 @@ export const VOICE_BAND_HZ = { low: 100, high: 2000 } as const;
 export function createAnalyser(ctx: AudioContext, fftSize = ORBIT_FFT_SIZE): AnalyserNode {
   const analyser = ctx.createAnalyser();
   analyser.fftSize = fftSize;
-  analyser.smoothingTimeConstant = 0.62;
+  // Higher Web Audio smoothing + orbit-side THREE.MathUtils.lerp = organic voice follow.
+  analyser.smoothingTimeConstant = 0.78;
   analyser.minDecibels = -90;
   analyser.maxDecibels = -18;
   return analyser;

@@ -717,11 +717,11 @@ button.voice-pulse {
   padding: 0;
   overflow: hidden;
   border: 1px solid rgba(0, 243, 255, 0.12);
-  /* Original neon void — cyan / purple / magenta radial wash. */
+  /* Soft holographic void — muted cyan / purple / magenta wash (no bloom blowout). */
   background:
-    radial-gradient(ellipse 55% 50% at 50% 48%, rgba(112, 0, 255, 0.16), transparent 62%),
-    radial-gradient(ellipse 40% 36% at 50% 52%, rgba(0, 243, 255, 0.1), transparent 58%),
-    radial-gradient(ellipse 30% 28% at 50% 50%, rgba(255, 43, 214, 0.06), transparent 55%),
+    radial-gradient(ellipse 55% 50% at 50% 48%, rgba(107, 74, 212, 0.09), transparent 64%),
+    radial-gradient(ellipse 40% 36% at 50% 52%, rgba(90, 216, 232, 0.055), transparent 60%),
+    radial-gradient(ellipse 30% 28% at 50% 50%, rgba(212, 106, 184, 0.035), transparent 56%),
     #000;
   transition: min-height 240ms var(--ease), border-color 200ms var(--ease), opacity 280ms var(--ease);
 }
