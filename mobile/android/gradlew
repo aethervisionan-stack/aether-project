@@ -1,0 +1,14 @@
+#!/usr/bin/env sh
+# Bootstrap: install JDK 17 + Android Studio, then regenerate the wrapper:
+#   gradle wrapper --gradle-version 8.9
+# Or open mobile/android in Android Studio and sync.
+echo ""
+echo "Aether Vision Android scaffold"
+echo "-----------------------------"
+echo "gradle-wrapper.jar is not vendored in this repo."
+echo "Open this folder in Android Studio to sync, or run:"
+echo "  gradle wrapper --gradle-version 8.9"
+echo "then:"
+echo "  ./gradlew :app:assembleDebug"
+echo ""
+exit 1

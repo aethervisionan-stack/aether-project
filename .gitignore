@@ -27,3 +27,13 @@ venv/
 client/dist/
 client/.vite/
 client/node_modules/
+
+# Native mobile (see mobile/.gitignore for detail)
+mobile/**/local.properties
+mobile/**/secrets.properties
+mobile/**/Secrets.xcconfig
+mobile/**/google-services.json
+mobile/**/GoogleService-Info.plist
+mobile/**/.gradle/
+mobile/**/build/
+mobile/**/DerivedData/

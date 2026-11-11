@@ -1,0 +1,24 @@
+# Secrets / local env
+.env
+local.properties
+secrets.properties
+**/google-services.json
+**/GoogleService-Info.plist
+**/xcuserdata/
+**/*.xcuserstate
+**/DerivedData/
+**/.gradle/
+**/build/
+**/captures/
+**/.idea/
+*.iml
+*.apk
+*.aab
+*.ipa
+Pods/
+.DS_Store
+*.ppn
+*.pv
+*.jks
+*.keystore
+!debug.keystore

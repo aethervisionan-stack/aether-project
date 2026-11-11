@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Aether Vision</string>
+    <string name="handsfree_channel_id">aether_handsfree</string>
+    <string name="handsfree_channel_name">Hands-free listening</string>
+    <string name="handsfree_notification_title">Aether listening</string>
+    <string name="handsfree_notification_text">Wake word + VAD active — no tap needed</string>
+    <string name="aether_accessibility_description">
+        Aether Vision OS Bridge reads on-screen text and notifications (without forcing the
+        screen awake) and can perform confirmed gestures for the hands-free agent.
+    </string>
+</resources>

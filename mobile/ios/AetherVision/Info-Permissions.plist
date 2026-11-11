@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Merge these keys into the Xcode target Info.plist -->
+<plist version="1.0">
+<dict>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Aether listens for your wake word and voice commands without requiring a tap.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Aether uses GPS for navigation and mobility context.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Aether needs background location for continuous copilot guidance.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Aether captures periodic frames for vision sideband assistance.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+		<string>location</string>
+		<string>remote-notification</string>
+	</array>
+	<key>PICOVOICE_ACCESS_KEY</key>
+	<string>$(PICOVOICE_ACCESS_KEY)</string>
+	<key>AETHER_LIVE_WS_URL</key>
+	<string>$(AETHER_LIVE_WS_URL)</string>
+	<key>AETHER_PUSH_REGISTER_URL</key>
+	<string>$(AETHER_PUSH_REGISTER_URL)</string>
+</dict>
+</plist>
