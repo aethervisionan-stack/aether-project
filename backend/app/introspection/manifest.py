@@ -177,6 +177,21 @@ CAPABILITIES: tuple[CapabilityEntry, ...] = (
         hud_surfaces=("DevToolsPanel",),
         health_flags=("introspection.self_knowledge", "introspection.system_help_tool"),
     ),
+    CapabilityEntry(
+        id="deep_research_canvas",
+        category="frontier",
+        title="Deep Research & Canvas",
+        version="0.4.5",
+        description=(
+            "Gemini-level productivity: Deep Research (topic → sub-questions → parallel "
+            "web search → trusted sources → Markdown report) and a HUD Canvas split "
+            "editor beside the 3D mesh where AI + user co-edit via semantic diffs."
+        ),
+        example_voice="Pesquisa a fundo wearable AI OS e abre no Canvas.",
+        tools=("deep_research_tool", "canvas_edit_tool"),
+        hud_surfaces=("CanvasPanel",),
+        health_flags=("frontier.deep_research", "frontier.canvas_editor"),
+    ),
 )
 
 CAPABILITY_CATEGORIES: tuple[str, ...] = tuple(

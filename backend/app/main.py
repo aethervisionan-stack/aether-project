@@ -8,8 +8,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import ENGINE_NAME, ENGINE_VERSION, __version__
+from app.agent import routes as research_routes
 from app.auth import routes as google_auth_routes
 from app.billing import routes as billing_routes
+from app.canvas import routes as canvas_routes
 from app.config import get_settings
 from app.introspection.manifest import build_feature_flags
 from app.introspection.telemetry import get_latency_telemetry
@@ -41,7 +43,8 @@ app = FastAPI(
         "Hands-free OS agent: messaging/email/telephony/system + two-step confirm. "
         "Google OAuth: Gmail/Calendar/Drive + Maps tools under `/auth/google`. "
         "Native OS Bridge under `/tools/os-bridge` (desktop/android; mock DEV fallback). "
-        "Introspection: dynamic self-knowledge + system_help_tool."
+        "Introspection: dynamic self-knowledge + system_help_tool. "
+        "Deep Research under `/research`. Collaborative Canvas under `/canvas`."
     ),
     version=__version__,
 )
@@ -61,6 +64,8 @@ app.include_router(tools_routes.router)
 app.include_router(google_test_routes.router)
 app.include_router(google_auth_routes.router)
 app.include_router(os_bridge_routes.router)
+app.include_router(research_routes.router)
+app.include_router(canvas_routes.router)
 
 
 
@@ -170,6 +175,10 @@ async def health() -> dict[str, object]:
             "/tools/calendar/test",
             "/tools/drive/test",
             "/tools/maps/test",
+            "/research/run",
+            "/research/health",
+            "/canvas/docs",
+            "/canvas/preview",
             "/tools/google/test",
             "/auth/google/login",
             "/auth/google/start",
@@ -197,6 +206,8 @@ async def root() -> dict[str, str]:
         "os_bridge": "/tools/os-bridge/status",
         "os_bridge_inspector": "/tools/os-bridge/inspector",
         "verify_env": "python scripts/verify_env.py",
+        "research": "/research/run",
+        "canvas": "/canvas/docs",
     }
 
 
