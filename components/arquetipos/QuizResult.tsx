@@ -1,9 +1,10 @@
 "use client";
 
 import { motion, useReducedMotion } from "framer-motion";
-import { Check, Copy, RotateCcw } from "lucide-react";
+import { toPng } from "html-to-image";
+import { Check, Copy, Download, Loader2, RotateCcw } from "lucide-react";
 import Image from "next/image";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   TOTAL_QUESTIONS,
   buildIntro,
@@ -13,6 +14,11 @@ import {
   type NarrativeResult,
 } from "@/src/data/archetypes";
 import { OrnateCorners, SanctuaryBackdrop } from "./CinematicChrome";
+import {
+  SHARE_CARD_HEIGHT,
+  SHARE_CARD_WIDTH,
+  ShareCardTemplate,
+} from "./ShareCardTemplate";
 
 type Props = {
   result: NarrativeResult;
@@ -85,6 +91,8 @@ function SecondaryThumb({ profile }: { profile: ArchetypeProfile }) {
 export function QuizResult({ result, onRestart }: Props) {
   const reduce = useReducedMotion();
   const [copied, setCopied] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  const shareCardRef = useRef<HTMLDivElement>(null);
   const intro = useMemo(() => buildIntro(result), [result]);
   const principal = result.primary;
 
@@ -95,6 +103,64 @@ export function QuizResult({ result, onRestart }: Props) {
       window.setTimeout(() => setCopied(false), 2000);
     } catch {
       setCopied(false);
+    }
+  }
+
+  async function downloadShareImage() {
+    const node = shareCardRef.current;
+    if (!node || sharing) return;
+    setSharing(true);
+    try {
+      // Wait a frame so off-screen portraits are painted
+      await new Promise<void>((r) => requestAnimationFrame(() => r()));
+      const dataUrl = await toPng(node, {
+        width: SHARE_CARD_WIDTH,
+        height: SHARE_CARD_HEIGHT,
+        pixelRatio: 1,
+        cacheBust: true,
+        style: {
+          transform: "none",
+        },
+      });
+
+      const blob = await (await fetch(dataUrl)).blob();
+      const fileName = `arquetipo-${principal.id}.png`;
+      const file = new File([blob], fileName, { type: "image/png" });
+      const shareText = buildIntro(result);
+
+      const canFileShare =
+        typeof navigator !== "undefined" &&
+        typeof navigator.share === "function" &&
+        typeof navigator.canShare === "function" &&
+        navigator.canShare({ files: [file] });
+
+      if (canFileShare) {
+        try {
+          await navigator.share({
+            files: [file],
+            title: "Meu Arquétipo",
+            text: shareText,
+          });
+          return;
+        } catch (err) {
+          // User cancel → stop; other errors fall through to download
+          if (err instanceof DOMException && err.name === "AbortError") return;
+        }
+      }
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName;
+      a.rel = "noopener";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      // silent — button returns to idle
+    } finally {
+      setSharing(false);
     }
   }
 
@@ -317,25 +383,42 @@ export function QuizResult({ result, onRestart }: Props) {
           Escala 0–{TOTAL_QUESTIONS} pontos por arquétipo
         </p>
 
-        <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+        <div className="mt-8 flex flex-col gap-3">
           <button
             type="button"
-            onClick={onRestart}
-            className="inline-flex flex-1 items-center justify-center gap-2 border border-[color:var(--cart-border-soft)] px-5 py-3.5 text-sm text-[color:var(--cart-muted)] transition hover:border-[color:var(--cart-copper)] hover:text-[color:var(--cart-copper-bright)]"
+            onClick={() => void downloadShareImage()}
+            disabled={sharing}
+            className="cart-cta inline-flex w-full items-center justify-center gap-2 rounded-sm px-5 py-3.5 text-sm font-semibold disabled:opacity-60"
           >
-            <RotateCcw size={16} />
-            Nova Expedição
+            {sharing ? (
+              <Loader2 size={16} className="animate-spin" />
+            ) : (
+              <Download size={16} />
+            )}
+            {sharing ? "Gerando imagem…" : "Baixar Imagem"}
           </button>
-          <button
-            type="button"
-            onClick={copyResult}
-            className="cart-cta inline-flex flex-1 items-center justify-center gap-2 rounded-sm px-5 py-3.5 text-sm font-semibold"
-          >
-            {copied ? <Check size={16} /> : <Copy size={16} />}
-            {copied ? "Copiado" : "Copiar Relatório Completo"}
-          </button>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <button
+              type="button"
+              onClick={onRestart}
+              className="inline-flex flex-1 items-center justify-center gap-2 border border-[color:var(--cart-border-soft)] px-5 py-3.5 text-sm text-[color:var(--cart-muted)] transition hover:border-[color:var(--cart-copper)] hover:text-[color:var(--cart-copper-bright)]"
+            >
+              <RotateCcw size={16} />
+              Nova Expedição
+            </button>
+            <button
+              type="button"
+              onClick={copyResult}
+              className="inline-flex flex-1 items-center justify-center gap-2 border border-[color:var(--cart-border-soft)] px-5 py-3.5 text-sm text-[color:var(--cart-muted)] transition hover:border-[color:var(--cart-copper)] hover:text-[color:var(--cart-copper-bright)]"
+            >
+              {copied ? <Check size={16} /> : <Copy size={16} />}
+              {copied ? "Copiado" : "Copiar Relatório Completo"}
+            </button>
+          </div>
         </div>
       </div>
+
+      <ShareCardTemplate result={result} cardRef={shareCardRef} />
     </section>
   );
 }
