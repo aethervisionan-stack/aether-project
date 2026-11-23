@@ -17,7 +17,6 @@ const TARGET_VOL = 0.35;
 const FADE_MS = 1500;
 const EVENT = "start-medieval-audio";
 const MP3 = "/audio/dark-and-darker-lobby.mp3";
-const MISSING_TIP = "Adicione dark-and-darker-lobby.mp3 em public/audio/";
 const BPM = 63;
 const BEAT = 60 / BPM;
 
@@ -74,8 +73,6 @@ export function MedievalAudioPlayer() {
   const [volume, setVolume] = useState(TARGET_VOL);
   const [hoverVol, setHoverVol] = useState(false);
   const [readyHint, setReadyHint] = useState(false);
-  const [missingMp3, setMissingMp3] = useState(false);
-  const [showTip, setShowTip] = useState(false);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const ctxRef = useRef<AudioContext | null>(null);
@@ -90,7 +87,6 @@ export function MedievalAudioPlayer() {
   const scheduleTimerRef = useRef<number | null>(null);
   const fadeRafRef = useRef<number | null>(null);
   const fadeTimeoutRef = useRef<number | null>(null);
-  const tipTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     volumeRef.current = volume;
@@ -109,13 +105,6 @@ export function MedievalAudioPlayer() {
     window.addEventListener("medieval-audio-mute-change", onMute);
     return () =>
       window.removeEventListener("medieval-audio-mute-change", onMute);
-  }, []);
-
-  const flashMissingTip = useCallback(() => {
-    setMissingMp3(true);
-    setShowTip(true);
-    if (tipTimerRef.current != null) window.clearTimeout(tipTimerRef.current);
-    tipTimerRef.current = window.setTimeout(() => setShowTip(false), 6000);
   }, []);
 
   const clearFades = useCallback(() => {
@@ -263,7 +252,6 @@ export function MedievalAudioPlayer() {
     modeRef.current = "mp3";
     el.volume = 0;
     await el.play();
-    setMissingMp3(false);
     setPlaying(true);
     setReadyHint(true);
     const t0 = performance.now();
@@ -288,7 +276,7 @@ export function MedievalAudioPlayer() {
       await startMp3(target);
       return;
     } catch {
-      flashMissingTip();
+      /* missing/corrupt mp3 → gentle Web Audio fallback */
     }
 
     try {
@@ -300,7 +288,7 @@ export function MedievalAudioPlayer() {
     } catch {
       setPlaying(false);
     }
-  }, [clearFades, ensureWebAmbience, flashMissingTip, startMp3]);
+  }, [clearFades, ensureWebAmbience, startMp3]);
 
   const toggle = useCallback(() => {
     if (playing) {
@@ -323,7 +311,6 @@ export function MedievalAudioPlayer() {
   useEffect(() => {
     return () => {
       clearFades();
-      if (tipTimerRef.current != null) window.clearTimeout(tipTimerRef.current);
       audioRef.current?.pause();
       stopWeb();
       void ctxRef.current?.close();
@@ -346,9 +333,10 @@ export function MedievalAudioPlayer() {
   }
 
   const active = playing && !muted;
-  const label =
-    active || readyHint
-      ? "Lobby • Dark & Darker"
+  const label = active
+    ? "Taverna Medieval"
+    : readyHint
+      ? "Taverna Medieval"
       : "Tocar Tema do Lobby";
 
   return (
@@ -357,21 +345,12 @@ export function MedievalAudioPlayer() {
       onMouseEnter={() => setHoverVol(true)}
       onMouseLeave={() => setHoverVol(false)}
     >
-      {(showTip || (missingMp3 && hoverVol && !active)) && (
-        <p
-          role="status"
-          className="mb-2 max-w-[16rem] rounded-sm border border-[color:var(--cine-border-soft)] bg-[color:var(--cine-void)]/90 px-2.5 py-1.5 text-[10px] leading-snug text-[color:var(--cine-muted)] shadow-lg backdrop-blur-md"
-        >
-          {MISSING_TIP}
-        </p>
-      )}
-
       <div className="cine-glass flex items-center gap-2.5 rounded-full border border-[color:var(--cine-border-soft)] px-3.5 py-2.5 shadow-[0_12px_40px_rgba(0,0,0,0.45)]">
         <button
           type="button"
           onClick={toggle}
           className="flex items-center gap-2 text-[color:var(--cine-ink)] transition hover:text-[color:var(--cine-amber-soft)]"
-          aria-label={active ? "Pausar tema do lobby" : "Tocar tema do lobby"}
+          aria-label={active ? "Pausar taverna medieval" : "Tocar tema do lobby"}
         >
           {muted && !playing ? (
             <VolumeX size={16} className="text-[color:var(--cine-muted)]" />
