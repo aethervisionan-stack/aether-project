@@ -1,0 +1,169 @@
+/* Dark Fantasy Cartographic / Medieval Exploration — visual only */
+.arquetipo-root {
+  --cart-breu: #0a0c0f;
+  --cart-slate: #14181f;
+  --cart-slate-mid: #1a2029;
+  --cart-panel: rgba(22, 26, 34, 0.88);
+  --cart-copper: #b87333;
+  --cart-copper-bright: #c9894a;
+  --cart-amber: #a65d2e;
+  --cart-torch: #c4783a;
+  --cart-parchment: #c4b59a;
+  --cart-ink: #d6d0c4;
+  --cart-muted: #8a8478;
+  --cart-dim: #5c574e;
+  --cart-border: rgba(184, 115, 51, 0.42);
+  --cart-border-soft: rgba(184, 115, 51, 0.18);
+  --cart-torch-glow: rgba(196, 120, 58, 0.18);
+  --cart-slate-glow: rgba(70, 90, 110, 0.2);
+  color: var(--cart-ink);
+  background: var(--cart-breu);
+  font-family: var(--font-arq-sans), ui-serif, Georgia, serif;
+}
+
+.arquetipo-root .cart-display {
+  font-family: var(--font-arq-display), ui-serif, Georgia, serif;
+}
+
+.arquetipo-root .cart-topo {
+  background-image:
+    linear-gradient(rgba(196, 181, 154, 0.1) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(196, 181, 154, 0.1) 1px, transparent 1px);
+  background-size: 48px 48px;
+  background-position: center center;
+}
+
+.arquetipo-root .cart-atmosphere {
+  background:
+    radial-gradient(
+      ellipse 70% 45% at 85% 0%,
+      var(--cart-torch-glow),
+      transparent 55%
+    ),
+    radial-gradient(
+      ellipse 55% 40% at 5% 90%,
+      var(--cart-slate-glow),
+      transparent 50%
+    ),
+    linear-gradient(168deg, #0e1218 0%, #0a0c0f 42%, #12161c 100%);
+}
+
+.arquetipo-root .cart-card {
+  background: var(--cart-panel);
+  border: 1px solid var(--cart-border);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.5) inset,
+    0 14px 36px rgba(0, 0, 0, 0.4);
+}
+
+.arquetipo-root .cart-card-soft {
+  background: rgba(20, 24, 31, 0.65);
+  border: 1px solid var(--cart-border-soft);
+}
+
+.arquetipo-root .cart-title-torch {
+  background: linear-gradient(
+    125deg,
+    #6b3d1a 0%,
+    #c9894a 32%,
+    #b87333 52%,
+    #e0a66a 72%,
+    #7a4a22 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.arquetipo-root .cart-cta {
+  font-family: var(--font-arq-display), ui-serif, Georgia, serif;
+  letter-spacing: 0.07em;
+  background: linear-gradient(135deg, #6b3d1a 0%, #a65d2e 38%, #c9894a 58%, #8a4e24 100%);
+  color: #1a1008;
+  border: 1px solid rgba(201, 137, 74, 0.55);
+  box-shadow:
+    0 0 20px rgba(184, 115, 51, 0.22),
+    inset 0 1px 0 rgba(255, 220, 180, 0.25);
+  transition: filter 0.25s ease, transform 0.25s ease;
+}
+
+.arquetipo-root .cart-cta:hover {
+  filter: brightness(1.07);
+  transform: translateY(-1px);
+}
+
+.arquetipo-root .cart-badge {
+  border: 1px solid var(--cart-border);
+  background: rgba(184, 115, 51, 0.1);
+  color: var(--cart-copper-bright);
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+}
+
+.arquetipo-root .cart-scroll {
+  position: relative;
+  background:
+    linear-gradient(180deg, rgba(196, 120, 58, 0.08), transparent 28%),
+    var(--cart-panel);
+  border: 1px solid var(--cart-border);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.45) inset,
+    0 18px 40px rgba(0, 0, 0, 0.4);
+}
+
+.arquetipo-root .cart-scroll::before,
+.arquetipo-root .cart-scroll::after {
+  content: "";
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--cart-border),
+    transparent
+  );
+}
+
+.arquetipo-root .cart-scroll::before {
+  top: 10px;
+}
+
+.arquetipo-root .cart-scroll::after {
+  bottom: 10px;
+}
+
+.arquetipo-root .cart-option {
+  background: rgba(14, 18, 24, 0.72);
+  border: 1px solid var(--cart-border-soft);
+  color: var(--cart-muted);
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease,
+    color 0.2s ease;
+}
+
+.arquetipo-root .cart-option:hover {
+  border-color: var(--cart-border);
+  color: var(--cart-ink);
+  background: rgba(26, 32, 41, 0.9);
+}
+
+.arquetipo-root .cart-option-active {
+  border-color: var(--cart-copper);
+  background: rgba(184, 115, 51, 0.12);
+  color: var(--cart-ink);
+  box-shadow: 0 0 16px rgba(184, 115, 51, 0.14);
+}
+
+.arquetipo-root .cart-trail {
+  height: 3px;
+  background: rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+}
+
+.arquetipo-root .cart-trail-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #6b3d1a, var(--cart-torch), var(--cart-copper-bright));
+}

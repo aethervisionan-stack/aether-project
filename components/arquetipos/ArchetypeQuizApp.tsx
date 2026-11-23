@@ -13,7 +13,7 @@ import { QuizFlow } from "./QuizFlow";
 import { QuizHero } from "./QuizHero";
 import { QuizProcessing } from "./QuizProcessing";
 import { QuizResult } from "./QuizResult";
-import "./grimoire.css";
+import "./cartographic.css";
 
 type Stage = "landing" | "quiz" | "processing" | "result";
 

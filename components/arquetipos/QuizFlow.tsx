@@ -20,28 +20,31 @@ export function QuizFlow({ index, answers, onSelect, onBack }: Props) {
   const selected = answers[question.id];
 
   return (
-    <section className="grim-atmosphere relative mx-auto flex min-h-[100dvh] w-full max-w-lg flex-col px-5 pb-8 pt-6">
+    <section className="cart-atmosphere cart-topo relative mx-auto flex min-h-[100dvh] w-full max-w-lg flex-col px-5 pb-8 pt-6">
       <div className="mb-6 flex items-center gap-3">
         <button
           type="button"
           onClick={onBack}
-          className="flex h-10 w-10 items-center justify-center border border-[color:var(--grim-border-soft)] text-[color:var(--grim-stone)] transition hover:border-[color:var(--grim-gold)] hover:text-[color:var(--grim-gold-bright)]"
+          className="flex h-10 w-10 items-center justify-center border border-[color:var(--cart-border-soft)] text-[color:var(--cart-muted)] transition hover:border-[color:var(--cart-copper)] hover:text-[color:var(--cart-copper-bright)]"
           aria-label="Voltar"
         >
           <ChevronLeft size={20} />
         </button>
         <div className="min-w-0 flex-1">
           <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-            <p className="grim-display text-[11px] uppercase tracking-[0.22em] text-[color:var(--grim-gold)]">
-              Provação {question.stage}/3 · {question.stageTitle}
+            <p className="cart-display text-[11px] uppercase tracking-[0.22em] text-[color:var(--cart-copper)]">
+              Trilha de Exploração · Etapa {question.stage}/3
             </p>
-            <span className="tabular text-xs text-[color:var(--grim-stone-dim)]">
-              {index + 1}/{TOTAL_QUESTIONS}
+            <span className="tabular text-xs text-[color:var(--cart-dim)]">
+              Marco {index + 1} de {TOTAL_QUESTIONS}
             </span>
           </div>
-          <div className="h-[3px] overflow-hidden bg-black/40">
+          <p className="mb-2 text-xs text-[color:var(--cart-muted)]">
+            {question.stageTitle}
+          </p>
+          <div className="cart-trail">
             <motion.div
-              className="h-full origin-left bg-gradient-to-r from-[color:var(--grim-purple)] to-[color:var(--grim-gold)]"
+              className="cart-trail-fill origin-left"
               initial={false}
               animate={{ width: `${progress}%` }}
               transition={{ duration: 0.45, ease: EASE }}
@@ -58,9 +61,9 @@ export function QuizFlow({ index, answers, onSelect, onBack }: Props) {
             animate={{ opacity: 1, x: 0 }}
             exit={reduce ? undefined : { opacity: 0, x: -20 }}
             transition={{ duration: 0.38, ease: EASE }}
-            className="grim-card flex flex-col rounded-sm p-5 sm:p-6"
+            className="cart-card flex flex-col rounded-sm p-5 sm:p-6"
           >
-            <h2 className="grim-display text-[1.35rem] leading-snug tracking-wide text-[color:var(--grim-ink)] sm:text-[1.55rem]">
+            <h2 className="cart-display text-[1.35rem] leading-snug tracking-wide text-[color:var(--cart-ink)] sm:text-[1.55rem]">
               {question.text}
             </h2>
 
@@ -79,11 +82,11 @@ export function QuizFlow({ index, answers, onSelect, onBack }: Props) {
                         delay: reduce ? 0 : 0.05 + i * 0.04,
                       }}
                       onClick={() => onSelect(question.id, option.id)}
-                      className={`grim-option w-full rounded-sm px-4 py-4 text-left text-[0.95rem] leading-snug ${
-                        isSelected ? "grim-option-active" : ""
+                      className={`cart-option w-full rounded-sm px-4 py-4 text-left text-[0.95rem] leading-snug ${
+                        isSelected ? "cart-option-active" : ""
                       }`}
                     >
-                      <span className="grim-display mr-3 inline-block text-sm text-[color:var(--grim-gold)]">
+                      <span className="cart-display mr-3 inline-block text-sm text-[color:var(--cart-copper)]">
                         {option.letter}
                       </span>
                       {option.text}

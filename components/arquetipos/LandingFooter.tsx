@@ -6,19 +6,19 @@ type Props = {
 
 export function LandingFooter({ onStartQuiz }: Props) {
   return (
-    <footer className="border-t border-[color:var(--grim-border-soft)]">
+    <footer className="border-t border-[color:var(--cart-border-soft)]">
       <div className="px-5 py-10">
-        <div className="mx-auto flex max-w-5xl flex-col items-center justify-between gap-4 text-xs text-[color:var(--grim-stone-dim)] sm:flex-row">
-          <p className="grim-display text-base tracking-[0.12em] text-[color:var(--grim-gold)]/70">
+        <div className="mx-auto flex max-w-5xl flex-col items-center justify-between gap-4 text-xs text-[color:var(--cart-dim)] sm:flex-row">
+          <p className="cart-display text-base tracking-[0.12em] text-[color:var(--cart-copper)]/75">
             Arquétipo
           </p>
-          <p>Carol Pearson / Jung · Dark Fantasy Grimoire</p>
+          <p>Carol Pearson / Jung · Carta de Expedição</p>
           <button
             type="button"
             onClick={onStartQuiz}
-            className="text-[color:var(--grim-gold)] transition hover:text-[color:var(--grim-gold-bright)]"
+            className="text-[color:var(--cart-copper)] transition hover:text-[color:var(--cart-copper-bright)]"
           >
-            Começar Teste
+            Iniciar Expedição
           </button>
         </div>
       </div>
