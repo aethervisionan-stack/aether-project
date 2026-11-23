@@ -15,10 +15,10 @@ import Image from "next/image";
 import {
   EmberField,
   MedievalDivider,
-  OrnateCorners,
   RealmMedallion,
   SanctuaryBackdrop,
 } from "./CinematicChrome";
+import { EmberCard } from "./EmberCard";
 import { playStageChime } from "@/src/utils/soundEffects";
 import { dispatchMedievalAudioStart } from "./MedievalAudioPlayer";
 
@@ -198,8 +198,8 @@ export function QuizHero({ onStart }: Props) {
                   transition={{ duration: 0.55, ease: EASE, delay: i * 0.06 }}
                   className={item.span}
                 >
-                  <OrnateCorners
-                    className={`cine-card h-full rounded-sm p-6 ${
+                  <EmberCard
+                    className={`h-full rounded-sm p-6 ${
                       i === 0 ? "lg:flex lg:flex-col lg:justify-between" : ""
                     }`}
                   >
@@ -229,7 +229,7 @@ export function QuizHero({ onStart }: Props) {
                         {item.body}
                       </p>
                     </div>
-                  </OrnateCorners>
+                  </EmberCard>
                 </motion.li>
               ))}
             </ul>
@@ -260,7 +260,7 @@ export function QuizHero({ onStart }: Props) {
                   viewport={{ once: true, margin: "-40px" }}
                   transition={{ duration: 0.55, ease: EASE, delay: i * 0.05 }}
                 >
-                  <OrnateCorners className="cine-card flex min-h-[220px] flex-col items-center rounded-sm px-5 py-8 text-center">
+                  <EmberCard className="flex min-h-[220px] flex-col items-center rounded-sm px-5 py-8 text-center">
                     <RealmMedallion accent={realm.accent} shape={realm.shape}>
                       <realm.icon size={20} aria-hidden />
                     </RealmMedallion>
@@ -276,7 +276,7 @@ export function QuizHero({ onStart }: Props) {
                     <p className="mt-3 text-xs leading-relaxed text-[color:var(--cine-muted)]">
                       {realm.body}
                     </p>
-                  </OrnateCorners>
+                  </EmberCard>
                 </motion.li>
               ))}
             </ul>
@@ -294,7 +294,7 @@ export function QuizHero({ onStart }: Props) {
             transition={{ duration: 0.6, ease: EASE }}
             className="mx-auto max-w-xl"
           >
-            <OrnateCorners className="cine-glass-strong rounded-sm px-6 py-12 text-center">
+            <EmberCard className="ember-card-glass px-6 py-12 text-center">
               <p className="cine-display text-[11px] uppercase tracking-[0.32em] text-[color:var(--cine-amber)]">
                 Altar do grimório
               </p>
@@ -315,7 +315,7 @@ export function QuizHero({ onStart }: Props) {
               <p className="mt-4 text-xs tracking-wide text-[color:var(--cine-dim)]">
                 • Trilha Sonora Imersiva
               </p>
-            </OrnateCorners>
+            </EmberCard>
           </motion.div>
         </section>
       </div>

@@ -16,10 +16,17 @@ import {
 const TARGET_VOL = 0.35;
 const FADE_MS = 2000;
 const EVENT = "start-medieval-audio";
-const MP3 = "/audio/medieval-ambience.mp3";
+const MP3 = "/audio/dark-and-darker-lobby.mp3";
+const BPM = 63;
+const BEAT = 60 / BPM; // ≈ 0.952s
 
-/** Soft D-minor / Dorian drones for ethereal fallback ambience */
-const DORIAN_HZ = [146.83, 174.61, 220.0, 293.66];
+/** Gm — Eb — F — Ebmaj7 plucked lute/guitar arpeggio (Hz) */
+const PROGRESSION: number[][] = [
+  [196.0, 233.08, 293.66, 392.0], // Gm
+  [155.56, 196.0, 233.08, 311.13], // Eb
+  [174.61, 220.0, 261.63, 349.23], // F
+  [155.56, 196.0, 233.08, 293.66], // Ebmaj7
+];
 
 function rampGain(
   gain: GainNode,
@@ -33,6 +40,34 @@ function rampGain(
   gain.gain.linearRampToValueAtTime(to, now + ms / 1000);
 }
 
+function pluck(
+  ctx: AudioContext,
+  dest: AudioNode,
+  freq: number,
+  when: number,
+  vol = 0.14,
+) {
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  const filter = ctx.createBiquadFilter();
+  osc.type = "triangle";
+  osc.frequency.setValueAtTime(freq, when);
+  // slight string decay pitch droop
+  osc.frequency.exponentialRampToValueAtTime(freq * 0.985, when + 0.45);
+  filter.type = "lowpass";
+  filter.frequency.setValueAtTime(2200, when);
+  filter.frequency.exponentialRampToValueAtTime(900, when + 0.4);
+  filter.Q.value = 0.9;
+  gain.gain.setValueAtTime(0.0001, when);
+  gain.gain.linearRampToValueAtTime(vol, when + 0.008);
+  gain.gain.exponentialRampToValueAtTime(0.0001, when + 0.55);
+  osc.connect(filter);
+  filter.connect(gain);
+  gain.connect(dest);
+  osc.start(when);
+  osc.stop(when + 0.6);
+}
+
 export function MedievalAudioPlayer() {
   const [playing, setPlaying] = useState(false);
   const [muted, setMuted] = useState(false);
@@ -43,10 +78,14 @@ export function MedievalAudioPlayer() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const ctxRef = useRef<AudioContext | null>(null);
   const masterRef = useRef<GainNode | null>(null);
-  const oscRef = useRef<OscillatorNode[]>([]);
   const modeRef = useRef<"mp3" | "web" | null>(null);
   const volumeRef = useRef(TARGET_VOL);
   const playingRef = useRef(false);
+  const webActiveRef = useRef(false);
+  const nextNoteRef = useRef(0);
+  const chordIdxRef = useRef(0);
+  const noteIdxRef = useRef(0);
+  const scheduleTimerRef = useRef<number | null>(null);
   const fadeRafRef = useRef<number | null>(null);
   const fadeTimeoutRef = useRef<number | null>(null);
 
@@ -65,7 +104,8 @@ export function MedievalAudioPlayer() {
       if (detail) setMuted(detail.muted);
     };
     window.addEventListener("medieval-audio-mute-change", onMute);
-    return () => window.removeEventListener("medieval-audio-mute-change", onMute);
+    return () =>
+      window.removeEventListener("medieval-audio-mute-change", onMute);
   }, []);
 
   const clearFades = useCallback(() => {
@@ -80,14 +120,40 @@ export function MedievalAudioPlayer() {
   }, []);
 
   const stopWeb = useCallback(() => {
-    for (const o of oscRef.current) {
-      try {
-        o.stop();
-      } catch {
-        /* already stopped */
-      }
+    webActiveRef.current = false;
+    if (scheduleTimerRef.current != null) {
+      window.clearTimeout(scheduleTimerRef.current);
+      scheduleTimerRef.current = null;
     }
-    oscRef.current = [];
+  }, []);
+
+  const scheduleArpeggioRef = useRef<() => void>(() => {});
+
+  useEffect(() => {
+    scheduleArpeggioRef.current = () => {
+      const ctx = ctxRef.current;
+      const master = masterRef.current;
+      if (!ctx || !master || !webActiveRef.current) return;
+
+      const horizon = ctx.currentTime + 1.25;
+      while (nextNoteRef.current < horizon) {
+        const chord = PROGRESSION[chordIdxRef.current % PROGRESSION.length];
+        const freq = chord[noteIdxRef.current % chord.length];
+        const when = nextNoteRef.current;
+        pluck(ctx, master, freq, when, 0.13);
+        nextNoteRef.current = when + BEAT / 2; // eighth notes @ 63 BPM
+        noteIdxRef.current += 1;
+        if (noteIdxRef.current >= chord.length) {
+          noteIdxRef.current = 0;
+          chordIdxRef.current =
+            (chordIdxRef.current + 1) % PROGRESSION.length;
+        }
+      }
+
+      scheduleTimerRef.current = window.setTimeout(() => {
+        scheduleArpeggioRef.current();
+      }, 400);
+    };
   }, []);
 
   const ensureWebAmbience = useCallback(async () => {
@@ -98,38 +164,25 @@ export function MedievalAudioPlayer() {
     if (!AC) throw new Error("Web Audio unavailable");
 
     let ctx = ctxRef.current;
-    if (!ctx) {
+    if (!ctx || ctx.state === "closed") {
       ctx = new AC();
       ctxRef.current = ctx;
     }
     if (ctx.state === "suspended") await ctx.resume();
+
+    stopWeb();
 
     const master = ctx.createGain();
     master.gain.value = 0;
     master.connect(ctx.destination);
     masterRef.current = master;
 
-    const filter = ctx.createBiquadFilter();
-    filter.type = "lowpass";
-    filter.frequency.value = 680;
-    filter.Q.value = 0.7;
-    filter.connect(master);
-
-    stopWeb();
-    const oscs: OscillatorNode[] = [];
-    DORIAN_HZ.forEach((hz, i) => {
-      const osc = ctx!.createOscillator();
-      const g = ctx!.createGain();
-      osc.type = i % 2 === 0 ? "sine" : "triangle";
-      osc.frequency.value = hz;
-      g.gain.value = i === 0 ? 0.22 : 0.09;
-      osc.connect(g);
-      g.connect(filter);
-      osc.start();
-      oscs.push(osc);
-    });
-    oscRef.current = oscs;
     modeRef.current = "web";
+    webActiveRef.current = true;
+    chordIdxRef.current = 0;
+    noteIdxRef.current = 0;
+    nextNoteRef.current = ctx.currentTime + 0.05;
+    scheduleArpeggioRef.current();
     return master;
   }, [stopWeb]);
 
@@ -165,6 +218,57 @@ export function MedievalAudioPlayer() {
     }
   }, [clearFades, stopWeb]);
 
+  const startMp3 = useCallback(async (target: number) => {
+    let el = audioRef.current;
+    if (!el || el.src.indexOf("dark-and-darker-lobby") === -1) {
+      el = new Audio(MP3);
+      el.loop = true;
+      el.preload = "auto";
+      audioRef.current = el;
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      let settled = false;
+      const finish = (ok: boolean) => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timer);
+        el!.removeEventListener("canplaythrough", onOk);
+        el!.removeEventListener("error", onErr);
+        if (ok) resolve();
+        else reject(new Error("mp3 missing"));
+      };
+      const onOk = () => finish(true);
+      const onErr = () => finish(false);
+      const timer = window.setTimeout(() => finish(false), 2500);
+      if (el!.readyState >= 3) {
+        finish(true);
+        return;
+      }
+      el!.addEventListener("canplaythrough", onOk);
+      el!.addEventListener("error", onErr);
+      el!.load();
+    });
+
+    modeRef.current = "mp3";
+    el.volume = 0;
+    el.onerror = () => {
+      /* runtime decode failure → caller already past load; ignore here */
+    };
+    await el.play();
+    setPlaying(true);
+    setReadyHint(true);
+    const t0 = performance.now();
+    const step = (now: number) => {
+      const p = Math.min(1, (now - t0) / FADE_MS);
+      el!.volume = target * p;
+      if (p < 1) {
+        fadeRafRef.current = window.requestAnimationFrame(step);
+      }
+    };
+    fadeRafRef.current = window.requestAnimationFrame(step);
+  }, []);
+
   const fadeInPlay = useCallback(async () => {
     clearFades();
     setMedievalAudioMuted(false);
@@ -173,54 +277,10 @@ export function MedievalAudioPlayer() {
     const target = volumeRef.current;
 
     try {
-      let el = audioRef.current;
-      if (!el) {
-        el = new Audio(MP3);
-        el.loop = true;
-        el.preload = "auto";
-        audioRef.current = el;
-      }
-
-      await new Promise<void>((resolve, reject) => {
-        let settled = false;
-        const finish = (ok: boolean) => {
-          if (settled) return;
-          settled = true;
-          window.clearTimeout(timer);
-          el!.removeEventListener("canplaythrough", onOk);
-          el!.removeEventListener("error", onErr);
-          if (ok) resolve();
-          else reject(new Error("mp3 missing"));
-        };
-        const onOk = () => finish(true);
-        const onErr = () => finish(false);
-        const timer = window.setTimeout(() => finish(false), 2200);
-        if (el!.readyState >= 3) {
-          finish(true);
-          return;
-        }
-        el!.addEventListener("canplaythrough", onOk);
-        el!.addEventListener("error", onErr);
-        el!.load();
-      });
-
-      modeRef.current = "mp3";
-      el.volume = 0;
-      await el.play();
-      setPlaying(true);
-      setReadyHint(true);
-      const t0 = performance.now();
-      const step = (now: number) => {
-        const p = Math.min(1, (now - t0) / FADE_MS);
-        el!.volume = target * p;
-        if (p < 1) {
-          fadeRafRef.current = window.requestAnimationFrame(step);
-        }
-      };
-      fadeRafRef.current = window.requestAnimationFrame(step);
+      await startMp3(target);
       return;
     } catch {
-      /* Web Audio fallback */
+      /* onError / missing → Web Audio Gm lute arpeggio */
     }
 
     try {
@@ -232,7 +292,7 @@ export function MedievalAudioPlayer() {
     } catch {
       setPlaying(false);
     }
-  }, [clearFades, ensureWebAmbience]);
+  }, [clearFades, ensureWebAmbience, startMp3]);
 
   const toggle = useCallback(() => {
     if (playing) {
@@ -289,7 +349,7 @@ export function MedievalAudioPlayer() {
           type="button"
           onClick={toggle}
           className="flex items-center gap-2 text-[color:var(--cine-ink)] transition hover:text-[color:var(--cine-amber-soft)]"
-          aria-label={playing ? "Silenciar trilha" : "Ativar som"}
+          aria-label={playing ? "Silenciar trilha" : "Ativar trilha"}
         >
           {showMutedIcon ? (
             <VolumeX size={16} className="text-[color:var(--cine-muted)]" />
@@ -298,10 +358,10 @@ export function MedievalAudioPlayer() {
           )}
           <span className="cine-display hidden text-[10px] uppercase tracking-[0.18em] sm:inline">
             {playing && !muted
-              ? "Trilha Arcana"
+              ? "Taverna Sombria"
               : readyHint || muted
-                ? "Trilha Arcana"
-                : "Ativar Som"}
+                ? "Taverna Sombria"
+                : "Ativar Trilha"}
           </span>
         </button>
 
