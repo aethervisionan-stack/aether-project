@@ -86,7 +86,7 @@ export async function quoteForFulfillment(
   const solPaid = order.usd > 0 ? order.usd / sol.usd : 0;
   return quoteVisionForSol({
     solPaid,
-    bonusPct: bonusPctForTier(order.tierId),
+    bonusPct: bonusPctForTier(order.tierId, order.usd),
     solUsd: sol.usd,
     solUsdSource: sol.source,
   });

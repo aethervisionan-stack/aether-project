@@ -15,6 +15,13 @@ function safeEqual(a: string, b: string) {
 
 export async function POST(request: Request) {
   const pix = pixConfig();
+  if (!pix.webhookSecret) {
+    return NextResponse.json(
+      { error: "PIX_WEBHOOK_SECRET required" },
+      { status: 503 },
+    );
+  }
+
   const raw = await request.text();
   let body: Record<string, unknown> = {};
   try {
@@ -29,18 +36,11 @@ export async function POST(request: Request) {
     "";
   const mpSignature = request.headers.get("x-signature") ?? "";
 
-  if (pix.webhookSecret) {
-    const hmac = createHmac("sha256", pix.webhookSecret).update(raw).digest("hex");
-    const okHeader = headerSecret && safeEqual(headerSecret, pix.webhookSecret);
-    const okHmac = mpSignature && safeEqual(mpSignature, hmac);
-    if (!okHeader && !okHmac) {
-      return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-    }
-  } else if (process.env.NODE_ENV === "production") {
-    return NextResponse.json(
-      { error: "PIX_WEBHOOK_SECRET required in production" },
-      { status: 401 },
-    );
+  const hmac = createHmac("sha256", pix.webhookSecret).update(raw).digest("hex");
+  const okHeader = Boolean(headerSecret) && safeEqual(headerSecret, pix.webhookSecret);
+  const okHmac = Boolean(mpSignature) && safeEqual(mpSignature, hmac);
+  if (!okHeader && !okHmac) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
   const orderId = String(

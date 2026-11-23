@@ -25,9 +25,32 @@ export function pricingMode(): PricingMode {
   return process.env.VISION_PRICING?.trim() === "raydium" ? "raydium" : "presale";
 }
 
-export function bonusPctForTier(tierId: string | null | undefined): number {
-  const tier = PRESALE_TIERS.find((item) => item.id === tierId);
-  return tier?.bonusPct ?? 0;
+/**
+ * Bonus is earned from USD paid, never from a client-claimed tier alone.
+ * Optional `claimedTierId` is only used when the payment meets that tier's minimum;
+ * it cannot exceed the bonus the payment qualifies for.
+ */
+export function bonusPctForUsd(usdPaid: number): number {
+  if (!(usdPaid > 0)) return 0;
+  const matched = [...PRESALE_TIERS]
+    .reverse()
+    .find((tier) => usdPaid + 1e-9 >= tier.usd);
+  return matched?.bonusPct ?? 0;
+}
+
+export function bonusPctForTier(
+  tierId: string | null | undefined,
+  usdPaid?: number,
+): number {
+  if (typeof usdPaid === "number") {
+    const earned = bonusPctForUsd(usdPaid);
+    if (!tierId) return earned;
+    const claimed = PRESALE_TIERS.find((item) => item.id === tierId);
+    if (!claimed || usdPaid + 1e-9 < claimed.usd) return earned;
+    return Math.min(claimed.bonusPct, earned);
+  }
+  // Without a verified payment amount, never trust a client-supplied tier.
+  return 0;
 }
 
 export function raydiumReserves(): { vision: number; sol: number } | null {
@@ -127,9 +150,10 @@ export async function quoteVisionForLamports(input: {
 }): Promise<VisionQuote> {
   const solPaid = input.lamports / LAMPORTS_PER_SOL;
   const sol = await fetchSolUsd();
+  const usdPaid = solPaid * sol.usd;
   return quoteVisionForSol({
     solPaid,
-    bonusPct: bonusPctForTier(input.tierId),
+    bonusPct: bonusPctForTier(input.tierId, usdPaid),
     solUsd: sol.usd,
     solUsdSource: sol.source,
   });

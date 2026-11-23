@@ -3,6 +3,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { PublicKey } from "@solana/web3.js";
 import { PRESALE_TIERS, visionForUsd, visionFromUsd } from "@/lib/presale";
+import { bonusPctForTier } from "@/lib/vision-pricing";
 
 export type PayMethod = "sol" | "pix";
 export type OrderStatus =
@@ -57,9 +58,27 @@ export function brlFromUsd(usd: number): number {
 }
 
 function visionAmountFor(usd: number, tierId: string | null): number {
-  const tier = PRESALE_TIERS.find((item) => item.id === tierId);
-  if (tier) return visionForUsd(usd, tier.bonusPct);
+  const bonusPct = bonusPctForTier(tierId, usd);
+  if (bonusPct > 0) return visionForUsd(usd, bonusPct);
   return visionFromUsd(usd);
+}
+
+/** Persist only a tier the payment amount actually qualifies for. */
+export function resolveTierForUsd(
+  usd: number,
+  claimedTierId?: string | null,
+): { tierId: string | null; tierName: string } {
+  const earned = [...PRESALE_TIERS]
+    .reverse()
+    .find((tier) => usd + 1e-9 >= tier.usd);
+  if (!earned) return { tierId: null, tierName: "Custom" };
+  if (claimedTierId) {
+    const claimed = PRESALE_TIERS.find((tier) => tier.id === claimedTierId);
+    if (claimed && usd + 1e-9 >= claimed.usd) {
+      return { tierId: claimed.id, tierName: claimed.name };
+    }
+  }
+  return { tierId: earned.id, tierName: earned.name };
 }
 
 export function assertDestPubkey(value: string): string {
@@ -176,17 +195,16 @@ export async function createOrder(input: CreateOrderInput): Promise<VisionOrder>
   }
 
   const id = randomUUID();
-  const tierId = input.tierId ?? null;
+  const resolved = resolveTierForUsd(input.usd, input.tierId ?? null);
+  const tierId = resolved.tierId;
   const order: VisionOrder = {
     id,
     tierId,
-    tierName: input.tierName ?? "Vision allocation",
+    tierName: resolved.tierName,
     usd: input.usd,
     brl: brlFromUsd(input.usd),
-    visionAmount:
-      input.visionAmount && input.visionAmount > 0
-        ? input.visionAmount
-        : visionAmountFor(input.usd, tierId),
+    // Always derive $VISION server-side from USD + earned tier (ignore client amount).
+    visionAmount: visionAmountFor(input.usd, tierId),
     destPubkey,
     method: input.method,
     status: "awaiting_payment",
