@@ -96,7 +96,7 @@ export function QuizResult({ ranked, onRestart }: Props) {
         transition={{ duration: 0.55, ease: EASE, delay: 0.15 }}
         className="mt-8 border-l-2 border-[#C9A227]/60 pl-4 font-[family-name:var(--font-arq-display)] text-xl italic leading-snug text-[#F3EDE0]/90"
       >
-        “{dominant.lema}”
+        {dominant.vibe}
       </motion.blockquote>
 
       <motion.p
@@ -105,10 +105,9 @@ export function QuizResult({ ranked, onRestart }: Props) {
         transition={{ duration: 0.55, ease: EASE, delay: 0.2 }}
         className="mt-6 text-base leading-relaxed text-[#F3EDE0]/70"
       >
-        {dominant.summary}
+        {dominant.era}
       </motion.p>
 
-      {/* Affinity bars — interaction-relevant comparison */}
       <div className="mt-10 space-y-3">
         {ranked.slice(0, 4).map((item, i) => {
           const arch = ARCHETYPES[item.id];
@@ -137,22 +136,14 @@ export function QuizResult({ ranked, onRestart }: Props) {
       </div>
 
       <div className="mt-12 space-y-8 border-t border-white/10 pt-10">
-        <ResultBlock title="Pontos fortes" items={dominant.strengths} />
-        <ResultBlock title="Sombras" items={dominant.shadows} />
+        <ResultBlock title="Green flags" items={dominant.greenFlags} />
+        <ResultBlock title="Red flags" items={dominant.redFlags} />
         <div>
           <h3 className="text-[11px] uppercase tracking-[0.22em] text-[#C9A227]/90">
-            Vida
+            Onde brilha
           </h3>
           <p className="mt-3 text-sm leading-relaxed text-[#F3EDE0]/70">
-            {dominant.life}
-          </p>
-        </div>
-        <div>
-          <h3 className="text-[11px] uppercase tracking-[0.22em] text-[#C9A227]/90">
-            Negócios e posicionamento
-          </h3>
-          <p className="mt-3 text-sm leading-relaxed text-[#F3EDE0]/70">
-            {dominant.business}
+            {dominant.ondeBrilha}
           </p>
         </div>
         <div className="border border-white/10 bg-white/[0.02] p-5">
@@ -165,8 +156,11 @@ export function QuizResult({ ranked, onRestart }: Props) {
           >
             {secondary.name}
           </p>
-          <p className="mt-2 text-sm leading-relaxed text-white/55">
-            {secondary.summary}
+          <p className="mt-2 text-sm italic leading-relaxed text-white/55">
+            {secondary.vibe}
+          </p>
+          <p className="mt-2 text-sm leading-relaxed text-white/45">
+            {secondary.era}
           </p>
         </div>
       </div>

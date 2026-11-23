@@ -14,7 +14,7 @@ const STEPS = [
   {
     n: "03",
     title: "Resultado aplicável",
-    body: "Dominante + secundário, lema, forças, sombras e uso em vida e negócios.",
+    body: "Dominante + secundário, vibe, era, green flags, red flags e onde brilha.",
   },
 ] as const;
 

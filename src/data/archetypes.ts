@@ -15,12 +15,14 @@ export type ArchetypeId =
 export type Archetype = {
   id: ArchetypeId;
   name: string;
-  lema: string;
-  summary: string;
-  strengths: string[];
-  shadows: string[];
-  life: string;
-  business: string;
+  /** Short shareable line — the vibe people quote. */
+  vibe: string;
+  /** Longer energy / “era” description. */
+  era: string;
+  greenFlags: string[];
+  redFlags: string[];
+  /** Where this archetype lights up in life, work, and online. */
+  ondeBrilha: string;
   accent: string;
 };
 
@@ -40,253 +42,229 @@ export const ARCHETYPES: Record<ArchetypeId, Archetype> = {
   inocente: {
     id: "inocente",
     name: "Inocente",
-    lema: "Liberdade para ser você mesmo.",
-    summary:
-      "Você busca pureza, otimismo e um caminho simples. Confia no bem e inspira segurança emocional em quem está ao seu redor.",
-    strengths: [
-      "Otimismo genuíno e fé no potencial humano",
-      "Autenticidade e comunicação transparente",
-      "Capacidade de renovar a esperança em equipes",
+    vibe: "Ainda acredito que pode dar certo — e isso não é ingenuidade, é escolha.",
+    era: "Sua era é a do feed limpo e da conversa sem cinismo. Você protege um núcleo de esperança mesmo quando o algoritmo empurra pânico. Amigos te procuram pra lembrar que não está tudo perdido.",
+    greenFlags: [
+      "Fala o que sente sem performance",
+      "Mantém fé sem ignorar o que dói",
+      "Cria espaços onde dá pra baixar a guarda",
     ],
-    shadows: [
-      "Ingenuidade diante de riscos reais",
-      "Negação de conflitos necessários",
-      "Dependência de validação externa",
+    redFlags: [
+      "Evita conflito até o close friends virar pressão",
+      "Confia demais em narrativa bonita",
+      "Precisa de validação constante pra se sentir ok",
     ],
-    life: "Priorize ambientes seguros e relações honestas. Proteja seu otimismo com limites claros — não com cinismo.",
-    business:
-      "Brilhe em marcas de bem-estar, educação e experiências que prometem simplicidade e confiança. Sua narrativa vende clareza.",
+    ondeBrilha:
+      "Comunidades acolhedoras, wellness honesto, educação leve e marcas que prometem clareza sem gaslighting. Você vende paz que ainda parece verdadeira.",
     accent: "#E8C547",
   },
   sabio: {
     id: "sabio",
     name: "Sábio",
-    lema: "A verdade te libertará.",
-    summary:
-      "Você orienta decisões pela análise, aprendizado contínuo e visão de longo prazo. Busca compreender o mundo antes de agir.",
-    strengths: [
-      "Pensamento crítico e profundidade analítica",
-      "Paciência para estudar padrões complexos",
-      "Credibilidade como conselheiro e mentor",
+    vibe: "Antes de opinar, eu abro 14 abas — e ainda acho pouco.",
+    era: "Sua era é thread longa, podcast 2h e print de artigo. Você desconfia do hype até entender o mecanismo. No Discord, é a pessoa que manda o link certo no meio do caos.",
+    greenFlags: [
+      "Separa fato de vibe com paciência",
+      "Explica complexo sem humilhar",
+      "Pensa em segundo e terceiro efeito",
     ],
-    shadows: [
-      "Paralisia por excesso de análise",
-      "Distância emocional em momentos críticos",
-      "Arrogância intelectual",
+    redFlags: [
+      "Paralisia por pesquisa infinita",
+      "Fica frio quando o assunto é sentimento",
+      "Usa inteligência pra se afastar em vez de chegar",
     ],
-    life: "Equilibre estudo com experimentação. Conhecimento sem ação vira biblioteca; ação sem reflexão vira ruído.",
-    business:
-      "Ideal para consultoria, pesquisa, educação e produtos baseados em dados. Posicione-se como a voz que reduz incerteza.",
+    ondeBrilha:
+      "Pesquisa, educação, data, consultoria e conteúdo que reduz ansiedade com clareza. Você é a voz anti-FOMO com método.",
     accent: "#7C9CFF",
   },
   explorador: {
     id: "explorador",
     name: "Explorador",
-    lema: "Não me prenda — eu preciso descobrir.",
-    summary:
-      "Você é movido pela autonomia, curiosidade e pela fronteira do desconhecido. Evita rotinas que sufocam a identidade.",
-    strengths: [
-      "Coragem para sair da zona de conforto",
-      "Adaptabilidade em contextos novos",
-      "Inspiração para inovar processos e rotas",
+    vibe: "Se a rotina apertar o peito, eu já estou no próximo mapa.",
+    era: "Sua era é aba anônima, cidade nova, servidor novo. Identidade pra você é movimento — não um bio fixo. Prefere errar longe a acertar preso.",
+    greenFlags: [
+      "Entra no desconhecido sem pedir roteiro",
+      "Adapta rápido quando o plano quebra",
+      "Inspira gente travada a tentar outra rota",
     ],
-    shadows: [
-      "Inquietação crônica e dificuldade de compromisso",
-      "Fuga quando a estabilidade exige presença",
-      "Espalhamento de energia em muitas frentes",
+    redFlags: [
+      "Some quando compromisso pede presença",
+      "Coleciona começos e evita finais",
+      "Confunde liberdade com fuga",
     ],
-    life: "Construa ritual mínimo de âncora (saúde, finanças, relações) para sustentar suas expedições sem se perder.",
-    business:
-      "Destaque-se em viagem, outdoor, startups e marcas de descoberta. Venda liberdade com método — não só aventura.",
+    ondeBrilha:
+      "Viagem, outdoor, startups, creator nomad e produtos de descoberta. Venda liberdade com um ritual mínimo de âncora — senão a vibe vira só escape.",
     accent: "#3DD6C6",
   },
   "fora-da-lei": {
     id: "fora-da-lei",
     name: "Fora-da-lei",
-    lema: "As regras são feitas para serem questionadas.",
-    summary:
-      "Você desafia o status quo, provoca mudança e rejeita o que parece injusto ou artificial. Sua força é a ruptura criativa.",
-    strengths: [
-      "Coragem para confrontar sistemas ultrapassados",
-      "Identidade marcante e discurso disruptivo",
-      "Capacidade de catalisar movimentos",
+    vibe: "Se a regra é injusta, eu não vou performar obediência.",
+    era: "Sua era é reply afiado, desabafo sem filtro e lado B do algoritmo. Você sente cheiro de sistema podre e não consegue fingir que está tudo ok só pra manter paz falsa.",
+    greenFlags: [
+      "Nomeia o absurdo quando ninguém quer",
+      "Protege quem a regra esmaga",
+      "Transforma revolta em movimento concreto",
     ],
-    shadows: [
-      "Rebelião sem propósito construtivo",
-      "Autossabotagem por oposição automática",
-      "Dificuldade de colaborar em estruturas",
+    redFlags: [
+      "Rebela por reflexo, sem projeto",
+      "Queima ponte antes de construir saída",
+      "Confunde autenticidade com autossabotagem",
     ],
-    life: "Canalize a revolta em projetos concretos. Destruir sem reconstruir só aumenta o vazio.",
-    business:
-      "Perfeito para marcas underground, ativismo, tech disruptiva e posicionamento anti-establishment com proposta clara.",
+    ondeBrilha:
+      "Ativismo, underground, tech disruptiva e marcas anti-pose. Você brilha quando a ruptura tem proposta — não só vibe de cancelamento.",
     accent: "#E85D4C",
   },
   mago: {
     id: "mago",
     name: "Mago",
-    lema: "Se você pode imaginar, pode transformar.",
-    summary:
-      "Você conecta visão e realidade. Enxerga padrões invisíveis e orquestra mudanças que parecem mágicas para os outros.",
-    strengths: [
-      "Visão sistêmica e influência sutil",
-      "Capacidade de catalisar transformações",
-      "Intuição estratégica afiada",
+    vibe: "Eu não só vejo o padrão — eu mudo o clima da sala.",
+    era: "Sua era é 2am com insight que reorganiza a semana. Você conecta pessoas, ideias e timing como se fosse óbvio. Pro mundo parece mágica; pra você é leitura de campo.",
+    greenFlags: [
+      "Enxerga o subtexto do grupo",
+      "Vira chave sem precisar gritar",
+      "Traduz visão em experimento testável",
     ],
-    shadows: [
-      "Manipulação disfarçada de visão",
-      "Promessas que fogem do operacional",
-      "Isolamento por se sentir incompreendido",
+    redFlags: [
+      "Manipula com cara de visão",
+      "Promete transformação sem operacional",
+      "Se isola quando ninguém ‘pega’ a ideia",
     ],
-    life: "Traduza insights em rituais e experimentos mensuráveis. Magia sustentável é processo, não mistério.",
-    business:
-      "Excelente em branding, coaching de transformação, produto e inovação. Sua narrativa vende virada de chave.",
+    ondeBrilha:
+      "Branding, produto, coaching de virada e inovação. Você vende a sensação de ‘agora faz sentido’ — desde que entregue o passo a passo.",
     accent: "#A78BFA",
   },
   heroi: {
     id: "heroi",
     name: "Herói",
-    lema: "Onde há vontade, há um caminho.",
-    summary:
-      "Você enfrenta desafios de frente, eleva o padrão e busca provar valor pela conquista. Competência é o seu idioma.",
-    strengths: [
-      "Disciplina e resiliência sob pressão",
-      "Liderança pelo exemplo",
-      "Foco em resultados e superação",
+    vibe: "Se tá difícil, eu entro. Depois a gente conversa sobre descanso.",
+    era: "Sua era é streak, meta batida e inbox zerada às 23h. Você prova valor na entrega — e odeia parecer fraco no feed ou no time. Burnout digital te conhece pelo nome.",
+    greenFlags: [
+      "Segura pressão sem sumir",
+      "Puxa o padrão pra cima pelo exemplo",
+      "Transforma crise em missão clara",
     ],
-    shadows: [
-      "Burnout por exigência excessiva",
-      "Dificuldade de pedir ajuda",
-      "Competição que esvazia relações",
+    redFlags: [
+      "Trabalha até apagar e chama de disciplina",
+      "Pedir ajuda parece derrota",
+      "Competição esvazia amizade",
     ],
-    life: "Defina vitórias que incluam descanso e vínculo. Heroísmo sem recuperação vira martírio.",
-    business:
-      "Forte em performance, esportes, carreira e produtos de alta exigência. Venda a jornada da conquista com ética.",
+    ondeBrilha:
+      "Performance, esporte, carreira high-stakes e produtos de alta exigência. Sua narrativa de conquista só sustenta se incluir recuperação de verdade.",
     accent: "#F0A500",
   },
   amante: {
     id: "amante",
     name: "Amante",
-    lema: "Estou apaixonado pela vida.",
-    summary:
-      "Você valoriza conexão, estética, sensualidade e profundidade afetiva. Busca experiências que toquem a alma.",
-    strengths: [
-      "Empatia e presença emocional",
-      "Sensibilidade estética e relacional",
-      "Capacidade de criar vínculo autêntico",
+    vibe: "Eu quero sentir de verdade — não só curtir e seguir.",
+    era: "Sua era é estética 2am, playlist íntima e conversa que passa da meia-noite. Você lê o mood da pessoa antes do texto. Conexão > clout.",
+    greenFlags: [
+      "Presença emocional que desarma",
+      "Senso estético que eleva o cotidiano",
+      "Cria vínculo sem forçar performance",
     ],
-    shadows: [
-      "Ciúme, dependência afetiva ou idealização",
-      "Decisões guiadas só pela emoção",
-      "Medo do abandono que limita autonomia",
+    redFlags: [
+      "Idealiza e depois se machuca com a realidade",
+      "Decide só no feeling quando precisava de limite",
+      "Medo de ficar só vira clingy ou ghosting",
     ],
-    life: "Cuide do prazer sem perder o centro. Amor próprio é a base de toda intimidade duradoura.",
-    business:
-      "Brilha em moda, hospitalidade, bem-estar, arte e marcas sensoriais. Venda desejo com elegância e verdade.",
+    ondeBrilha:
+      "Moda, hospitalidade, arte, bem-estar e marcas sensoriais. Você vende desejo com honestidade — sem romance tóxico disfarçado de profundidade.",
     accent: "#E879A9",
   },
   "bobo-da-corte": {
     id: "bobo-da-corte",
     name: "Bobo da Corte",
-    lema: "Se não for divertido, para quê?",
-    summary:
-      "Você desarma tensões com humor, leveza e improvisação. Lembra ao mundo que alegria também é sabedoria.",
-    strengths: [
-      "Criatividade espontânea e carisma",
-      "Capacidade de quebrar gelo e hierarquias",
-      "Resiliência emocional pelo riso",
+    vibe: "Se ninguém riu ainda, eu assumo o risco do primeiro meme.",
+    era: "Sua era é story caótico, call no Discord e humor que corta tensão sem ser cruel. Você lembra o grupo que a vida não é só productivity porn.",
+    greenFlags: [
+      "Quebra gelo sem humilhar",
+      "Improvisa quando o plano morre",
+      "Usa leveza pra abrir assunto difícil",
     ],
-    shadows: [
-      "Fuga de responsabilidade via piada",
-      "Superficialidade em temas sérios",
+    redFlags: [
+      "Piada vira escudo pra não se comprometer",
+      "Foge do sério até virar distância",
       "Medo de ser levado a sério demais",
     ],
-    life: "Use o humor como ponte, não como esconderijo. Sua leveza ganha força quando também segura o peso.",
-    business:
-      "Ideal para entretenimento, conteúdo, eventos e marcas jovens. Venda alegria com inteligência cultural.",
+    ondeBrilha:
+      "Conteúdo, entretenimento, eventos e marcas com cultura jovem. Sua alegria vira poder quando também segura o peso da conversa.",
     accent: "#F4C430",
   },
   "cara-comum": {
     id: "cara-comum",
     name: "Cara Comum",
-    lema: "Todos têm valor — eu também.",
-    summary:
-      "Você valoriza pertencimento, igualdade e realismo. Prefere o sólido ao glamouroso e conecta-se pelo cotidiano.",
-    strengths: [
-      "Empatia com a maioria e pé no chão",
-      "Confiabilidade e senso de comunidade",
-      "Comunicação acessível e sem pretensão",
+    vibe: "Sem pose. Se funciona na vida real, já é luxo.",
+    era: "Sua era é grupo do zap da faculdade, almoço barato e feed sem estética forçada. Você desconfia de guru e prefere o que a maioria consegue viver de verdade.",
+    greenFlags: [
+      "Fala acessível, sem jargão pra impressionar",
+      "Mantém pé no chão quando o hype explode",
+      "Faz a comunidade se sentir incluída",
     ],
-    shadows: [
-      "Medo de se destacar e se limitar",
-      "Conformismo que adia potencial",
-      "Ressentimento com quem brilha",
+    redFlags: [
+      "Se esconde pra não brilhar",
+      "Confunde pertencimento com se apagar",
+      "Resente quem ousa mais sem admitir inveja",
     ],
-    life: "Pertencer não exige desaparecer. Sua autenticidade simples é poder — use-a sem se encolher.",
-    business:
-      "Forte em produtos de massa, serviços essenciais e marcas de confiança cotidiana. Venda inclusão sem discurso vazio.",
+    ondeBrilha:
+      "Produtos do dia a dia, serviços essenciais e marcas de confiança sem glamour fake. Você vende inclusão com realismo — não discurso vazio de ‘somos todos iguais’.",
     accent: "#8FA3B8",
   },
   prestativo: {
     id: "prestativo",
     name: "Prestativo",
-    lema: "Ame o próximo como a si mesmo.",
-    summary:
-      "Você encontra sentido em cuidar, apoiar e aliviar o sofrimento alheio. Generosidade é o centro da sua identidade.",
-    strengths: [
-      "Empatia prática e escuta generosa",
-      "Lealdade e presença em crises",
-      "Capacidade de construir segurança emocional",
+    vibe: "Se alguém tá mal no close friends, eu já tô no privado.",
+    era: "Sua era é ser o emotional support friend do servidor. Você sente o burnout alheio antes do ‘tô bem’. Cuidar é o seu idioma — e também o seu risco.",
+    greenFlags: [
+      "Escuta sem transformar em conselho automático",
+      "Aparece na crise, não só no story feliz",
+      "Cria segurança emocional no grupo",
     ],
-    shadows: [
-      "Autossacrifício e burnout cuidador",
-      "Dificuldade de dizer não",
+    redFlags: [
+      "Diz sim até se esvaziar",
       "Ajuda que gera dependência",
+      "Culpa quando coloca limite",
     ],
-    life: "Cuidar de si é pré-requisito ético do cuidado. Estabeleça reciprocidade sem culpa.",
-    business:
-      "Excelente em saúde, educação, ONG, RH e serviços de suporte. Venda cuidado com limites saudáveis.",
+    ondeBrilha:
+      "Saúde, educação, RH, suporte e comunidades de cuidado. Você brilha quando reciprocidade entra no contrato — cuidar de si não é egoísmo.",
     accent: "#5BB8A8",
   },
   governante: {
     id: "governante",
     name: "Governante",
-    lema: "O poder é responsabilidade.",
-    summary:
-      "Você organiza, decide e cria ordem. Busca estabilidade, status legítimo e sistemas que funcionem para o coletivo.",
-    strengths: [
-      "Visão de estrutura e governança",
-      "Decisão sob pressão e autoridade natural",
-      "Capacidade de construir legados",
+    vibe: "Alguém precisa organizar o caos — e eu não vou fingir que não sou essa pessoa.",
+    era: "Sua era é planilha, papel definido e call que termina com dono de cada tarefa. Você quer sistemas que protejam o grupo, não só status no LinkedIn.",
+    greenFlags: [
+      "Decide quando todo mundo trava",
+      "Cria ordem sem precisar de caos teatral",
+      "Pensa legado e estabilidade de longo prazo",
     ],
-    shadows: [
-      "Controle excessivo e rigidez",
-      "Medo de caos que inibe inovação",
-      "Status como máscara de insegurança",
+    redFlags: [
+      "Controla demais e sufoca o time",
+      "Medo de bagunça trava inovação",
+      "Usa cargo pra cobrir insegurança",
     ],
-    life: "Liderar é servir à ordem justa — não ao ego. Delegue e cultive confiança nos processos.",
-    business:
-      "Natural em gestão, luxury com substância, política organizacional e marcas de autoridade. Venda estabilidade premium.",
+    ondeBrilha:
+      "Gestão, operações, luxury com substância e marcas de autoridade. Você vende estabilidade premium — liderança como serviço, não ego.",
     accent: "#C9A227",
   },
   criador: {
     id: "criador",
     name: "Criador",
-    lema: "Se pode ser imaginado, pode ser criado.",
-    summary:
-      "Você dá forma ao que ainda não existe. Motivado por visão estética, inovação e a necessidade de deixar uma marca única.",
-    strengths: [
-      "Imaginação fértil e senso estético",
-      "Persistência para materializar ideias",
-      "Identidade autoral forte",
+    vibe: "Se ainda não existe do jeito que eu imagino, eu faço.",
+    era: "Sua era é moodboard às 2am, rascunho no Notes e obsessão por estética que carrega identidade. O algoritmo tenta te encaixar; você insiste em assinatura própria.",
+    greenFlags: [
+      "Materializa ideia em coisa tocável",
+      "Mantém voz autoral sob pressão de tendência",
+      "Itera sem perder a visão",
     ],
-    shadows: [
-      "Perfeccionismo que trava entregas",
-      "Isolamento criativo e medo de julgamento",
+    redFlags: [
+      "Perfeccionismo que nunca posta",
       "Identidade fundida demais à obra",
+      "Isola-se no processo e some do mundo",
     ],
-    life: "Crie ciclos de rascunho → feedback → entrega. A obra viva supera a obra perfeita na gaveta.",
-    business:
-      "Ideal para design, produto, arte, mídia e marcas autorais. Venda originalidade com processo de produção claro.",
+    ondeBrilha:
+      "Design, produto, arte, mídia e marcas autorais. Você vende originalidade com processo: rascunho → feedback → entrega viva.",
     accent: "#6EC1E4",
   },
 };
@@ -306,305 +284,309 @@ export const ARCHETYPE_ORDER: ArchetypeId[] = [
   "criador",
 ];
 
+/**
+ * 12 Gen Z dilemmas — each option weights primary (3) + secondary (1)
+ * so the twelve archetypes stay roughly balanced across the quiz.
+ */
 export const QUESTIONS: Question[] = [
   {
     id: "q1",
-    text: "Uma decisão importante aparece sem aviso. Qual é o seu primeiro impulso?",
+    text: "Você abre o celular e o feed já vem carregado de urgência. Qual é o seu primeiro movimento?",
     options: [
       {
         id: "q1a",
-        text: "Confiar que tudo se ajeita e escolher o caminho mais honesto.",
+        text: "Silencio notificações e escolho só o que me deixa inteiro.",
         weights: { inocente: 3, prestativo: 1 },
       },
       {
         id: "q1b",
-        text: "Pesquisar a fundo até entender riscos, dados e padrões.",
+        text: "Abro abas, cruzo fontes e só então formo opinião.",
         weights: { sabio: 3, governante: 1 },
       },
       {
         id: "q1c",
-        text: "Testar o caminho menos óbvio — a descoberta importa mais.",
+        text: "Saio do app e vou atrás de algo que o algoritmo não escolheu pra mim.",
         weights: { explorador: 3, criador: 1 },
       },
       {
         id: "q1d",
-        text: "Agir com força e assumir a responsabilidade do resultado.",
+        text: "Uso a pressão como combustível e ataco a próxima meta.",
         weights: { heroi: 3, "fora-da-lei": 1 },
       },
     ],
   },
   {
     id: "q2",
-    text: "No trabalho, o que mais te energiza no dia a dia?",
+    text: "No Discord / close friends, o clima fica pesado. O que você faz?",
     options: [
       {
         id: "q2a",
-        text: "Transformar uma visão em algo concreto e original.",
-        weights: { criador: 3, mago: 1 },
-      },
-      {
-        id: "q2b",
-        text: "Organizar pessoas e recursos para tudo funcionar bem.",
-        weights: { governante: 3, heroi: 1 },
-      },
-      {
-        id: "q2c",
-        text: "Ajudar alguém a superar um problema real.",
+        text: "Manda áudio curto pra quem tá mal e oferece presença de verdade.",
         weights: { prestativo: 3, "cara-comum": 1 },
       },
       {
+        id: "q2b",
+        text: "Muda o mood com humor — sem invalidar o que rolou.",
+        weights: { "bobo-da-corte": 3, inocente: 1 },
+      },
+      {
+        id: "q2c",
+        text: "Lê o subtexto do grupo e propõe um reset de conversa.",
+        weights: { mago: 3, amante: 1 },
+      },
+      {
         id: "q2d",
-        text: "Quebrar uma regra inútil que trava o progresso.",
-        weights: { "fora-da-lei": 3, explorador: 1 },
+        text: "Organiza: o que é fato, o que é rumor, quem decide o quê.",
+        weights: { governante: 3, sabio: 1 },
       },
     ],
   },
   {
     id: "q3",
-    text: "Em um conflito com alguém próximo, você tende a…",
+    text: "Algoritmo vs identidade: a plataforma empurra um ‘você’ que rende view. Você…",
     options: [
       {
         id: "q3a",
-        text: "Buscar reconexão emocional e entender o desejo do outro.",
-        weights: { amante: 3, prestativo: 1 },
+        text: "Posta o que é seu, mesmo se engajar menos.",
+        weights: { criador: 3, inocente: 1 },
       },
       {
         id: "q3b",
-        text: "Aliviar o clima com humor e perspectiva leve.",
-        weights: { "bobo-da-corte": 3, inocente: 1 },
+        text: "Estuda o jogo, depois decide o que vale a pena jogar.",
+        weights: { sabio: 2, mago: 2 },
       },
       {
         id: "q3c",
-        text: "Analisar o que cada lado precisa e propor um acordo justo.",
-        weights: { sabio: 2, governante: 2, "cara-comum": 1 },
+        text: "Recusa o moldinho e aponta o absurdo do incentivo.",
+        weights: { "fora-da-lei": 3, explorador: 1 },
       },
       {
         id: "q3d",
-        text: "Confrontar direto o que está errado, sem rodeios.",
-        weights: { heroi: 2, "fora-da-lei": 2 },
+        text: "Entrega no nível máximo — quer provar que consegue no próprio critério.",
+        weights: { heroi: 3, governante: 1 },
       },
     ],
   },
   {
     id: "q4",
-    text: "Qual cenário de fim de semana mais te atrai?",
+    text: "É 2am. A estética da noite te puxa. O que você faz com essa energia?",
     options: [
       {
         id: "q4a",
-        text: "Uma viagem improvisada para um lugar que você nunca foi.",
-        weights: { explorador: 3, "bobo-da-corte": 1 },
+        text: "Monta moodboard / rascunho de algo que ainda não existe.",
+        weights: { criador: 3, mago: 1 },
       },
       {
         id: "q4b",
-        text: "Um jantar íntimo, belo e sensorialmente cuidado.",
-        weights: { amante: 3, criador: 1 },
+        text: "Manda mensagem íntima ou curte a vibe com quem importa.",
+        weights: { amante: 3, prestativo: 1 },
       },
       {
         id: "q4c",
-        text: "Um encontro simples com amigos de sempre, sem frescura.",
-        weights: { "cara-comum": 3, prestativo: 1 },
+        text: "Cai numa spiral de pesquisa até achar o ‘porquê’ do que te inquieta.",
+        weights: { sabio: 3, explorador: 1 },
       },
       {
         id: "q4d",
-        text: "Um workshop, livro ou conversa que expanda sua mente.",
-        weights: { sabio: 3, mago: 1 },
+        text: "Ri sozinho de um meme e manda no grupo pra aliviar a cabeça.",
+        weights: { "bobo-da-corte": 3, "cara-comum": 1 },
       },
     ],
   },
   {
     id: "q5",
-    text: "Quando um projeto trava, sua reação mais natural é…",
+    text: "Burnout digital bate: cérebro em 4K, corpo em 144p. Sua reação mais natural?",
     options: [
       {
         id: "q5a",
-        text: "Reimaginar a abordagem até surgir uma solução elegante.",
-        weights: { mago: 3, criador: 2 },
-      },
-      {
-        id: "q5b",
-        text: "Dobrar o esforço e superar o obstáculo na força.",
+        text: "Forço mais um sprint — ‘depois eu descanso de verdade’.",
         weights: { heroi: 3, governante: 1 },
       },
       {
+        id: "q5b",
+        text: "Desapareço um tempo e volto quando a identidade respirar.",
+        weights: { explorador: 3, inocente: 1 },
+      },
+      {
         id: "q5c",
-        text: "Manter a fé e lembrar o time do propósito maior.",
-        weights: { inocente: 3, prestativo: 1 },
+        text: "Peço (ou ofereço) cuidado concreto: comida, call, silêncio compartilhado.",
+        weights: { prestativo: 3, amante: 1 },
       },
       {
         id: "q5d",
-        text: "Questionar se o sistema inteiro precisa ser redesenhado.",
-        weights: { "fora-da-lei": 3, sabio: 1 },
+        text: "Redesenho o sistema: limites, stack, rituais — pra não repetir.",
+        weights: { mago: 2, criador: 2, sabio: 1 },
       },
     ],
   },
   {
     id: "q6",
-    text: "Como você prefere ser lembrado pelas pessoas?",
+    text: "Surge uma regra injusta no trampo / faculdade / servidor. Você…",
     options: [
       {
         id: "q6a",
-        text: "Como alguém que elevou o padrão e inspirou coragem.",
-        weights: { heroi: 3, governante: 1 },
+        text: "Expõe o absurdo com ironia e abre o debate.",
+        weights: { "bobo-da-corte": 2, "fora-da-lei": 3 },
       },
       {
         id: "q6b",
-        text: "Como alguém que fez os outros se sentirem vistos e amados.",
-        weights: { amante: 3, prestativo: 2 },
-      },
-      {
-        id: "q6c",
-        text: "Como alguém que criou algo único e deixou marca.",
-        weights: { criador: 3, mago: 1 },
-      },
-      {
-        id: "q6d",
-        text: "Como alguém acessível, justo e parte da comunidade.",
-        weights: { "cara-comum": 3, inocente: 1 },
-      },
-    ],
-  },
-  {
-    id: "q7",
-    text: "Diante de uma regra absurda na empresa, você…",
-    options: [
-      {
-        id: "q7a",
-        text: "Expõe o absurdo com ironia e provoca o debate.",
-        weights: { "bobo-da-corte": 3, "fora-da-lei": 2 },
-      },
-      {
-        id: "q7b",
-        text: "Propõe uma estrutura nova, mais clara e eficiente.",
+        text: "Propõe uma estrutura nova, clara e justa.",
         weights: { governante: 3, sabio: 1 },
       },
       {
-        id: "q7c",
-        text: "Ajuda quem sofre com a regra a contornar o impacto.",
+        id: "q6c",
+        text: "Protege quem a regra fere e ajuda a contornar o dano.",
         weights: { prestativo: 3, "cara-comum": 1 },
       },
       {
-        id: "q7d",
-        text: "Sai em busca de outro território onde possa ser livre.",
+        id: "q6d",
+        text: "Procura outro território onde não precise performar obediência.",
         weights: { explorador: 3, "fora-da-lei": 1 },
       },
     ],
   },
   {
-    id: "q8",
-    text: "O que mais te motiva a aprender algo novo?",
+    id: "q7",
+    text: "Propósito: alguém pergunta ‘o que você quer da vida?’ no meio da call. Você sente…",
     options: [
       {
-        id: "q8a",
-        text: "Compreender a verdade por trás das aparências.",
-        weights: { sabio: 3, mago: 1 },
-      },
-      {
-        id: "q8b",
-        text: "Ganhar poder para transformar situações difíceis.",
-        weights: { mago: 3, heroi: 1 },
-      },
-      {
-        id: "q8c",
-        text: "Expressar uma visão criativa que ainda não existe.",
+        id: "q7a",
+        text: "Vontade de construir algo único que carregue a minha assinatura.",
         weights: { criador: 3, amante: 1 },
       },
       {
-        id: "q8d",
-        text: "Tornar a vida mais leve e divertida para mim e para os outros.",
-        weights: { "bobo-da-corte": 3, inocente: 2 },
+        id: "q7b",
+        text: "Vontade de deixar o mundo um pouco menos hostil pra quem vem depois.",
+        weights: { prestativo: 2, inocente: 3 },
+      },
+      {
+        id: "q7c",
+        text: "Vontade de entender o jogo fundo o bastante pra mudar as regras.",
+        weights: { mago: 3, sabio: 1 },
+      },
+      {
+        id: "q7d",
+        text: "Vontade de viver livre, com histórias — não um roteiro engessado.",
+        weights: { explorador: 3, "bobo-da-corte": 1 },
       },
     ],
   },
   {
-    id: "q9",
-    text: "Em um grupo novo, qual papel você assume com mais naturalidade?",
+    id: "q8",
+    text: "Em um grupo novo (faculdade, trampo, server), qual papel cai natural?",
     options: [
       {
-        id: "q9a",
-        text: "O anfitrião que cuida para ninguém ficar de fora.",
-        weights: { prestativo: 3, "cara-comum": 1 },
+        id: "q8a",
+        text: "O que garante que ninguém fica no canto.",
+        weights: { prestativo: 2, "cara-comum": 3 },
       },
       {
-        id: "q9b",
-        text: "O catalisador que muda o clima e a direção da conversa.",
+        id: "q8b",
+        text: "O que muda o clima e a direção sem parecer chefe.",
         weights: { mago: 2, "bobo-da-corte": 2, amante: 1 },
       },
       {
-        id: "q9c",
-        text: "O líder que define prioridades e decide o próximo passo.",
+        id: "q8c",
+        text: "O que define prioridade e fecha o próximo passo.",
         weights: { governante: 3, heroi: 1 },
       },
       {
-        id: "q9d",
-        text: "O observador curioso que mapeia o território antes de agir.",
+        id: "q8d",
+        text: "O que observa o território antes de se posicionar.",
         weights: { explorador: 2, sabio: 2 },
       },
     ],
   },
   {
-    id: "q10",
-    text: "Qual medo mais te incomoda admitir?",
+    id: "q9",
+    text: "Qual medo mais te incomoda admitir em voz alta?",
     options: [
       {
-        id: "q10a",
-        text: "Ser engolido pela mediocridade ou pela rotina.",
+        id: "q9a",
+        text: "Ser engolido pela mediocridade / rotina / bio genérica.",
         weights: { explorador: 2, criador: 2, "fora-da-lei": 1 },
       },
       {
-        id: "q10b",
-        text: "Perder o controle e ver o caos dominar.",
+        id: "q9b",
+        text: "Perder o controle e ver o caos dominar o que construí.",
         weights: { governante: 3, heroi: 1 },
       },
       {
-        id: "q10c",
-        text: "Ser rejeitado ou ficar emocionalmente só.",
+        id: "q9c",
+        text: "Ser rejeitado ou ficar emocionalmente só no meio da multidão online.",
         weights: { amante: 3, "cara-comum": 1 },
       },
       {
-        id: "q10d",
-        text: "Descobrir que o mundo não é tão bom quanto eu esperava.",
+        id: "q9d",
+        text: "Descobrir que o mundo (e as pessoas) não são tão bons quanto eu esperava.",
         weights: { inocente: 3, prestativo: 1 },
       },
     ],
   },
   {
-    id: "q11",
-    text: "Se pudesse redesenhar sua marca pessoal, o que priorizaria?",
+    id: "q10",
+    text: "Seu perfil pessoal vira ‘marca’ por um mês. O que você prioriza?",
     options: [
       {
-        id: "q11a",
+        id: "q10a",
         text: "Autoridade, excelência e presença inconfundível.",
         weights: { governante: 2, heroi: 2, criador: 1 },
       },
       {
-        id: "q11b",
+        id: "q10b",
         text: "Proximidade, humor e humanidade sem pose.",
         weights: { "bobo-da-corte": 2, "cara-comum": 2, inocente: 1 },
       },
       {
-        id: "q11c",
+        id: "q10c",
         text: "Mistério, visão e capacidade de virar o jogo.",
         weights: { mago: 3, "fora-da-lei": 1 },
       },
       {
-        id: "q11d",
-        text: "Beleza, conexão e experiências memoráveis.",
+        id: "q10d",
+        text: "Beleza, conexão e experiências que a pessoa sente na pele.",
         weights: { amante: 3, criador: 1 },
       },
     ],
   },
   {
+    id: "q11",
+    text: "Um projeto trava no pior momento (deadline + notificação + dúvida). Você…",
+    options: [
+      {
+        id: "q11a",
+        text: "Reimagina a abordagem até surgir uma saída elegante.",
+        weights: { mago: 3, criador: 2 },
+      },
+      {
+        id: "q11b",
+        text: "Dobra o esforço e empurra o obstáculo na raça.",
+        weights: { heroi: 3, governante: 1 },
+      },
+      {
+        id: "q11c",
+        text: "Lembra o time do ‘pra quê’ e segura a fé no meio do caos.",
+        weights: { inocente: 3, prestativo: 1 },
+      },
+      {
+        id: "q11d",
+        text: "Questiona se o sistema inteiro precisa ser redesenhado.",
+        weights: { "fora-da-lei": 3, sabio: 1 },
+      },
+    ],
+  },
+  {
     id: "q12",
-    text: "Olhando cinco anos à frente, o sucesso ideal para você é…",
+    text: "Daqui a cinco anos, sucesso de verdade pra você parece…",
     options: [
       {
         id: "q12a",
-        text: "Ter construído um sistema sólido que outros confiam e seguem.",
+        text: "Um sistema sólido que outras pessoas confiam e seguem.",
         weights: { governante: 3, sabio: 1 },
       },
       {
         id: "q12b",
-        text: "Ter ajudado muitas pessoas a viver melhor.",
+        text: "Ter ajudado muita gente a viver com menos peso.",
         weights: { prestativo: 3, inocente: 1 },
       },
       {
@@ -677,13 +659,14 @@ export function formatShareText(
   dominantPct: number,
   secondaryPct: number,
 ): string {
+  const greens = dominant.greenFlags.slice(0, 2).join(" · ");
   return [
-    `Meu arquétipo dominante: ${dominant.name} (${dominantPct}% de afinidade)`,
-    `Lema: "${dominant.lema}"`,
-    `Secundário: ${secondary.name} (${secondaryPct}%)`,
+    `Meu arquétipo: ${dominant.name} (${dominantPct}%)`,
+    `Vibe: ${dominant.vibe}`,
+    `Era: ${dominant.era}`,
+    `Green flags: ${greens}`,
+    `Secundário: ${secondary.name} (${secondaryPct}%) — ${secondary.vibe}`,
     "",
-    dominant.summary,
-    "",
-    "Descubra o seu em Arquétipo.",
+    "Descobre o seu no Arquétipo ✨",
   ].join("\n");
 }

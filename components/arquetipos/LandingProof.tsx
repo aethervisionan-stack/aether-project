@@ -6,11 +6,11 @@ const QUOTES = [
     who: "Marina, estrategista",
   },
   {
-    text: "O secundário explicou meu conflito interno. Usei o lema no posicionamento da marca em uma semana.",
+    text: "O secundário explicou meu conflito interno. Coloquei a vibe no bio e no pitch em uma semana.",
     who: "Rafael, fundador",
   },
   {
-    text: "Rápido, sem enrolação. O mapa de sombras valeu mais do que testes longos que já fiz.",
+    text: "Rápido, sem enrolação. Os red flags bateram mais do que testes longos que já fiz.",
     who: "Helena, designer",
   },
 ] as const;

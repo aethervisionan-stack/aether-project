@@ -17,8 +17,8 @@ const BENEFITS = [
   },
   {
     icon: Sparkles,
-    title: "Mapa de sombras",
-    body: "Veja onde a força vira excesso: perfeccionismo, fuga, controle ou autossacrifício.",
+    title: "Green e red flags",
+    body: "Veja onde a força vira excesso: burnout, fuga, controle ou se apagar pra caber no algoritmo.",
   },
 ] as const;
 
