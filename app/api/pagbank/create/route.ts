@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 
 function mockPixPayload(orderId: string) {
   // Placeholder EMV-ish string for UI / copy in mock mode — not a real Pix.
-  const text = `00020126580014BR.GOV.BCB.PIX0136${orderId}52040000530398654043.005802BR5913Arquétipo Quiz6009SAO PAULO62070503***6304ABCD`;
+  const text = `00020126580014BR.GOV.BCB.PIX0136${orderId}52040000530398654043.005802BR5913Arquetipo Quiz6009SAO PAULO62070503***6304ABCD`;
   return {
     pixCopyPaste: text,
     qrCodeImageUrl: null as string | null,
