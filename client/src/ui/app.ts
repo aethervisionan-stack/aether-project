@@ -559,8 +559,10 @@ export class ControlApp {
   }
 
   private setEntitled(active: boolean): void {
-    this.entitled = active;
-    this.livePanel.hidden = !active;
+    // Local unlock must never collapse Live / orbit / Connect — even if entitlement fetch fails.
+    const unlocked = isFeatureUnlock(this.billingConfig);
+    this.entitled = active || unlocked;
+    this.livePanel.hidden = !(active || unlocked);
     // Keep payment CTA visible + clickable in local/mock so the button never “disappears”.
     this.subscribeSection.hidden = false;
     this.subscribeBtn.hidden = false;
@@ -833,6 +835,27 @@ export class ControlApp {
     // Prefer real Live taps whenever the service exists (even with demo query for overlay tests).
     if (this.service && demo !== "pulse" && demo !== "user" && demo !== "full") {
       return this.service.getOrbitAudioSnapshot();
+    }
+
+    // Unlocked local HUD: keep orbit “present” without requiring Connect first.
+    if (
+      !demo &&
+      !this.service &&
+      (this.entitled || isFeatureUnlock(this.billingConfig) || envDevUnlock())
+    ) {
+      return {
+        wsOpen: true,
+        vadSpeech: false,
+        playbackActive: false,
+        mode: "idle",
+        micLevel: 0,
+        playLevel: 0,
+        bass: 0,
+        mid: 0,
+        treble: 0,
+        voiceBand: 0,
+        cognitive: "idle" as const,
+      };
     }
 
     if (demo === "full" || demo === "pulse" || demo === "user") {

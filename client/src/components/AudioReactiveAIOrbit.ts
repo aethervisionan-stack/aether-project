@@ -299,7 +299,8 @@ export class AudioReactiveAIOrbit {
 
     this.resizeObserver.observe(host);
     this.resize();
-    this.applyPresence("point");
+    // Idle = visible plexus sphere (not a dormant point) so local HUD tests see AI immediately.
+    this.applyPresence("full");
   }
 
   start(driver: OrbitDriver): void {
@@ -582,14 +583,10 @@ export class AudioReactiveAIOrbit {
     const speakMode = this.resolveSpeakMode(drive);
     const cognitive = resolveCognitive(drive, speakMode);
     const speaking = speakMode !== 0 || cognitive === "thinking";
-    const full =
-      drive.wsOpen ||
-      drive.vadSpeech ||
-      drive.playbackActive ||
-      drive.mode === "speaking" ||
-      drive.mode === "listening" ||
-      drive.mode === "processing" ||
-      Boolean(drive.toolsActive);
+    // Always render the full sphere. Prior gate required wsOpen/VAD/playback and left
+    // only a 7px idle point — looked like “AI missing” after Connect-ready local unlock.
+    // Motion stays calm when disconnected (energy→0); Connect still drives reactivity.
+    const full = true;
 
     // 100–2000Hz voice band → smoothed RMS / avg (prefer explicit voiceBand).
     const voiceRaw =
