@@ -1,23 +1,23 @@
-import localFont from "next/font/local";
+import { Cinzel, Plus_Jakarta_Sans } from "next/font/google";
 import type { Metadata, Viewport } from "next";
 import { ArchetypeQuizApp } from "@/components/arquetipos/ArchetypeQuizApp";
 
-const display = localFont({
-  src: "./fonts/CormorantGaramond-Regular.ttf",
+const display = Cinzel({
+  subsets: ["latin"],
   variable: "--font-arq-display",
   display: "swap",
-  weight: "400 700",
+  weight: ["400", "500", "600", "700"],
 });
 
-const sans = localFont({
-  src: "./fonts/Karla-Regular.ttf",
+const sans = Plus_Jakarta_Sans({
+  subsets: ["latin"],
   variable: "--font-arq-sans",
   display: "swap",
-  weight: "400 700",
+  weight: ["400", "500", "600", "700"],
 });
 
 export const viewport: Viewport = {
-  themeColor: "#07070b",
+  themeColor: "#05040a",
   width: "device-width",
   initialScale: 1,
   colorScheme: "dark",

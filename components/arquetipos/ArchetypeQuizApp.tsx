@@ -7,15 +7,13 @@ import {
   calculateResult,
   scoreAnswers,
 } from "@/src/data/archetypes";
-import { LandingBenefits } from "./LandingBenefits";
 import { LandingFooter } from "./LandingFooter";
 import { LandingHeader } from "./LandingHeader";
-import { LandingHowItWorks } from "./LandingHowItWorks";
-import { LandingProof } from "./LandingProof";
 import { QuizFlow } from "./QuizFlow";
 import { QuizHero } from "./QuizHero";
 import { QuizProcessing } from "./QuizProcessing";
 import { QuizResult } from "./QuizResult";
+import "./grimoire.css";
 
 type Stage = "landing" | "quiz" | "processing" | "result";
 
@@ -87,7 +85,7 @@ export function ArchetypeQuizApp() {
     stage === "quiz" || stage === "processing" || stage === "result";
 
   return (
-    <div className="arquetipo-root min-h-[100dvh] bg-[#07070b] text-[#F3EDE0]">
+    <div className="arquetipo-root min-h-[100dvh]">
       <LandingHeader onStartQuiz={startQuiz} compact={inFlow} />
 
       <AnimatePresence mode="wait">
@@ -100,33 +98,6 @@ export function ArchetypeQuizApp() {
             transition={{ duration: 0.35 }}
           >
             <QuizHero onStart={startQuiz} />
-            <LandingBenefits />
-            <LandingHowItWorks />
-            <LandingProof />
-            <section
-              id="teste"
-              className="scroll-mt-20 border-t border-white/8 px-5 py-20 sm:py-24"
-            >
-              <div className="mx-auto max-w-xl text-center">
-                <p className="text-[11px] uppercase tracking-[0.28em] text-[#C9A227]">
-                  O teste
-                </p>
-                <h2 className="mt-3 font-[family-name:var(--font-arq-display)] text-3xl tracking-tight text-[#F3EDE0] sm:text-4xl">
-                  Descubra o Seu Arquétipo Dominante
-                </h2>
-                <p className="mt-4 text-base text-[#F3EDE0]/55">
-                  12 perguntas em 3 etapas. Sem cadastro. Resultado com
-                  dominante + sub-arquétipo ou perfil híbrido.
-                </p>
-                <button
-                  type="button"
-                  onClick={startQuiz}
-                  className="mt-8 bg-gradient-to-r from-[#C9A227] to-[#E8C547] px-7 py-3.5 text-sm font-semibold tracking-wide text-[#0a0a0c] transition hover:brightness-110"
-                >
-                  Começar Teste
-                </button>
-              </div>
-            </section>
             <LandingFooter onStartQuiz={startQuiz} />
           </motion.div>
         )}

@@ -20,28 +20,28 @@ export function QuizFlow({ index, answers, onSelect, onBack }: Props) {
   const selected = answers[question.id];
 
   return (
-    <section className="relative mx-auto flex min-h-[100dvh] w-full max-w-lg flex-col px-5 pb-8 pt-6">
+    <section className="grim-atmosphere relative mx-auto flex min-h-[100dvh] w-full max-w-lg flex-col px-5 pb-8 pt-6">
       <div className="mb-6 flex items-center gap-3">
         <button
           type="button"
           onClick={onBack}
-          className="flex h-10 w-10 items-center justify-center border border-white/10 text-[#F3EDE0]/70 transition hover:border-[#C9A227]/40 hover:text-[#E8C547]"
+          className="flex h-10 w-10 items-center justify-center border border-[color:var(--grim-border-soft)] text-[color:var(--grim-stone)] transition hover:border-[color:var(--grim-gold)] hover:text-[color:var(--grim-gold-bright)]"
           aria-label="Voltar"
         >
           <ChevronLeft size={20} />
         </button>
         <div className="min-w-0 flex-1">
           <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-            <p className="text-[11px] uppercase tracking-[0.2em] text-[#C9A227]/90">
-              Etapa {question.stage}/3 · {question.stageTitle}
+            <p className="grim-display text-[11px] uppercase tracking-[0.22em] text-[color:var(--grim-gold)]">
+              Provação {question.stage}/3 · {question.stageTitle}
             </p>
-            <span className="tabular text-xs text-white/35">
+            <span className="tabular text-xs text-[color:var(--grim-stone-dim)]">
               {index + 1}/{TOTAL_QUESTIONS}
             </span>
           </div>
-          <div className="h-[3px] overflow-hidden bg-white/8">
+          <div className="h-[3px] overflow-hidden bg-black/40">
             <motion.div
-              className="h-full origin-left bg-gradient-to-r from-[#4F46E5] to-[#C9A227]"
+              className="h-full origin-left bg-gradient-to-r from-[color:var(--grim-purple)] to-[color:var(--grim-gold)]"
               initial={false}
               animate={{ width: `${progress}%` }}
               transition={{ duration: 0.45, ease: EASE }}
@@ -58,9 +58,9 @@ export function QuizFlow({ index, answers, onSelect, onBack }: Props) {
             animate={{ opacity: 1, x: 0 }}
             exit={reduce ? undefined : { opacity: 0, x: -20 }}
             transition={{ duration: 0.38, ease: EASE }}
-            className="flex flex-col"
+            className="grim-card flex flex-col rounded-sm p-5 sm:p-6"
           >
-            <h2 className="font-[family-name:var(--font-arq-display)] text-[1.45rem] leading-snug tracking-[-0.02em] text-[#F3EDE0] sm:text-[1.65rem]">
+            <h2 className="grim-display text-[1.35rem] leading-snug tracking-wide text-[color:var(--grim-ink)] sm:text-[1.55rem]">
               {question.text}
             </h2>
 
@@ -79,13 +79,11 @@ export function QuizFlow({ index, answers, onSelect, onBack }: Props) {
                         delay: reduce ? 0 : 0.05 + i * 0.04,
                       }}
                       onClick={() => onSelect(question.id, option.id)}
-                      className={`w-full border px-4 py-4 text-left text-[0.95rem] leading-snug transition ${
-                        isSelected
-                          ? "border-[#C9A227]/55 bg-[#C9A227]/12 text-[#F3EDE0]"
-                          : "border-white/10 bg-white/[0.02] text-[#F3EDE0]/82 hover:border-white/25 hover:bg-white/[0.04]"
+                      className={`grim-option w-full rounded-sm px-4 py-4 text-left text-[0.95rem] leading-snug ${
+                        isSelected ? "grim-option-active" : ""
                       }`}
                     >
-                      <span className="mr-3 inline-block font-[family-name:var(--font-arq-display)] text-sm text-[#C9A227]/80">
+                      <span className="grim-display mr-3 inline-block text-sm text-[color:var(--grim-gold)]">
                         {option.letter}
                       </span>
                       {option.text}
