@@ -31,6 +31,8 @@ export type ArchetypeProfile = {
   colorClass: string;
   /** Hex for charts */
   accent: string;
+  /** Portrait card under public/images/archetypes */
+  image: string;
 };
 
 export type QuestionOption = {
@@ -85,6 +87,7 @@ export const ARCHETYPES: Record<ArchetypeId, ArchetypeProfile> = {
       "mantém a esperança, a transparência e a busca por soluções simples e éticas sem perder a leveza",
     colorClass: "text-amber-300 border-amber-400/40 bg-amber-400/10",
     accent: "#F5D76E",
+    image: "/images/archetypes/inocente.jpg",
   },
   explorador: {
     id: "explorador",
@@ -105,6 +108,7 @@ export const ARCHETYPES: Record<ArchetypeId, ArchetypeProfile> = {
       "impede que você fique preso em rotinas engessadas, trazendo sede de novidade e adaptação rápida",
     colorClass: "text-teal-300 border-teal-400/40 bg-teal-400/10",
     accent: "#2DD4BF",
+    image: "/images/archetypes/explorador.jpg",
   },
   sabio: {
     id: "sabio",
@@ -126,6 +130,7 @@ export const ARCHETYPES: Record<ArchetypeId, ArchetypeProfile> = {
       "garante que suas atitudes sejam embasadas em lógica, pesquisa e profundo entendimento antes de agir",
     colorClass: "text-indigo-300 border-indigo-400/40 bg-indigo-400/10",
     accent: "#818CF8",
+    image: "/images/archetypes/sabio.jpg",
   },
   heroi: {
     id: "heroi",
@@ -147,6 +152,7 @@ export const ARCHETYPES: Record<ArchetypeId, ArchetypeProfile> = {
       "tira as ideias do papel para superar desafios reais com disciplina, foco e determinação",
     colorClass: "text-orange-300 border-orange-400/40 bg-orange-400/10",
     accent: "#FB923C",
+    image: "/images/archetypes/heroi.jpg",
   },
   rebelde: {
     id: "rebelde",
@@ -168,6 +174,7 @@ export const ARCHETYPES: Record<ArchetypeId, ArchetypeProfile> = {
       "dá coragem para questionar regras ultrapassadas e provocar mudanças necessárias onde outros se acomodam",
     colorClass: "text-rose-300 border-rose-400/40 bg-rose-400/10",
     accent: "#FB7185",
+    image: "/images/archetypes/rebelde.jpg",
   },
   mago: {
     id: "mago",
@@ -189,6 +196,7 @@ export const ARCHETYPES: Record<ArchetypeId, ArchetypeProfile> = {
       "conecta ideias distantes para transformar problemas complexos em soluções inovadoras",
     colorClass: "text-violet-300 border-violet-400/40 bg-violet-400/10",
     accent: "#A78BFA",
+    image: "/images/archetypes/mago.jpg",
   },
   pessoa_comum: {
     id: "pessoa_comum",
@@ -210,6 +218,7 @@ export const ARCHETYPES: Record<ArchetypeId, ArchetypeProfile> = {
       "mantém os pés no chão, valoriza a igualdade e cria conexões genuínas sem soar arrogante ou inacessível",
     colorClass: "text-slate-300 border-slate-400/40 bg-slate-400/10",
     accent: "#94A3B8",
+    image: "/images/archetypes/pessoa_comum.jpg",
   },
   amante: {
     id: "amante",
@@ -230,6 +239,7 @@ export const ARCHETYPES: Record<ArchetypeId, ArchetypeProfile> = {
       "traz entusiasmo, sensibilidade estética e profundidade humana para tudo o que você constrói",
     colorClass: "text-pink-300 border-pink-400/40 bg-pink-400/10",
     accent: "#F472B6",
+    image: "/images/archetypes/amante.jpg",
   },
   bobo_da_corte: {
     id: "bobo_da_corte",
@@ -250,6 +260,7 @@ export const ARCHETYPES: Record<ArchetypeId, ArchetypeProfile> = {
       "dissolve tensões, traz criatividade espontânea e impede que você leve a vida de forma rígida demais",
     colorClass: "text-yellow-300 border-yellow-400/40 bg-yellow-400/10",
     accent: "#FACC15",
+    image: "/images/archetypes/bobo_da_corte.jpg",
   },
   cuidador: {
     id: "cuidador",
@@ -271,6 +282,7 @@ export const ARCHETYPES: Record<ArchetypeId, ArchetypeProfile> = {
       "direciona suas habilidades para apoiar, proteger e gerar impacto positivo real na vida das pessoas",
     colorClass: "text-emerald-300 border-emerald-400/40 bg-emerald-400/10",
     accent: "#34D399",
+    image: "/images/archetypes/cuidador.jpg",
   },
   criador: {
     id: "criador",
@@ -291,6 +303,7 @@ export const ARCHETYPES: Record<ArchetypeId, ArchetypeProfile> = {
       "impulsiona você a criar soluções autorais, originais e com alto senso estético",
     colorClass: "text-sky-300 border-sky-400/40 bg-sky-400/10",
     accent: "#38BDF8",
+    image: "/images/archetypes/criador.jpg",
   },
   governante: {
     id: "governante",
@@ -311,6 +324,7 @@ export const ARCHETYPES: Record<ArchetypeId, ArchetypeProfile> = {
       "traz organização, visão estratégica e capacidade de transformar planos em estruturas sólidas e prósperas",
     colorClass: "text-amber-200 border-amber-500/40 bg-amber-500/10",
     accent: "#C9A227",
+    image: "/images/archetypes/governante.jpg",
   },
 };
 
