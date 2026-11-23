@@ -7,17 +7,23 @@ import {
   calculateResult,
   scoreAnswers,
 } from "@/src/data/archetypes";
-import { playStageChime } from "@/src/utils/soundEffects";
+import {
+  readIsUnlocked,
+  writeIsUnlocked,
+} from "@/src/utils/archetypeUnlock";
+import { playRevealChord, playStageChime } from "@/src/utils/soundEffects";
 import { LandingFooter } from "./LandingFooter";
 import { LandingHeader } from "./LandingHeader";
 import { MedievalAudioPlayer } from "./MedievalAudioPlayer";
+import { PaywallScreen } from "./PaywallScreen";
 import { QuizFlow } from "./QuizFlow";
 import { QuizHero } from "./QuizHero";
 import { QuizProcessing } from "./QuizProcessing";
 import { QuizResult } from "./QuizResult";
 import "./cartographic.css";
 
-type Stage = "landing" | "quiz" | "processing" | "result";
+/** welcome | quiz | paywall | result (+ brief processing after quiz) */
+type Stage = "welcome" | "quiz" | "processing" | "paywall" | "result";
 
 const PROCESSING_MS = 1200;
 const ADVANCE_MS = 300;
@@ -25,12 +31,14 @@ const ADVANCE_MS = 300;
 export function ArchetypeQuizApp() {
   const reduce = useReducedMotion();
   const [mounted, setMounted] = useState(false);
-  const [stage, setStage] = useState<Stage>("landing");
+  const [unlocked, setUnlocked] = useState(false);
+  const [stage, setStage] = useState<Stage>("welcome");
   const [index, setIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
 
   useEffect(() => {
     setMounted(true);
+    setUnlocked(readIsUnlocked());
   }, []);
 
   const result = useMemo(
@@ -50,9 +58,16 @@ export function ArchetypeQuizApp() {
 
   useEffect(() => {
     if (stage !== "processing") return;
-    const t = window.setTimeout(() => setStage("result"), PROCESSING_MS);
+    const t = window.setTimeout(() => {
+      if (unlocked) {
+        playRevealChord();
+        setStage("result");
+      } else {
+        setStage("paywall");
+      }
+    }, PROCESSING_MS);
     return () => window.clearTimeout(t);
-  }, [stage]);
+  }, [stage, unlocked]);
 
   function handleSelect(questionId: string, optionId: string) {
     setAnswers((prev) => ({ ...prev, [questionId]: optionId }));
@@ -61,7 +76,6 @@ export function ArchetypeQuizApp() {
         finishQuiz();
       } else {
         const next = index + 1;
-        // Stage milestones: Marco 5 (index 4) and Marco 9 (index 8)
         if (next === 4 || next === 8) {
           playStageChime();
         }
@@ -76,20 +90,30 @@ export function ArchetypeQuizApp() {
       return;
     }
     if (stage === "quiz" && index === 0) {
-      setStage("landing");
+      setStage("welcome");
     }
   }
 
   function handleRestart() {
     setAnswers({});
     setIndex(0);
-    setStage("landing");
+    setStage("welcome");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function handleUnlocked() {
+    writeIsUnlocked(true);
+    setUnlocked(true);
+    setStage("result");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   const fade = !mounted || reduce;
   const inFlow =
-    stage === "quiz" || stage === "processing" || stage === "result";
+    stage === "quiz" ||
+    stage === "processing" ||
+    stage === "paywall" ||
+    stage === "result";
 
   return (
     <div className="arquetipo-root min-h-[100dvh]">
@@ -97,9 +121,9 @@ export function ArchetypeQuizApp() {
       <MedievalAudioPlayer />
 
       <AnimatePresence mode="wait">
-        {stage === "landing" && (
+        {stage === "welcome" && (
           <motion.div
-            key="landing"
+            key="welcome"
             initial={fade ? false : { opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={fade ? undefined : { opacity: 0 }}
@@ -138,6 +162,19 @@ export function ArchetypeQuizApp() {
             className="pt-14 sm:pt-16"
           >
             <QuizProcessing />
+          </motion.div>
+        )}
+
+        {stage === "paywall" && (
+          <motion.div
+            key="paywall"
+            initial={fade ? false : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={fade ? undefined : { opacity: 0 }}
+            transition={{ duration: 0.35 }}
+            className="pt-14 sm:pt-16"
+          >
+            <PaywallScreen onUnlocked={handleUnlocked} />
           </motion.div>
         )}
 
