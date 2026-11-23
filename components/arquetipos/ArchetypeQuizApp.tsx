@@ -4,7 +4,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   QUESTIONS,
-  resolveOutcome,
+  calculateResult,
   scoreAnswers,
 } from "@/src/data/archetypes";
 import { LandingBenefits } from "./LandingBenefits";
@@ -33,8 +33,8 @@ export function ArchetypeQuizApp() {
     setMounted(true);
   }, []);
 
-  const outcome = useMemo(
-    () => resolveOutcome(scoreAnswers(answers)),
+  const result = useMemo(
+    () => calculateResult(scoreAnswers(answers)),
     [answers],
   );
 
@@ -171,7 +171,7 @@ export function ArchetypeQuizApp() {
             transition={{ duration: 0.4 }}
             className="pt-14 sm:pt-16"
           >
-            <QuizResult outcome={outcome} onRestart={handleRestart} />
+            <QuizResult result={result} onRestart={handleRestart} />
           </motion.div>
         )}
       </AnimatePresence>

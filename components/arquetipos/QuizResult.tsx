@@ -4,34 +4,29 @@ import { motion, useReducedMotion } from "framer-motion";
 import { Check, Copy, RotateCcw } from "lucide-react";
 import { useMemo, useState } from "react";
 import {
-  ARCHETYPES,
   TOTAL_QUESTIONS,
-  buildResumo,
+  buildIntro,
   formatShareText,
-  type QuizOutcome,
-  type RankedArchetype,
+  joinPt,
+  type NarrativeResult,
 } from "@/src/data/archetypes";
 
 type Props = {
-  outcome: QuizOutcome;
+  result: NarrativeResult;
   onRestart: () => void;
 };
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
-export function QuizResult({ outcome, onRestart }: Props) {
+export function QuizResult({ result, onRestart }: Props) {
   const reduce = useReducedMotion();
   const [copied, setCopied] = useState(false);
-  const resumo = useMemo(() => buildResumo(outcome), [outcome]);
-  const chartRows = useMemo(
-    () => outcome.ranked.filter((r) => r.score > 0),
-    [outcome.ranked],
-  );
+  const intro = useMemo(() => buildIntro(result), [result]);
+  const principal = result.primary;
 
   async function copyResult() {
-    const text = formatShareText(outcome);
     try {
-      await navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(formatShareText(result));
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -52,59 +47,187 @@ export function QuizResult({ outcome, onRestart }: Props) {
         Seu resultado
       </motion.p>
 
-      {outcome.kind === "dominant" ? (
-        <DominantHeader
-          dominant={outcome.dominant}
-          sub={outcome.sub}
-          dominantScore={outcome.dominantScore}
-          subScore={outcome.subScore}
-          reduce={!!reduce}
-        />
-      ) : (
-        <HybridHeader
-          tied={outcome.tied}
-          score={outcome.score}
-          reduce={!!reduce}
-        />
-      )}
+      {/* Section 1 — Intro */}
+      <motion.div
+        initial={reduce ? false : { opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, ease: EASE, delay: 0.05 }}
+        className="mt-4"
+      >
+        {result.hybrid ? (
+          <h2 className="font-[family-name:var(--font-arq-display)] text-[clamp(1.9rem,7vw,2.85rem)] leading-[1.05] tracking-[-0.02em] text-[#F3EDE0]">
+            Perfil Híbrido
+          </h2>
+        ) : (
+          <h2
+            className="font-[family-name:var(--font-arq-display)] text-[clamp(2.1rem,8vw,3.25rem)] leading-[0.95] tracking-[-0.03em]"
+            style={{ color: principal.accent }}
+          >
+            {principal.title}
+          </h2>
+        )}
+        <p className="mt-5 text-base leading-relaxed text-[#F3EDE0]/75">
+          {intro}
+        </p>
+      </motion.div>
 
-      <motion.p
+      {/* Section 2 — Score table */}
+      <motion.div
+        initial={reduce ? false : { opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.55, ease: EASE, delay: 0.12 }}
+        className="mt-10 overflow-hidden border border-white/10"
+      >
+        <div className="border-b border-white/10 bg-white/[0.03] px-4 py-3">
+          <h3 className="text-[11px] uppercase tracking-[0.22em] text-[#C9A227]/90">
+            Resultado Completo da Sua Pontuação
+          </h3>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[28rem] text-left text-sm">
+            <thead>
+              <tr className="border-b border-white/10 text-[11px] uppercase tracking-[0.14em] text-white/40">
+                <th className="px-4 py-3 font-medium">Arquétipo</th>
+                <th className="px-4 py-3 font-medium">Pontos</th>
+                <th className="px-4 py-3 font-medium">Papel no Seu Perfil</th>
+              </tr>
+            </thead>
+            <tbody>
+              {result.dominants.map((d) => (
+                <tr
+                  key={d.profile.id}
+                  className="border-b border-white/8 align-top"
+                >
+                  <td className="px-4 py-3 font-semibold text-[#F3EDE0]">
+                    {d.profile.title}
+                  </td>
+                  <td className="px-4 py-3 tabular text-[#F3EDE0]/80">
+                    {d.score} pts
+                  </td>
+                  <td className="px-4 py-3 text-[#F3EDE0]/65">
+                    {d.profile.dominantRole}
+                  </td>
+                </tr>
+              ))}
+              {result.secondaries.map((s) => (
+                <tr
+                  key={s.profile.id}
+                  className="border-b border-white/8 align-top"
+                >
+                  <td className="px-4 py-3 font-semibold text-[#F3EDE0]">
+                    {s.profile.title}
+                  </td>
+                  <td className="px-4 py-3 tabular text-[#F3EDE0]/80">
+                    {s.score} pts
+                  </td>
+                  <td className="px-4 py-3 text-[#F3EDE0]/65">
+                    {s.profile.subRole}
+                  </td>
+                </tr>
+              ))}
+              {result.complementary.length > 0 && (
+                <tr className="align-top">
+                  <td className="px-4 py-3 text-[#F3EDE0]/85">
+                    {result.complementary
+                      .map((c) => c.profile.title)
+                      .join(" / ")}
+                  </td>
+                  <td className="px-4 py-3 tabular text-[#F3EDE0]/70">
+                    {result.complementary.every((c) => c.score === 1)
+                      ? "1 pt cada"
+                      : result.complementary
+                          .map((c) => `${c.score}`)
+                          .join(", ") + " pts"}
+                  </td>
+                  <td className="px-4 py-3 text-[#F3EDE0]/55">
+                    Traços complementares de{" "}
+                    {joinPt(
+                      result.complementary.map((c) => c.profile.traitKeyword),
+                    )}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </motion.div>
+
+      {/* Section 3 — Principal profile card */}
+      <motion.div
         initial={reduce ? false : { opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.55, ease: EASE, delay: 0.18 }}
-        className="mt-6 text-base leading-relaxed text-[#F3EDE0]/70"
+        className={`mt-8 border p-6 ${principal.colorClass}`}
       >
-        {resumo}
-      </motion.p>
+        <h3 className="font-[family-name:var(--font-arq-display)] text-2xl text-[#F3EDE0]">
+          Perfil Principal: {principal.title}{" "}
+          <span className="text-[#F3EDE0]/55">({principal.subtitle})</span>
+        </h3>
+        <p className="mt-3 text-sm leading-relaxed text-[#F3EDE0]/70">
+          Grupo <strong className="font-medium text-[#F3EDE0]/90">{principal.grupo}</strong>.
+          Desejo central: {principal.desejo}. {principal.modificador}
+        </p>
+        <ul className="mt-5 space-y-3 text-sm leading-relaxed text-[#F3EDE0]/75">
+          <li>
+            <span className="text-[11px] uppercase tracking-[0.18em] text-[#C9A227]/90">
+              Pontos fortes
+            </span>
+            <p className="mt-1">{principal.forcas}</p>
+          </li>
+          <li>
+            <span className="text-[11px] uppercase tracking-[0.18em] text-[#C9A227]/90">
+              Maior medo
+            </span>
+            <p className="mt-1">{principal.medo}</p>
+          </li>
+          <li>
+            <span className="text-[11px] uppercase tracking-[0.18em] text-[#C9A227]/90">
+              Ponto de atenção (Sombra)
+            </span>
+            <p className="mt-1">
+              {principal.sombra}. Observe esse padrão na prática e use seus
+              sub-arquétipos para equilibrá-lo — especialmente quando a pressão
+              sobe.
+            </p>
+          </li>
+        </ul>
+      </motion.div>
 
-      <div className="mt-10 space-y-6 border-t border-white/10 pt-10">
-        {outcome.kind === "dominant" ? (
-          <ProfileBlocks
-            title={outcome.dominant.title}
-            desejo={outcome.dominant.desejo}
-            forcas={outcome.dominant.forcas}
-            medo={outcome.dominant.medo}
-            sombra={outcome.dominant.sombra}
-            colorClass={outcome.dominant.colorClass}
-          />
-        ) : (
-          outcome.tied.map((p) => (
-            <ProfileBlocks
-              key={p.id}
-              title={p.title}
-              desejo={p.desejo}
-              forcas={p.forcas}
-              medo={p.medo}
-              sombra={p.sombra}
-              colorClass={p.colorClass}
-            />
-          ))
-        )}
-      </div>
+      {/* Section 4 — Sub balance */}
+      {result.secondaries.length > 0 && (
+        <motion.div
+          initial={reduce ? false : { opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.55, ease: EASE, delay: 0.24 }}
+          className="mt-8 border border-white/10 bg-white/[0.02] p-6"
+        >
+          <h3 className="font-[family-name:var(--font-arq-display)] text-2xl text-[#F3EDE0]">
+            Como os Seus Sub-arquétipos Equilibram Você
+          </h3>
+          <p className="mt-3 text-sm leading-relaxed text-[#F3EDE0]/65">
+            Diferente de {principal.typicalTrap}, a sua combinação cria um
+            perfil muito completo:
+          </p>
+          <ul className="mt-5 space-y-4">
+            {result.secondaries.map((s) => (
+              <li key={s.profile.id}>
+                <p className="text-sm font-semibold text-[#F3EDE0]">
+                  O toque de {s.profile.title}:
+                </p>
+                <p className="mt-1 text-sm leading-relaxed text-[#F3EDE0]/65">
+                  Você {s.profile.balanceBenefit}.
+                </p>
+              </li>
+            ))}
+          </ul>
+        </motion.div>
+      )}
 
-      <ScoreChart rows={chartRows} reduce={!!reduce} />
+      <p className="mt-8 text-center text-xs text-white/35">
+        Escala 0–{TOTAL_QUESTIONS} pontos por arquétipo
+      </p>
 
-      <div className="mt-12 flex flex-col gap-3 sm:flex-row">
+      <div className="mt-8 flex flex-col gap-3 sm:flex-row">
         <button
           type="button"
           onClick={onRestart}
@@ -119,183 +242,9 @@ export function QuizResult({ outcome, onRestart }: Props) {
           className="inline-flex flex-1 items-center justify-center gap-2 bg-gradient-to-r from-[#C9A227] to-[#E8C547] px-5 py-3.5 text-sm font-semibold text-[#0a0a0c] transition hover:brightness-110"
         >
           {copied ? <Check size={16} /> : <Copy size={16} />}
-          {copied ? "Copiado" : "Copiar Resultado"}
+          {copied ? "Copiado" : "Copiar Resultado Completo"}
         </button>
       </div>
     </section>
-  );
-}
-
-function DominantHeader({
-  dominant,
-  sub,
-  dominantScore,
-  subScore,
-  reduce,
-}: {
-  dominant: (typeof ARCHETYPES)[keyof typeof ARCHETYPES];
-  sub: (typeof ARCHETYPES)[keyof typeof ARCHETYPES];
-  dominantScore: number;
-  subScore: number;
-  reduce: boolean;
-}) {
-  return (
-    <>
-      <motion.p
-        initial={reduce ? false : { opacity: 0 }}
-        animate={{ opacity: 1 }}
-        className="mt-3 text-sm text-white/45"
-      >
-        Arquétipo Dominante · {dominantScore}/{TOTAL_QUESTIONS}
-      </motion.p>
-      <motion.h2
-        initial={reduce ? false : { opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.65, ease: EASE, delay: 0.06 }}
-        className="mt-2 font-[family-name:var(--font-arq-display)] text-[clamp(2.2rem,9vw,3.5rem)] leading-[0.95] tracking-[-0.03em]"
-        style={{ color: dominant.accent }}
-      >
-        {dominant.title}
-      </motion.h2>
-      <p className="mt-2 text-sm text-[#F3EDE0]/55">{dominant.subtitle}</p>
-      <div
-        className={`mt-5 inline-flex border px-3 py-1.5 text-xs ${dominant.colorClass}`}
-      >
-        Grupo: {dominant.grupo}
-      </div>
-      <p className="mt-6 text-sm text-white/50">
-        Sub-arquétipo:{" "}
-        <span style={{ color: sub.accent }} className="font-medium">
-          {sub.title}
-        </span>{" "}
-        ({subScore}/{TOTAL_QUESTIONS}) — {sub.subtitle}
-      </p>
-    </>
-  );
-}
-
-function HybridHeader({
-  tied,
-  score,
-  reduce,
-}: {
-  tied: [
-    (typeof ARCHETYPES)[keyof typeof ARCHETYPES],
-    (typeof ARCHETYPES)[keyof typeof ARCHETYPES],
-  ];
-  score: number;
-  reduce: boolean;
-}) {
-  const [a, b] = tied;
-  return (
-    <>
-      <motion.p
-        initial={reduce ? false : { opacity: 0 }}
-        animate={{ opacity: 1 }}
-        className="mt-3 text-sm text-white/45"
-      >
-        Perfil Híbrido · {score}/{TOTAL_QUESTIONS} cada
-      </motion.p>
-      <motion.h2
-        initial={reduce ? false : { opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.65, ease: EASE, delay: 0.06 }}
-        className="mt-2 font-[family-name:var(--font-arq-display)] text-[clamp(1.85rem,7vw,3rem)] leading-[1.05] tracking-[-0.02em] text-[#F3EDE0]"
-      >
-        <span style={{ color: a.accent }}>{a.title}</span>
-        <span className="text-white/35"> + </span>
-        <span style={{ color: b.accent }}>{b.title}</span>
-      </motion.h2>
-      <p className="mt-3 text-sm text-[#F3EDE0]/55">
-        {a.subtitle} · {b.subtitle}
-      </p>
-    </>
-  );
-}
-
-function ProfileBlocks({
-  title,
-  desejo,
-  forcas,
-  medo,
-  sombra,
-  colorClass,
-}: {
-  title: string;
-  desejo: string;
-  forcas: string;
-  medo: string;
-  sombra: string;
-  colorClass: string;
-}) {
-  return (
-    <div className={`border p-5 ${colorClass}`}>
-      <p className="text-[11px] uppercase tracking-[0.22em] opacity-80">
-        {title}
-      </p>
-      <Field label="Desejo Central" value={desejo} />
-      <Field label="Pontos Fortes" value={forcas} />
-      <Field label="Maior Medo" value={medo} />
-      <Field label="Sombra (Ponto de Atenção)" value={sombra} />
-    </div>
-  );
-}
-
-function Field({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="mt-4">
-      <h3 className="text-[11px] uppercase tracking-[0.18em] text-[#C9A227]/90">
-        {label}
-      </h3>
-      <p className="mt-1.5 text-sm leading-relaxed text-[#F3EDE0]/75">
-        {value}
-      </p>
-    </div>
-  );
-}
-
-function ScoreChart({
-  rows,
-  reduce,
-}: {
-  rows: RankedArchetype[];
-  reduce: boolean;
-}) {
-  if (rows.length === 0) return null;
-  return (
-    <div className="mt-12 border-t border-white/10 pt-10">
-      <h3 className="text-[11px] uppercase tracking-[0.22em] text-[#C9A227]/90">
-        Pontuação (0–{TOTAL_QUESTIONS})
-      </h3>
-      <div className="mt-6 space-y-3">
-        {rows.map((item, i) => {
-          const arch = ARCHETYPES[item.id];
-          const width = (item.score / TOTAL_QUESTIONS) * 100;
-          return (
-            <div key={item.id}>
-              <div className="mb-1.5 flex justify-between text-xs">
-                <span className="text-[#F3EDE0]/75">{arch.title}</span>
-                <span className="tabular text-white/40">
-                  {item.score}/{TOTAL_QUESTIONS}
-                </span>
-              </div>
-              <div className="h-2 overflow-hidden bg-white/8">
-                <motion.div
-                  className="h-full"
-                  style={{ backgroundColor: arch.accent }}
-                  initial={reduce ? false : { width: 0 }}
-                  animate={{ width: `${width}%` }}
-                  transition={{
-                    duration: 0.75,
-                    ease: EASE,
-                    delay: reduce ? 0 : 0.15 + i * 0.05,
-                  }}
-                />
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
   );
 }
