@@ -9,6 +9,7 @@ import {
   scoreAnswers,
 } from "@/src/data/archetypes";
 import { LandingBenefits } from "./LandingBenefits";
+import { LandingFinalCta } from "./LandingFinalCta";
 import { LandingFooter } from "./LandingFooter";
 import { LandingHeader } from "./LandingHeader";
 import { LandingHowItWorks } from "./LandingHowItWorks";
@@ -143,7 +144,8 @@ export function ArchetypeQuizApp() {
                 </button>
               </div>
             </section>
-            <LandingFooter onStartQuiz={startQuiz} />
+            <LandingFinalCta onStartQuiz={startQuiz} />
+            <LandingFooter />
           </motion.div>
         )}
 

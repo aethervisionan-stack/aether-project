@@ -6,9 +6,10 @@
     "node": ">=20"
   },
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "next dev --turbopack -H 127.0.0.1 -p 3000",
+    "dev:lan": "next dev --turbopack -H 0.0.0.0 -p 3000",
     "build": "next build",
-    "start": "next start",
+    "start": "next start -H 127.0.0.1 -p 3000",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "token:metadata": "tsx scripts/register-vision-metadata.ts",
