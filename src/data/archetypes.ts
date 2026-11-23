@@ -684,6 +684,6 @@ export function formatShareText(
     "",
     dominant.summary,
     "",
-    "Descubra o seu: /arquetipos",
+    "Descubra o seu em Arquétipo.",
   ].join("\n");
 }

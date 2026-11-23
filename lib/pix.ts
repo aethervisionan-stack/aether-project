@@ -53,9 +53,9 @@ export function pixConfig() {
     merchantName: process.env.PIX_MERCHANT_NAME?.trim() || "AETHER VISION",
     merchantCity: process.env.PIX_MERCHANT_CITY?.trim() || "SAO PAULO",
     webhookSecret: process.env.PIX_WEBHOOK_SECRET?.trim() || "",
+    // Never enable mock pay in production. Local/dev only when explicitly opted in.
     allowMock:
-      process.env.PIX_ALLOW_MOCK === "true" ||
-      (process.env.NODE_ENV !== "production" &&
-        process.env.PIX_ALLOW_MOCK !== "false"),
+      process.env.NODE_ENV !== "production" &&
+      process.env.PIX_ALLOW_MOCK === "true",
   };
 }

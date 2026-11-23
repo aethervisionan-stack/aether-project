@@ -11,10 +11,17 @@ export const maxDuration = 60;
  */
 export async function POST(request: Request) {
   const secret = process.env.SOLANA_WEBHOOK_SECRET?.trim();
-  const header = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ??
+  if (!secret) {
+    return NextResponse.json(
+      { error: "webhook_secret_required" },
+      { status: 503 },
+    );
+  }
+  const header =
+    request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ??
     request.headers.get("x-webhook-secret") ??
     "";
-  if (secret && header !== secret) {
+  if (!header || header !== secret) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 

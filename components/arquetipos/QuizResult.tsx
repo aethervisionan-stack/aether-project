@@ -32,9 +32,7 @@ export function QuizResult({ ranked, onRestart }: Props) {
       secondaryRank.percent,
     );
     const url =
-      typeof window !== "undefined"
-        ? `${window.location.origin}/arquetipos`
-        : "/arquetipos";
+      typeof window !== "undefined" ? window.location.origin : "/";
 
     if (typeof navigator !== "undefined" && navigator.share) {
       try {

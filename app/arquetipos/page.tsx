@@ -1,5 +1,6 @@
-import { ArchetypeQuizApp } from "@/components/arquetipos/ArchetypeQuizApp";
+import { redirect } from "next/navigation";
 
-export default function ArquetiposPage() {
-  return <ArchetypeQuizApp />;
+/** Legacy path — quiz now lives at `/`. */
+export default function ArquetiposRedirectPage() {
+  redirect("/");
 }

@@ -622,26 +622,6 @@ export function PresaleCheckout() {
               <p className="mt-3 text-sm text-cyan">
                 {fulfillNote ?? t.checkout.pixWaiting}
               </p>
-              <button
-                type="button"
-                onClick={() => {
-                  if (!pixOrderId) return;
-                  void fetch(`/api/orders/${pixOrderId}/mock-pay`, {
-                    method: "POST",
-                  }).then(async (response) => {
-                    const data = (await response.json()) as {
-                      order?: { fulfillError?: string | null; splSignature?: string | null };
-                    };
-                    if (data.order?.splSignature) setFulfillNote(t.checkout.fulfillOk);
-                    else if (data.order?.fulfillError)
-                      setFulfillNote(t.checkout.fulfillWaitWallet);
-                    else setFulfillNote(t.checkout.fulfillPending);
-                  });
-                }}
-                className="mt-2 text-[11px] text-muted underline-offset-2 hover:text-cyan hover:underline"
-              >
-                {t.checkout.pixSimulate}
-              </button>
             </div>
           ) : null}
 
