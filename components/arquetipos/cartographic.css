@@ -432,3 +432,38 @@
 .arquetipo-root .cine-ember-12 { left: 91%; animation-duration: 15.5s; animation-delay: 4.9s; }
 .arquetipo-root .cine-ember-13 { left: 18%; animation-duration: 18s; animation-delay: 6.1s; width: 2px; height: 2px; }
 .arquetipo-root .cine-ember-14 { left: 67%; animation-duration: 10.5s; animation-delay: 7s; }
+
+/* —— Medieval audio pill EQ —— */
+.arquetipo-root .cine-eq-bar {
+  display: block;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--cine-amber);
+  transform-origin: bottom;
+  animation: cine-eq-pulse 0.9s ease-in-out infinite alternate;
+}
+
+.arquetipo-root .cine-eq-1 { height: 4px; animation-delay: 0s; }
+.arquetipo-root .cine-eq-2 { height: 8px; animation-delay: 0.15s; }
+.arquetipo-root .cine-eq-3 { height: 6px; animation-delay: 0.3s; }
+.arquetipo-root .cine-eq-4 { height: 10px; animation-delay: 0.08s; }
+
+@keyframes cine-eq-pulse {
+  from { transform: scaleY(0.45); opacity: 0.55; }
+  to { transform: scaleY(1); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .arquetipo-root .cine-eq-bar {
+    animation: none;
+  }
+}
+
+.arquetipo-root .cine-vol::-webkit-slider-thumb {
+  appearance: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--cine-amber-soft);
+  cursor: pointer;
+}

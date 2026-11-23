@@ -9,6 +9,7 @@ import {
 } from "@/src/data/archetypes";
 import { LandingFooter } from "./LandingFooter";
 import { LandingHeader } from "./LandingHeader";
+import { MedievalAudioPlayer } from "./MedievalAudioPlayer";
 import { QuizFlow } from "./QuizFlow";
 import { QuizHero } from "./QuizHero";
 import { QuizProcessing } from "./QuizProcessing";
@@ -87,6 +88,7 @@ export function ArchetypeQuizApp() {
   return (
     <div className="arquetipo-root min-h-[100dvh]">
       <LandingHeader onStartQuiz={startQuiz} compact={inFlow} />
+      <MedievalAudioPlayer />
 
       <AnimatePresence mode="wait">
         {stage === "landing" && (

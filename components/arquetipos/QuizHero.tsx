@@ -19,6 +19,7 @@ import {
   RealmMedallion,
   SanctuaryBackdrop,
 } from "./CinematicChrome";
+import { dispatchMedievalAudioStart } from "./MedievalAudioPlayer";
 
 type Props = {
   onStart: () => void;
@@ -96,6 +97,11 @@ export function QuizHero({ onStart }: Props) {
           transition: { duration: 0.7, ease: EASE, delay },
         };
 
+  function beginJourney() {
+    dispatchMedievalAudioStart();
+    onStart();
+  }
+
   return (
     <div className="relative">
       {/* Full-bleed cinematic hero — dragon */}
@@ -150,12 +156,15 @@ export function QuizHero({ onStart }: Props) {
               <motion.div {...fade(0.28)} className="mt-9">
                 <button
                   type="button"
-                  onClick={onStart}
+                  onClick={beginJourney}
                   className="cine-cta inline-flex items-center gap-3 rounded-sm px-8 py-3.5 text-sm font-semibold"
                 >
                   <Shield size={16} aria-hidden />
-                  Começar Teste
+                  Iniciar a Jornada
                 </button>
+                <p className="mt-4 text-xs tracking-wide text-[color:var(--cine-dim)]">
+                  • Trilha Sonora Imersiva
+                </p>
               </motion.div>
             </div>
           </div>
@@ -295,12 +304,15 @@ export function QuizHero({ onStart }: Props) {
               </p>
               <button
                 type="button"
-                onClick={onStart}
+                onClick={beginJourney}
                 className="cine-cta mt-8 inline-flex items-center gap-3 rounded-sm px-8 py-3.5 text-sm font-semibold"
               >
                 <Shield size={16} aria-hidden />
-                Começar Teste
+                Iniciar a Jornada
               </button>
+              <p className="mt-4 text-xs tracking-wide text-[color:var(--cine-dim)]">
+                • Trilha Sonora Imersiva
+              </p>
             </OrnateCorners>
           </motion.div>
         </section>
