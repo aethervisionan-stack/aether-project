@@ -2,7 +2,11 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { findOrderByPixTxid, getOrder } from "@/lib/orders";
 import { fulfillApiBody, markPaidAndFulfill } from "@/lib/fulfill-vision";
-import { pixConfig } from "@/lib/pix";
+import {
+  extractPixPaidBrl,
+  pixAmountCoversOrder,
+  pixConfig,
+} from "@/lib/pix";
 
 export const runtime = "nodejs";
 
@@ -37,7 +41,8 @@ export async function POST(request: Request) {
   const mpSignature = request.headers.get("x-signature") ?? "";
 
   const hmac = createHmac("sha256", pix.webhookSecret).update(raw).digest("hex");
-  const okHeader = Boolean(headerSecret) && safeEqual(headerSecret, pix.webhookSecret);
+  const okHeader =
+    Boolean(headerSecret) && safeEqual(headerSecret, pix.webhookSecret);
   const okHmac = Boolean(mpSignature) && safeEqual(mpSignature, hmac);
   if (!okHeader && !okHmac) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -57,6 +62,32 @@ export async function POST(request: Request) {
     (await getOrder(orderId)) ?? (await findOrderByPixTxid(orderId));
   if (!order) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+  if (order.method !== "pix") {
+    return NextResponse.json({ error: "not_pix_order" }, { status: 400 });
+  }
+
+  const paidBrl = extractPixPaidBrl(body);
+  if (paidBrl == null) {
+    return NextResponse.json(
+      { error: "paid_amount_required" },
+      { status: 400 },
+    );
+  }
+  if (!pixAmountCoversOrder(paidBrl, order.brl)) {
+    console.warn("[pix-webhook] amount mismatch", {
+      orderId: order.id,
+      paidBrl,
+      expectedBrl: order.brl,
+    });
+    return NextResponse.json(
+      {
+        error: "amount_mismatch",
+        paidBrl,
+        expectedBrl: order.brl,
+      },
+      { status: 409 },
+    );
   }
 
   const result = await markPaidAndFulfill(order.id, {

@@ -59,3 +59,54 @@ export function pixConfig() {
       process.env.PIX_ALLOW_MOCK === "true",
   };
 }
+
+function asNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number.parseFloat(value.replace(",", "."));
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+/**
+ * Pull paid BRL from common PIX/MP/OpenPix webhook shapes.
+ * Returns null when the payload has no usable amount (caller must fail closed).
+ */
+export function extractPixPaidBrl(body: Record<string, unknown>): number | null {
+  const candidates: unknown[] = [
+    body.amount,
+    body.value,
+    body.transaction_amount,
+    body.paidAmount,
+    body.paid_amount,
+    (body.payment as Record<string, unknown> | undefined)?.transaction_amount,
+    (body.payment as Record<string, unknown> | undefined)?.amount,
+    (body.data as Record<string, unknown> | undefined)?.amount,
+    (body.data as Record<string, unknown> | undefined)?.value,
+    (body.data as Record<string, unknown> | undefined)?.transaction_amount,
+    (
+      (body.data as Record<string, unknown> | undefined)?.payment as
+        | Record<string, unknown>
+        | undefined
+    )?.transaction_amount,
+    (body.pix as Record<string, unknown> | undefined)?.amount,
+    (body.charge as Record<string, unknown> | undefined)?.value,
+  ];
+
+  for (const candidate of candidates) {
+    const n = asNumber(candidate);
+    if (n != null && n > 0) return n;
+  }
+  return null;
+}
+
+/** Paid BRL must cover the order (small float tolerance). */
+export function pixAmountCoversOrder(
+  paidBrl: number,
+  orderBrl: number,
+): boolean {
+  if (!(paidBrl > 0) || !(orderBrl > 0)) return false;
+  const tolerance = Math.max(0.05, orderBrl * 0.005);
+  return paidBrl + tolerance >= orderBrl;
+}

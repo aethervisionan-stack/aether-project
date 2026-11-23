@@ -47,7 +47,12 @@ export function createSolanaConnection(endpoint: string) {
 }
 
 export function getClientRpcEndpoint(): string {
-  if (typeof window !== "undefined") {
+  // Use a direct RPC URL. The /api/solana-rpc proxy is opt-in + authenticated
+  // and must not be the default (open proxy burns paid RPC quota).
+  if (
+    typeof window !== "undefined" &&
+    process.env.NEXT_PUBLIC_SOLANA_RPC_PROXY === "true"
+  ) {
     return `${window.location.origin}${SOLANA_RPC_PROXY_PATH}`;
   }
   return PRIMARY_SOLANA_RPC;
