@@ -12,7 +12,7 @@ export function LandingFooter({ onStartQuiz }: Props) {
           <p className="cine-display text-sm tracking-[0.22em] text-[color:var(--cine-amber)]/80">
             ARCANUM • XII
           </p>
-          <p>Carol Pearson / Jung · Dark Fantasy</p>
+          <p>Jung · Dark Fantasy</p>
           <button
             type="button"
             onClick={onStartQuiz}

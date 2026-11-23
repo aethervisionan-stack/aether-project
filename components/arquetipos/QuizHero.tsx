@@ -152,7 +152,7 @@ export function QuizHero({ onStart }: Props) {
                 className="mt-5 max-w-lg text-base leading-relaxed text-[color:var(--cine-muted)] sm:text-lg"
               >
                 Doze provas revelam o brasão que guia sua jornada — entre os 12
-                arquétipos de Carol Pearson.
+                arquétipos de Jung.
               </motion.p>
 
               <motion.div {...fade(0.28)} className="mt-9">

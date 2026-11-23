@@ -6,7 +6,7 @@ const BENEFITS = [
   {
     icon: Eye,
     title: "Arquétipo Dominante",
-    body: "Um líder claro entre os 12 de Carol Pearson — com desejo central, forças, medo e sombra.",
+    body: "Um líder claro entre os 12 arquétipos de Jung — com desejo central, forças, medo e sombra.",
   },
   {
     icon: Compass,
@@ -34,7 +34,7 @@ export function LandingBenefits() {
           Clareza arquetípica em menos de dois minutos
         </h2>
         <p className="mt-4 max-w-lg text-base text-[#F3EDE0]/55">
-          Os 12 arquétipos de Pearson organizam motivação, medo e legado — para
+          Os 12 arquétipos de Jung organizam motivação, medo e legado — para
           você se ver com mais precisão.
         </p>
         <ul className="mt-12 grid gap-6 sm:grid-cols-3">

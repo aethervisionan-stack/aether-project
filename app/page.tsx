@@ -26,7 +26,7 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   title: "ARCANUM • XII — Descubra o Seu Arquétipo Dominante",
   description:
-    "Teste gratuito dos 12 arquétipos de Carol Pearson / Jung. Doze provas em três etapas: dominante, sub-arquétipo ou perfil híbrido.",
+    "Teste gratuito dos 12 arquétipos de Jung. Doze provas em três etapas: dominante, sub-arquétipo ou perfil híbrido.",
   alternates: { canonical: "/" },
   openGraph: {
     title: "Descubra o Seu Arquétipo Dominante",
