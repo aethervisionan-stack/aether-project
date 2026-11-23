@@ -6,19 +6,19 @@ type Props = {
 
 export function LandingFooter({ onStartQuiz }: Props) {
   return (
-    <footer className="border-t border-[color:var(--cart-border-soft)]">
+    <footer className="border-t border-[color:var(--cine-border-soft)]">
       <div className="px-5 py-10">
-        <div className="mx-auto flex max-w-5xl flex-col items-center justify-between gap-4 text-xs text-[color:var(--cart-dim)] sm:flex-row">
-          <p className="cart-display text-base tracking-[0.12em] text-[color:var(--cart-copper)]/75">
-            Arquétipo
+        <div className="mx-auto flex max-w-5xl flex-col items-center justify-between gap-4 text-xs text-[color:var(--cine-dim)] sm:flex-row">
+          <p className="cine-display text-sm tracking-[0.22em] text-[color:var(--cine-amber)]/80">
+            ARCANUM • XII
           </p>
-          <p>Carol Pearson / Jung · Carta de Expedição</p>
+          <p>Carol Pearson / Jung · Dark Fantasy</p>
           <button
             type="button"
             onClick={onStartQuiz}
-            className="text-[color:var(--cart-copper)] transition hover:text-[color:var(--cart-copper-bright)]"
+            className="text-[color:var(--cine-amber)] transition hover:text-[color:var(--cine-amber-soft)]"
           >
-            Iniciar Expedição
+            Começar Teste
           </button>
         </div>
       </div>

@@ -17,24 +17,25 @@ const body = Lora({
 });
 
 export const viewport: Viewport = {
-  themeColor: "#0a0c0f",
+  themeColor: "#050608",
   width: "device-width",
   initialScale: 1,
   colorScheme: "dark",
 };
 
 export const metadata: Metadata = {
-  title: "Arquétipo — Mapa da Expedição Interior",
+  title: "ARCANUM • XII — Descubra o Seu Arquétipo Dominante",
   description:
-    "Teste gratuito dos 12 arquétipos de Carol Pearson / Jung. Doze marcos em três etapas: dominante, sub-arquétipo ou perfil híbrido.",
+    "Teste gratuito dos 12 arquétipos de Carol Pearson / Jung. Doze provas em três etapas: dominante, sub-arquétipo ou perfil híbrido.",
   alternates: { canonical: "/" },
   openGraph: {
     title: "Descubra o Seu Arquétipo Dominante",
     description:
-      "12 marcos em 3 etapas. Relatório de expedição com desejo, forças, medos e perigos do terreno.",
+      "12 provas em 3 etapas. Resultado com desejo central, forças, medo, sombra e pontuação.",
     locale: "pt_BR",
     type: "website",
     url: "/",
+    images: [{ url: "/images/hero-dragon.jpg" }],
   },
 };
 

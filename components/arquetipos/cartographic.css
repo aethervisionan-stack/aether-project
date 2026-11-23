@@ -1,74 +1,205 @@
-/* Dark Fantasy Cartographic / Medieval Exploration — visual only */
+/* AAA cinematic Dark Fantasy — visual only (quiz logic untouched) */
 .arquetipo-root {
-  --cart-breu: #0a0c0f;
-  --cart-slate: #14181f;
-  --cart-slate-mid: #1a2029;
-  --cart-panel: rgba(22, 26, 34, 0.88);
-  --cart-copper: #b87333;
-  --cart-copper-bright: #c9894a;
-  --cart-amber: #a65d2e;
-  --cart-torch: #c4783a;
-  --cart-parchment: #c4b59a;
-  --cart-ink: #d6d0c4;
-  --cart-muted: #8a8478;
-  --cart-dim: #5c574e;
-  --cart-border: rgba(184, 115, 51, 0.42);
-  --cart-border-soft: rgba(184, 115, 51, 0.18);
-  --cart-torch-glow: rgba(196, 120, 58, 0.18);
-  --cart-slate-glow: rgba(70, 90, 110, 0.2);
-  color: var(--cart-ink);
-  background: var(--cart-breu);
+  --cine-void: #050608;
+  --cine-ink: #ece7df;
+  --cine-muted: #a39e94;
+  --cine-dim: #6b665e;
+  --cine-carmine: #9b2c2c;
+  --cine-carmine-bright: #c43c3c;
+  --cine-amber: #c9894a;
+  --cine-amber-soft: #e0a66a;
+  --cine-copper: #b87333;
+  --cine-glass: rgba(12, 14, 18, 0.55);
+  --cine-glass-strong: rgba(10, 12, 16, 0.72);
+  --cine-border: rgba(201, 137, 74, 0.28);
+  --cine-border-soft: rgba(236, 231, 223, 0.1);
+  --cine-panel: rgba(16, 18, 24, 0.78);
+  color: var(--cine-ink);
+  background: var(--cine-void);
   font-family: var(--font-arq-sans), ui-serif, Georgia, serif;
+}
+
+.arquetipo-root .cine-display {
+  font-family: var(--font-arq-display), ui-serif, Georgia, serif;
+}
+
+.arquetipo-root .cine-glass {
+  background: var(--cine-glass);
+  border: 1px solid var(--cine-border-soft);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.arquetipo-root .cine-glass-strong {
+  background: var(--cine-glass-strong);
+  border: 1px solid var(--cine-border);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.arquetipo-root .cine-card {
+  background: var(--cine-panel);
+  border: 1px solid var(--cine-border-soft);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+}
+
+.arquetipo-root .cine-title-amber {
+  background: linear-gradient(
+    120deg,
+    #7a3a1a 0%,
+    #e0a66a 34%,
+    #c9894a 52%,
+    #f0c98a 72%,
+    #8a4e24 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.arquetipo-root .cine-cta {
+  font-family: var(--font-arq-display), ui-serif, Georgia, serif;
+  letter-spacing: 0.08em;
+  background: linear-gradient(
+    135deg,
+    #6b1a1a 0%,
+    #9b2c2c 28%,
+    #c43c3c 48%,
+    #c9894a 78%,
+    #a65d2e 100%
+  );
+  color: #f8efe4;
+  border: 1px solid rgba(224, 166, 106, 0.45);
+  box-shadow:
+    0 0 28px rgba(155, 44, 44, 0.28),
+    inset 0 1px 0 rgba(255, 220, 180, 0.28);
+  transition: filter 0.25s ease, transform 0.25s ease;
+}
+
+.arquetipo-root .cine-cta:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+
+.arquetipo-root .cine-atmosphere {
+  background:
+    radial-gradient(
+      ellipse 60% 40% at 90% 10%,
+      rgba(201, 137, 74, 0.12),
+      transparent 55%
+    ),
+    radial-gradient(
+      ellipse 50% 35% at 10% 90%,
+      rgba(155, 44, 44, 0.1),
+      transparent 50%
+    ),
+    linear-gradient(168deg, #0a0c10 0%, #050608 45%, #0e1014 100%);
+}
+
+.arquetipo-root .cine-option {
+  background: rgba(10, 12, 16, 0.72);
+  border: 1px solid var(--cine-border-soft);
+  color: var(--cine-muted);
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease,
+    color 0.2s ease;
+}
+
+.arquetipo-root .cine-option:hover {
+  border-color: var(--cine-border);
+  color: var(--cine-ink);
+  background: rgba(22, 24, 30, 0.9);
+}
+
+.arquetipo-root .cine-option-active {
+  border-color: var(--cine-amber);
+  background: rgba(155, 44, 44, 0.14);
+  color: var(--cine-ink);
+  box-shadow: 0 0 16px rgba(155, 44, 44, 0.16);
+}
+
+.arquetipo-root .cine-trail {
+  height: 3px;
+  background: rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+}
+
+.arquetipo-root .cine-trail-fill {
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    #6b1a1a,
+    var(--cine-carmine-bright),
+    var(--cine-amber)
+  );
+}
+
+.arquetipo-root .cine-scroll {
+  position: relative;
+  background:
+    linear-gradient(180deg, rgba(155, 44, 44, 0.1), transparent 30%),
+    var(--cine-panel);
+  border: 1px solid var(--cine-border);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.4);
+}
+
+/* Legacy cart-* aliases → cinematic tokens (quiz screens) */
+.arquetipo-root {
+  --cart-breu: var(--cine-void);
+  --cart-ink: var(--cine-ink);
+  --cart-muted: var(--cine-muted);
+  --cart-dim: var(--cine-dim);
+  --cart-copper: var(--cine-amber);
+  --cart-copper-bright: var(--cine-amber-soft);
+  --cart-border: var(--cine-border);
+  --cart-border-soft: var(--cine-border-soft);
+  --cart-panel: var(--cine-panel);
+  --cart-torch: var(--cine-amber);
 }
 
 .arquetipo-root .cart-display {
   font-family: var(--font-arq-display), ui-serif, Georgia, serif;
 }
 
-.arquetipo-root .cart-topo {
-  background-image:
-    linear-gradient(rgba(196, 181, 154, 0.1) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(196, 181, 154, 0.1) 1px, transparent 1px);
-  background-size: 48px 48px;
-  background-position: center center;
-}
-
 .arquetipo-root .cart-atmosphere {
   background:
     radial-gradient(
-      ellipse 70% 45% at 85% 0%,
-      var(--cart-torch-glow),
+      ellipse 60% 40% at 90% 10%,
+      rgba(201, 137, 74, 0.12),
       transparent 55%
     ),
     radial-gradient(
-      ellipse 55% 40% at 5% 90%,
-      var(--cart-slate-glow),
+      ellipse 50% 35% at 10% 90%,
+      rgba(155, 44, 44, 0.1),
       transparent 50%
     ),
-    linear-gradient(168deg, #0e1218 0%, #0a0c0f 42%, #12161c 100%);
+    linear-gradient(168deg, #0a0c10 0%, #050608 45%, #0e1014 100%);
+}
+
+.arquetipo-root .cart-topo {
+  background-image: none;
 }
 
 .arquetipo-root .cart-card {
-  background: var(--cart-panel);
-  border: 1px solid var(--cart-border);
-  box-shadow:
-    0 0 0 1px rgba(0, 0, 0, 0.5) inset,
-    0 14px 36px rgba(0, 0, 0, 0.4);
+  background: var(--cine-panel);
+  border: 1px solid var(--cine-border-soft);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
 }
 
 .arquetipo-root .cart-card-soft {
-  background: rgba(20, 24, 31, 0.65);
-  border: 1px solid var(--cart-border-soft);
+  background: rgba(16, 18, 24, 0.65);
+  border: 1px solid var(--cine-border-soft);
 }
 
 .arquetipo-root .cart-title-torch {
   background: linear-gradient(
-    125deg,
-    #6b3d1a 0%,
-    #c9894a 32%,
-    #b87333 52%,
-    #e0a66a 72%,
-    #7a4a22 100%
+    120deg,
+    #7a3a1a 0%,
+    #e0a66a 34%,
+    #c9894a 52%,
+    #f0c98a 72%,
+    #8a4e24 100%
   );
   -webkit-background-clip: text;
   background-clip: text;
@@ -77,25 +208,32 @@
 
 .arquetipo-root .cart-cta {
   font-family: var(--font-arq-display), ui-serif, Georgia, serif;
-  letter-spacing: 0.07em;
-  background: linear-gradient(135deg, #6b3d1a 0%, #a65d2e 38%, #c9894a 58%, #8a4e24 100%);
-  color: #1a1008;
-  border: 1px solid rgba(201, 137, 74, 0.55);
+  letter-spacing: 0.08em;
+  background: linear-gradient(
+    135deg,
+    #6b1a1a 0%,
+    #9b2c2c 28%,
+    #c43c3c 48%,
+    #c9894a 78%,
+    #a65d2e 100%
+  );
+  color: #f8efe4;
+  border: 1px solid rgba(224, 166, 106, 0.45);
   box-shadow:
-    0 0 20px rgba(184, 115, 51, 0.22),
-    inset 0 1px 0 rgba(255, 220, 180, 0.25);
+    0 0 28px rgba(155, 44, 44, 0.28),
+    inset 0 1px 0 rgba(255, 220, 180, 0.28);
   transition: filter 0.25s ease, transform 0.25s ease;
 }
 
 .arquetipo-root .cart-cta:hover {
-  filter: brightness(1.07);
+  filter: brightness(1.08);
   transform: translateY(-1px);
 }
 
 .arquetipo-root .cart-badge {
-  border: 1px solid var(--cart-border);
-  background: rgba(184, 115, 51, 0.1);
-  color: var(--cart-copper-bright);
+  border: 1px solid var(--cine-border);
+  background: rgba(155, 44, 44, 0.12);
+  color: var(--cine-amber-soft);
   letter-spacing: 0.26em;
   text-transform: uppercase;
 }
@@ -103,12 +241,10 @@
 .arquetipo-root .cart-scroll {
   position: relative;
   background:
-    linear-gradient(180deg, rgba(196, 120, 58, 0.08), transparent 28%),
-    var(--cart-panel);
-  border: 1px solid var(--cart-border);
-  box-shadow:
-    0 0 0 1px rgba(0, 0, 0, 0.45) inset,
-    0 18px 40px rgba(0, 0, 0, 0.4);
+    linear-gradient(180deg, rgba(155, 44, 44, 0.1), transparent 30%),
+    var(--cine-panel);
+  border: 1px solid var(--cine-border);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.4);
 }
 
 .arquetipo-root .cart-scroll::before,
@@ -118,12 +254,7 @@
   left: 8%;
   right: 8%;
   height: 1px;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    var(--cart-border),
-    transparent
-  );
+  background: linear-gradient(90deg, transparent, var(--cine-border), transparent);
 }
 
 .arquetipo-root .cart-scroll::before {
@@ -135,9 +266,9 @@
 }
 
 .arquetipo-root .cart-option {
-  background: rgba(14, 18, 24, 0.72);
-  border: 1px solid var(--cart-border-soft);
-  color: var(--cart-muted);
+  background: rgba(10, 12, 16, 0.72);
+  border: 1px solid var(--cine-border-soft);
+  color: var(--cine-muted);
   transition:
     border-color 0.2s ease,
     background 0.2s ease,
@@ -145,16 +276,16 @@
 }
 
 .arquetipo-root .cart-option:hover {
-  border-color: var(--cart-border);
-  color: var(--cart-ink);
-  background: rgba(26, 32, 41, 0.9);
+  border-color: var(--cine-border);
+  color: var(--cine-ink);
+  background: rgba(22, 24, 30, 0.9);
 }
 
 .arquetipo-root .cart-option-active {
-  border-color: var(--cart-copper);
-  background: rgba(184, 115, 51, 0.12);
-  color: var(--cart-ink);
-  box-shadow: 0 0 16px rgba(184, 115, 51, 0.14);
+  border-color: var(--cine-amber);
+  background: rgba(155, 44, 44, 0.14);
+  color: var(--cine-ink);
+  box-shadow: 0 0 16px rgba(155, 44, 44, 0.16);
 }
 
 .arquetipo-root .cart-trail {
@@ -165,5 +296,10 @@
 
 .arquetipo-root .cart-trail-fill {
   height: 100%;
-  background: linear-gradient(90deg, #6b3d1a, var(--cart-torch), var(--cart-copper-bright));
+  background: linear-gradient(
+    90deg,
+    #6b1a1a,
+    var(--cine-carmine-bright),
+    var(--cine-amber)
+  );
 }
