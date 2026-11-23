@@ -24,14 +24,14 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "Arquétipo — Descubra o arquétipo que guia sua essência",
+  title: "Arquétipo — Descubra o Seu Arquétipo Dominante",
   description:
-    "Landing e teste gratuito dos 12 arquétipos junguianos em português. Em menos de 2 minutos, descubra seu arquétipo dominante e como posicioná-lo na vida e nos negócios.",
+    "Teste gratuito dos 12 arquétipos de Carol Pearson / Jung. Doze perguntas em três etapas: dominante, sub-arquétipo ou perfil híbrido.",
   alternates: { canonical: "/" },
   openGraph: {
-    title: "Arquétipo — Quiz dos 12 arquétipos junguianos",
+    title: "Descubra o Seu Arquétipo Dominante",
     description:
-      "Descubra o arquétipo que guia suas decisões e sua essência. Teste gratuito em menos de 2 minutos.",
+      "12 perguntas em 3 etapas. Resultado com desejo central, forças, medo, sombra e gráfico de pontuação.",
     locale: "pt_BR",
     type: "website",
     url: "/",

@@ -3,18 +3,18 @@
 const STEPS = [
   {
     n: "01",
-    title: "Doze situações reais",
-    body: "Escolha a resposta que mais soa como você — sem certo ou errado.",
+    title: "Motivação e Propósito",
+    body: "Quatro perguntas sobre realização, frustração, crise e como você aparece para os outros.",
   },
   {
     n: "02",
-    title: "Leitura do perfil",
-    body: "Cruzamos padrões de motivação, desejo e sombra arquetípica.",
+    title: "Comportamento e Decisões",
+    body: "Papel em equipe, lema de vida, relacionamentos e o que faria com um ano sabático.",
   },
   {
     n: "03",
-    title: "Resultado aplicável",
-    body: "Dominante + secundário, vibe, era, green flags, red flags e onde brilha.",
+    title: "Medos e Legado",
+    body: "Medo interno, orgulho no trabalho, ambiente ideal e o legado que quer deixar.",
   },
 ] as const;
 
@@ -29,7 +29,7 @@ export function LandingHowItWorks() {
           Como funciona
         </p>
         <h2 className="mt-3 max-w-xl font-[family-name:var(--font-arq-display)] text-3xl tracking-tight text-[#F3EDE0] sm:text-4xl">
-          Menos de dois minutos. Resultado completo.
+          12 perguntas em 3 etapas
         </h2>
         <ol className="mt-12 grid gap-8 sm:grid-cols-3">
           {STEPS.map((step) => (

@@ -1,34 +1,26 @@
 "use client";
 
 import { Compass, Eye, Sparkles } from "lucide-react";
-import { motion, useReducedMotion } from "framer-motion";
-import { useEffect, useState } from "react";
 
 const BENEFITS = [
   {
     icon: Eye,
-    title: "Clareza de identidade",
-    body: "Entenda o padrão que guia suas decisões — e o que você evita sem perceber.",
+    title: "Arquétipo Dominante",
+    body: "Um líder claro entre os 12 de Carol Pearson — com desejo central, forças, medo e sombra.",
   },
   {
     icon: Compass,
-    title: "Posicionamento prático",
-    body: "Traduza o arquétipo dominante em linguagem de marca, carreira e relacionamento.",
+    title: "Sub-arquétipo ou Híbrido",
+    body: "Segundo lugar combina descrições; empate no topo vira Perfil Híbrido com os dois.",
   },
   {
     icon: Sparkles,
-    title: "Green e red flags",
-    body: "Veja onde a força vira excesso: burnout, fuga, controle ou se apagar pra caber no algoritmo.",
+    title: "Mapa de pontuação",
+    body: "Gráfico simples 0–12 por arquétipo pontuado — fácil de copiar e compartilhar.",
   },
 ] as const;
 
-const EASE = [0.22, 1, 0.36, 1] as const;
-
 export function LandingBenefits() {
-  const reduce = useReducedMotion();
-  const [ready, setReady] = useState(false);
-  useEffect(() => setReady(true), []);
-
   return (
     <section
       id="beneficios"
@@ -39,31 +31,24 @@ export function LandingBenefits() {
           Por que fazer
         </p>
         <h2 className="mt-3 max-w-xl font-[family-name:var(--font-arq-display)] text-3xl tracking-tight text-[#F3EDE0] sm:text-4xl">
-          Um espelho psicológico em linguagem de decisão
+          Clareza arquetípica em menos de dois minutos
         </h2>
         <p className="mt-4 max-w-lg text-base text-[#F3EDE0]/55">
-          Os 12 arquétipos junguianos organizam motivação, desejo e sombra — para
-          você se posicionar com mais precisão.
+          Os 12 arquétipos de Pearson organizam motivação, medo e legado — para
+          você se ver com mais precisão.
         </p>
-
         <ul className="mt-12 grid gap-6 sm:grid-cols-3">
-          {BENEFITS.map((item, i) => (
-            <motion.li
+          {BENEFITS.map((item) => (
+            <li
               key={item.title}
-              initial={ready && !reduce ? { opacity: 0, y: 16 } : false}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-10%" }}
-              transition={{ duration: 0.55, ease: EASE, delay: i * 0.06 }}
               className="border border-white/10 bg-white/[0.02] p-6"
             >
-              <item.icon className="text-[#C9A227]" size={22} strokeWidth={1.5} />
-              <h3 className="mt-4 font-[family-name:var(--font-arq-display)] text-xl text-[#F3EDE0]">
-                {item.title}
-              </h3>
+              <item.icon size={22} className="text-[#C9A227]" aria-hidden />
+              <h3 className="mt-4 text-lg text-[#F3EDE0]">{item.title}</h3>
               <p className="mt-2 text-sm leading-relaxed text-[#F3EDE0]/55">
                 {item.body}
               </p>
-            </motion.li>
+            </li>
           ))}
         </ul>
       </div>

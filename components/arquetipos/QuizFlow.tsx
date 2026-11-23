@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ChevronLeft } from "lucide-react";
-import { QUESTIONS, type Question } from "@/src/data/archetypes";
+import { QUESTIONS, TOTAL_QUESTIONS, type Question } from "@/src/data/archetypes";
 
 type Props = {
   index: number;
@@ -16,8 +16,7 @@ const EASE = [0.22, 1, 0.36, 1] as const;
 export function QuizFlow({ index, answers, onSelect, onBack }: Props) {
   const reduce = useReducedMotion();
   const question: Question = QUESTIONS[index];
-  const total = QUESTIONS.length;
-  const progress = ((index + 1) / total) * 100;
+  const progress = ((index + 1) / TOTAL_QUESTIONS) * 100;
   const selected = answers[question.id];
 
   return (
@@ -26,19 +25,18 @@ export function QuizFlow({ index, answers, onSelect, onBack }: Props) {
         <button
           type="button"
           onClick={onBack}
-          disabled={index === 0}
-          className="flex h-10 w-10 items-center justify-center border border-white/10 text-[#F3EDE0]/70 transition enabled:hover:border-[#C9A227]/40 enabled:hover:text-[#E8C547] disabled:opacity-30"
+          className="flex h-10 w-10 items-center justify-center border border-white/10 text-[#F3EDE0]/70 transition hover:border-[#C9A227]/40 hover:text-[#E8C547]"
           aria-label="Voltar"
         >
           <ChevronLeft size={20} />
         </button>
         <div className="min-w-0 flex-1">
-          <div className="mb-2 flex items-baseline justify-between gap-3">
+          <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
             <p className="text-[11px] uppercase tracking-[0.2em] text-[#C9A227]/90">
-              Pergunta {index + 1} de {total}
+              Etapa {question.stage}/3 · {question.stageTitle}
             </p>
             <span className="tabular text-xs text-white/35">
-              {Math.round(progress)}%
+              {index + 1}/{TOTAL_QUESTIONS}
             </span>
           </div>
           <div className="h-[3px] overflow-hidden bg-white/8">
@@ -88,7 +86,7 @@ export function QuizFlow({ index, answers, onSelect, onBack }: Props) {
                       }`}
                     >
                       <span className="mr-3 inline-block font-[family-name:var(--font-arq-display)] text-sm text-[#C9A227]/80">
-                        {String.fromCharCode(65 + i)}
+                        {option.letter}
                       </span>
                       {option.text}
                     </motion.button>

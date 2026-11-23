@@ -3,9 +3,8 @@
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  LEAD_CAPTURE_ENABLED,
   QUESTIONS,
-  rankArchetypes,
+  resolveOutcome,
   scoreAnswers,
 } from "@/src/data/archetypes";
 import { LandingBenefits } from "./LandingBenefits";
@@ -13,7 +12,6 @@ import { LandingFooter } from "./LandingFooter";
 import { LandingHeader } from "./LandingHeader";
 import { LandingHowItWorks } from "./LandingHowItWorks";
 import { LandingProof } from "./LandingProof";
-import { LeadCaptureModal } from "./LeadCaptureModal";
 import { QuizFlow } from "./QuizFlow";
 import { QuizHero } from "./QuizHero";
 import { QuizProcessing } from "./QuizProcessing";
@@ -21,7 +19,8 @@ import { QuizResult } from "./QuizResult";
 
 type Stage = "landing" | "quiz" | "processing" | "result";
 
-const PROCESSING_MS = 1500;
+const PROCESSING_MS = 1200;
+const ADVANCE_MS = 300;
 
 export function ArchetypeQuizApp() {
   const reduce = useReducedMotion();
@@ -29,15 +28,13 @@ export function ArchetypeQuizApp() {
   const [stage, setStage] = useState<Stage>("landing");
   const [index, setIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
-  const [leadOpen, setLeadOpen] = useState(false);
-  const [leadDone, setLeadDone] = useState(!LEAD_CAPTURE_ENABLED);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  const ranked = useMemo(
-    () => rankArchetypes(scoreAnswers(answers)),
+  const outcome = useMemo(
+    () => resolveOutcome(scoreAnswers(answers)),
     [answers],
   );
 
@@ -53,15 +50,9 @@ export function ArchetypeQuizApp() {
 
   useEffect(() => {
     if (stage !== "processing") return;
-    const t = window.setTimeout(() => {
-      if (LEAD_CAPTURE_ENABLED && !leadDone) {
-        setLeadOpen(true);
-      } else {
-        setStage("result");
-      }
-    }, PROCESSING_MS);
+    const t = window.setTimeout(() => setStage("result"), PROCESSING_MS);
     return () => window.clearTimeout(t);
-  }, [stage, leadDone]);
+  }, [stage]);
 
   function handleSelect(questionId: string, optionId: string) {
     setAnswers((prev) => ({ ...prev, [questionId]: optionId }));
@@ -71,7 +62,7 @@ export function ArchetypeQuizApp() {
       } else {
         setIndex((i) => i + 1);
       }
-    }, 280);
+    }, ADVANCE_MS);
   }
 
   function handleBack() {
@@ -87,20 +78,13 @@ export function ArchetypeQuizApp() {
   function handleRestart() {
     setAnswers({});
     setIndex(0);
-    setLeadOpen(false);
-    setLeadDone(!LEAD_CAPTURE_ENABLED);
     setStage("landing");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  function closeLead() {
-    setLeadOpen(false);
-    setLeadDone(true);
-    setStage("result");
-  }
-
   const fade = !mounted || reduce;
-  const inFlow = stage === "quiz" || stage === "processing" || stage === "result";
+  const inFlow =
+    stage === "quiz" || stage === "processing" || stage === "result";
 
   return (
     <div className="arquetipo-root min-h-[100dvh] bg-[#07070b] text-[#F3EDE0]">
@@ -128,18 +112,18 @@ export function ArchetypeQuizApp() {
                   O teste
                 </p>
                 <h2 className="mt-3 font-[family-name:var(--font-arq-display)] text-3xl tracking-tight text-[#F3EDE0] sm:text-4xl">
-                  Comece agora — 12 perguntas situacionais
+                  Descubra o Seu Arquétipo Dominante
                 </h2>
                 <p className="mt-4 text-base text-[#F3EDE0]/55">
-                  Sem cadastro obrigatório. Resultado com arquétipo dominante,
-                  secundário e aplicação prática.
+                  12 perguntas em 3 etapas. Sem cadastro. Resultado com
+                  dominante + sub-arquétipo ou perfil híbrido.
                 </p>
                 <button
                   type="button"
                   onClick={startQuiz}
                   className="mt-8 bg-gradient-to-r from-[#C9A227] to-[#E8C547] px-7 py-3.5 text-sm font-semibold tracking-wide text-[#0a0a0c] transition hover:brightness-110"
                 >
-                  Iniciar Teste Gratuito
+                  Começar Teste
                 </button>
               </div>
             </section>
@@ -187,18 +171,10 @@ export function ArchetypeQuizApp() {
             transition={{ duration: 0.4 }}
             className="pt-14 sm:pt-16"
           >
-            <QuizResult ranked={ranked} onRestart={handleRestart} />
+            <QuizResult outcome={outcome} onRestart={handleRestart} />
           </motion.div>
         )}
       </AnimatePresence>
-
-      <LeadCaptureModal
-        open={leadOpen}
-        onSkip={closeLead}
-        onSubmit={() => {
-          closeLead();
-        }}
-      />
     </div>
   );
 }

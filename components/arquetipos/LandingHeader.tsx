@@ -40,7 +40,7 @@ export function LandingHeader({ onStartQuiz, compact = false }: Props) {
           onClick={onStartQuiz}
           className="bg-gradient-to-r from-[#C9A227] to-[#E8C547] px-3.5 py-2 text-xs font-semibold tracking-wide text-[#0a0a0c] transition hover:brightness-110 sm:px-4 sm:text-sm"
         >
-          Iniciar Teste
+          Começar Teste
         </button>
       </div>
     </header>

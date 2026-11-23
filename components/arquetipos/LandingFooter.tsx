@@ -20,7 +20,7 @@ export function LandingFooter({ onStartQuiz }: Props) {
             onClick={onStartQuiz}
             className="mt-8 bg-gradient-to-r from-[#C9A227] via-[#E0B84A] to-[#C9A227] bg-[length:200%_100%] px-7 py-3.5 text-sm font-semibold tracking-wide text-[#0a0a0c] transition-[background-position] duration-500 hover:bg-[position:100%_0]"
           >
-            Iniciar Teste Gratuito
+            Começar Teste
           </button>
         </div>
       </section>
@@ -29,7 +29,7 @@ export function LandingFooter({ onStartQuiz }: Props) {
           <p className="font-[family-name:var(--font-arq-display)] text-base text-[#F3EDE0]/55">
             Arquétipo
           </p>
-          <p>Quiz dos 12 arquétipos junguianos · pt-BR</p>
+          <p>12 arquétipos Carol Pearson / Jung · pt-BR</p>
         </div>
       </div>
     </footer>
