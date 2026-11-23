@@ -10,6 +10,7 @@ import {
   joinPt,
   type NarrativeResult,
 } from "@/src/data/archetypes";
+import { OrnateCorners, SanctuaryBackdrop } from "./CinematicChrome";
 
 type Props = {
   result: NarrativeResult;
@@ -35,7 +36,9 @@ export function QuizResult({ result, onRestart }: Props) {
   }
 
   return (
-    <section className="cart-atmosphere cart-topo relative mx-auto min-h-[100dvh] w-full max-w-2xl px-5 pb-16 pt-12">
+    <section className="cine-sanctuary-band relative mx-auto min-h-[100dvh] w-full max-w-2xl px-5 pb-16 pt-12">
+      <SanctuaryBackdrop opacity={0.25} />
+      <div className="relative z-10">
       <motion.p
         initial={reduce ? false : { opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
@@ -49,8 +52,9 @@ export function QuizResult({ result, onRestart }: Props) {
         initial={reduce ? false : { opacity: 0, scale: 0.98, y: 16 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ duration: 0.7, ease: EASE, delay: 0.05 }}
-        className="cart-scroll mx-auto mt-8 max-w-md rounded-sm px-6 pb-12 pt-10 text-center"
+        className="mx-auto mt-8 max-w-md"
       >
+        <OrnateCorners className="cart-scroll rounded-sm px-6 pb-12 pt-10 text-center">
         <ScrollText
           size={22}
           style={{ color: principal.accent }}
@@ -82,6 +86,7 @@ export function QuizResult({ result, onRestart }: Props) {
             background: `linear-gradient(90deg, transparent, ${principal.accent}, transparent)`,
           }}
         />
+        </OrnateCorners>
       </motion.div>
 
       <motion.p
@@ -275,6 +280,7 @@ export function QuizResult({ result, onRestart }: Props) {
           {copied ? <Check size={16} /> : <Copy size={16} />}
           {copied ? "Copiado" : "Copiar Relatório Completo"}
         </button>
+      </div>
       </div>
     </section>
   );

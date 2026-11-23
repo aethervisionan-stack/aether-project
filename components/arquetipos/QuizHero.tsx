@@ -2,6 +2,7 @@
 
 import { motion, useReducedMotion } from "framer-motion";
 import {
+  BookOpen,
   Compass,
   Crown,
   Flame,
@@ -9,9 +10,15 @@ import {
   Scroll,
   Shield,
   Sword,
-  BookOpen,
 } from "lucide-react";
 import Image from "next/image";
+import {
+  EmberField,
+  MedievalDivider,
+  OrnateCorners,
+  RealmMedallion,
+  SanctuaryBackdrop,
+} from "./CinematicChrome";
 
 type Props = {
   onStart: () => void;
@@ -50,6 +57,7 @@ const REINOS = [
     body: "Inocente · Explorador · Sábio",
     icon: Compass,
     accent: "#a39e94",
+    shape: "octagon" as const,
   },
   {
     title: "Deixar uma Marca",
@@ -57,6 +65,7 @@ const REINOS = [
     body: "Herói · Rebelde · Mago",
     icon: Sword,
     accent: "#c43c3c",
+    shape: "lozenge" as const,
   },
   {
     title: "Conectar-se",
@@ -64,6 +73,7 @@ const REINOS = [
     body: "Pessoa Comum · Amante · Bobo da Corte",
     icon: Heart,
     accent: "#c9894a",
+    shape: "octagon" as const,
   },
   {
     title: "Prover Estrutura",
@@ -71,6 +81,7 @@ const REINOS = [
     body: "Cuidador · Criador · Governante",
     icon: Crown,
     accent: "#e0a66a",
+    shape: "lozenge" as const,
   },
 ] as const;
 
@@ -87,28 +98,25 @@ export function QuizHero({ onStart }: Props) {
 
   return (
     <div className="relative">
-      {/* Full-bleed cinematic hero */}
-      <section
-        id="topo"
-        className="relative min-h-screen overflow-hidden"
-      >
+      {/* Full-bleed cinematic hero — dragon */}
+      <section id="topo" className="relative min-h-screen overflow-hidden">
         <Image
           src="/images/hero-dragon.jpg"
           alt="Cavaleiro diante de um dragão sob o castelo nas névoas"
           fill
           priority
           sizes="100vw"
+          quality={90}
           className="object-cover object-[62%_center] sm:object-center"
         />
 
-        {/* Cinematic overlays: left readable plane, bottom vignette, top soft fade */}
         <div
           className="pointer-events-none absolute inset-0"
           aria-hidden
           style={{
             background: `
               linear-gradient(90deg, rgba(5,6,8,0.92) 0%, rgba(5,6,8,0.72) 28%, rgba(5,6,8,0.28) 52%, transparent 72%),
-              linear-gradient(0deg, rgba(5,6,8,0.88) 0%, rgba(5,6,8,0.35) 22%, transparent 48%),
+              linear-gradient(0deg, rgba(7,7,9,0.95) 0%, rgba(7,7,9,0.4) 24%, transparent 52%),
               linear-gradient(180deg, rgba(5,6,8,0.55) 0%, transparent 28%)
             `,
           }}
@@ -154,142 +162,149 @@ export function QuizHero({ onStart }: Props) {
         </div>
       </section>
 
-      {/* Provações — bento */}
-      <section
-        id="provacoes"
-        className="cine-atmosphere scroll-mt-24 border-t border-[color:var(--cine-border-soft)] px-5 py-20"
-      >
-        <div className="mx-auto max-w-5xl">
-          <p className="cine-display text-[11px] uppercase tracking-[0.32em] text-[color:var(--cine-amber)]">
-            As Três Provações
-          </p>
-          <h2 className="cine-display mt-3 max-w-xl text-3xl tracking-wide text-[color:var(--cine-ink)] sm:text-4xl">
-            O caminho pelo grimório
-          </h2>
-          <ul className="mt-12 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 lg:grid-rows-2">
-            {PROVACOES.map((item, i) => (
-              <motion.li
-                key={item.n}
-                initial={reduce ? false : { opacity: 0, y: 14 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: "-40px" }}
-                transition={{ duration: 0.55, ease: EASE, delay: i * 0.06 }}
-                className={`cine-card rounded-sm p-6 ${item.span} ${
-                  i === 0 ? "lg:flex lg:flex-col lg:justify-between" : ""
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <item.icon
-                    size={20}
-                    className="text-[color:var(--cine-amber)]"
-                    aria-hidden
-                  />
-                  <span className="cine-display text-2xl text-[color:var(--cine-amber)]/65">
-                    {item.n}
-                  </span>
-                </div>
-                <div>
-                  <h3
-                    className={`cine-display mt-5 tracking-wide text-[color:var(--cine-ink)] ${
-                      i === 0 ? "text-2xl lg:text-3xl" : "text-lg"
-                    }`}
-                  >
-                    {item.title}
-                  </h3>
-                  <p
-                    className={`mt-2 leading-relaxed text-[color:var(--cine-muted)] ${
-                      i === 0 ? "text-base" : "text-sm"
-                    }`}
-                  >
-                    {item.body}
-                  </p>
-                </div>
-              </motion.li>
-            ))}
-          </ul>
-        </div>
-      </section>
+      {/* Below-fold sanctuary continuum */}
+      <div className="cine-sanctuary-band relative overflow-hidden">
+        <SanctuaryBackdrop opacity={0.45} />
+        <EmberField />
 
-      {/* Reinos */}
-      <section
-        id="reinos"
-        className="scroll-mt-24 border-t border-[color:var(--cine-border-soft)] px-5 py-20"
-      >
-        <div className="mx-auto max-w-5xl">
-          <p className="cine-display text-[11px] uppercase tracking-[0.32em] text-[color:var(--cine-amber)]">
-            Os Quatro Reinos
-          </p>
-          <h2 className="cine-display mt-3 max-w-xl text-3xl tracking-wide text-[color:var(--cine-ink)] sm:text-4xl">
-            Brasões do mapa interior
-          </h2>
-          <p className="mt-4 max-w-lg text-sm leading-relaxed text-[color:var(--cine-muted)]">
-            Cada arquétipo pertence a um reino. Seu resultado revela qual selo
-            carrega mais peso — e quais o equilibram.
-          </p>
-          <ul className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-            {REINOS.map((realm, i) => (
-              <motion.li
-                key={realm.title}
-                initial={reduce ? false : { opacity: 0, y: 14 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: "-40px" }}
-                transition={{ duration: 0.55, ease: EASE, delay: i * 0.05 }}
-                className="cine-card flex min-h-[200px] flex-col items-center rounded-sm px-5 py-8 text-center"
-              >
-                <realm.icon
-                  size={22}
-                  style={{ color: realm.accent }}
-                  aria-hidden
-                />
-                <p
-                  className="cine-display mt-4 text-xs tracking-[0.28em]"
-                  style={{ color: realm.accent }}
+        {/* Provações */}
+        <section id="provacoes" className="relative z-10 scroll-mt-24 px-5 py-20">
+          <div className="mx-auto max-w-5xl">
+            <MedievalDivider />
+            <p className="cine-display mt-6 text-[11px] uppercase tracking-[0.32em] text-[color:var(--cine-amber)]">
+              As Três Provações
+            </p>
+            <h2 className="cine-display mt-3 max-w-xl text-3xl tracking-wide text-[color:var(--cine-ink)] sm:text-4xl">
+              O caminho pelo grimório
+            </h2>
+            <ul className="mt-12 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 lg:grid-rows-2">
+              {PROVACOES.map((item, i) => (
+                <motion.li
+                  key={item.n}
+                  initial={reduce ? false : { opacity: 0, y: 14 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, margin: "-40px" }}
+                  transition={{ duration: 0.55, ease: EASE, delay: i * 0.06 }}
+                  className={item.span}
                 >
-                  REINO {realm.seal}
-                </p>
-                <h3 className="cine-display mt-3 text-lg tracking-wide text-[color:var(--cine-amber-soft)]">
-                  {realm.title}
-                </h3>
-                <p className="mt-3 text-xs leading-relaxed text-[color:var(--cine-muted)]">
-                  {realm.body}
-                </p>
-              </motion.li>
-            ))}
-          </ul>
-        </div>
-      </section>
+                  <OrnateCorners
+                    className={`cine-card h-full rounded-sm p-6 ${
+                      i === 0 ? "lg:flex lg:flex-col lg:justify-between" : ""
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <item.icon
+                        size={20}
+                        className="text-[color:var(--cine-amber)]"
+                        aria-hidden
+                      />
+                      <span className="cine-display text-2xl text-[color:var(--cine-amber)]/65">
+                        {item.n}
+                      </span>
+                    </div>
+                    <div>
+                      <h3
+                        className={`cine-display mt-5 tracking-wide text-[color:var(--cine-ink)] ${
+                          i === 0 ? "text-2xl lg:text-3xl" : "text-lg"
+                        }`}
+                      >
+                        {item.title}
+                      </h3>
+                      <p
+                        className={`mt-2 leading-relaxed text-[color:var(--cine-muted)] ${
+                          i === 0 ? "text-base" : "text-sm"
+                        }`}
+                      >
+                        {item.body}
+                      </p>
+                    </div>
+                  </OrnateCorners>
+                </motion.li>
+              ))}
+            </ul>
+          </div>
+        </section>
 
-      {/* Glass final CTA */}
-      <section
-        id="teste"
-        className="scroll-mt-24 border-t border-[color:var(--cine-border-soft)] px-5 py-20"
-      >
-        <motion.div
-          initial={reduce ? false : { opacity: 0, y: 16 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6, ease: EASE }}
-          className="cine-glass-strong mx-auto max-w-xl rounded-sm px-6 py-12 text-center"
-        >
-          <p className="cine-display text-[11px] uppercase tracking-[0.32em] text-[color:var(--cine-amber)]">
-            Abrir o grimório
-          </p>
-          <h2 className="cine-display cine-title-amber mt-4 text-3xl tracking-wide">
-            Pronto para a revelação?
-          </h2>
-          <p className="mt-4 text-sm text-[color:var(--cine-muted)]">
-            Doze perguntas. Três provações. Um brasão dominante.
-          </p>
-          <button
-            type="button"
-            onClick={onStart}
-            className="cine-cta mt-8 inline-flex items-center gap-3 rounded-sm px-8 py-3.5 text-sm font-semibold"
+        <MedievalDivider className="relative z-10" />
+
+        {/* Reinos */}
+        <section id="reinos" className="relative z-10 scroll-mt-24 px-5 py-20">
+          <div className="mx-auto max-w-5xl">
+            <p className="cine-display text-[11px] uppercase tracking-[0.32em] text-[color:var(--cine-amber)]">
+              Os Quatro Reinos
+            </p>
+            <h2 className="cine-display mt-3 max-w-xl text-3xl tracking-wide text-[color:var(--cine-ink)] sm:text-4xl">
+              Brasões do mapa interior
+            </h2>
+            <p className="mt-4 max-w-lg text-sm leading-relaxed text-[color:var(--cine-muted)]">
+              Cada arquétipo pertence a um reino. Seu resultado revela qual selo
+              carrega mais peso — e quais o equilibram.
+            </p>
+            <ul className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+              {REINOS.map((realm, i) => (
+                <motion.li
+                  key={realm.title}
+                  initial={reduce ? false : { opacity: 0, y: 14 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, margin: "-40px" }}
+                  transition={{ duration: 0.55, ease: EASE, delay: i * 0.05 }}
+                >
+                  <OrnateCorners className="cine-card flex min-h-[220px] flex-col items-center rounded-sm px-5 py-8 text-center">
+                    <RealmMedallion accent={realm.accent} shape={realm.shape}>
+                      <realm.icon size={20} aria-hidden />
+                    </RealmMedallion>
+                    <p
+                      className="cine-display mt-5 text-xs tracking-[0.28em]"
+                      style={{ color: realm.accent }}
+                    >
+                      REINO {realm.seal}
+                    </p>
+                    <h3 className="cine-display mt-3 text-lg tracking-wide text-[color:var(--cine-amber-soft)]">
+                      {realm.title}
+                    </h3>
+                    <p className="mt-3 text-xs leading-relaxed text-[color:var(--cine-muted)]">
+                      {realm.body}
+                    </p>
+                  </OrnateCorners>
+                </motion.li>
+              ))}
+            </ul>
+          </div>
+        </section>
+
+        <MedievalDivider className="relative z-10" />
+
+        {/* Glass altar final CTA */}
+        <section id="teste" className="relative z-10 scroll-mt-24 px-5 py-20">
+          <motion.div
+            initial={reduce ? false : { opacity: 0, y: 16 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6, ease: EASE }}
+            className="mx-auto max-w-xl"
           >
-            <Shield size={16} aria-hidden />
-            Começar Teste
-          </button>
-        </motion.div>
-      </section>
+            <OrnateCorners className="cine-glass-strong rounded-sm px-6 py-12 text-center">
+              <p className="cine-display text-[11px] uppercase tracking-[0.32em] text-[color:var(--cine-amber)]">
+                Altar do grimório
+              </p>
+              <h2 className="cine-display cine-title-amber mt-4 text-3xl tracking-wide">
+                Pronto para a revelação?
+              </h2>
+              <p className="mt-4 text-sm text-[color:var(--cine-muted)]">
+                Doze perguntas. Três provações. Um brasão dominante.
+              </p>
+              <button
+                type="button"
+                onClick={onStart}
+                className="cine-cta mt-8 inline-flex items-center gap-3 rounded-sm px-8 py-3.5 text-sm font-semibold"
+              >
+                <Shield size={16} aria-hidden />
+                Começar Teste
+              </button>
+            </OrnateCorners>
+          </motion.div>
+        </section>
+      </div>
     </div>
   );
 }

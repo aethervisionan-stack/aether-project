@@ -3,6 +3,7 @@
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ChevronLeft } from "lucide-react";
 import { QUESTIONS, TOTAL_QUESTIONS, type Question } from "@/src/data/archetypes";
+import { OrnateCorners, SanctuaryBackdrop } from "./CinematicChrome";
 
 type Props = {
   index: number;
@@ -20,8 +21,9 @@ export function QuizFlow({ index, answers, onSelect, onBack }: Props) {
   const selected = answers[question.id];
 
   return (
-    <section className="cart-atmosphere cart-topo relative mx-auto flex min-h-[100dvh] w-full max-w-lg flex-col px-5 pb-8 pt-6">
-      <div className="mb-6 flex items-center gap-3">
+    <section className="cine-sanctuary-band relative mx-auto flex min-h-[100dvh] w-full max-w-lg flex-col px-5 pb-8 pt-6">
+      <SanctuaryBackdrop opacity={0.25} />
+      <div className="relative z-10 mb-6 flex items-center gap-3">
         <button
           type="button"
           onClick={onBack}
@@ -53,7 +55,7 @@ export function QuizFlow({ index, answers, onSelect, onBack }: Props) {
         </div>
       </div>
 
-      <div className="flex flex-1 flex-col justify-center">
+      <div className="relative z-10 flex flex-1 flex-col justify-center">
         <AnimatePresence mode="wait">
           <motion.div
             key={question.id}
@@ -61,40 +63,41 @@ export function QuizFlow({ index, answers, onSelect, onBack }: Props) {
             animate={{ opacity: 1, x: 0 }}
             exit={reduce ? undefined : { opacity: 0, x: -20 }}
             transition={{ duration: 0.38, ease: EASE }}
-            className="cart-card flex flex-col rounded-sm p-5 sm:p-6"
           >
-            <h2 className="cart-display text-[1.35rem] leading-snug tracking-wide text-[color:var(--cart-ink)] sm:text-[1.55rem]">
-              {question.text}
-            </h2>
+            <OrnateCorners className="cart-card flex flex-col rounded-sm p-5 sm:p-6">
+              <h2 className="cart-display text-[1.35rem] leading-snug tracking-wide text-[color:var(--cart-ink)] sm:text-[1.55rem]">
+                {question.text}
+              </h2>
 
-            <ul className="mt-8 flex flex-col gap-3">
-              {question.options.map((option, i) => {
-                const isSelected = selected === option.id;
-                return (
-                  <li key={option.id}>
-                    <motion.button
-                      type="button"
-                      initial={reduce ? false : { opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{
-                        duration: 0.35,
-                        ease: EASE,
-                        delay: reduce ? 0 : 0.05 + i * 0.04,
-                      }}
-                      onClick={() => onSelect(question.id, option.id)}
-                      className={`cart-option w-full rounded-sm px-4 py-4 text-left text-[0.95rem] leading-snug ${
-                        isSelected ? "cart-option-active" : ""
-                      }`}
-                    >
-                      <span className="cart-display mr-3 inline-block text-sm text-[color:var(--cart-copper)]">
-                        {option.letter}
-                      </span>
-                      {option.text}
-                    </motion.button>
-                  </li>
-                );
-              })}
-            </ul>
+              <ul className="mt-8 flex flex-col gap-3">
+                {question.options.map((option, i) => {
+                  const isSelected = selected === option.id;
+                  return (
+                    <li key={option.id}>
+                      <motion.button
+                        type="button"
+                        initial={reduce ? false : { opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{
+                          duration: 0.35,
+                          ease: EASE,
+                          delay: reduce ? 0 : 0.05 + i * 0.04,
+                        }}
+                        onClick={() => onSelect(question.id, option.id)}
+                        className={`cart-option w-full rounded-sm px-4 py-4 text-left text-[0.95rem] leading-snug ${
+                          isSelected ? "cart-option-active" : ""
+                        }`}
+                      >
+                        <span className="cart-display mr-3 inline-block text-sm text-[color:var(--cart-copper)]">
+                          {option.letter}
+                        </span>
+                        {option.text}
+                      </motion.button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </OrnateCorners>
           </motion.div>
         </AnimatePresence>
       </div>
