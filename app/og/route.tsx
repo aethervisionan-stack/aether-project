@@ -61,6 +61,8 @@ export async function GET(request: Request) {
         />
 
         <div style={{ display: "flex", alignItems: "center", gap: 22 }}>
+          {/* next/og ImageResponse requires <img>; next/image is not supported here */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={`${origin}/logo.png`}
             width={76}

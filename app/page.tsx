@@ -1,19 +1,19 @@
-import { Cormorant_Garamond, Karla } from "next/font/google";
+import localFont from "next/font/local";
 import type { Metadata, Viewport } from "next";
 import { ArchetypeQuizApp } from "@/components/arquetipos/ArchetypeQuizApp";
 
-const display = Cormorant_Garamond({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+const display = localFont({
+  src: "./fonts/CormorantGaramond-Regular.ttf",
   variable: "--font-arq-display",
   display: "swap",
+  weight: "400 700",
 });
 
-const sans = Karla({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+const sans = localFont({
+  src: "./fonts/Karla-Regular.ttf",
   variable: "--font-arq-sans",
   display: "swap",
+  weight: "400 700",
 });
 
 export const viewport: Viewport = {
@@ -26,7 +26,7 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   title: "Arquétipo — Descubra o arquétipo que guia sua essência",
   description:
-    "Teste gratuito dos 12 arquétipos junguianos em português. Em menos de 2 minutos, descubra seu arquétipo dominante e como posicioná-lo na vida e nos negócios.",
+    "Landing e teste gratuito dos 12 arquétipos junguianos em português. Em menos de 2 minutos, descubra seu arquétipo dominante e como posicioná-lo na vida e nos negócios.",
   alternates: { canonical: "/" },
   openGraph: {
     title: "Arquétipo — Quiz dos 12 arquétipos junguianos",

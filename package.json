@@ -3,13 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "engines": {
-    "node": "26.x"
+    "node": ">=20"
   },
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "typecheck": "tsc --noEmit",
     "token:metadata": "tsx scripts/register-vision-metadata.ts",
     "token:audit": "tsx scripts/audit-vision-mint.ts",
     "token:restore": "tsx scripts/restore-phantom-ata.ts",

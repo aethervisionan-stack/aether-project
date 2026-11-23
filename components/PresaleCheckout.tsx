@@ -601,6 +601,8 @@ export function PresaleCheckout() {
               <p className="text-sm leading-relaxed text-muted">
                 {t.checkout.pixHint}
               </p>
+              {/* Dynamic third-party QR URL; next/image domain config not worth the coupling */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 alt="PIX QR"
                 className="mx-auto mt-4 h-44 w-44 rounded-xl bg-white p-2"

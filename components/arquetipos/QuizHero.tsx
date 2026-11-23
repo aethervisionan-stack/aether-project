@@ -21,7 +21,10 @@ export function QuizHero({ onStart }: Props) {
   const animateIn = ready && !reduce;
 
   return (
-    <section className="relative flex min-h-[100dvh] flex-col justify-end overflow-hidden px-5 pb-16 pt-24 sm:justify-center sm:pb-24 sm:pt-20">
+    <section
+      id="topo"
+      className="relative flex min-h-[100dvh] flex-col justify-end overflow-hidden px-5 pb-16 pt-28 sm:justify-center sm:pb-24 sm:pt-28"
+    >
       {/* Atmosphere — full-bleed gradient plane */}
       <div className="pointer-events-none absolute inset-0" aria-hidden>
         <div className="absolute inset-0 bg-[#07070b]" />
