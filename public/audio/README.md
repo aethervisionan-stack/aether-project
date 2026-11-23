@@ -3,9 +3,9 @@
 Preferred lobby loop for `MedievalAudioPlayer`:
 
 - Path: `/audio/dark-and-darker-lobby.mp3`
-- Behavior: seamless loop with 2s fade-in to volume `0.35`
+- Behavior: `loop` + `preload="auto"`, fade-in 0 → selected volume (default `0.35`) over **1.5s**
 
-If this file is missing or errors, the player falls back to a continuous
-Web Audio plucked lute/guitar arpeggio: **Gm → Eb → F → Ebmaj7** at **63 BPM**.
-
-Optional legacy path (unused by current player): `medieval-ambience.mp3`.
+If this file is missing, the UI shows a discrete tip  
+`Adicione dark-and-darker-lobby.mp3 em public/audio/`  
+and falls back to a continuous Web Audio plucked lute arpeggio:  
+**Gm → Eb → F → Ebmaj7** at **63 BPM** (no crash).

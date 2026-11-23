@@ -1,6 +1,6 @@
 "use client";
 
-import { Volume2, VolumeX } from "lucide-react";
+import { Flame, Volume2, VolumeX } from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -14,11 +14,12 @@ import {
 } from "@/src/utils/soundEffects";
 
 const TARGET_VOL = 0.35;
-const FADE_MS = 2000;
+const FADE_MS = 1500;
 const EVENT = "start-medieval-audio";
 const MP3 = "/audio/dark-and-darker-lobby.mp3";
+const MISSING_TIP = "Adicione dark-and-darker-lobby.mp3 em public/audio/";
 const BPM = 63;
-const BEAT = 60 / BPM; // ≈ 0.952s
+const BEAT = 60 / BPM;
 
 /** Gm — Eb — F — Ebmaj7 plucked lute/guitar arpeggio (Hz) */
 const PROGRESSION: number[][] = [
@@ -52,7 +53,6 @@ function pluck(
   const filter = ctx.createBiquadFilter();
   osc.type = "triangle";
   osc.frequency.setValueAtTime(freq, when);
-  // slight string decay pitch droop
   osc.frequency.exponentialRampToValueAtTime(freq * 0.985, when + 0.45);
   filter.type = "lowpass";
   filter.frequency.setValueAtTime(2200, when);
@@ -74,6 +74,8 @@ export function MedievalAudioPlayer() {
   const [volume, setVolume] = useState(TARGET_VOL);
   const [hoverVol, setHoverVol] = useState(false);
   const [readyHint, setReadyHint] = useState(false);
+  const [missingMp3, setMissingMp3] = useState(false);
+  const [showTip, setShowTip] = useState(false);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const ctxRef = useRef<AudioContext | null>(null);
@@ -88,6 +90,7 @@ export function MedievalAudioPlayer() {
   const scheduleTimerRef = useRef<number | null>(null);
   const fadeRafRef = useRef<number | null>(null);
   const fadeTimeoutRef = useRef<number | null>(null);
+  const tipTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     volumeRef.current = volume;
@@ -106,6 +109,13 @@ export function MedievalAudioPlayer() {
     window.addEventListener("medieval-audio-mute-change", onMute);
     return () =>
       window.removeEventListener("medieval-audio-mute-change", onMute);
+  }, []);
+
+  const flashMissingTip = useCallback(() => {
+    setMissingMp3(true);
+    setShowTip(true);
+    if (tipTimerRef.current != null) window.clearTimeout(tipTimerRef.current);
+    tipTimerRef.current = window.setTimeout(() => setShowTip(false), 6000);
   }, []);
 
   const clearFades = useCallback(() => {
@@ -141,7 +151,7 @@ export function MedievalAudioPlayer() {
         const freq = chord[noteIdxRef.current % chord.length];
         const when = nextNoteRef.current;
         pluck(ctx, master, freq, when, 0.13);
-        nextNoteRef.current = when + BEAT / 2; // eighth notes @ 63 BPM
+        nextNoteRef.current = when + BEAT / 2;
         noteIdxRef.current += 1;
         if (noteIdxRef.current >= chord.length) {
           noteIdxRef.current = 0;
@@ -220,7 +230,7 @@ export function MedievalAudioPlayer() {
 
   const startMp3 = useCallback(async (target: number) => {
     let el = audioRef.current;
-    if (!el || el.src.indexOf("dark-and-darker-lobby") === -1) {
+    if (!el || !el.src.includes("dark-and-darker-lobby")) {
       el = new Audio(MP3);
       el.loop = true;
       el.preload = "auto";
@@ -252,10 +262,8 @@ export function MedievalAudioPlayer() {
 
     modeRef.current = "mp3";
     el.volume = 0;
-    el.onerror = () => {
-      /* runtime decode failure → caller already past load; ignore here */
-    };
     await el.play();
+    setMissingMp3(false);
     setPlaying(true);
     setReadyHint(true);
     const t0 = performance.now();
@@ -280,7 +288,7 @@ export function MedievalAudioPlayer() {
       await startMp3(target);
       return;
     } catch {
-      /* onError / missing → Web Audio Gm lute arpeggio */
+      flashMissingTip();
     }
 
     try {
@@ -292,7 +300,7 @@ export function MedievalAudioPlayer() {
     } catch {
       setPlaying(false);
     }
-  }, [clearFades, ensureWebAmbience, startMp3]);
+  }, [clearFades, ensureWebAmbience, flashMissingTip, startMp3]);
 
   const toggle = useCallback(() => {
     if (playing) {
@@ -315,6 +323,7 @@ export function MedievalAudioPlayer() {
   useEffect(() => {
     return () => {
       clearFades();
+      if (tipTimerRef.current != null) window.clearTimeout(tipTimerRef.current);
       audioRef.current?.pause();
       stopWeb();
       void ctxRef.current?.close();
@@ -336,7 +345,11 @@ export function MedievalAudioPlayer() {
     }
   }
 
-  const showMutedIcon = muted || !playing;
+  const active = playing && !muted;
+  const label =
+    active || readyHint
+      ? "Lobby • Dark & Darker"
+      : "Tocar Tema do Lobby";
 
   return (
     <div
@@ -344,28 +357,35 @@ export function MedievalAudioPlayer() {
       onMouseEnter={() => setHoverVol(true)}
       onMouseLeave={() => setHoverVol(false)}
     >
+      {(showTip || (missingMp3 && hoverVol && !active)) && (
+        <p
+          role="status"
+          className="mb-2 max-w-[16rem] rounded-sm border border-[color:var(--cine-border-soft)] bg-[color:var(--cine-void)]/90 px-2.5 py-1.5 text-[10px] leading-snug text-[color:var(--cine-muted)] shadow-lg backdrop-blur-md"
+        >
+          {MISSING_TIP}
+        </p>
+      )}
+
       <div className="cine-glass flex items-center gap-2.5 rounded-full border border-[color:var(--cine-border-soft)] px-3.5 py-2.5 shadow-[0_12px_40px_rgba(0,0,0,0.45)]">
         <button
           type="button"
           onClick={toggle}
           className="flex items-center gap-2 text-[color:var(--cine-ink)] transition hover:text-[color:var(--cine-amber-soft)]"
-          aria-label={playing ? "Silenciar trilha" : "Ativar trilha"}
+          aria-label={active ? "Pausar tema do lobby" : "Tocar tema do lobby"}
         >
-          {showMutedIcon ? (
+          {muted && !playing ? (
             <VolumeX size={16} className="text-[color:var(--cine-muted)]" />
+          ) : active ? (
+            <Flame size={16} className="text-[color:var(--cine-amber)]" />
           ) : (
-            <Volume2 size={16} className="text-[color:var(--cine-amber)]" />
+            <Volume2 size={16} className="text-[color:var(--cine-muted)]" />
           )}
-          <span className="cine-display hidden text-[10px] uppercase tracking-[0.18em] sm:inline">
-            {playing && !muted
-              ? "Taverna Sombria"
-              : readyHint || muted
-                ? "Taverna Sombria"
-                : "Ativar Trilha"}
+          <span className="cine-display hidden text-[10px] uppercase tracking-[0.16em] sm:inline">
+            {label}
           </span>
         </button>
 
-        {playing && !muted && (
+        {active && (
           <span className="cine-eq flex h-3 items-end gap-[2px]" aria-hidden>
             <i className="cine-eq-bar cine-eq-1" />
             <i className="cine-eq-bar cine-eq-2" />
