@@ -5,6 +5,7 @@ import {
   SITE_TITLE,
   SITE_URL,
 } from "@/lib/site";
+import { AetherProviders } from "./providers";
 
 export const metadata: Metadata = {
   title: SITE_TITLE,
@@ -21,5 +22,5 @@ export const metadata: Metadata = {
 export default function AetherLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  return children;
+  return <AetherProviders>{children}</AetherProviders>;
 }

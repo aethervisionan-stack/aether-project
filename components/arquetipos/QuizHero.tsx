@@ -2,6 +2,7 @@
 
 import { motion, useReducedMotion } from "framer-motion";
 import { ArrowRight } from "lucide-react";
+import { useEffect, useState } from "react";
 
 type Props = {
   onStart: () => void;
@@ -11,6 +12,13 @@ const EASE = [0.22, 1, 0.36, 1] as const;
 
 export function QuizHero({ onStart }: Props) {
   const reduce = useReducedMotion();
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    setReady(true);
+  }, []);
+
+  const animateIn = ready && !reduce;
 
   return (
     <section className="relative flex min-h-[100dvh] flex-col justify-end overflow-hidden px-5 pb-16 pt-24 sm:justify-center sm:pb-24 sm:pt-20">
@@ -49,7 +57,7 @@ export function QuizHero({ onStart }: Props) {
 
       <div className="relative mx-auto w-full max-w-3xl">
         <motion.p
-          initial={reduce ? false : { opacity: 0, y: 16 }}
+          initial={animateIn ? { opacity: 0, y: 16 } : false}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, ease: EASE }}
           className="font-[family-name:var(--font-arq-display)] text-[clamp(2.75rem,12vw,5.5rem)] leading-[0.9] tracking-[-0.03em] text-[#F3EDE0]"
@@ -58,7 +66,7 @@ export function QuizHero({ onStart }: Props) {
         </motion.p>
 
         <motion.h1
-          initial={reduce ? false : { opacity: 0, y: 20 }}
+          initial={animateIn ? { opacity: 0, y: 20 } : false}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.75, ease: EASE, delay: 0.08 }}
           className="mt-6 max-w-2xl font-[family-name:var(--font-arq-display)] text-[clamp(1.45rem,4.2vw,2.15rem)] font-medium leading-[1.2] tracking-[-0.02em] text-[#F3EDE0]/92"
@@ -67,7 +75,7 @@ export function QuizHero({ onStart }: Props) {
         </motion.h1>
 
         <motion.p
-          initial={reduce ? false : { opacity: 0, y: 16 }}
+          initial={animateIn ? { opacity: 0, y: 16 } : false}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, ease: EASE, delay: 0.16 }}
           className="mt-5 max-w-md text-base leading-relaxed text-[#F3EDE0]/55"
@@ -77,7 +85,7 @@ export function QuizHero({ onStart }: Props) {
         </motion.p>
 
         <motion.div
-          initial={reduce ? false : { opacity: 0, y: 16 }}
+          initial={animateIn ? { opacity: 0, y: 16 } : false}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, ease: EASE, delay: 0.24 }}
           className="mt-10"
