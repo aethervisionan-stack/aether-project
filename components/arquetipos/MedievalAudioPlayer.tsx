@@ -8,6 +8,10 @@ import {
   useState,
   type ChangeEvent,
 } from "react";
+import {
+  isMedievalAudioMuted,
+  setMedievalAudioMuted,
+} from "@/src/utils/soundEffects";
 
 const TARGET_VOL = 0.35;
 const FADE_MS = 2000;
@@ -15,7 +19,7 @@ const EVENT = "start-medieval-audio";
 const MP3 = "/audio/medieval-ambience.mp3";
 
 /** Soft D-minor / Dorian drones for ethereal fallback ambience */
-const DORIAN_HZ = [146.83, 174.61, 220.0, 293.66]; // D3 A3 A3 D4-ish cluster
+const DORIAN_HZ = [146.83, 174.61, 220.0, 293.66];
 
 function rampGain(
   gain: GainNode,
@@ -31,6 +35,7 @@ function rampGain(
 
 export function MedievalAudioPlayer() {
   const [playing, setPlaying] = useState(false);
+  const [muted, setMuted] = useState(false);
   const [volume, setVolume] = useState(TARGET_VOL);
   const [hoverVol, setHoverVol] = useState(false);
   const [readyHint, setReadyHint] = useState(false);
@@ -41,12 +46,27 @@ export function MedievalAudioPlayer() {
   const oscRef = useRef<OscillatorNode[]>([]);
   const modeRef = useRef<"mp3" | "web" | null>(null);
   const volumeRef = useRef(TARGET_VOL);
+  const playingRef = useRef(false);
   const fadeRafRef = useRef<number | null>(null);
   const fadeTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     volumeRef.current = volume;
   }, [volume]);
+
+  useEffect(() => {
+    playingRef.current = playing;
+  }, [playing]);
+
+  useEffect(() => {
+    setMuted(isMedievalAudioMuted());
+    const onMute = (e: Event) => {
+      const detail = (e as CustomEvent<{ muted: boolean }>).detail;
+      if (detail) setMuted(detail.muted);
+    };
+    window.addEventListener("medieval-audio-mute-change", onMute);
+    return () => window.removeEventListener("medieval-audio-mute-change", onMute);
+  }, []);
 
   const clearFades = useCallback(() => {
     if (fadeRafRef.current != null) {
@@ -147,10 +167,11 @@ export function MedievalAudioPlayer() {
 
   const fadeInPlay = useCallback(async () => {
     clearFades();
+    setMedievalAudioMuted(false);
+    setMuted(false);
 
     const target = volumeRef.current;
 
-    // Prefer MP3 loop when file exists
     try {
       let el = audioRef.current;
       if (!el) {
@@ -199,7 +220,7 @@ export function MedievalAudioPlayer() {
       fadeRafRef.current = window.requestAnimationFrame(step);
       return;
     } catch {
-      /* fall through to Web Audio */
+      /* Web Audio fallback */
     }
 
     try {
@@ -214,17 +235,22 @@ export function MedievalAudioPlayer() {
   }, [clearFades, ensureWebAmbience]);
 
   const toggle = useCallback(() => {
-    if (playing) fadeOutAndPause();
-    else void fadeInPlay();
+    if (playing) {
+      setMedievalAudioMuted(true);
+      setMuted(true);
+      fadeOutAndPause();
+    } else {
+      void fadeInPlay();
+    }
   }, [playing, fadeOutAndPause, fadeInPlay]);
 
   useEffect(() => {
     const onStart = () => {
-      if (!playing) void fadeInPlay();
+      if (!playingRef.current) void fadeInPlay();
     };
     window.addEventListener(EVENT, onStart);
     return () => window.removeEventListener(EVENT, onStart);
-  }, [playing, fadeInPlay]);
+  }, [fadeInPlay]);
 
   useEffect(() => {
     return () => {
@@ -250,6 +276,8 @@ export function MedievalAudioPlayer() {
     }
   }
 
+  const showMutedIcon = muted || !playing;
+
   return (
     <div
       className="fixed bottom-4 right-4 z-[60] sm:bottom-6 sm:right-6"
@@ -261,19 +289,23 @@ export function MedievalAudioPlayer() {
           type="button"
           onClick={toggle}
           className="flex items-center gap-2 text-[color:var(--cine-ink)] transition hover:text-[color:var(--cine-amber-soft)]"
-          aria-label={playing ? "Pausar trilha" : "Ativar som"}
+          aria-label={playing ? "Silenciar trilha" : "Ativar som"}
         >
-          {playing ? (
-            <Volume2 size={16} className="text-[color:var(--cine-amber)]" />
-          ) : (
+          {showMutedIcon ? (
             <VolumeX size={16} className="text-[color:var(--cine-muted)]" />
+          ) : (
+            <Volume2 size={16} className="text-[color:var(--cine-amber)]" />
           )}
           <span className="cine-display hidden text-[10px] uppercase tracking-[0.18em] sm:inline">
-            {playing || readyHint ? "Trilha Arcana" : "Ativar Som"}
+            {playing && !muted
+              ? "Trilha Arcana"
+              : readyHint || muted
+                ? "Trilha Arcana"
+                : "Ativar Som"}
           </span>
         </button>
 
-        {playing && (
+        {playing && !muted && (
           <span className="cine-eq flex h-3 items-end gap-[2px]" aria-hidden>
             <i className="cine-eq-bar cine-eq-1" />
             <i className="cine-eq-bar cine-eq-2" />

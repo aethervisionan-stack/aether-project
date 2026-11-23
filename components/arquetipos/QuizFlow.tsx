@@ -3,6 +3,7 @@
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ChevronLeft } from "lucide-react";
 import { QUESTIONS, TOTAL_QUESTIONS, type Question } from "@/src/data/archetypes";
+import { playParchmentClick } from "@/src/utils/soundEffects";
 import { OrnateCorners, SanctuaryBackdrop } from "./CinematicChrome";
 
 type Props = {
@@ -83,7 +84,10 @@ export function QuizFlow({ index, answers, onSelect, onBack }: Props) {
                           ease: EASE,
                           delay: reduce ? 0 : 0.05 + i * 0.04,
                         }}
-                        onClick={() => onSelect(question.id, option.id)}
+                        onClick={() => {
+                          playParchmentClick();
+                          onSelect(question.id, option.id);
+                        }}
                         className={`cart-option w-full rounded-sm px-4 py-4 text-left text-[0.95rem] leading-snug ${
                           isSelected ? "cart-option-active" : ""
                         }`}

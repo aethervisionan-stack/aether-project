@@ -7,6 +7,7 @@ import {
   calculateResult,
   scoreAnswers,
 } from "@/src/data/archetypes";
+import { playStageChime } from "@/src/utils/soundEffects";
 import { LandingFooter } from "./LandingFooter";
 import { LandingHeader } from "./LandingHeader";
 import { MedievalAudioPlayer } from "./MedievalAudioPlayer";
@@ -59,7 +60,12 @@ export function ArchetypeQuizApp() {
       if (index >= QUESTIONS.length - 1) {
         finishQuiz();
       } else {
-        setIndex((i) => i + 1);
+        const next = index + 1;
+        // Stage milestones: Marco 5 (index 4) and Marco 9 (index 8)
+        if (next === 4 || next === 8) {
+          playStageChime();
+        }
+        setIndex(next);
       }
     }, ADVANCE_MS);
   }

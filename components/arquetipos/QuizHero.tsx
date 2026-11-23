@@ -19,6 +19,7 @@ import {
   RealmMedallion,
   SanctuaryBackdrop,
 } from "./CinematicChrome";
+import { playStageChime } from "@/src/utils/soundEffects";
 import { dispatchMedievalAudioStart } from "./MedievalAudioPlayer";
 
 type Props = {
@@ -98,6 +99,7 @@ export function QuizHero({ onStart }: Props) {
         };
 
   function beginJourney() {
+    playStageChime();
     dispatchMedievalAudioStart();
     onStart();
   }

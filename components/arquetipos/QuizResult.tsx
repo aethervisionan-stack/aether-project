@@ -2,7 +2,7 @@
 
 import { motion, useReducedMotion } from "framer-motion";
 import { Check, Copy, RotateCcw, ScrollText } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   TOTAL_QUESTIONS,
   buildIntro,
@@ -10,6 +10,7 @@ import {
   joinPt,
   type NarrativeResult,
 } from "@/src/data/archetypes";
+import { playRevealChord } from "@/src/utils/soundEffects";
 import { OrnateCorners, SanctuaryBackdrop } from "./CinematicChrome";
 
 type Props = {
@@ -24,6 +25,10 @@ export function QuizResult({ result, onRestart }: Props) {
   const [copied, setCopied] = useState(false);
   const intro = useMemo(() => buildIntro(result), [result]);
   const principal = result.primary;
+
+  useEffect(() => {
+    playRevealChord();
+  }, []);
 
   async function copyResult() {
     try {
