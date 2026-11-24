@@ -51,16 +51,25 @@ export async function GET(_req: Request, ctx: Ctx) {
       status?: number;
       code?: string;
       description?: string;
+      bodyPreview?: string;
+      parameterName?: string;
     };
-    const message =
-      err instanceof Error ? err.message : "Status failed";
+    const status =
+      typeof apiErr.status === "number" ? apiErr.status : 502;
+    const code = apiErr.code || `HTTP_${status}`;
+    const description =
+      apiErr.description ||
+      (err instanceof Error ? err.message : "Status failed");
     return NextResponse.json(
       {
-        error: message,
-        code: apiErr.code,
-        description: apiErr.description,
+        error: `${code}: ${description}`,
+        code,
+        description,
+        parameterName: apiErr.parameterName,
+        bodyPreview: apiErr.bodyPreview,
+        httpStatus: status,
       },
-      { status: typeof apiErr.status === "number" ? apiErr.status : 502 },
+      { status },
     );
   }
 }

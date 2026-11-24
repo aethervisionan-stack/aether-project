@@ -25,6 +25,9 @@ export function pagbankToken(): string | undefined {
     raw = raw.replace(/^Bearer\s+/i, "").trim();
   }
 
+  // Remove accidental whitespace/newlines from dashboard paste
+  raw = raw.replace(/\s+/g, "");
+
   return raw || undefined;
 }
 

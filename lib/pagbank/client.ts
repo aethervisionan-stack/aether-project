@@ -25,6 +25,9 @@ export type PagbankApiError = Error & {
   status?: number;
   code?: string;
   description?: string;
+  /** Truncated PagBank response text — never contains our token */
+  bodyPreview?: string;
+  parameterName?: string;
 };
 
 type Json = Record<string, unknown>;
@@ -42,6 +45,7 @@ function asArray(v: unknown): unknown[] {
 function pickString(...vals: unknown[]): string | null {
   for (const v of vals) {
     if (typeof v === "string" && v.trim()) return v.trim();
+    if (typeof v === "number" && Number.isFinite(v)) return String(v);
   }
   return null;
 }
@@ -57,10 +61,12 @@ function authHeaders(): HeadersInit {
     Authorization: `Bearer ${token}`,
     Accept: "application/json",
     "Content-Type": "application/json",
+    // Prefer uncompressed JSON so error bodies are always readable on serverless
+    "Accept-Encoding": "identity",
   };
 }
 
-/** ISO-8601 expiration for charges.payment_method.pix.expiration_date */
+/** ISO-8601 expiration for PIX QR (PagBank accepts Z or offset). */
 function expirationIso(hours = 2): string {
   return new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
 }
@@ -111,30 +117,96 @@ function normalizeChargeStatus(raw: unknown): PagbankStatusResult["status"] {
   return "waiting";
 }
 
-/** Pull code/description from PagBank error shapes (object or error_messages[]). */
+/** Regex fallback when JSON parse fails or shape is unexpected. */
+function regexExtractError(rawText: string): {
+  code?: string;
+  description?: string;
+  parameterName?: string;
+} {
+  if (!rawText) return {};
+  const code =
+    rawText.match(/"code"\s*:\s*"([^"]+)"/i)?.[1] ||
+    rawText.match(/"error"\s*:\s*"([^"]+)"/i)?.[1] ||
+    undefined;
+  const description =
+    rawText.match(/"description"\s*:\s*"([^"]+)"/i)?.[1] ||
+    rawText.match(/"message"\s*:\s*"([^"]+)"/i)?.[1] ||
+    undefined;
+  const parameterName =
+    rawText.match(/"parameter_name"\s*:\s*"([^"]+)"/i)?.[1] || undefined;
+  return { code, description, parameterName };
+}
+
+/**
+ * Pull code/description from every known PagBank error shape.
+ * Docs: { error_messages: [{ code, error, description, parameter_name }] }
+ * Alt:  { code, description }
+ */
 function parsePagbankErrorBody(
   body: Json,
   rawText: string,
-): { code?: string; description?: string; message: string } {
-  const firstErr = asRecord(asArray(body.error_messages)[0]);
-  const code =
-    pickString(body.code, firstErr?.code, firstErr?.error_code) || undefined;
-  const description =
+  httpStatus: number,
+): {
+  code: string;
+  description: string;
+  parameterName?: string;
+  message: string;
+  bodyPreview: string;
+} {
+  const bodyPreview = (rawText || "").slice(0, 800);
+  const messages = asArray(body.error_messages);
+  const firstErr =
+    asRecord(messages[0]) ||
+    asRecord(asArray(body.errors)[0]) ||
+    null;
+
+  let code =
+    pickString(
+      body.code,
+      firstErr?.code,
+      firstErr?.error_code,
+      firstErr?.error,
+      body.error,
+    ) || undefined;
+
+  let description =
     pickString(
       body.description,
       firstErr?.description,
       firstErr?.message,
       body.message,
+      typeof messages[0] === "string" ? messages[0] : null,
     ) || undefined;
 
-  const message =
-    [code, description].filter(Boolean).join(": ") ||
-    description ||
-    code ||
-    (rawText && rawText.length < 400 ? rawText : null) ||
-    "PagBank request failed";
+  let parameterName =
+    pickString(firstErr?.parameter_name, body.parameter_name) || undefined;
 
-  return { code, description, message };
+  if (!code || !description) {
+    const rx = regexExtractError(rawText);
+    code = code || rx.code;
+    description = description || rx.description;
+    parameterName = parameterName || rx.parameterName;
+  }
+
+  // Always expose something actionable — never leave UI with bare "(403)" only
+  if (!code) code = `HTTP_${httpStatus}`;
+  if (!description) {
+    if (!rawText) {
+      description =
+        "Empty body from PagBank (403 often = Orders API whitelist / ACCESS_DENIED). Check Vercel function logs.";
+    } else if (/<!DOCTYPE|<html/i.test(rawText)) {
+      description =
+        "Non-JSON HTML body from upstream (proxy/WAF). See bodyPreview.";
+    } else {
+      description = bodyPreview.slice(0, 280);
+    }
+  }
+
+  const message = parameterName
+    ? `${code}: ${description} (field: ${parameterName})`
+    : `${code}: ${description}`;
+
+  return { code, description, parameterName, message, bodyPreview };
 }
 
 /** Log status + safe headers + body; never Authorization / token values. */
@@ -142,7 +214,7 @@ function logPagbankFailure(
   op: string,
   res: Response,
   rawText: string,
-  parsed: { code?: string; description?: string },
+  parsed: { code: string; description: string; parameterName?: string },
 ) {
   const safeHeaders: Record<string, string> = {};
   res.headers.forEach((value, key) => {
@@ -162,37 +234,56 @@ function logPagbankFailure(
     urlHost,
     apiBase: pagbankApiBase(),
     token: pagbankTokenMeta(),
-    code: parsed.code ?? null,
-    description: parsed.description ?? null,
+    code: parsed.code,
+    description: parsed.description,
+    parameterName: parsed.parameterName ?? null,
     responseHeaders: safeHeaders,
     bodyText: rawText.slice(0, 4000),
   });
 }
 
+function makeApiError(
+  op: string,
+  status: number,
+  parsed: ReturnType<typeof parsePagbankErrorBody>,
+): PagbankApiError {
+  const err = new Error(
+    `PagBank ${op} failed (${status}) ${parsed.message}`,
+  ) as PagbankApiError;
+  err.status = status;
+  err.code = parsed.code;
+  err.description = parsed.description;
+  err.bodyPreview = parsed.bodyPreview;
+  err.parameterName = parsed.parameterName;
+  return err;
+}
+
 /**
- * Official PIX order (charges + payment_method PIX) per PagBank Orders docs.
- * Amount = R$ 3,00 (300). notification_urls only when HTTPS and non-localhost.
- * QR expiration is charges[].payment_method.pix.expiration_date (ISO-8601).
+ * Official PIX order (charges + payment_method PIX) — R$ 3,00.
+ * ASCII-safe customer/item strings; HTTPS notification_urls only (no localhost).
+ * QR expiry: charges[].payment_method.pix.expiration_date (ISO-8601).
+ *
+ * Note: production 403 ACCESS_DENIED is PagBank Orders whitelist (account),
+ * not amount — but invalid tax_id/email usually yield 400 with parameter_name.
  */
 function buildPixOrderPayload() {
   const amount = PAGBANK_UNLOCK_AMOUNT_CENTAVOS;
   const reference = `arq-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const taxId = generateValidCPF();
+  const taxId = generateValidCPF(); // digits-only, checksum-valid
   const expires = expirationIso(2);
   const notify = pagbankNotificationUrl();
 
   const payload: Json = {
     reference_id: reference,
     customer: {
-      name: "Cliente Arquétipo",
-      // Real TLD — @pagador.local was a likely reject risk
-      email: `arquetipo.${taxId.slice(0, 6)}@aether-project-eight.vercel.app`,
+      name: "Jose Silva",
+      email: `cliente.${taxId.slice(0, 6)}@email.com`,
       tax_id: taxId,
       phones: [
         {
           country: "55",
           area: "11",
-          number: "987654321",
+          number: "999999999",
           type: "MOBILE",
         },
       ],
@@ -200,7 +291,7 @@ function buildPixOrderPayload() {
     items: [
       {
         reference_id: "archetype-unlock",
-        name: "Relatorio de Arquétipos",
+        name: "Relatorio de Arquetipos",
         quantity: 1,
         unit_amount: amount,
       },
@@ -240,21 +331,13 @@ export async function createPagbankPixOrder(): Promise<PagbankCreateResult> {
   try {
     body = rawText ? (JSON.parse(rawText) as Json) : {};
   } catch {
-    body = { raw: rawText.slice(0, 500) };
+    body = {};
   }
 
   if (!res.ok) {
-    const parsed = parsePagbankErrorBody(body, rawText);
+    const parsed = parsePagbankErrorBody(body, rawText, res.status);
     logPagbankFailure("create", res, rawText, parsed);
-    const err = new Error(
-      parsed.code
-        ? `PagBank create failed (${res.status}) ${parsed.code}${parsed.description ? `: ${parsed.description}` : ""}`
-        : `PagBank create failed (${res.status})${parsed.description ? `: ${parsed.description}` : ""}`,
-    ) as PagbankApiError;
-    err.status = res.status;
-    err.code = parsed.code;
-    err.description = parsed.description;
-    throw err;
+    throw makeApiError("create", res.status, parsed);
   }
 
   const orderId = pickString(body.id);
@@ -291,17 +374,9 @@ export async function fetchPagbankOrderStatus(
   }
 
   if (!res.ok) {
-    const parsed = parsePagbankErrorBody(body, rawText);
+    const parsed = parsePagbankErrorBody(body, rawText, res.status);
     logPagbankFailure("status", res, rawText, parsed);
-    const err = new Error(
-      parsed.code
-        ? `PagBank status failed (${res.status}) ${parsed.code}${parsed.description ? `: ${parsed.description}` : ""}`
-        : `PagBank status failed (${res.status})${parsed.description ? `: ${parsed.description}` : ""}`,
-    ) as PagbankApiError;
-    err.status = res.status;
-    err.code = parsed.code;
-    err.description = parsed.description;
-    throw err;
+    throw makeApiError("status", res.status, parsed);
   }
 
   let status: PagbankStatusResult["status"] = "waiting";

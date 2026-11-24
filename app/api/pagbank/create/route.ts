@@ -74,16 +74,24 @@ export async function POST() {
     });
   } catch (err) {
     const apiErr = err as PagbankApiError;
-    const message =
-      err instanceof Error ? err.message : "Create failed";
-    // Safe client payload — code/description from PagBank, never secrets
+    const status =
+      typeof apiErr.status === "number" ? apiErr.status : 502;
+    const code = apiErr.code || `HTTP_${status}`;
+    const description =
+      apiErr.description ||
+      (err instanceof Error ? err.message : "Create failed");
+
+    // Always return exact PagBank code/description (+ safe body preview)
     return NextResponse.json(
       {
-        error: message,
-        code: apiErr.code ?? undefined,
-        description: apiErr.description ?? undefined,
+        error: `${code}: ${description}`,
+        code,
+        description,
+        parameterName: apiErr.parameterName || undefined,
+        bodyPreview: apiErr.bodyPreview || undefined,
+        httpStatus: status,
       },
-      { status: typeof apiErr.status === "number" ? apiErr.status : 502 },
+      { status },
     );
   }
 }
