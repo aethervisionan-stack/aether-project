@@ -472,10 +472,8 @@ export function QuizResult({ result, onRestart, locked = false }: Props) {
         </div>
       </motion.div>
 
-      {/* Off-screen share card — only used after unlock download */}
-      {!locked ? (
-        <ShareCardTemplate result={result} cardRef={shareCardRef} />
-      ) : null}
+      {/* Keep share card mounted while locked so Baixar Imagem is ready the instant unlock clears */}
+      <ShareCardTemplate result={result} cardRef={shareCardRef} />
     </section>
   );
 }

@@ -27,6 +27,8 @@ type CreateResponse = {
 type StatusResponse = {
   status?: "waiting" | "paid" | "declined" | "canceled";
   error?: string;
+  code?: string;
+  description?: string;
 };
 
 const EASE = [0.22, 1, 0.36, 1] as const;
@@ -46,15 +48,44 @@ function formatCountdown(totalSeconds: number) {
   return `${mm}:${ss}`;
 }
 
+/** Mobile-friendly clipboard with execCommand fallback when Clipboard API is blocked. */
+async function writeClipboard(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    // fall through
+  }
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.left = "-9999px";
+    ta.style.top = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    ta.setSelectionRange(0, text.length);
+    const ok = document.execCommand("copy");
+    ta.remove();
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Opção 1 paywall overlay — translucent Pix card over the blurred real result.
  * Reuses POST /api/pagbank/create + GET /api/pagbank/status/[orderId] (+ simulate-dev).
- * QR / copia-e-cola / countdown / paid polling live in this component's state.
+ * Polls ~3s; tolerates transient failures; stops on paid / declined / canceled / session expiry.
  */
 export function PaywallScreen({ onUnlocked, visible = true }: Props) {
   const reduce = useReducedMotion();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [expired, setExpired] = useState(false);
   const [orderId, setOrderId] = useState<string | null>(null);
   const [pixCopyPaste, setPixCopyPaste] = useState("");
   const [qrUrl, setQrUrl] = useState<string | null>(null);
@@ -79,6 +110,7 @@ export function PaywallScreen({ onUnlocked, visible = true }: Props) {
     async function createOrder() {
       setLoading(true);
       setError(null);
+      setExpired(false);
       try {
         const res = await fetch("/api/pagbank/create", { method: "POST" });
         const data = (await res.json()) as CreateResponse;
@@ -111,14 +143,23 @@ export function PaywallScreen({ onUnlocked, visible = true }: Props) {
     };
   }, []);
 
+  // Countdown — stop polling when session hits 0
   useEffect(() => {
     if (!polling || unlockedRef.current) return;
     const id = window.setInterval(() => {
-      setSecondsLeft((prev) => (prev > 0 ? prev - 1 : 0));
+      setSecondsLeft((prev) => {
+        if (prev <= 1) {
+          setPolling(false);
+          setExpired(true);
+          return 0;
+        }
+        return prev - 1;
+      });
     }, 1000);
     return () => window.clearInterval(id);
   }, [polling]);
 
+  // ~3s status poll — tolerate network/5xx; stop on paid / declined / canceled
   useEffect(() => {
     if (!polling || !orderId || unlockedRef.current) return;
 
@@ -130,11 +171,23 @@ export function PaywallScreen({ onUnlocked, visible = true }: Props) {
           `/api/pagbank/status/${encodeURIComponent(orderId!)}`,
           { cache: "no-store" },
         );
+        // Transient HTTP failures — keep waiting
+        if (!res.ok) return;
         const data = (await res.json()) as StatusResponse;
-        if (cancelled) return;
+        if (cancelled || unlockedRef.current) return;
+
         if (data.status === "paid") {
           setPolling(false);
           finishUnlock();
+          return;
+        }
+        if (data.status === "declined" || data.status === "canceled") {
+          setPolling(false);
+          setError(
+            data.status === "declined"
+              ? "Pagamento recusado. Gere um novo Pix."
+              : "Cobrança cancelada ou expirada. Gere um novo Pix.",
+          );
         }
       } catch {
         // keep polling — transient network blips
@@ -152,13 +205,9 @@ export function PaywallScreen({ onUnlocked, visible = true }: Props) {
   }, [polling, orderId]);
 
   async function copyPix() {
-    try {
-      await navigator.clipboard.writeText(pixCopyPaste);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2200);
-    } catch {
-      setCopied(false);
-    }
+    const ok = await writeClipboard(pixCopyPaste);
+    setCopied(ok);
+    if (ok) window.setTimeout(() => setCopied(false), 2200);
   }
 
   async function simulatePay() {
@@ -183,6 +232,8 @@ export function PaywallScreen({ onUnlocked, visible = true }: Props) {
     }
   }
 
+  const showFatal = Boolean(error) || expired;
+
   return (
     <AnimatePresence>
       {visible ? (
@@ -199,10 +250,8 @@ export function PaywallScreen({ onUnlocked, visible = true }: Props) {
               : { opacity: 0, y: 10, transition: { duration: 0.45, ease: EASE } }
           }
           transition={{ duration: 0.35, ease: EASE }}
-          /* Transparent shell — do NOT paint an opaque veil; blurred result must stay visible */
           className="pointer-events-none absolute inset-0 z-30 flex items-start justify-center px-4 pb-8 pt-14 sm:items-center sm:pt-10"
         >
-          {/* Soft local dim only under the card — keeps portraits readable around edges */}
           <div
             className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_42%,rgba(5,6,8,0.28)_0%,rgba(5,6,8,0.12)_55%,transparent_78%)]"
             aria-hidden
@@ -214,7 +263,6 @@ export function PaywallScreen({ onUnlocked, visible = true }: Props) {
             transition={{ duration: 0.5, ease: EASE, delay: 0.05 }}
             className="pointer-events-auto relative z-[1] w-full max-w-md"
           >
-            {/* ember-card-glass → translucent panel so bait shows through */}
             <EmberCard className="ember-card-glass p-5 sm:p-7">
               <div className="flex items-start justify-between gap-3">
                 <p
@@ -251,9 +299,13 @@ export function PaywallScreen({ onUnlocked, visible = true }: Props) {
                   <Loader2 className="h-7 w-7 animate-spin text-[color:var(--cart-copper)]" />
                   <p className="text-sm">Gerando Pix…</p>
                 </div>
-              ) : error ? (
+              ) : showFatal ? (
                 <div className="space-y-4 py-6 text-center">
-                  <p className="text-sm text-red-300/90">{error}</p>
+                  <p className="text-sm text-red-300/90">
+                    {expired
+                      ? "Sessão do Pix expirou. Gere um novo código para liberar."
+                      : error}
+                  </p>
                   <button
                     type="button"
                     className="cart-cta rounded-sm px-5 py-3 text-sm font-semibold"
