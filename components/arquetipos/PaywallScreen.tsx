@@ -45,8 +45,9 @@ function formatCountdown(totalSeconds: number) {
 }
 
 /**
- * Modelo 1 paywall overlay — Pix unlock card over the blurred result bait.
+ * Opção 1 paywall overlay — translucent Pix card over the blurred real result.
  * Reuses POST /api/pagbank/create + GET /api/pagbank/status/[orderId] (+ simulate-dev).
+ * QR / copia-e-cola / countdown / paid polling live in this component's state.
  */
 export function PaywallScreen({ onUnlocked, visible = true }: Props) {
   const reduce = useReducedMotion();
@@ -190,24 +191,26 @@ export function PaywallScreen({ onUnlocked, visible = true }: Props) {
           exit={
             reduce
               ? { opacity: 0 }
-              : { opacity: 0, y: 12, transition: { duration: 0.45, ease: EASE } }
+              : { opacity: 0, y: 10, transition: { duration: 0.45, ease: EASE } }
           }
-          transition={{ duration: 0.4, ease: EASE }}
-          className="pointer-events-none fixed inset-x-0 bottom-0 top-14 z-30 flex items-start justify-center overflow-y-auto px-4 pb-10 pt-16 sm:top-16 sm:pt-20"
+          transition={{ duration: 0.35, ease: EASE }}
+          /* Transparent shell — do NOT paint an opaque veil; blurred result must stay visible */
+          className="pointer-events-none absolute inset-0 z-30 flex items-start justify-center px-4 pb-8 pt-14 sm:items-center sm:pt-10"
         >
-          {/* Soft veil — blurred real result remains visible underneath as bait */}
+          {/* Soft local dim only under the card — keeps portraits readable around edges */}
           <div
-            className="pointer-events-none fixed inset-0 top-14 bg-[radial-gradient(ellipse_at_50%_18%,rgba(5,6,8,0.25)_0%,rgba(5,6,8,0.68)_50%,rgba(5,6,8,0.9)_100%)] sm:top-16"
+            className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_42%,rgba(5,6,8,0.28)_0%,rgba(5,6,8,0.12)_55%,transparent_78%)]"
             aria-hidden
           />
 
           <motion.div
-            initial={reduce ? false : { opacity: 0, y: 18, scale: 0.98 }}
+            initial={reduce ? false : { opacity: 0, y: 16, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={{ duration: 0.55, ease: EASE, delay: 0.06 }}
+            transition={{ duration: 0.5, ease: EASE, delay: 0.05 }}
             className="pointer-events-auto relative z-[1] w-full max-w-md"
           >
-            <EmberCard className="p-5 sm:p-7">
+            {/* ember-card-glass → translucent panel so bait shows through */}
+            <EmberCard className="ember-card-glass p-5 sm:p-7">
               <div className="flex items-start justify-between gap-3">
                 <p
                   id="paywall-headline"
@@ -216,7 +219,7 @@ export function PaywallScreen({ onUnlocked, visible = true }: Props) {
                   🔒 Seu perfil exclusivo já foi gerado!
                 </p>
                 <span
-                  className="shrink-0 tabular rounded-sm border border-[color:var(--cine-border)] bg-black/35 px-2.5 py-1 font-mono text-xs tracking-wider text-[color:var(--cart-copper-bright)]"
+                  className="shrink-0 tabular rounded-sm border border-[color:var(--cine-border)] bg-black/30 px-2.5 py-1 font-mono text-xs tracking-wider text-[color:var(--cart-copper-bright)]"
                   title="Tempo restante da sessão"
                 >
                   {formatCountdown(secondsLeft)}
@@ -261,9 +264,9 @@ export function PaywallScreen({ onUnlocked, visible = true }: Props) {
                     <img
                       src={qrImageSrc(pixCopyPaste, qrUrl)}
                       alt="QR Code Pix R$ 3,00"
-                      width={220}
-                      height={220}
-                      className="h-[180px] w-[180px] sm:h-[220px] sm:w-[220px]"
+                      width={200}
+                      height={200}
+                      className="h-[160px] w-[160px] sm:h-[200px] sm:w-[200px]"
                     />
                   </div>
 

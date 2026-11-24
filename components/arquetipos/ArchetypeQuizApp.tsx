@@ -178,6 +178,7 @@ export function ArchetypeQuizApp() {
             animate={{ opacity: 1 }}
             exit={fade ? undefined : { opacity: 0 }}
             transition={{ duration: 0.4 }}
+            /* relative + no overflow clip so absolute translucent overlay sits on blurred result */
             className="relative pt-14 sm:pt-16"
           >
             <QuizResult
@@ -185,6 +186,7 @@ export function ArchetypeQuizApp() {
               onRestart={handleRestart}
               locked={!unlocked}
             />
+            {/* Overlay only while paywall session active; paid → visible=false then unmount */}
             {paywallMounted ? (
               <PaywallScreen
                 visible={!unlocked}

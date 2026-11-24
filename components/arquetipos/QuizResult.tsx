@@ -170,24 +170,30 @@ export function QuizResult({ result, onRestart, locked = false }: Props) {
   }
 
   return (
-    <section className="cine-sanctuary-band relative mx-auto min-h-[100dvh] w-full max-w-2xl px-5 pb-16 pt-12">
+    <section
+      className={`cine-sanctuary-band relative mx-auto w-full max-w-2xl px-5 pt-12 ${
+        locked
+          ? "h-[calc(100dvh-3.5rem)] min-h-[28rem] overflow-hidden pb-8 sm:h-[calc(100dvh-4rem)]"
+          : "min-h-[100dvh] pb-16"
+      }`}
+    >
       <SanctuaryBackdrop opacity={0.25} />
 
-      {/* Curiosity hook — start of archetype name stays sharp while locked */}
+      {/* Sharp curiosity hook ABOVE the blurred layer (not inside filter) */}
       {locked ? (
         <motion.div
           initial={reduce ? false : { opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, ease: EASE }}
-          className="pointer-events-none fixed inset-x-0 top-[3.75rem] z-40 px-5 select-none text-center sm:top-[4.25rem]"
+          className="pointer-events-none relative z-20 mb-3 select-none text-center"
           aria-hidden
         >
-          <p className="cart-display text-[10px] uppercase tracking-[0.32em] text-[color:var(--cart-copper)] drop-shadow-[0_2px_8px_rgba(0,0,0,0.85)]">
+          <p className="cart-display text-[10px] uppercase tracking-[0.32em] text-[color:var(--cart-copper)]">
             Seu arquétipo
           </p>
-          <p className="cart-display mt-1.5 text-xl tracking-wide text-[color:var(--cine-ink)] drop-shadow-[0_2px_10px_rgba(0,0,0,0.9)] sm:text-2xl">
+          <p className="cart-display mt-1.5 text-xl tracking-wide text-[color:var(--cine-ink)] sm:text-2xl">
             <span>{titleHook}</span>
-            <span className="inline-block blur-[6px] opacity-70">
+            <span className="inline-block blur-[5px] opacity-60">
               {titleRest || "…"}
             </span>
             <span className="ml-0.5 inline-block animate-pulse text-[color:var(--cart-copper)]">
@@ -197,18 +203,18 @@ export function QuizResult({ result, onRestart, locked = false }: Props) {
         </motion.div>
       ) : null}
 
+      {/* Real result stays mounted — blurred bait while !isPaid / locked */}
       <motion.div
         className={`relative z-10 ${locked ? "select-none" : ""}`}
         animate={
           locked
-            ? { filter: "blur(10px)", opacity: 0.72 }
+            ? { filter: "blur(8px)", opacity: 0.92 }
             : { filter: "blur(0px)", opacity: 1 }
         }
-        transition={{ duration: reduce ? 0.2 : 0.7, ease: EASE }}
+        transition={{ duration: reduce ? 0.2 : 0.65, ease: EASE }}
         style={{
-          // backdrop-filter as secondary soft veil (works when ancestor has bg)
-          backdropFilter: locked ? "blur(10px)" : "blur(0px)",
-          WebkitBackdropFilter: locked ? "blur(10px)" : "blur(0px)",
+          backdropFilter: locked ? "blur(8px)" : "blur(0px)",
+          WebkitBackdropFilter: locked ? "blur(8px)" : "blur(0px)",
           pointerEvents: locked ? "none" : "auto",
           userSelect: locked ? "none" : "auto",
         }}
