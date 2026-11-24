@@ -159,14 +159,15 @@ export function PaywallScreen({ onUnlocked, visible = true }: Props) {
               </div>
 
               <div className="mt-5 flex flex-col items-center">
-                <div className="mx-auto flex w-full justify-center rounded-sm border border-[color:var(--cine-border)] bg-white p-2.5 shadow-[0_12px_32px_rgba(0,0,0,0.35)] sm:p-3">
+                {/* Clean QR only — square white pad, quiet-zone padding for camera scan */}
+                <div className="mx-auto flex aspect-square w-[200px] items-center justify-center bg-white p-4 sm:w-[232px] sm:p-5">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={FIXED_PIX_QR_SRC}
-                    alt="QR Code Pix oficial PagBank R$ 3,00"
-                    width={220}
-                    height={204}
-                    className="mx-auto h-auto w-[168px] max-w-full object-contain sm:w-[220px]"
+                    alt="QR Code Pix R$ 3,00"
+                    width={192}
+                    height={192}
+                    className="h-full w-full object-contain"
                     decoding="async"
                   />
                 </div>

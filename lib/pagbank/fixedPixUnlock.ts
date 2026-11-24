@@ -1,12 +1,12 @@
 /**
  * Fixed official PagBank Pix for Opção 1 R$3 curiosity unlock.
- * QR asset: /public/pix-qrcode-pagbank.png (decoded EMV below).
+ * Clean QR (no brand chrome): /public/pix-qr-clean.png — generated from FIXED_PIX_EMV.
  * Public Pix copia-e-cola — not an API token/secret.
  */
 
-export const FIXED_PIX_QR_SRC = "/pix-qrcode-pagbank.png";
+export const FIXED_PIX_QR_SRC = "/pix-qr-clean.png";
 
-/** Exact one-line EMV decoded from the official PagBank QR PNG. */
+/** Exact one-line EMV (same payload as the official PagBank QR). */
 export const FIXED_PIX_EMV =
   "00020126600014br.gov.bcb.pix0111467390518010223quiz medieval resultado27600016BR.COM.PAGSEGURO01368E98180E-07E0-45FD-969F-68D0E562F92452048999530398654043.005802BR5925GUILHERME CAMILO DA SILVA6005Bauru62290525PAGS00000030026112413394263042157";
 
