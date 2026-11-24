@@ -1,14 +1,15 @@
 "use client";
 
-import { motion, useReducedMotion } from "framer-motion";
-import { Check, Copy, Loader2, Shield } from "lucide-react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { Check, Copy, Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { playRevealChord } from "@/src/utils/soundEffects";
 import { EmberCard } from "./EmberCard";
-import { SanctuaryBackdrop } from "./CinematicChrome";
 
 type Props = {
   onUnlocked: () => void;
+  /** When true, overlay fades out (parent already cleared lock/blur). */
+  visible?: boolean;
 };
 
 type CreateResponse = {
@@ -28,13 +29,26 @@ type StatusResponse = {
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 const POLL_MS = 3000;
+/** Session / QR remaining window shown on the card */
+const SESSION_SECONDS = 10 * 60;
 
 function qrImageSrc(pixCopyPaste: string, qrCodeImageUrl: string | null) {
   if (qrCodeImageUrl) return qrCodeImageUrl;
   return `https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=8&data=${encodeURIComponent(pixCopyPaste)}`;
 }
 
-export function PaywallScreen({ onUnlocked }: Props) {
+function formatCountdown(totalSeconds: number) {
+  const s = Math.max(0, totalSeconds);
+  const mm = String(Math.floor(s / 60)).padStart(2, "0");
+  const ss = String(s % 60).padStart(2, "0");
+  return `${mm}:${ss}`;
+}
+
+/**
+ * Modelo 1 paywall overlay — Pix unlock card over the blurred result bait.
+ * Reuses POST /api/pagbank/create + GET /api/pagbank/status/[orderId] (+ simulate-dev).
+ */
+export function PaywallScreen({ onUnlocked, visible = true }: Props) {
   const reduce = useReducedMotion();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -46,6 +60,7 @@ export function PaywallScreen({ onUnlocked }: Props) {
   const [copied, setCopied] = useState(false);
   const [polling, setPolling] = useState(false);
   const [simulating, setSimulating] = useState(false);
+  const [secondsLeft, setSecondsLeft] = useState(SESSION_SECONDS);
   const unlockedRef = useRef(false);
 
   function finishUnlock() {
@@ -74,6 +89,7 @@ export function PaywallScreen({ onUnlocked }: Props) {
         setSimulateAllowed(Boolean(data.simulateAllowed));
         setMock(Boolean(data.mock));
         setPolling(true);
+        setSecondsLeft(SESSION_SECONDS);
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : "Erro ao criar Pix");
@@ -88,6 +104,14 @@ export function PaywallScreen({ onUnlocked }: Props) {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!polling || unlockedRef.current) return;
+    const id = window.setInterval(() => {
+      setSecondsLeft((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [polling]);
 
   useEffect(() => {
     if (!polling || !orderId || unlockedRef.current) return;
@@ -125,7 +149,7 @@ export function PaywallScreen({ onUnlocked }: Props) {
     try {
       await navigator.clipboard.writeText(pixCopyPaste);
       setCopied(true);
-      window.setTimeout(() => setCopied(false), 1800);
+      window.setTimeout(() => setCopied(false), 2200);
     } catch {
       setCopied(false);
     }
@@ -154,117 +178,134 @@ export function PaywallScreen({ onUnlocked }: Props) {
   }
 
   return (
-    <section className="cine-sanctuary-band relative mx-auto min-h-[100dvh] w-full max-w-lg px-5 pb-16 pt-12">
-      <SanctuaryBackdrop opacity={0.28} />
-      <div className="relative z-10">
-        <motion.p
-          initial={reduce ? false : { opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, ease: EASE }}
-          className="cart-display text-center text-[11px] uppercase tracking-[0.32em] text-[color:var(--cart-copper)]"
-        >
-          Portal do Relatório
-        </motion.p>
-
-        <motion.h1
-          initial={reduce ? false : { opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.55, ease: EASE, delay: 0.04 }}
-          className="cart-display mt-4 text-center text-3xl tracking-wide text-[color:var(--cine-ink)] sm:text-4xl"
-        >
-          Desbloqueie por Pix
-        </motion.h1>
-
-        <motion.p
-          initial={reduce ? false : { opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.55, ease: EASE, delay: 0.08 }}
-          className="mx-auto mt-3 max-w-md text-center text-sm leading-relaxed text-[color:var(--cart-muted)]"
-        >
-          Seu pergaminho está pronto. Pague{" "}
-          <strong className="font-semibold text-[color:var(--cart-copper-bright)]">
-            R$ 3,00
-          </strong>{" "}
-          via Pix — sem cadastro, sem formulário. A liberação é automática.
-        </motion.p>
-
+    <AnimatePresence>
+      {visible ? (
         <motion.div
-          initial={reduce ? false : { opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, ease: EASE, delay: 0.1 }}
-          className="mt-8"
+          key="paywall-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="paywall-headline"
+          initial={reduce ? false : { opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={
+            reduce
+              ? { opacity: 0 }
+              : { opacity: 0, y: 12, transition: { duration: 0.45, ease: EASE } }
+          }
+          transition={{ duration: 0.4, ease: EASE }}
+          className="pointer-events-none fixed inset-x-0 bottom-0 top-14 z-30 flex items-start justify-center overflow-y-auto px-4 pb-10 pt-16 sm:top-16 sm:pt-20"
         >
-          <EmberCard className="p-6 sm:p-8">
-            {loading ? (
-              <div className="flex flex-col items-center gap-3 py-10 text-[color:var(--cart-muted)]">
-                <Loader2 className="h-7 w-7 animate-spin text-[color:var(--cart-copper)]" />
-                <p className="text-sm">Gerando Pix…</p>
-              </div>
-            ) : error ? (
-              <div className="space-y-4 py-6 text-center">
-                <p className="text-sm text-red-300/90">{error}</p>
-                <button
-                  type="button"
-                  className="cart-cta rounded-sm px-5 py-3 text-sm font-semibold"
-                  onClick={() => window.location.reload()}
+          {/* Soft veil — blurred real result remains visible underneath as bait */}
+          <div
+            className="pointer-events-none fixed inset-0 top-14 bg-[radial-gradient(ellipse_at_50%_18%,rgba(5,6,8,0.25)_0%,rgba(5,6,8,0.68)_50%,rgba(5,6,8,0.9)_100%)] sm:top-16"
+            aria-hidden
+          />
+
+          <motion.div
+            initial={reduce ? false : { opacity: 0, y: 18, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ duration: 0.55, ease: EASE, delay: 0.06 }}
+            className="pointer-events-auto relative z-[1] w-full max-w-md"
+          >
+            <EmberCard className="p-5 sm:p-7">
+              <div className="flex items-start justify-between gap-3">
+                <p
+                  id="paywall-headline"
+                  className="cart-display text-left text-lg leading-snug tracking-wide text-[color:var(--cine-ink)] sm:text-xl"
                 >
-                  Tentar de novo
-                </button>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center">
-                <p className="cart-display text-[10px] uppercase tracking-[0.28em] text-[color:var(--cart-copper)]">
-                  Escaneie o QR Code
+                  🔒 Seu perfil exclusivo já foi gerado!
                 </p>
-                <div className="mt-4 rounded-sm border border-[color:var(--cine-border)] bg-white p-3 shadow-[0_12px_32px_rgba(0,0,0,0.35)]">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={qrImageSrc(pixCopyPaste, qrUrl)}
-                    alt="QR Code Pix R$ 3,00"
-                    width={240}
-                    height={240}
-                    className="h-[220px] w-[220px] sm:h-[240px] sm:w-[240px]"
-                  />
-                </div>
-
-                <p className="mt-5 text-center text-xs text-[color:var(--cart-dim)]">
-                  Ou use Pix Copia e Cola
-                </p>
-                <button
-                  type="button"
-                  onClick={() => void copyPix()}
-                  className="mt-2 inline-flex w-full max-w-sm items-center justify-center gap-2 border border-[color:var(--cart-border-soft)] px-4 py-3 text-sm text-[color:var(--cart-ink)] transition hover:border-[color:var(--cart-copper)] hover:text-[color:var(--cart-copper-bright)]"
+                <span
+                  className="shrink-0 tabular rounded-sm border border-[color:var(--cine-border)] bg-black/35 px-2.5 py-1 font-mono text-xs tracking-wider text-[color:var(--cart-copper-bright)]"
+                  title="Tempo restante da sessão"
                 >
-                  {copied ? <Check size={16} /> : <Copy size={16} />}
-                  {copied ? "Código copiado" : "Copiar código Pix"}
-                </button>
+                  {formatCountdown(secondsLeft)}
+                </span>
+              </div>
 
-                <div className="mt-6 flex items-center gap-2 text-xs text-[color:var(--cart-muted)]">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin text-[color:var(--cart-copper)]" />
-                  Aguardando pagamento…
-                </div>
+              <p className="mt-3 text-sm leading-relaxed text-[color:var(--cart-muted)]">
+                Apenas 7% das pessoas chegam a essa combinação exata. Libere a
+                leitura completa agora antes que a sessão expire.
+              </p>
 
-                <p className="mt-3 inline-flex items-center gap-1.5 text-[11px] text-[color:var(--cart-dim)]">
-                  <Shield size={12} />
-                  Confirmação automática a cada 3s
-                  {mock ? " · modo mock" : null}
+              <div className="mt-5 border-t border-[color:var(--cart-border-soft)] pt-5 text-center">
+                <p className="cart-display text-sm tracking-wide text-[color:var(--cart-copper-bright)] sm:text-base">
+                  Taxa simbólica de liberação: R$ 3,00
                 </p>
+                <p className="mt-1.5 text-[11px] leading-relaxed text-[color:var(--cart-dim)] sm:text-xs">
+                  (Menos que um café para manter nossos servidores e a análise
+                  individual no ar)
+                </p>
+              </div>
 
-                {simulateAllowed ? (
+              {loading ? (
+                <div className="flex flex-col items-center gap-3 py-10 text-[color:var(--cart-muted)]">
+                  <Loader2 className="h-7 w-7 animate-spin text-[color:var(--cart-copper)]" />
+                  <p className="text-sm">Gerando Pix…</p>
+                </div>
+              ) : error ? (
+                <div className="space-y-4 py-6 text-center">
+                  <p className="text-sm text-red-300/90">{error}</p>
                   <button
                     type="button"
-                    disabled={simulating}
-                    onClick={() => void simulatePay()}
-                    className="mt-6 text-xs uppercase tracking-[0.18em] text-[color:var(--cart-dim)] underline-offset-4 hover:text-[color:var(--cart-copper)] hover:underline disabled:opacity-50"
+                    className="cart-cta rounded-sm px-5 py-3 text-sm font-semibold"
+                    onClick={() => window.location.reload()}
                   >
-                    {simulating ? "Simulando…" : "Simular pagamento (dev)"}
+                    Tentar de novo
                   </button>
-                ) : null}
-              </div>
-            )}
-          </EmberCard>
+                </div>
+              ) : (
+                <div className="mt-5 flex flex-col items-center">
+                  <div className="rounded-sm border border-[color:var(--cine-border)] bg-white p-2.5 shadow-[0_12px_32px_rgba(0,0,0,0.35)] sm:p-3">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={qrImageSrc(pixCopyPaste, qrUrl)}
+                      alt="QR Code Pix R$ 3,00"
+                      width={220}
+                      height={220}
+                      className="h-[180px] w-[180px] sm:h-[220px] sm:w-[220px]"
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => void copyPix()}
+                    className="cart-cta mt-5 inline-flex w-full items-center justify-center gap-2 rounded-sm px-4 py-3.5 text-center text-sm font-semibold leading-snug sm:text-[15px]"
+                  >
+                    {copied ? <Check size={18} /> : <Copy size={18} />}
+                    {copied
+                      ? "✅ Código Pix copiado! Cole no app do seu banco"
+                      : "Copiar Código Pix (Liberação em 3 segundos)"}
+                  </button>
+
+                  <div className="mt-4 flex items-center gap-2 text-xs text-[color:var(--cart-muted)]">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-[color:var(--cart-copper)]" />
+                    Aguardando confirmação do Pix…
+                    {mock ? " · mock" : null}
+                  </div>
+
+                  <p className="mt-4 text-center text-[11px] leading-relaxed text-[color:var(--cart-dim)] sm:text-xs">
+                    ⚡ Acesso automático: Assim que o Pix for confirmado, o
+                    desfoque some na hora nesta mesma tela. Sem assinatura e sem
+                    cobranças futuras.
+                  </p>
+
+                  {simulateAllowed ? (
+                    <button
+                      type="button"
+                      disabled={simulating}
+                      onClick={() => void simulatePay()}
+                      className="mt-5 text-xs uppercase tracking-[0.18em] text-[color:var(--cart-dim)] underline-offset-4 hover:text-[color:var(--cart-copper)] hover:underline disabled:opacity-50"
+                    >
+                      {simulating ? "Simulando…" : "Simular pagamento (dev)"}
+                    </button>
+                  ) : null}
+                </div>
+              )}
+            </EmberCard>
+          </motion.div>
         </motion.div>
-      </div>
-    </section>
+      ) : null}
+    </AnimatePresence>
   );
 }

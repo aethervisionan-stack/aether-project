@@ -23,6 +23,8 @@ import {
 type Props = {
   result: NarrativeResult;
   onRestart: () => void;
+  /** When true, real result stays behind blur as curiosity bait (Opção 1). */
+  locked?: boolean;
 };
 
 const EASE = [0.22, 1, 0.36, 1] as const;
@@ -88,13 +90,16 @@ function SecondaryThumb({ profile }: { profile: ArchetypeProfile }) {
   );
 }
 
-export function QuizResult({ result, onRestart }: Props) {
+export function QuizResult({ result, onRestart, locked = false }: Props) {
   const reduce = useReducedMotion();
   const [copied, setCopied] = useState(false);
   const [sharing, setSharing] = useState(false);
   const shareCardRef = useRef<HTMLDivElement>(null);
   const intro = useMemo(() => buildIntro(result), [result]);
   const principal = result.primary;
+  /** Semi-revealed hook — first words of the archetype title to spark curiosity */
+  const titleHook = principal.title.slice(0, Math.min(8, principal.title.length));
+  const titleRest = principal.title.slice(titleHook.length);
 
   async function copyResult() {
     try {
@@ -167,7 +172,48 @@ export function QuizResult({ result, onRestart }: Props) {
   return (
     <section className="cine-sanctuary-band relative mx-auto min-h-[100dvh] w-full max-w-2xl px-5 pb-16 pt-12">
       <SanctuaryBackdrop opacity={0.25} />
-      <div className="relative z-10">
+
+      {/* Curiosity hook — start of archetype name stays sharp while locked */}
+      {locked ? (
+        <motion.div
+          initial={reduce ? false : { opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: EASE }}
+          className="pointer-events-none fixed inset-x-0 top-[3.75rem] z-40 px-5 select-none text-center sm:top-[4.25rem]"
+          aria-hidden
+        >
+          <p className="cart-display text-[10px] uppercase tracking-[0.32em] text-[color:var(--cart-copper)] drop-shadow-[0_2px_8px_rgba(0,0,0,0.85)]">
+            Seu arquétipo
+          </p>
+          <p className="cart-display mt-1.5 text-xl tracking-wide text-[color:var(--cine-ink)] drop-shadow-[0_2px_10px_rgba(0,0,0,0.9)] sm:text-2xl">
+            <span>{titleHook}</span>
+            <span className="inline-block blur-[6px] opacity-70">
+              {titleRest || "…"}
+            </span>
+            <span className="ml-0.5 inline-block animate-pulse text-[color:var(--cart-copper)]">
+              …
+            </span>
+          </p>
+        </motion.div>
+      ) : null}
+
+      <motion.div
+        className={`relative z-10 ${locked ? "select-none" : ""}`}
+        animate={
+          locked
+            ? { filter: "blur(10px)", opacity: 0.72 }
+            : { filter: "blur(0px)", opacity: 1 }
+        }
+        transition={{ duration: reduce ? 0.2 : 0.7, ease: EASE }}
+        style={{
+          // backdrop-filter as secondary soft veil (works when ancestor has bg)
+          backdropFilter: locked ? "blur(10px)" : "blur(0px)",
+          WebkitBackdropFilter: locked ? "blur(10px)" : "blur(0px)",
+          pointerEvents: locked ? "none" : "auto",
+          userSelect: locked ? "none" : "auto",
+        }}
+        aria-hidden={locked || undefined}
+      >
         <motion.p
           initial={reduce ? false : { opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -387,7 +433,7 @@ export function QuizResult({ result, onRestart }: Props) {
           <button
             type="button"
             onClick={() => void downloadShareImage()}
-            disabled={sharing}
+            disabled={sharing || locked}
             className="cart-cta inline-flex w-full items-center justify-center gap-2 rounded-sm px-5 py-3.5 text-sm font-semibold disabled:opacity-60"
           >
             {sharing ? (
@@ -401,7 +447,8 @@ export function QuizResult({ result, onRestart }: Props) {
             <button
               type="button"
               onClick={onRestart}
-              className="inline-flex flex-1 items-center justify-center gap-2 border border-[color:var(--cart-border-soft)] px-5 py-3.5 text-sm text-[color:var(--cart-muted)] transition hover:border-[color:var(--cart-copper)] hover:text-[color:var(--cart-copper-bright)]"
+              disabled={locked}
+              className="inline-flex flex-1 items-center justify-center gap-2 border border-[color:var(--cart-border-soft)] px-5 py-3.5 text-sm text-[color:var(--cart-muted)] transition hover:border-[color:var(--cart-copper)] hover:text-[color:var(--cart-copper-bright)] disabled:opacity-50"
             >
               <RotateCcw size={16} />
               Nova Expedição
@@ -409,16 +456,20 @@ export function QuizResult({ result, onRestart }: Props) {
             <button
               type="button"
               onClick={copyResult}
-              className="inline-flex flex-1 items-center justify-center gap-2 border border-[color:var(--cart-border-soft)] px-5 py-3.5 text-sm text-[color:var(--cart-muted)] transition hover:border-[color:var(--cart-copper)] hover:text-[color:var(--cart-copper-bright)]"
+              disabled={locked}
+              className="inline-flex flex-1 items-center justify-center gap-2 border border-[color:var(--cart-border-soft)] px-5 py-3.5 text-sm text-[color:var(--cart-muted)] transition hover:border-[color:var(--cart-copper)] hover:text-[color:var(--cart-copper-bright)] disabled:opacity-50"
             >
               {copied ? <Check size={16} /> : <Copy size={16} />}
               {copied ? "Copiado" : "Copiar Relatório Completo"}
             </button>
           </div>
         </div>
-      </div>
+      </motion.div>
 
-      <ShareCardTemplate result={result} cardRef={shareCardRef} />
+      {/* Off-screen share card — only used after unlock download */}
+      {!locked ? (
+        <ShareCardTemplate result={result} cardRef={shareCardRef} />
+      ) : null}
     </section>
   );
 }

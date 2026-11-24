@@ -22,8 +22,8 @@ import { QuizProcessing } from "./QuizProcessing";
 import { QuizResult } from "./QuizResult";
 import "./cartographic.css";
 
-/** welcome | quiz | paywall | result (+ brief processing after quiz) */
-type Stage = "welcome" | "quiz" | "processing" | "paywall" | "result";
+/** welcome | quiz | processing | result (paywall overlays result when locked) */
+type Stage = "welcome" | "quiz" | "processing" | "result";
 
 const PROCESSING_MS = 1200;
 const ADVANCE_MS = 300;
@@ -32,6 +32,8 @@ export function ArchetypeQuizApp() {
   const reduce = useReducedMotion();
   const [mounted, setMounted] = useState(false);
   const [unlocked, setUnlocked] = useState(false);
+  /** Keeps paywall in the tree briefly after unlock so the overlay can fade out. */
+  const [paywallMounted, setPaywallMounted] = useState(false);
   const [stage, setStage] = useState<Stage>("welcome");
   const [index, setIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
@@ -59,15 +61,23 @@ export function ArchetypeQuizApp() {
   useEffect(() => {
     if (stage !== "processing") return;
     const t = window.setTimeout(() => {
+      // Always land on result — locked users see blurred bait + Pix overlay in place
       if (unlocked) {
         playRevealChord();
-        setStage("result");
       } else {
-        setStage("paywall");
+        setPaywallMounted(true);
       }
+      setStage("result");
     }, PROCESSING_MS);
     return () => window.clearTimeout(t);
   }, [stage, unlocked]);
+
+  // After unlock fade, drop PaywallScreen so it cannot create another Pix order
+  useEffect(() => {
+    if (!unlocked || !paywallMounted) return;
+    const t = window.setTimeout(() => setPaywallMounted(false), 550);
+    return () => window.clearTimeout(t);
+  }, [unlocked, paywallMounted]);
 
   function handleSelect(questionId: string, optionId: string) {
     setAnswers((prev) => ({ ...prev, [questionId]: optionId }));
@@ -101,19 +111,15 @@ export function ArchetypeQuizApp() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
+  /** Unlock in place — blur fades on same result screen (no navigation). */
   function handleUnlocked() {
     writeIsUnlocked(true);
     setUnlocked(true);
-    setStage("result");
-    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   const fade = !mounted || reduce;
   const inFlow =
-    stage === "quiz" ||
-    stage === "processing" ||
-    stage === "paywall" ||
-    stage === "result";
+    stage === "quiz" || stage === "processing" || stage === "result";
 
   return (
     <div className="arquetipo-root min-h-[100dvh]">
@@ -165,19 +171,6 @@ export function ArchetypeQuizApp() {
           </motion.div>
         )}
 
-        {stage === "paywall" && (
-          <motion.div
-            key="paywall"
-            initial={fade ? false : { opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={fade ? undefined : { opacity: 0 }}
-            transition={{ duration: 0.35 }}
-            className="pt-14 sm:pt-16"
-          >
-            <PaywallScreen onUnlocked={handleUnlocked} />
-          </motion.div>
-        )}
-
         {stage === "result" && (
           <motion.div
             key="result"
@@ -185,9 +178,19 @@ export function ArchetypeQuizApp() {
             animate={{ opacity: 1 }}
             exit={fade ? undefined : { opacity: 0 }}
             transition={{ duration: 0.4 }}
-            className="pt-14 sm:pt-16"
+            className="relative pt-14 sm:pt-16"
           >
-            <QuizResult result={result} onRestart={handleRestart} />
+            <QuizResult
+              result={result}
+              onRestart={handleRestart}
+              locked={!unlocked}
+            />
+            {paywallMounted ? (
+              <PaywallScreen
+                visible={!unlocked}
+                onUnlocked={handleUnlocked}
+              />
+            ) : null}
           </motion.div>
         )}
       </AnimatePresence>
