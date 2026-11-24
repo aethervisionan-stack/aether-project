@@ -72,7 +72,7 @@ export function ArchetypeQuizApp() {
     return () => window.clearTimeout(t);
   }, [stage, unlocked]);
 
-  // After unlock fade, drop PaywallScreen so it cannot create another Pix order
+  // After unlock fade, drop PaywallScreen (fixed Pix — no create call)
   useEffect(() => {
     if (!unlocked || !paywallMounted) return;
     const t = window.setTimeout(() => setPaywallMounted(false), 550);
