@@ -46,7 +46,21 @@ export async function GET(_req: Request, ctx: Ctx) {
       amountCentavos: remote.amountCentavos,
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Status failed";
-    return NextResponse.json({ error: message }, { status: 502 });
+    const apiErr = err as {
+      message?: string;
+      status?: number;
+      code?: string;
+      description?: string;
+    };
+    const message =
+      err instanceof Error ? err.message : "Status failed";
+    return NextResponse.json(
+      {
+        error: message,
+        code: apiErr.code,
+        description: apiErr.description,
+      },
+      { status: typeof apiErr.status === "number" ? apiErr.status : 502 },
+    );
   }
 }

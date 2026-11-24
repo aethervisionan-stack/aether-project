@@ -20,6 +20,8 @@ type CreateResponse = {
   simulateAllowed?: boolean;
   mock?: boolean;
   error?: string;
+  code?: string;
+  description?: string;
 };
 
 type StatusResponse = {
@@ -81,7 +83,10 @@ export function PaywallScreen({ onUnlocked, visible = true }: Props) {
         const res = await fetch("/api/pagbank/create", { method: "POST" });
         const data = (await res.json()) as CreateResponse;
         if (!res.ok || !data.orderId || !data.pixCopyPaste) {
-          throw new Error(data.error || "Não foi possível gerar o Pix");
+          const detail = [data.code, data.description || data.error]
+            .filter(Boolean)
+            .join(": ");
+          throw new Error(detail || "Não foi possível gerar o Pix");
         }
         if (cancelled) return;
         setOrderId(data.orderId);

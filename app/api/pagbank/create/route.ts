@@ -4,7 +4,10 @@ import {
   pagbankMockMode,
   pagbankSimulateAllowed,
 } from "@/lib/pagbank/config";
-import { createPagbankPixOrder } from "@/lib/pagbank/client";
+import {
+  createPagbankPixOrder,
+  type PagbankApiError,
+} from "@/lib/pagbank/client";
 import { putPagbankOrder } from "@/lib/pagbank/store";
 
 export const runtime = "nodejs";
@@ -70,7 +73,17 @@ export async function POST() {
       simulateAllowed,
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Create failed";
-    return NextResponse.json({ error: message }, { status: 502 });
+    const apiErr = err as PagbankApiError;
+    const message =
+      err instanceof Error ? err.message : "Create failed";
+    // Safe client payload — code/description from PagBank, never secrets
+    return NextResponse.json(
+      {
+        error: message,
+        code: apiErr.code ?? undefined,
+        description: apiErr.description ?? undefined,
+      },
+      { status: typeof apiErr.status === "number" ? apiErr.status : 502 },
+    );
   }
 }
