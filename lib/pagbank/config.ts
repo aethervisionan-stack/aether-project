@@ -18,9 +18,14 @@ export function pagbankApiBase(): string {
   return "https://api.pagseguro.com";
 }
 
-/** Dev/local simulate path — never treat production as auto-on. */
+/**
+ * Dev/local simulate path.
+ * Production (Vercel Production or NODE_ENV=production) stays OFF unless
+ * PAGBANK_ALLOW_SIMULATE=true is set explicitly.
+ */
 export function pagbankSimulateAllowed(): boolean {
   if (process.env.PAGBANK_ALLOW_SIMULATE === "true") return true;
+  if (process.env.VERCEL_ENV === "production") return false;
   if (process.env.NODE_ENV === "development") return true;
   return false;
 }
