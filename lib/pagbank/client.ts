@@ -6,6 +6,7 @@ import {
   pagbankTokenMeta,
 } from "./config";
 import { generateValidCPF } from "./cpf";
+import { isValidPixEmv } from "./pixEmv";
 
 export type PagbankCreateResult = {
   orderId: string;
@@ -71,30 +72,63 @@ function expirationIso(hours = 2): string {
   return new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
 }
 
+/** Safe summary of order body for logs — never includes secrets/tokens. */
+function summarizeOrderForLog(body: Json): Json {
+  const qrCodes = asArray(body.qr_codes).map((raw) => {
+    const qr = asRecord(raw);
+    if (!qr) return { empty: true };
+    const text = pickString(qr.text);
+    return {
+      id: pickString(qr.id),
+      hasText: Boolean(text),
+      textLength: text?.length ?? 0,
+      textPrefix: text ? text.slice(0, 24) : null,
+      validEmv: isValidPixEmv(text),
+      linkRels: asArray(qr.links)
+        .map((l) => pickString(asRecord(l)?.rel))
+        .filter(Boolean),
+    };
+  });
+  const charges = asArray(body.charges).map((raw) => {
+    const charge = asRecord(raw);
+    if (!charge) return { empty: true };
+    const qr = asRecord(charge.qr_code);
+    const text = pickString(qr?.text);
+    return {
+      id: pickString(charge.id),
+      status: pickString(charge.status),
+      hasQrText: Boolean(text),
+      textLength: text?.length ?? 0,
+      validEmv: isValidPixEmv(text),
+      linkRels: asArray(charge.links)
+        .map((l) => pickString(asRecord(l)?.rel))
+        .filter(Boolean),
+    };
+  });
+  return {
+    id: pickString(body.id),
+    reference_id: pickString(body.reference_id),
+    status: pickString(body.status),
+    qr_codes: qrCodes,
+    charges,
+    error_messages: body.error_messages ?? null,
+  };
+}
+
+/**
+ * Prefer PagBank `qr_codes[0].text` EMV; fall back to `charges[].qr_code.text`.
+ * Never invent / forge copia-e-cola — missing/invalid text is an error.
+ */
 function extractPixFromOrder(body: Json): {
   pixCopyPaste: string;
   qrCodeImageUrl: string | null;
 } {
-  for (const raw of asArray(body.charges)) {
-    const charge = asRecord(raw);
-    if (!charge) continue;
-    const qr = asRecord(charge.qr_code);
-    const text = pickString(qr?.text);
-    let png: string | null = null;
-    for (const linkRaw of asArray(charge.links)) {
-      const link = asRecord(linkRaw);
-      if (!link) continue;
-      if (String(link.rel).toUpperCase() === "QRCODE.PNG") {
-        png = pickString(link.href);
-      }
-    }
-    if (text) return { pixCopyPaste: text, qrCodeImageUrl: png };
-  }
-
+  // 1) Official wallet/order qr_codes[0].text first (user/bank expectation)
   for (const raw of asArray(body.qr_codes)) {
     const qr = asRecord(raw);
     if (!qr) continue;
     const text = pickString(qr.text);
+    if (!text || !isValidPixEmv(text)) continue;
     let png: string | null = null;
     for (const linkRaw of asArray(qr.links)) {
       const link = asRecord(linkRaw);
@@ -103,10 +137,38 @@ function extractPixFromOrder(body: Json): {
         png = pickString(link.href);
       }
     }
-    if (text) return { pixCopyPaste: text, qrCodeImageUrl: png };
+    return { pixCopyPaste: text, qrCodeImageUrl: png };
   }
 
-  throw new Error("PagBank order missing PIX QR payload");
+  // 2) PIX charges path — charges[].qr_code.text (PagBank PIX guide)
+  for (const raw of asArray(body.charges)) {
+    const charge = asRecord(raw);
+    if (!charge) continue;
+    const qr = asRecord(charge.qr_code);
+    const text = pickString(qr?.text);
+    if (!text || !isValidPixEmv(text)) continue;
+    let png: string | null = null;
+    for (const linkRaw of asArray(charge.links)) {
+      const link = asRecord(linkRaw);
+      if (!link) continue;
+      if (String(link.rel).toUpperCase() === "QRCODE.PNG") {
+        png = pickString(link.href);
+      }
+    }
+    return { pixCopyPaste: text, qrCodeImageUrl: png };
+  }
+
+  const summary = summarizeOrderForLog(body);
+  console.error("[pagbank:create] missing/invalid PIX EMV text", summary);
+  const err = new Error(
+    "PIX_EMV_MISSING: PagBank order has no valid qr_codes[0].text (or charges.qr_code.text) EMV — refusing fake fallback",
+  ) as PagbankApiError;
+  err.status = 502;
+  err.code = "PIX_EMV_MISSING";
+  err.description =
+    "Pedido criado sem código Pix copia-e-cola válido. Não é possível emitir QR para o banco.";
+  err.bodyPreview = JSON.stringify(summary).slice(0, 800);
+  throw err;
 }
 
 function normalizeChargeStatus(raw: unknown): PagbankStatusResult["status"] {

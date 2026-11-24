@@ -8,50 +8,73 @@ import {
   createPagbankPixOrder,
   type PagbankApiError,
 } from "@/lib/pagbank/client";
+import { isValidPixEmv } from "@/lib/pagbank/pixEmv";
 import { putPagbankOrder } from "@/lib/pagbank/store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function mockPixPayload(orderId: string) {
-  // Placeholder EMV-ish string for UI / copy in mock mode — not a real Pix.
-  const text = `00020126580014BR.GOV.BCB.PIX0136${orderId}52040000530398654043.005802BR5913Arquetipo Quiz6009SAO PAULO62070503***6304ABCD`;
-  return {
-    pixCopyPaste: text,
-    qrCodeImageUrl: null as string | null,
-  };
-}
-
 export async function POST() {
   try {
     const simulateAllowed = pagbankSimulateAllowed();
 
+    // Mock mode: never return forged EMV (banks reject placeholder copia-e-cola).
+    // Dev can still unlock via simulate when allowed.
     if (pagbankMockMode()) {
       const orderId = `MOCK_${crypto.randomUUID()}`;
-      const pix = mockPixPayload(orderId);
       putPagbankOrder({
         orderId,
         status: "waiting",
         amountCentavos: PAGBANK_UNLOCK_AMOUNT_CENTAVOS,
-        pixCopyPaste: pix.pixCopyPaste,
-        qrCodeImageUrl: pix.qrCodeImageUrl,
+        pixCopyPaste: "",
+        qrCodeImageUrl: null,
         mock: true,
         createdAt: Date.now(),
       });
 
-      return NextResponse.json({
-        orderId,
-        amountCentavos: PAGBANK_UNLOCK_AMOUNT_CENTAVOS,
-        amountLabel: "R$ 3,00",
-        pixCopyPaste: pix.pixCopyPaste,
-        qrCodeImageUrl: pix.qrCodeImageUrl,
-        status: "waiting",
-        mock: true,
-        simulateAllowed,
-      });
+      return NextResponse.json(
+        {
+          orderId,
+          amountCentavos: PAGBANK_UNLOCK_AMOUNT_CENTAVOS,
+          amountLabel: "R$ 3,00",
+          pixCopyPaste: "",
+          qrCodeImageUrl: null,
+          status: "waiting",
+          mock: true,
+          simulateAllowed,
+          code: "PIX_MOCK_NO_EMV",
+          description:
+            "Modo mock: nenhum código Pix real foi emitido (evita QR rejeitado pelo banco). Use Simular pagamento (dev) se disponível.",
+          error:
+            "PIX_MOCK_NO_EMV: sem EMV real — copy/QR ocultos até haver texto PagBank válido",
+        },
+        // 200 so UI can still poll/simulate with orderId, but no copy text
+        { status: 200 },
+      );
     }
 
     const created = await createPagbankPixOrder();
+
+    if (!isValidPixEmv(created.pixCopyPaste)) {
+      console.error("[pagbank:create] refused invalid EMV after extract", {
+        orderId: created.orderId,
+        textLength: created.pixCopyPaste.length,
+        textPrefix: created.pixCopyPaste.slice(0, 24),
+      });
+      return NextResponse.json(
+        {
+          error:
+            "PIX_EMV_INVALID: PagBank response lacked a valid qr_codes/charges EMV text",
+          code: "PIX_EMV_INVALID",
+          description:
+            "Resposta PagBank sem código Pix válido — copy/QR não serão exibidos",
+          orderId: created.orderId,
+          httpStatus: 502,
+        },
+        { status: 502 },
+      );
+    }
+
     putPagbankOrder({
       orderId: created.orderId,
       status: "waiting",
@@ -81,7 +104,6 @@ export async function POST() {
       apiErr.description ||
       (err instanceof Error ? err.message : "Create failed");
 
-    // Always return exact PagBank code/description (+ safe body preview)
     return NextResponse.json(
       {
         error: `${code}: ${description}`,

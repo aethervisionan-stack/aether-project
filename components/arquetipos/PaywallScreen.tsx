@@ -3,6 +3,7 @@
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Check, Copy, Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { isValidPixEmv } from "@/lib/pagbank/pixEmv";
 import { playRevealChord } from "@/src/utils/soundEffects";
 import { EmberCard } from "./EmberCard";
 
@@ -39,9 +40,11 @@ const POLL_MS = 3000;
 /** Session / QR remaining window shown on the card */
 const SESSION_SECONDS = 10 * 60;
 
-function qrImageSrc(pixCopyPaste: string, qrCodeImageUrl: string | null) {
-  if (qrCodeImageUrl) return qrCodeImageUrl;
-  return `https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=8&data=${encodeURIComponent(pixCopyPaste)}`;
+/** Only PagBank-hosted PNG when present — never encode invalid/fake EMV via third-party QR. */
+function pagbankQrImageSrc(qrCodeImageUrl: string | null): string | null {
+  if (!qrCodeImageUrl) return null;
+  if (!/^https:\/\//i.test(qrCodeImageUrl)) return null;
+  return qrCodeImageUrl;
 }
 
 function formatCountdown(totalSeconds: number) {
@@ -117,8 +120,10 @@ export function PaywallScreen({ onUnlocked, visible = true }: Props) {
       try {
         const res = await fetch("/api/pagbank/create", { method: "POST" });
         const data = (await res.json()) as CreateResponse;
-        if (!res.ok || !data.orderId || !data.pixCopyPaste) {
-          // Prefer exact PagBank code/description — never show generic-only when detail exists
+        const hasValidEmv = isValidPixEmv(data.pixCopyPaste);
+
+        // Hard failure when HTTP error and no usable order
+        if (!res.ok && !data.orderId) {
           const parts = [
             data.code,
             data.description,
@@ -130,17 +135,43 @@ export function PaywallScreen({ onUnlocked, visible = true }: Props) {
               : data.error ||
                 data.bodyPreview ||
                 `Não foi possível gerar o Pix (HTTP ${res.status})`;
-          // Operator action when PagBank Orders whitelist blocks production
           if (/ACCESS_DENIED|whitelist/i.test(detail)) {
             detail +=
               " — Ação: solicitar ao PagBank liberação (whitelist) da API Orders/PIX em produção para esta conta.";
           }
           throw new Error(detail);
         }
+
+        if (!data.orderId) {
+          throw new Error(
+            data.error || "Não foi possível gerar o pedido Pix",
+          );
+        }
+
+        // No forged EMV: refuse to arm copy/QR without valid PagBank text
+        if (!hasValidEmv) {
+          if (cancelled) return;
+          setOrderId(data.orderId);
+          setPixCopyPaste("");
+          setQrUrl(null);
+          setSimulateAllowed(Boolean(data.simulateAllowed));
+          setMock(Boolean(data.mock));
+          setPolling(Boolean(data.simulateAllowed));
+          setSecondsLeft(SESSION_SECONDS);
+          setError(
+            [
+              data.code || "PIX_EMV_MISSING",
+              data.description ||
+                "Código Pix inválido ou ausente — copy/QR ocultos (bancos rejeitam EMV falso).",
+            ].join(" — "),
+          );
+          return;
+        }
+
         if (cancelled) return;
         setOrderId(data.orderId);
-        setPixCopyPaste(data.pixCopyPaste);
-        setQrUrl(data.qrCodeImageUrl);
+        setPixCopyPaste(data.pixCopyPaste.trim());
+        setQrUrl(pagbankQrImageSrc(data.qrCodeImageUrl ?? null));
         setSimulateAllowed(Boolean(data.simulateAllowed));
         setMock(Boolean(data.mock));
         setPolling(true);
@@ -222,6 +253,7 @@ export function PaywallScreen({ onUnlocked, visible = true }: Props) {
   }, [polling, orderId]);
 
   async function copyPix() {
+    if (!isValidPixEmv(pixCopyPaste)) return;
     const ok = await writeClipboard(pixCopyPaste);
     setCopied(ok);
     if (ok) window.setTimeout(() => setCopied(false), 2200);
@@ -249,7 +281,14 @@ export function PaywallScreen({ onUnlocked, visible = true }: Props) {
     }
   }
 
-  const showFatal = Boolean(error) || expired;
+  const hasValidEmv = isValidPixEmv(pixCopyPaste);
+  const qrSrc = hasValidEmv ? pagbankQrImageSrc(qrUrl) : null;
+  /** Fatal = expired or hard error with nothing useful to do (no simulate) */
+  const showFatal =
+    expired || (Boolean(error) && !simulateAllowed && !hasValidEmv);
+  const showEmvUi = hasValidEmv && !expired;
+  const showDevOnly =
+    !hasValidEmv && !expired && simulateAllowed && Boolean(orderId);
 
   return (
     <AnimatePresence>
@@ -333,49 +372,84 @@ export function PaywallScreen({ onUnlocked, visible = true }: Props) {
                 </div>
               ) : (
                 <div className="mt-5 flex flex-col items-center">
-                  <div className="rounded-sm border border-[color:var(--cine-border)] bg-white p-2.5 shadow-[0_12px_32px_rgba(0,0,0,0.35)] sm:p-3">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={qrImageSrc(pixCopyPaste, qrUrl)}
-                      alt="QR Code Pix R$ 3,00"
-                      width={200}
-                      height={200}
-                      className="h-[160px] w-[160px] sm:h-[200px] sm:w-[200px]"
-                    />
-                  </div>
+                  {/* Copy + QR only when API returned a valid PagBank EMV */}
+                  {showEmvUi ? (
+                    <>
+                      {qrSrc ? (
+                        <div className="rounded-sm border border-[color:var(--cine-border)] bg-white p-2.5 shadow-[0_12px_32px_rgba(0,0,0,0.35)] sm:p-3">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={qrSrc}
+                            alt="QR Code Pix R$ 3,00"
+                            width={200}
+                            height={200}
+                            className="h-[160px] w-[160px] sm:h-[200px] sm:w-[200px]"
+                          />
+                        </div>
+                      ) : (
+                        <p className="text-center text-xs text-[color:var(--cart-dim)]">
+                          Use Pix Copia e Cola abaixo (imagem QR não fornecida
+                          pelo PagBank).
+                        </p>
+                      )}
 
-                  <button
-                    type="button"
-                    onClick={() => void copyPix()}
-                    className="cart-cta mt-5 inline-flex w-full items-center justify-center gap-2 rounded-sm px-4 py-3.5 text-center text-sm font-semibold leading-snug sm:text-[15px]"
-                  >
-                    {copied ? <Check size={18} /> : <Copy size={18} />}
-                    {copied
-                      ? "✅ Código Pix copiado! Cole no app do seu banco"
-                      : "Copiar Código Pix (Liberação em 3 segundos)"}
-                  </button>
+                      <button
+                        type="button"
+                        onClick={() => void copyPix()}
+                        className="cart-cta mt-5 inline-flex w-full items-center justify-center gap-2 rounded-sm px-4 py-3.5 text-center text-sm font-semibold leading-snug sm:text-[15px]"
+                      >
+                        {copied ? <Check size={18} /> : <Copy size={18} />}
+                        {copied
+                          ? "✅ Código Pix copiado! Cole no app do seu banco"
+                          : "Copiar Código Pix (Liberação em 3 segundos)"}
+                      </button>
 
-                  <div className="mt-4 flex items-center gap-2 text-xs text-[color:var(--cart-muted)]">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin text-[color:var(--cart-copper)]" />
-                    Aguardando confirmação do Pix…
-                    {mock ? " · mock" : null}
-                  </div>
+                      <div className="mt-4 flex items-center gap-2 text-xs text-[color:var(--cart-muted)]">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin text-[color:var(--cart-copper)]" />
+                        Aguardando confirmação do Pix…
+                      </div>
+                    </>
+                  ) : null}
 
-                  <p className="mt-4 text-center text-[11px] leading-relaxed text-[color:var(--cart-dim)] sm:text-xs">
-                    ⚡ Acesso automático: Assim que o Pix for confirmado, o
-                    desfoque some na hora nesta mesma tela. Sem assinatura e sem
-                    cobranças futuras.
-                  </p>
+                  {showDevOnly ? (
+                    <div className="w-full space-y-4 text-center">
+                      <p className="text-sm text-amber-200/90">
+                        {error ||
+                          "Sem código Pix real do PagBank — copy/QR ocultos."}
+                        {mock ? " (mock)" : null}
+                      </p>
+                      <button
+                        type="button"
+                        disabled={simulating}
+                        onClick={() => void simulatePay()}
+                        className="cart-cta inline-flex w-full items-center justify-center rounded-sm px-4 py-3.5 text-sm font-semibold disabled:opacity-50"
+                      >
+                        {simulating ? "Simulando…" : "Simular pagamento (dev)"}
+                      </button>
+                    </div>
+                  ) : null}
 
-                  {simulateAllowed ? (
-                    <button
-                      type="button"
-                      disabled={simulating}
-                      onClick={() => void simulatePay()}
-                      className="mt-5 text-xs uppercase tracking-[0.18em] text-[color:var(--cart-dim)] underline-offset-4 hover:text-[color:var(--cart-copper)] hover:underline disabled:opacity-50"
-                    >
-                      {simulating ? "Simulando…" : "Simular pagamento (dev)"}
-                    </button>
+                  {showEmvUi ? (
+                    <>
+                      <p className="mt-4 text-center text-[11px] leading-relaxed text-[color:var(--cart-dim)] sm:text-xs">
+                        ⚡ Acesso automático: Assim que o Pix for confirmado, o
+                        desfoque some na hora nesta mesma tela. Sem assinatura e
+                        sem cobranças futuras.
+                      </p>
+
+                      {simulateAllowed ? (
+                        <button
+                          type="button"
+                          disabled={simulating}
+                          onClick={() => void simulatePay()}
+                          className="mt-5 text-xs uppercase tracking-[0.18em] text-[color:var(--cart-dim)] underline-offset-4 hover:text-[color:var(--cart-copper)] hover:underline disabled:opacity-50"
+                        >
+                          {simulating
+                            ? "Simulando…"
+                            : "Simular pagamento (dev)"}
+                        </button>
+                      ) : null}
+                    </>
                   ) : null}
                 </div>
               )}
