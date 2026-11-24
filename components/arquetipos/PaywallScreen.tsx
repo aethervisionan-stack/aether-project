@@ -124,12 +124,17 @@ export function PaywallScreen({ onUnlocked, visible = true }: Props) {
             data.description,
             data.parameterName ? `(campo: ${data.parameterName})` : null,
           ].filter(Boolean);
-          const detail =
+          let detail =
             parts.length > 0
               ? parts.join(" — ")
               : data.error ||
                 data.bodyPreview ||
                 `Não foi possível gerar o Pix (HTTP ${res.status})`;
+          // Operator action when PagBank Orders whitelist blocks production
+          if (/ACCESS_DENIED|whitelist/i.test(detail)) {
+            detail +=
+              " — Ação: solicitar ao PagBank liberação (whitelist) da API Orders/PIX em produção para esta conta.";
+          }
           throw new Error(detail);
         }
         if (cancelled) return;
