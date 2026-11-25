@@ -6,22 +6,32 @@ Extrai paleta dominante de cada carta (ColorThief + quantização Pillow),
 aplica cor principal no texto e secundária em keywords; se contraste baixo,
 usa backdrop escuro + stroke + sombra.
 
+Narração PT-BR: edge-tts (padrão) → ElevenLabs (se ELEVENLABS_API_KEY +
+TTS_ENGINE=elevenlabs) → Windows SAPI → sem voz (só trilha + aviso).
+
 Uso:
   python scripts/generate-tiktok-archetype-videos.py
   python scripts/generate-tiktok-archetype-videos.py --only 01-inocente
+  python scripts/generate-tiktok-archetype-videos.py --engine edge
+  python scripts/generate-tiktok-archetype-videos.py --engine sapi
+  python scripts/generate-tiktok-archetype-videos.py --engine none
 """
 
 from __future__ import annotations
 
 import argparse
+import asyncio
 import colorsys
 import json
 import math
+import os
 import re
 import shutil
 import subprocess
 import sys
 import tempfile
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 from PIL import Image
@@ -58,15 +68,54 @@ DEFAULT_OUT = Path(r"C:\Users\Next\Desktop\projeto quiz medieval\editado")
 WIDTH = 1080
 HEIGHT = 1920
 FPS = 30
-AUDIO_VOLUME = 0.16
+# Trilha sob narração (mais baixa); sobe um pouco se não houver voz
+MUSIC_VOLUME_WITH_VOICE = 0.10
+MUSIC_VOLUME_NO_VOICE = 0.16
+VOICE_VOLUME = 1.05
 FADE_OUT_SEC = 1.6
+# Timing estimado (só fallback sem TTS)
 CHARS_PER_SEC = 13.0
 MIN_PHRASE_SEC = 1.25
 MAX_PHRASE_SEC = 4.2
-GAP_SEC = 0.10
-LEAD_IN_SEC = 0.30
-TAIL_HOLD_SEC = 0.50
+GAP_SEC = 0.12
+LEAD_IN_SEC = 0.35
+TAIL_HOLD_SEC = 0.55
 CONTRAST_MIN = 3.2  # abaixo → backdrop
+
+# Ritmo/tom por personalidade
+TONE_FIRME = "firme"  # Governante / Sábio / Herói / Mago
+TONE_LEVE = "leve"  # Inocente / Explorador / Órfão / Bobo
+TONE_INTENSO = "intenso"  # Amante / Rebelde / Criador / Cuidador
+
+VOICE_PROFILES = {
+    TONE_FIRME: {
+        "edge_voice": "pt-BR-AntonioNeural",
+        "edge_rate": "-10%",
+        "edge_pitch": "-2Hz",
+        "sapi_rate": -3,  # -10..10
+        "eleven_stability": 0.55,
+        "eleven_similarity": 0.75,
+        "eleven_style": 0.15,
+    },
+    TONE_LEVE: {
+        "edge_voice": "pt-BR-FranciscaNeural",
+        "edge_rate": "+6%",
+        "edge_pitch": "+1Hz",
+        "sapi_rate": 2,
+        "eleven_stability": 0.40,
+        "eleven_similarity": 0.70,
+        "eleven_style": 0.35,
+    },
+    TONE_INTENSO: {
+        "edge_voice": "pt-BR-FranciscaNeural",
+        "edge_rate": "-4%",
+        "edge_pitch": "-1Hz",
+        "sapi_rate": -1,
+        "eleven_stability": 0.35,
+        "eleven_similarity": 0.80,
+        "eleven_style": 0.45,
+    },
+}
 
 # Keywords (pt-BR) recebem cor secundária da paleta
 ACCENT_WORDS = [
@@ -93,12 +142,13 @@ ACCENT_WORDS = [
 ]
 
 # Ordem: Inocente → Governante. Órfão usa pessoa_comum.jpg.
-# Roteiros divididos em blocos curtos (≈3–6 palavras), timing ∝ texto.
+# Roteiros profundos em blocos curtos; timing real vem do TTS.
 ARCHETYPES = [
     {
         "slug": "01-inocente",
         "card": "inocente.jpg",
         "title": "O Inocente",
+        "tone": TONE_LEVE,
         "lines": [
             "Você acha que só tem",
             "bom coração...",
@@ -124,6 +174,7 @@ ARCHETYPES = [
         "slug": "02-orfao",
         "card": "pessoa_comum.jpg",
         "title": "O Órfão",
+        "tone": TONE_LEVE,
         "lines": [
             "Se encaixar e não gerar atrito",
             "te dá paz...",
@@ -147,6 +198,7 @@ ARCHETYPES = [
         "slug": "03-heroi",
         "card": "heroi.jpg",
         "title": "O Herói",
+        "tone": TONE_FIRME,
         "lines": [
             "Se você parar de lutar",
             "por cinco minutos,",
@@ -171,6 +223,7 @@ ARCHETYPES = [
         "slug": "04-cuidador",
         "card": "cuidador.jpg",
         "title": "O Cuidador",
+        "tone": TONE_INTENSO,
         "lines": [
             "Ajudar todo mundo",
             "é amor de verdade...",
@@ -196,6 +249,7 @@ ARCHETYPES = [
         "slug": "05-explorador",
         "card": "explorador.jpg",
         "title": "O Explorador",
+        "tone": TONE_LEVE,
         "lines": [
             "Você ama a liberdade...",
             "ou só foge toda vez",
@@ -221,6 +275,7 @@ ARCHETYPES = [
         "slug": "06-rebelde",
         "card": "rebelde.jpg",
         "title": "O Rebelde",
+        "tone": TONE_INTENSO,
         "lines": [
             "Você quebra padrões",
             "por consciência...",
@@ -246,6 +301,7 @@ ARCHETYPES = [
         "slug": "07-amante",
         "card": "amante.jpg",
         "title": "O Amante",
+        "tone": TONE_INTENSO,
         "lines": [
             "Você vive tudo",
             "com intensidade...",
@@ -269,6 +325,7 @@ ARCHETYPES = [
         "slug": "08-criador",
         "card": "criador.jpg",
         "title": "O Criador",
+        "tone": TONE_INTENSO,
         "lines": [
             "Quantas ideias boas",
             "você já segurou",
@@ -294,6 +351,7 @@ ARCHETYPES = [
         "slug": "09-bobo-da-corte",
         "card": "bobo_da_corte.jpg",
         "title": "O Bobo da Corte",
+        "tone": TONE_LEVE,
         "lines": [
             "A piada alivia",
             "o ambiente...",
@@ -319,6 +377,7 @@ ARCHETYPES = [
         "slug": "10-sabio",
         "card": "sabio.jpg",
         "title": "O Sábio",
+        "tone": TONE_FIRME,
         "lines": [
             "Você está analisando",
             "com calma...",
@@ -343,6 +402,7 @@ ARCHETYPES = [
         "slug": "11-mago",
         "card": "mago.jpg",
         "title": "O Mago",
+        "tone": TONE_FIRME,
         "lines": [
             "Você enxerga o que",
             "os outros não veem...",
@@ -368,6 +428,7 @@ ARCHETYPES = [
         "slug": "12-governante",
         "card": "governante.jpg",
         "title": "O Governante",
+        "tone": TONE_FIRME,
         "lines": [
             "Assumir o comando",
             "te fortalece...",
@@ -564,13 +625,27 @@ def phrase_duration(text: str) -> float:
     return max(MIN_PHRASE_SEC, min(MAX_PHRASE_SEC, sec))
 
 
-def build_timeline(lines: list[str]) -> tuple[list[tuple[float, float, str]], float]:
+def build_timeline_estimated(lines: list[str]) -> tuple[list[tuple[float, float, str]], float]:
     t = LEAD_IN_SEC
     segments: list[tuple[float, float, str]] = []
     for i, line in enumerate(lines):
         dur = phrase_duration(line)
         start = t
         end = t + dur
+        segments.append((start, end, line))
+        t = end + (GAP_SEC if i < len(lines) - 1 else 0)
+    total = t + TAIL_HOLD_SEC
+    return segments, total
+
+
+def build_timeline_from_durs(
+    lines: list[str], durs: list[float]
+) -> tuple[list[tuple[float, float, str]], float]:
+    t = LEAD_IN_SEC
+    segments: list[tuple[float, float, str]] = []
+    for i, (line, dur) in enumerate(zip(lines, durs)):
+        start = t
+        end = t + max(dur, 0.05)
         segments.append((start, end, line))
         t = end + (GAP_SEC if i < len(lines) - 1 else 0)
     total = t + TAIL_HOLD_SEC
@@ -692,12 +767,320 @@ def probe_duration(ffprobe: str, media: Path) -> float:
     return float(data["format"]["duration"])
 
 
+def probe_stream(ffprobe: str, media: Path) -> dict:
+    out = subprocess.check_output(
+        [
+            ffprobe,
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=width,height,r_frame_rate",
+            "-show_entries",
+            "format=duration,size",
+            "-of",
+            "json",
+            str(media),
+        ],
+        text=True,
+    )
+    return json.loads(out)
+
+
+# ---------------------------------------------------------------------------
+# TTS engines
+# ---------------------------------------------------------------------------
+
+
+def resolve_engine(requested: str | None) -> tuple[str, str]:
+    """
+    Retorna (engine, note).
+    Preferência: edge-tts; ElevenLabs só se chave + engine=elevenlabs;
+    fallback SAPI; none = só trilha.
+    """
+    env_engine = (os.environ.get("TTS_ENGINE") or "").strip().lower()
+    choice = (requested or env_engine or "auto").strip().lower()
+    eleven_key = (os.environ.get("ELEVENLABS_API_KEY") or "").strip()
+
+    if choice in ("none", "off", "skip"):
+        return "none", "voz desabilitada (--engine none)"
+
+    if choice in ("elevenlabs", "eleven"):
+        if not eleven_key:
+            print(
+                "AVISO: TTS_ENGINE/ --engine=elevenlabs sem ELEVENLABS_API_KEY; "
+                "tentando edge-tts."
+            )
+        else:
+            return "elevenlabs", "ElevenLabs (ELEVENLABS_API_KEY)"
+
+    if choice in ("sapi", "windows", "win"):
+        return "sapi", "Windows SAPI (System.Speech)"
+
+    if choice in ("edge", "edge-tts", "auto", ""):
+        try:
+            import edge_tts  # noqa: F401
+
+            return "edge", "edge-tts (pt-BR Neural)"
+        except ImportError:
+            print("AVISO: edge-tts não instalado (pip install edge-tts).")
+            if eleven_key and choice == "auto":
+                return "elevenlabs", "ElevenLabs (fallback; edge-tts ausente)"
+            print("AVISO: tentando Windows SAPI.")
+            return "sapi", "Windows SAPI (fallback; edge-tts ausente)"
+
+    print(f"AVISO: engine desconhecido '{choice}'; usando edge-tts.")
+    try:
+        import edge_tts  # noqa: F401
+
+        return "edge", "edge-tts (pt-BR Neural)"
+    except ImportError:
+        return "sapi", "Windows SAPI (fallback)"
+
+
+async def _edge_save(
+    text: str, out_path: Path, voice: str, rate: str, pitch: str
+) -> None:
+    import edge_tts
+
+    communicate = edge_tts.Communicate(text, voice, rate=rate, pitch=pitch)
+    await communicate.save(str(out_path))
+
+
+def synthesize_edge_lines(
+    lines: list[str], tone: str, work_dir: Path
+) -> list[Path]:
+    profile = VOICE_PROFILES[tone]
+    voice = profile["edge_voice"]
+    rate = profile["edge_rate"]
+    pitch = profile["edge_pitch"]
+    paths: list[Path] = []
+
+    async def all_lines() -> None:
+        for i, line in enumerate(lines):
+            out = work_dir / f"tts_{i:02d}.mp3"
+            await _edge_save(line, out, voice, rate, pitch)
+            paths.append(out)
+
+    asyncio.run(all_lines())
+    return paths
+
+
+def synthesize_elevenlabs_lines(
+    lines: list[str], tone: str, work_dir: Path
+) -> list[Path]:
+    api_key = (os.environ.get("ELEVENLABS_API_KEY") or "").strip()
+    voice_id = (
+        os.environ.get("ELEVENLABS_VOICE_ID") or "EXAVITQu4vr4xnSDxMaL"
+    ).strip()  # default Rachel-ish; override via env
+    model = (os.environ.get("ELEVENLABS_MODEL") or "eleven_multilingual_v2").strip()
+    profile = VOICE_PROFILES[tone]
+    paths: list[Path] = []
+
+    for i, line in enumerate(lines):
+        out = work_dir / f"tts_{i:02d}.mp3"
+        payload = json.dumps(
+            {
+                "text": line,
+                "model_id": model,
+                "voice_settings": {
+                    "stability": profile["eleven_stability"],
+                    "similarity_boost": profile["eleven_similarity"],
+                    "style": profile["eleven_style"],
+                    "use_speaker_boost": True,
+                },
+            }
+        ).encode("utf-8")
+        req = urllib.request.Request(
+            f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}",
+            data=payload,
+            method="POST",
+            headers={
+                "Accept": "audio/mpeg",
+                "Content-Type": "application/json",
+                "xi-api-key": api_key,
+            },
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                out.write_bytes(resp.read())
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode("utf-8", errors="replace")[:500]
+            raise RuntimeError(f"ElevenLabs HTTP {exc.code}: {body}") from exc
+        except Exception as exc:  # noqa: BLE001
+            raise RuntimeError(f"ElevenLabs falhou: {exc}") from exc
+        paths.append(out)
+    return paths
+
+
+def synthesize_sapi_lines(
+    lines: list[str], tone: str, work_dir: Path
+) -> list[Path]:
+    """Windows SAPI via PowerShell System.Speech → WAV por linha."""
+    rate = int(VOICE_PROFILES[tone]["sapi_rate"])
+    paths: list[Path] = []
+    for i, line in enumerate(lines):
+        out = work_dir / f"tts_{i:02d}.wav"
+        # Escape for PowerShell single-quoted string
+        safe = line.replace("'", "''")
+        out_ps = str(out).replace("'", "''")
+        ps = (
+            "Add-Type -AssemblyName System.Speech; "
+            "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
+            f"$s.Rate = {rate}; "
+            f"$s.SetOutputToWaveFile('{out_ps}'); "
+            f"$s.Speak('{safe}'); "
+            "$s.Dispose();"
+        )
+        proc = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", ps],
+            capture_output=True,
+            text=True,
+        )
+        if proc.returncode != 0 or not out.exists() or out.stat().st_size < 100:
+            err = (proc.stderr or proc.stdout or "SAPI failed")[-800:]
+            raise RuntimeError(f"SAPI falhou na linha {i}: {err}")
+        paths.append(out)
+    return paths
+
+
+def make_silence_wav(ffmpeg: str, path: Path, duration: float, sr: int = 24000) -> None:
+    run(
+        [
+            ffmpeg,
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            f"anullsrc=r={sr}:cl=mono",
+            "-t",
+            f"{duration:.3f}",
+            "-c:a",
+            "pcm_s16le",
+            str(path),
+        ]
+    )
+
+
+def concat_voice_track(
+    ffmpeg: str,
+    ffprobe: str,
+    line_audios: list[Path],
+    work_dir: Path,
+    out_path: Path,
+) -> list[float]:
+    """Monta trilha de voz com lead-in + gaps; retorna duração de cada linha."""
+    durs = [probe_duration(ffprobe, p) for p in line_audios]
+    lead = work_dir / "silence_lead.wav"
+    gap = work_dir / "silence_gap.wav"
+    tail = work_dir / "silence_tail.wav"
+    make_silence_wav(ffmpeg, lead, LEAD_IN_SEC)
+    make_silence_wav(ffmpeg, gap, GAP_SEC)
+    make_silence_wav(ffmpeg, tail, TAIL_HOLD_SEC)
+
+    # Normaliza tudo para wav mono 24k antes do concat
+    normalized: list[Path] = []
+    for i, src in enumerate(line_audios):
+        dst = work_dir / f"norm_{i:02d}.wav"
+        run(
+            [
+                ffmpeg,
+                "-y",
+                "-i",
+                str(src),
+                "-ar",
+                "24000",
+                "-ac",
+                "1",
+                "-c:a",
+                "pcm_s16le",
+                str(dst),
+            ]
+        )
+        normalized.append(dst)
+
+    concat_list = work_dir / "voice_concat.txt"
+    parts: list[str] = [f"file '{lead.resolve().as_posix()}'"]
+    for i, n in enumerate(normalized):
+        parts.append(f"file '{n.resolve().as_posix()}'")
+        if i < len(normalized) - 1:
+            parts.append(f"file '{gap.resolve().as_posix()}'")
+    parts.append(f"file '{tail.resolve().as_posix()}'")
+    concat_list.write_text("\n".join(parts) + "\n", encoding="utf-8")
+
+    run(
+        [
+            ffmpeg,
+            "-y",
+            "-f",
+            "concat",
+            "-safe",
+            "0",
+            "-i",
+            str(concat_list),
+            "-c:a",
+            "pcm_s16le",
+            str(out_path),
+        ]
+    )
+    return durs
+
+
+def synthesize_narration(
+    engine: str,
+    lines: list[str],
+    tone: str,
+    ffmpeg: str,
+    ffprobe: str,
+    work_dir: Path,
+) -> tuple[Path | None, list[tuple[float, float, str]], float, str]:
+    """
+    Gera trilha de voz + timeline sync.
+    Retorna (voice_wav|None, segments, duration, detail).
+    """
+    if engine == "none":
+        segments, duration = build_timeline_estimated(lines)
+        return None, segments, duration, "sem voz (timeline estimada)"
+
+    try:
+        if engine == "edge":
+            line_audios = synthesize_edge_lines(lines, tone, work_dir)
+            detail = (
+                f"edge-tts {VOICE_PROFILES[tone]['edge_voice']} "
+                f"rate={VOICE_PROFILES[tone]['edge_rate']} "
+                f"pitch={VOICE_PROFILES[tone]['edge_pitch']} tone={tone}"
+            )
+        elif engine == "elevenlabs":
+            line_audios = synthesize_elevenlabs_lines(lines, tone, work_dir)
+            detail = f"ElevenLabs tone={tone}"
+        elif engine == "sapi":
+            line_audios = synthesize_sapi_lines(lines, tone, work_dir)
+            detail = f"Windows SAPI rate={VOICE_PROFILES[tone]['sapi_rate']} tone={tone}"
+        else:
+            segments, duration = build_timeline_estimated(lines)
+            return None, segments, duration, f"engine desconhecido ({engine})"
+
+        voice_path = work_dir / "voice_track.wav"
+        durs = concat_voice_track(ffmpeg, ffprobe, line_audios, work_dir, voice_path)
+        segments, duration = build_timeline_from_durs(lines, durs)
+        # Ajusta duração total à trilha real (lead+lines+gaps+tail)
+        real = probe_duration(ffprobe, voice_path)
+        duration = max(duration, real)
+        return voice_path, segments, duration, detail
+    except Exception as exc:  # noqa: BLE001
+        print(f"AVISO: TTS ({engine}) falhou ({exc}); gerando sem voz.")
+        segments, duration = build_timeline_estimated(lines)
+        return None, segments, duration, f"fallback sem voz ({engine} falhou: {exc})"
+
+
 def generate_one(
     ffmpeg: str,
     ffprobe: str,
     arch: dict,
     out_dir: Path,
     work_dir: Path,
+    engine: str,
 ) -> tuple[Path, dict]:
     card = CARDS_DIR / arch["card"]
     if not card.exists():
@@ -709,12 +1092,26 @@ def generate_one(
         f"contrast={palette['contrast']} backdrop={palette['needs_backdrop']}"
     )
 
-    segments, duration = build_timeline(arch["lines"])
+    arch_work = work_dir / arch["slug"]
+    arch_work.mkdir(parents=True, exist_ok=True)
+
+    voice_path, segments, duration, tts_detail = synthesize_narration(
+        engine,
+        arch["lines"],
+        arch.get("tone", TONE_LEVE),
+        ffmpeg,
+        ffprobe,
+        arch_work,
+    )
+    print(f"  TTS: {tts_detail}  duration≈{duration:.2f}s")
+    palette["tts"] = tts_detail
+    palette["has_voice"] = voice_path is not None
+
     frames = max(int(round(duration * FPS)), FPS)
     zoom_end = 1.10
     zoom_expr = f"1+({zoom_end}-1)*on/{max(frames - 1, 1)}"
 
-    ass_path = work_dir / f"{arch['slug']}.ass"
+    ass_path = arch_work / f"{arch['slug']}.ass"
     write_ass(
         ass_path,
         segments,
@@ -740,37 +1137,93 @@ def generate_one(
         f"ass='{ass_escaped}'"
     )
 
-    cmd = [
-        ffmpeg,
-        "-y",
-        "-loop",
-        "1",
-        "-i",
-        str(card),
-        "-i",
-        str(AUDIO_PATH),
-        "-vf",
-        vf,
-        "-af",
-        f"volume={AUDIO_VOLUME},afade=t=out:st={fade_start:.3f}:d={FADE_OUT_SEC}",
-        "-t",
-        f"{duration:.3f}",
-        "-c:v",
-        "libx264",
-        "-pix_fmt",
-        "yuv420p",
-        "-preset",
-        "medium",
-        "-crf",
-        "20",
-        "-c:a",
-        "aac",
-        "-b:a",
-        "160k",
-        "-movflags",
-        "+faststart",
-        str(out_path),
-    ]
+    if voice_path is not None:
+        # 0=card, 1=voice, 2=music — ducking da trilha sob a fala
+        music_vol = MUSIC_VOLUME_WITH_VOICE
+        af = (
+            f"[1:a]volume={VOICE_VOLUME},"
+            f"aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo,"
+            f"asplit=2[voice][sc];"
+            f"[2:a]volume={music_vol},"
+            f"afade=t=out:st={fade_start:.3f}:d={FADE_OUT_SEC},"
+            f"aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo[music];"
+            f"[music][sc]sidechaincompress="
+            f"threshold=0.02:ratio=6:attack=40:release=350:makeup=1:mix=0.85[ducked];"
+            f"[voice][ducked]amix=inputs=2:duration=first:dropout_transition=0:"
+            f"normalize=0[aout]"
+        )
+        cmd = [
+            ffmpeg,
+            "-y",
+            "-loop",
+            "1",
+            "-i",
+            str(card),
+            "-i",
+            str(voice_path),
+            "-i",
+            str(AUDIO_PATH),
+            "-vf",
+            vf,
+            "-filter_complex",
+            af,
+            "-map",
+            "0:v",
+            "-map",
+            "[aout]",
+            "-t",
+            f"{duration:.3f}",
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "-preset",
+            "medium",
+            "-crf",
+            "20",
+            "-c:a",
+            "aac",
+            "-b:a",
+            "192k",
+            "-ar",
+            "48000",
+            "-movflags",
+            "+faststart",
+            str(out_path),
+        ]
+    else:
+        music_vol = MUSIC_VOLUME_NO_VOICE
+        cmd = [
+            ffmpeg,
+            "-y",
+            "-loop",
+            "1",
+            "-i",
+            str(card),
+            "-i",
+            str(AUDIO_PATH),
+            "-vf",
+            vf,
+            "-af",
+            f"volume={music_vol},afade=t=out:st={fade_start:.3f}:d={FADE_OUT_SEC}",
+            "-t",
+            f"{duration:.3f}",
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "-preset",
+            "medium",
+            "-crf",
+            "20",
+            "-c:a",
+            "aac",
+            "-b:a",
+            "160k",
+            "-movflags",
+            "+faststart",
+            str(out_path),
+        ]
     run(cmd)
 
     if not out_path.exists() or out_path.stat().st_size < 10_000:
@@ -787,6 +1240,12 @@ def main() -> None:
         nargs="*",
         help="Gerar apenas estes slugs (ex.: 01-inocente 12-governante)",
     )
+    parser.add_argument(
+        "--engine",
+        choices=["auto", "edge", "elevenlabs", "sapi", "none"],
+        default="auto",
+        help="Motor de voz (padrão: edge-tts; elevenlabs exige ELEVENLABS_API_KEY)",
+    )
     args = parser.parse_args()
 
     if not CARDS_DIR.is_dir():
@@ -796,6 +1255,7 @@ def main() -> None:
 
     ffmpeg = find_ffmpeg()
     ffprobe = find_ffprobe()
+    engine, engine_note = resolve_engine(args.engine)
     out_dir: Path = args.out
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -812,17 +1272,26 @@ def main() -> None:
     print(f"Trilha: {AUDIO_PATH}")
     print(f"Saída:  {out_dir}")
     print(f"ffmpeg: {ffmpeg}")
+    print(f"TTS:    {engine} — {engine_note}")
 
     results = []
     with tempfile.TemporaryDirectory(prefix="tiktok-archetypes-") as tmp:
         work = Path(tmp)
         for arch in selected:
-            print(f"\n=== {arch['slug']} ({arch['title']}) ===")
-            path, palette = generate_one(ffmpeg, ffprobe, arch, out_dir, work)
-            dur = probe_duration(ffprobe, path)
+            print(f"\n=== {arch['slug']} ({arch['title']}) tone={arch.get('tone')} ===")
+            path, palette = generate_one(
+                ffmpeg, ffprobe, arch, out_dir, work, engine
+            )
+            meta = probe_stream(ffprobe, path)
+            stream = (meta.get("streams") or [{}])[0]
+            fmt = meta.get("format") or {}
+            dur = float(fmt.get("duration") or probe_duration(ffprobe, path))
             size = path.stat().st_size
-            results.append((path, size, dur, palette))
-            print(f"OK {path.name}  {size/1_000_000:.2f} MB  {dur:.1f}s")
+            results.append((path, size, dur, palette, stream))
+            print(
+                f"OK {path.name}  {size/1_000_000:.2f} MB  {dur:.1f}s  "
+                f"{stream.get('width')}x{stream.get('height')} @{stream.get('r_frame_rate')}"
+            )
 
     print("\n--- Verificação ---")
     expected = [a["slug"] for a in (selected if args.only else ARCHETYPES)]
@@ -833,8 +1302,22 @@ def main() -> None:
             errors.append(f"faltando: {mp4}")
             continue
         try:
-            d = probe_duration(ffprobe, mp4)
-            print(f"OK {mp4.name}\t{mp4.stat().st_size:>10} bytes\t{d:.2f}s")
+            meta = probe_stream(ffprobe, mp4)
+            stream = (meta.get("streams") or [{}])[0]
+            fmt = meta.get("format") or {}
+            d = float(fmt.get("duration") or 0)
+            w, h = stream.get("width"), stream.get("height")
+            fps = stream.get("r_frame_rate")
+            print(
+                f"OK {mp4.name}\t{mp4.stat().st_size:>10} bytes\t{d:.2f}s\t"
+                f"{w}x{h}\t{fps}"
+            )
+            if w != WIDTH or h != HEIGHT:
+                errors.append(f"resolução errada: {mp4.name} {w}x{h}")
+            if fps not in ("30/1", "30"):
+                # zoompan força 30; aceita 30/1
+                if fps != "30/1":
+                    errors.append(f"fps inesperado: {mp4.name} {fps}")
         except Exception as exc:  # noqa: BLE001
             errors.append(f"não abre: {mp4} ({exc})")
 
@@ -844,14 +1327,16 @@ def main() -> None:
     if not args.only and len(expected) != 12:
         raise SystemExit("Esperava 12 arquétipos")
 
-    print("\n--- Paletas ---")
-    for path, size, dur, palette in results:
+    print("\n--- Paletas / TTS ---")
+    for path, size, dur, palette, _stream in results:
         print(
             f"{path.name}: primary={palette['primary']} secondary={palette['secondary']} "
-            f"contrast={palette['contrast']} backdrop={palette['needs_backdrop']}"
+            f"contrast={palette['contrast']} backdrop={palette['needs_backdrop']} "
+            f"voice={palette.get('has_voice')} | {palette.get('tts')}"
         )
 
     print(f"\nConcluído: {len(expected)} vídeo(s) em {out_dir}")
+    print(f"Engine: {engine} — {engine_note}")
     print(f"Approach: {results[0][3]['approach'] if results else 'n/a'}")
 
 
