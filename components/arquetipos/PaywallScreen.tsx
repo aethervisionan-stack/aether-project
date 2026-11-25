@@ -1,13 +1,16 @@
 "use client";
 
 import { motion, useReducedMotion } from "framer-motion";
-import { Check, Copy, Loader2, Shield } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { Check, Copy, Loader2, Lock, Shield } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { buildDiagnosis } from "@/src/data/diagnosis";
+import type { NarrativeResult } from "@/src/data/archetypes";
 import { playRevealChord } from "@/src/utils/soundEffects";
 import { EmberCard } from "./EmberCard";
 import { SanctuaryBackdrop } from "./CinematicChrome";
 
 type Props = {
+  result: NarrativeResult;
   onUnlocked: () => void;
 };
 
@@ -34,8 +37,9 @@ function qrImageSrc(pixCopyPaste: string, qrCodeImageUrl: string | null) {
   return `https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=8&data=${encodeURIComponent(pixCopyPaste)}`;
 }
 
-export function PaywallScreen({ onUnlocked }: Props) {
+export function PaywallScreen({ result, onUnlocked }: Props) {
   const reduce = useReducedMotion();
+  const diagnosis = useMemo(() => buildDiagnosis(result), [result]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [orderId, setOrderId] = useState<string | null>(null);
@@ -163,7 +167,7 @@ export function PaywallScreen({ onUnlocked }: Props) {
           transition={{ duration: 0.5, ease: EASE }}
           className="cart-display text-center text-[11px] uppercase tracking-[0.32em] text-[color:var(--cart-copper)]"
         >
-          Portal do Relatório
+          Prévia do Dossiê
         </motion.p>
 
         <motion.h1
@@ -172,27 +176,68 @@ export function PaywallScreen({ onUnlocked }: Props) {
           transition={{ duration: 0.55, ease: EASE, delay: 0.04 }}
           className="cart-display mt-4 text-center text-3xl tracking-wide text-[color:var(--cine-ink)] sm:text-4xl"
         >
-          Desbloqueie por Pix
+          Sua confluência está pronta
         </motion.h1>
+
+        <motion.div
+          initial={reduce ? false : { opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.55, ease: EASE, delay: 0.08 }}
+          className="cart-card mt-8 rounded-sm p-5"
+        >
+          <p className="cart-display text-[10px] uppercase tracking-[0.24em] text-[color:var(--cart-copper)]">
+            Arquétipo Dominante & Subarquétipo
+          </p>
+          <p className="mt-3 text-lg leading-snug text-[color:var(--cart-ink)]">
+            <span className="font-semibold" style={{ color: diagnosis.dominant.accent }}>
+              {diagnosis.dominant.title}
+            </span>{" "}
+            <span className="text-[color:var(--cart-dim)]">
+              ({diagnosis.dominantPct}%)
+            </span>
+            <span className="text-[color:var(--cart-muted)]"> · </span>
+            <span className="font-semibold" style={{ color: diagnosis.sub.accent }}>
+              {diagnosis.sub.title}
+            </span>{" "}
+            <span className="text-[color:var(--cart-dim)]">
+              ({diagnosis.secondaryPct}%)
+            </span>
+          </p>
+          <p className="mt-2 text-sm text-[color:var(--cart-muted)]">
+            {diagnosis.confluenceTitle}
+          </p>
+          <p className="mt-3 text-sm leading-relaxed text-[color:var(--cart-muted)]">
+            {diagnosis.confluenceText.slice(0, 180)}
+            {diagnosis.confluenceText.length > 180 ? "…" : ""}
+          </p>
+          <div className="mt-4 flex items-start gap-2 rounded-sm border border-[color:var(--cart-border-soft)] bg-black/20 px-3 py-3 text-xs leading-relaxed text-[color:var(--cart-dim)]">
+            <Lock size={14} className="mt-0.5 shrink-0 text-[color:var(--cart-copper)]" />
+            <span>
+              Espelho das escolhas, luz, gatilhos de autossabotagem, sombra e 3
+              passos de integração — liberados após Pix R$ 3,00. Suas 16
+              respostas ficam salvas neste aparelho.
+            </span>
+          </div>
+        </motion.div>
 
         <motion.p
           initial={reduce ? false : { opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.55, ease: EASE, delay: 0.08 }}
-          className="mx-auto mt-3 max-w-md text-center text-sm leading-relaxed text-[color:var(--cart-muted)]"
+          transition={{ duration: 0.55, ease: EASE, delay: 0.1 }}
+          className="mx-auto mt-8 max-w-md text-center text-sm leading-relaxed text-[color:var(--cart-muted)]"
         >
-          Seu pergaminho está pronto. Pague{" "}
+          Desbloqueie o dossiê completo por{" "}
           <strong className="font-semibold text-[color:var(--cart-copper-bright)]">
             R$ 3,00
           </strong>{" "}
-          via Pix — sem cadastro, sem formulário. A liberação é automática.
+          via Pix — sem cadastro. A liberação é automática.
         </motion.p>
 
         <motion.div
           initial={reduce ? false : { opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, ease: EASE, delay: 0.1 }}
-          className="mt-8"
+          transition={{ duration: 0.6, ease: EASE, delay: 0.12 }}
+          className="mt-6"
         >
           <EmberCard className="p-6 sm:p-8">
             {loading ? (

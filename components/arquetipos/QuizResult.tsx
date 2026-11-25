@@ -4,15 +4,17 @@ import { motion, useReducedMotion } from "framer-motion";
 import { toPng } from "html-to-image";
 import { Check, Copy, Download, Loader2, RotateCcw } from "lucide-react";
 import Image from "next/image";
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import {
-  TOTAL_QUESTIONS,
-  buildIntro,
-  formatShareText,
   joinPt,
   type ArchetypeProfile,
   type NarrativeResult,
 } from "@/src/data/archetypes";
+import {
+  buildDiagnosis,
+  formatDiagnosisShareText,
+} from "@/src/data/diagnosis";
+import { TOTAL_QUESTIONS } from "@/src/data/scoring";
 import { OrnateCorners, SanctuaryBackdrop } from "./CinematicChrome";
 import {
   SHARE_CARD_HEIGHT,
@@ -30,9 +32,11 @@ const EASE = [0.22, 1, 0.36, 1] as const;
 function DominantCard({
   profile,
   className = "",
+  badge,
 }: {
   profile: ArchetypeProfile;
   className?: string;
+  badge?: string;
 }) {
   return (
     <div
@@ -61,7 +65,7 @@ function DominantCard({
           className="cart-display text-[10px] uppercase tracking-[0.28em]"
           style={{ color: profile.accent }}
         >
-          Brasão
+          {badge ?? "Brasão"}
         </p>
         <h2 className="cart-display mt-1.5 text-xl tracking-wide text-[color:var(--cine-ink)] sm:text-2xl">
           {profile.title}
@@ -74,17 +78,30 @@ function DominantCard({
   );
 }
 
-function SecondaryThumb({ profile }: { profile: ArchetypeProfile }) {
+function SectionCard({
+  title,
+  delay,
+  children,
+}: {
+  title: string;
+  delay: number;
+  children: ReactNode;
+}) {
+  const reduce = useReducedMotion();
   return (
-    <div className="relative h-20 w-14 shrink-0 overflow-hidden rounded-sm border border-[color:var(--cine-border-soft)]">
-      <Image
-        src={profile.image}
-        alt={profile.title}
-        fill
-        sizes="56px"
-        className="object-cover"
-      />
-    </div>
+    <motion.div
+      initial={reduce ? false : { opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.55, ease: EASE, delay }}
+      className="cart-card mt-8 rounded-sm p-6"
+    >
+      <h3 className="cart-display text-[11px] uppercase tracking-[0.22em] text-[color:var(--cart-copper)]">
+        {title}
+      </h3>
+      <div className="mt-4 text-sm leading-relaxed text-[color:var(--cart-muted)]">
+        {children}
+      </div>
+    </motion.div>
   );
 }
 
@@ -93,12 +110,15 @@ export function QuizResult({ result, onRestart }: Props) {
   const [copied, setCopied] = useState(false);
   const [sharing, setSharing] = useState(false);
   const shareCardRef = useRef<HTMLDivElement>(null);
-  const intro = useMemo(() => buildIntro(result), [result]);
+  const diagnosis = useMemo(() => buildDiagnosis(result), [result]);
   const principal = result.primary;
+  const sub = diagnosis.sub;
 
   async function copyResult() {
     try {
-      await navigator.clipboard.writeText(formatShareText(result));
+      await navigator.clipboard.writeText(
+        formatDiagnosisShareText(result, diagnosis),
+      );
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -111,7 +131,6 @@ export function QuizResult({ result, onRestart }: Props) {
     if (!node || sharing) return;
     setSharing(true);
     try {
-      // Wait a frame so off-screen portraits are painted
       await new Promise<void>((r) => requestAnimationFrame(() => r()));
       const dataUrl = await toPng(node, {
         width: SHARE_CARD_WIDTH,
@@ -126,7 +145,7 @@ export function QuizResult({ result, onRestart }: Props) {
       const blob = await (await fetch(dataUrl)).blob();
       const fileName = `arquetipo-${principal.id}.png`;
       const file = new File([blob], fileName, { type: "image/png" });
-      const shareText = buildIntro(result);
+      const shareText = `${diagnosis.confluenceTitle} — ${principal.title} ${diagnosis.dominantPct}% · ${sub.title} ${diagnosis.secondaryPct}%`;
 
       const canFileShare =
         typeof navigator !== "undefined" &&
@@ -143,7 +162,6 @@ export function QuizResult({ result, onRestart }: Props) {
           });
           return;
         } catch (err) {
-          // User cancel → stop; other errors fall through to download
           if (err instanceof DOMException && err.name === "AbortError") return;
         }
       }
@@ -164,6 +182,13 @@ export function QuizResult({ result, onRestart }: Props) {
     }
   }
 
+  const modeLabel =
+    diagnosis.confluenceMode === "potencializa"
+      ? "potencializa"
+      : diagnosis.confluenceMode === "tensiona"
+        ? "tensiona"
+        : "equilibra";
+
   return (
     <section className="cine-sanctuary-band relative mx-auto min-h-[100dvh] w-full max-w-2xl px-5 pb-16 pt-12">
       <SanctuaryBackdrop opacity={0.25} />
@@ -174,7 +199,7 @@ export function QuizResult({ result, onRestart }: Props) {
           transition={{ duration: 0.55, ease: EASE }}
           className="cart-display text-[11px] uppercase tracking-[0.32em] text-[color:var(--cart-copper)]"
         >
-          Relatório de Expedição
+          Dossiê Personalizado
         </motion.p>
 
         <motion.div
@@ -183,40 +208,102 @@ export function QuizResult({ result, onRestart }: Props) {
           transition={{ duration: 0.7, ease: EASE, delay: 0.05 }}
           className="mx-auto mt-8"
         >
-          {result.hybrid ? (
-            <div className="grid grid-cols-2 gap-3 sm:gap-5">
-              {result.dominants.map((d) => (
-                <DominantCard key={d.profile.id} profile={d.profile} />
-              ))}
-            </div>
-          ) : (
-            <div className="mx-auto max-w-[280px] sm:max-w-[320px]">
-              <DominantCard profile={principal} />
-            </div>
-          )}
+          <div className="grid grid-cols-2 gap-3 sm:gap-5">
+            <DominantCard
+              profile={principal}
+              badge={`Dominante · ${diagnosis.dominantPct}%`}
+            />
+            <DominantCard
+              profile={sub}
+              badge={`Sub · ${diagnosis.secondaryPct}%`}
+            />
+          </div>
           <p className="cart-display mt-5 text-center text-[10px] uppercase tracking-[0.32em] text-[color:var(--cart-muted)]">
-            {result.hybrid ? "Pergaminho Híbrido" : "Pergaminho Dominante"}
+            Confluência Central
           </p>
         </motion.div>
 
-        <motion.p
-          initial={reduce ? false : { opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.55, ease: EASE, delay: 0.12 }}
-          className="mt-10 text-base leading-relaxed text-[color:var(--cart-muted)]"
+        <SectionCard title="1. Arquétipo Dominante & Subarquétipo" delay={0.12}>
+          <p className="cart-display text-xl tracking-wide text-[color:var(--cart-ink)]">
+            {diagnosis.confluenceTitle}
+          </p>
+          <p className="mt-3">
+            A combinação{" "}
+            <strong className="font-medium text-[color:var(--cart-ink)]">
+              {modeLabel}
+            </strong>{" "}
+            o perfil. {diagnosis.confluenceText}
+          </p>
+        </SectionCard>
+
+        <SectionCard title="2. Espelho das Suas Escolhas" delay={0.16}>
+          <p>{diagnosis.mirror}</p>
+          {diagnosis.topTags.length > 0 && (
+            <ul className="mt-4 flex flex-wrap gap-2">
+              {diagnosis.topTags.map((t) => (
+                <li
+                  key={t.tag}
+                  className="border border-[color:var(--cart-border-soft)] px-2.5 py-1 text-[11px] uppercase tracking-[0.12em] text-[color:var(--cart-copper)]"
+                >
+                  {t.label} · {t.count}×
+                </li>
+              ))}
+            </ul>
+          )}
+        </SectionCard>
+
+        <SectionCard title="3. Pontos Fortes (Sua Luz em Ação)" delay={0.2}>
+          <p>{diagnosis.strengths}</p>
+        </SectionCard>
+
+        <SectionCard
+          title="4. Pontos Fracos (Gatilhos de Autossabotagem)"
+          delay={0.24}
         >
-          {intro}
-        </motion.p>
+          <p>{diagnosis.weaknesses}</p>
+        </SectionCard>
 
         <motion.div
           initial={reduce ? false : { opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.55, ease: EASE, delay: 0.16 }}
-          className="cart-card mt-10 overflow-hidden rounded-sm"
+          transition={{ duration: 0.55, ease: EASE, delay: 0.28 }}
+          className="cart-card mt-8 rounded-sm p-6"
+          style={{
+            boxShadow: `0 0 36px ${principal.accent}18, 0 18px 40px rgba(0,0,0,0.4)`,
+          }}
+        >
+          <OrnateCorners className="p-1">
+            <h3 className="cart-display text-[11px] uppercase tracking-[0.22em] text-[color:var(--cart-copper)]">
+              5. A Sombra
+            </h3>
+            <p className="mt-4 text-sm leading-relaxed text-[color:var(--cart-muted)]">
+              {diagnosis.shadow}
+            </p>
+            <p className="cart-display mt-6 text-[11px] uppercase tracking-[0.18em] text-[color:var(--cart-copper)]">
+              3 Passos Práticos de Integração
+            </p>
+            <ol className="mt-3 space-y-3 text-sm leading-relaxed text-[color:var(--cart-ink)]/85">
+              {diagnosis.integrationSteps.map((step, i) => (
+                <li key={i} className="flex gap-3">
+                  <span className="cart-display text-[color:var(--cart-copper)]">
+                    {i + 1}.
+                  </span>
+                  <span>{step}</span>
+                </li>
+              ))}
+            </ol>
+          </OrnateCorners>
+        </motion.div>
+
+        <motion.div
+          initial={reduce ? false : { opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.55, ease: EASE, delay: 0.32 }}
+          className="cart-card mt-8 overflow-hidden rounded-sm"
         >
           <div className="border-b border-[color:var(--cart-border-soft)] px-4 py-3">
             <h3 className="cart-display text-[11px] uppercase tracking-[0.22em] text-[color:var(--cart-copper)]">
-              Registro Completo da Expedição
+              Pontuação Híbrida (Primário +3 · Secundário +1)
             </h3>
           </div>
           <div className="overflow-x-auto">
@@ -225,7 +312,8 @@ export function QuizResult({ result, onRestart }: Props) {
                 <tr className="border-b border-[color:var(--cart-border-soft)] text-[11px] uppercase tracking-[0.14em] text-[color:var(--cart-dim)]">
                   <th className="px-4 py-3 font-medium">Arquétipo</th>
                   <th className="px-4 py-3 font-medium">Pontos</th>
-                  <th className="px-4 py-3 font-medium">Papel no Seu Perfil</th>
+                  <th className="px-4 py-3 font-medium">Afinidade</th>
+                  <th className="px-4 py-3 font-medium">Papel</th>
                 </tr>
               </thead>
               <tbody>
@@ -239,6 +327,9 @@ export function QuizResult({ result, onRestart }: Props) {
                     </td>
                     <td className="px-4 py-3 tabular text-[color:var(--cart-copper)]">
                       {d.score} pts
+                    </td>
+                    <td className="px-4 py-3 tabular text-[color:var(--cart-muted)]">
+                      {d.affinityPct}%
                     </td>
                     <td className="px-4 py-3 text-[color:var(--cart-muted)]">
                       {d.profile.dominantRole}
@@ -256,6 +347,9 @@ export function QuizResult({ result, onRestart }: Props) {
                     <td className="px-4 py-3 tabular text-[color:var(--cart-muted)]">
                       {s.score} pts
                     </td>
+                    <td className="px-4 py-3 tabular text-[color:var(--cart-dim)]">
+                      {s.affinityPct}%
+                    </td>
                     <td className="px-4 py-3 text-[color:var(--cart-muted)]">
                       {s.profile.subRole}
                     </td>
@@ -269,18 +363,15 @@ export function QuizResult({ result, onRestart }: Props) {
                         .join(" / ")}
                     </td>
                     <td className="px-4 py-3 tabular text-[color:var(--cart-dim)]">
-                      {result.complementary.every((c) => c.score === 1)
-                        ? "1 pt cada"
-                        : result.complementary
-                            .map((c) => `${c.score}`)
-                            .join(", ") + " pts"}
+                      {result.complementary.map((c) => c.score).join(", ")} pts
+                    </td>
+                    <td className="px-4 py-3 tabular text-[color:var(--cart-dim)]">
+                      —
                     </td>
                     <td className="px-4 py-3 text-[color:var(--cart-dim)]">
-                      Traços complementares de{" "}
+                      Traços de{" "}
                       {joinPt(
-                        result.complementary.map(
-                          (c) => c.profile.traitKeyword,
-                        ),
+                        result.complementary.map((c) => c.profile.traitKeyword),
                       )}
                     </td>
                   </tr>
@@ -290,97 +381,9 @@ export function QuizResult({ result, onRestart }: Props) {
           </div>
         </motion.div>
 
-        <motion.div
-          initial={reduce ? false : { opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.55, ease: EASE, delay: 0.2 }}
-          className="cart-card mt-8 rounded-sm p-6"
-          style={{
-            boxShadow: `0 0 36px ${principal.accent}18, 0 18px 40px rgba(0,0,0,0.4)`,
-          }}
-        >
-          <OrnateCorners className="p-1">
-            <h3 className="cart-display text-2xl tracking-wide text-[color:var(--cart-copper-bright)]">
-              Perfil Principal: {principal.title}{" "}
-              <span className="text-[color:var(--cart-muted)]">
-                ({principal.subtitle})
-              </span>
-            </h3>
-            <p className="mt-3 text-sm leading-relaxed text-[color:var(--cart-muted)]">
-              Território{" "}
-              <strong className="font-medium text-[color:var(--cart-ink)]">
-                {principal.grupo}
-              </strong>
-              . Desejo central: {principal.desejo}. {principal.modificador}
-            </p>
-            <ul className="mt-5 space-y-3 text-sm leading-relaxed text-[color:var(--cart-muted)]">
-              <li>
-                <span className="cart-display text-[11px] uppercase tracking-[0.18em] text-[color:var(--cart-copper)]">
-                  Pontos fortes
-                </span>
-                <p className="mt-1 text-[color:var(--cart-ink)]/85">
-                  {principal.forcas}
-                </p>
-              </li>
-              <li>
-                <span className="cart-display text-[11px] uppercase tracking-[0.18em] text-[color:var(--cart-copper)]">
-                  Maior medo
-                </span>
-                <p className="mt-1 text-[color:var(--cart-ink)]/85">
-                  {principal.medo}
-                </p>
-              </li>
-              <li>
-                <span className="cart-display text-[11px] uppercase tracking-[0.18em] text-[color:var(--cart-copper)]">
-                  Perigos do Terreno
-                </span>
-                <p className="mt-1 text-[color:var(--cart-ink)]/85">
-                  {principal.sombra}. Observe esse padrão na prática e use seus
-                  sub-arquétipos para equilibrá-lo — especialmente quando a
-                  pressão sobe.
-                </p>
-              </li>
-            </ul>
-          </OrnateCorners>
-        </motion.div>
-
-        {result.secondaries.length > 0 && (
-          <motion.div
-            initial={reduce ? false : { opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.55, ease: EASE, delay: 0.24 }}
-            className="cart-card-soft mt-8 rounded-sm p-6"
-          >
-            <h3 className="cart-display text-2xl tracking-wide text-[color:var(--cart-ink)]">
-              Como os Seus Sub-arquétipos Equilibram Você
-            </h3>
-            <p className="mt-3 text-sm leading-relaxed text-[color:var(--cart-muted)]">
-              Diferente de {principal.typicalTrap}, a sua combinação cria um
-              perfil muito completo:
-            </p>
-            <ul className="mt-5 space-y-4">
-              {result.secondaries.map((s) => (
-                <li
-                  key={s.profile.id}
-                  className="flex items-start gap-3 sm:gap-4"
-                >
-                  <SecondaryThumb profile={s.profile} />
-                  <div className="min-w-0 flex-1">
-                    <p className="cart-display text-sm tracking-wide text-[color:var(--cart-copper-bright)]">
-                      O toque de {s.profile.title}:
-                    </p>
-                    <p className="mt-1 text-sm leading-relaxed text-[color:var(--cart-muted)]">
-                      Você {s.profile.balanceBenefit}.
-                    </p>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </motion.div>
-        )}
-
         <p className="mt-8 text-center text-xs text-[color:var(--cart-dim)]">
-          Escala 0–{TOTAL_QUESTIONS} pontos por arquétipo
+          Escala híbrida · até {TOTAL_QUESTIONS * 3} pts teóricos por arquétipo
+          (sempre primário)
         </p>
 
         <div className="mt-8 flex flex-col gap-3">
@@ -412,7 +415,7 @@ export function QuizResult({ result, onRestart }: Props) {
               className="inline-flex flex-1 items-center justify-center gap-2 border border-[color:var(--cart-border-soft)] px-5 py-3.5 text-sm text-[color:var(--cart-muted)] transition hover:border-[color:var(--cart-copper)] hover:text-[color:var(--cart-copper-bright)]"
             >
               {copied ? <Check size={16} /> : <Copy size={16} />}
-              {copied ? "Copiado" : "Copiar Relatório Completo"}
+              {copied ? "Copiado" : "Copiar Dossiê Completo"}
             </button>
           </div>
         </div>

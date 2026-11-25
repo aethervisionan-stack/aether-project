@@ -2,7 +2,8 @@
 
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ChevronLeft } from "lucide-react";
-import { QUESTIONS, TOTAL_QUESTIONS, type Question } from "@/src/data/archetypes";
+import type { Question } from "@/src/data/archetypes";
+import { QUESTIONS, TOTAL_QUESTIONS } from "@/src/data/scoring";
 import { playParchmentClick } from "@/src/utils/soundEffects";
 import { OrnateCorners, SanctuaryBackdrop } from "./CinematicChrome";
 
@@ -36,7 +37,7 @@ export function QuizFlow({ index, answers, onSelect, onBack }: Props) {
         <div className="min-w-0 flex-1">
           <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
             <p className="cart-display text-[11px] uppercase tracking-[0.22em] text-[color:var(--cart-copper)]">
-              Trilha de Exploração · Etapa {question.stage}/3
+              Trilha de Exploração · Eixo {question.stage}/4
             </p>
             <span className="tabular text-xs text-[color:var(--cart-dim)]">
               Marco {index + 1} de {TOTAL_QUESTIONS}

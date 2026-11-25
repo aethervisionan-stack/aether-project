@@ -2,7 +2,6 @@
 
 import { motion, useReducedMotion } from "framer-motion";
 import {
-  BookOpen,
   Compass,
   Crown,
   Flame,
@@ -31,24 +30,31 @@ const EASE = [0.22, 1, 0.36, 1] as const;
 const PROVACOES = [
   {
     n: "I",
-    title: "Motivação e Propósito",
-    body: "O que te realiza, o que te frustra, e como você enfrenta a crise.",
+    title: "Pressão e Crise",
+    body: "Como você reage quando o prazo estoura, a crítica fere e o imprevisto chega.",
     icon: Flame,
     span: "sm:col-span-2 lg:col-span-2 lg:row-span-2",
   },
   {
     n: "II",
-    title: "Comportamento e Decisões",
-    body: "Seu papel no grupo, seu lema, vínculos e o chamado da liberdade.",
-    icon: Scroll,
+    title: "Poder e Autonomia",
+    body: "Regras absurdas, cargos com custo e o impulso diante do controle alheio.",
+    icon: Crown,
     span: "sm:col-span-2 lg:col-span-2",
   },
   {
     n: "III",
-    title: "Medos e Legado",
-    body: "O medo interno, o orgulho do trabalho e a marca que deseja deixar.",
-    icon: BookOpen,
-    span: "sm:col-span-2 lg:col-span-2",
+    title: "Vínculos e Afeto",
+    body: "Honestidade que machuca, desequilíbrio e o pedido de ajuda na sobrecarga.",
+    icon: Heart,
+    span: "sm:col-span-1 lg:col-span-1",
+  },
+  {
+    n: "IV",
+    title: "Ambição e Sombra",
+    body: "Lançamentos, autossabotagem, exposição pública e o legado que trava.",
+    icon: Scroll,
+    span: "sm:col-span-1 lg:col-span-1",
   },
 ] as const;
 
@@ -72,7 +78,7 @@ const REINOS = [
   {
     title: "Conectar-se",
     seal: "III",
-    body: "Pessoa Comum · Amante · Bobo da Corte",
+    body: "Órfão · Amante · Bobo da Corte",
     icon: Heart,
     accent: "#c9894a",
     shape: "octagon" as const,
@@ -151,8 +157,8 @@ export function QuizHero({ onStart }: Props) {
                 {...fade(0.2)}
                 className="mt-5 max-w-lg text-base leading-relaxed text-[color:var(--cine-muted)] sm:text-lg"
               >
-                Doze provas revelam o brasão que guia sua jornada — entre os 12
-                arquétipos de Jung.
+                Dezesseis dilemas situacionais revelam dominante e subarquétipo
+                — entre os 12 arquétipos de Jung.
               </motion.p>
 
               <motion.div {...fade(0.28)} className="mt-9">
@@ -183,7 +189,7 @@ export function QuizHero({ onStart }: Props) {
           <div className="mx-auto max-w-5xl">
             <MedievalDivider />
             <p className="cine-display mt-6 text-[11px] uppercase tracking-[0.32em] text-[color:var(--cine-amber)]">
-              As Três Provações
+              Os Quatro Eixos
             </p>
             <h2 className="cine-display mt-3 max-w-xl text-3xl tracking-wide text-[color:var(--cine-ink)] sm:text-4xl">
               O caminho pelo grimório
@@ -302,7 +308,7 @@ export function QuizHero({ onStart }: Props) {
                 Pronto para a revelação?
               </h2>
               <p className="mt-4 text-sm text-[color:var(--cine-muted)]">
-                Doze perguntas. Três provações. Um brasão dominante.
+                16 perguntas. Quatro eixos. Confluência dominante + sub.
               </p>
               <button
                 type="button"

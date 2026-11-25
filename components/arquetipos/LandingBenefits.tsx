@@ -5,18 +5,18 @@ import { Compass, Eye, Sparkles } from "lucide-react";
 const BENEFITS = [
   {
     icon: Eye,
-    title: "Arquétipo Dominante",
-    body: "Um líder claro entre os 12 arquétipos de Jung — com desejo central, forças, medo e sombra.",
+    title: "Confluência Dominante + Sub",
+    body: "Diagnóstico cruza 1º e 2º arquétipo com as tags reais das suas 16 escolhas — sem texto genérico.",
   },
   {
     icon: Compass,
-    title: "Sub-arquétipo ou Híbrido",
-    body: "Segundo lugar combina descrições; empate no topo vira Perfil Híbrido com os dois.",
+    title: "Pontuação híbrida",
+    body: "Cada alternativa soma +3 ao primário e +1 ao secundário, com padrões comportamentais nomeados.",
   },
   {
     icon: Sparkles,
-    title: "Mapa de pontuação",
-    body: "Gráfico simples 0–12 por arquétipo pontuado — fácil de copiar e compartilhar.",
+    title: "Sombra + integração",
+    body: "Luz, gatilhos de autossabotagem e 3 passos práticos adaptados ao seu perfil — após Pix R$ 3,00.",
   },
 ] as const;
 
@@ -31,11 +31,11 @@ export function LandingBenefits() {
           Por que fazer
         </p>
         <h2 className="mt-3 max-w-xl font-[family-name:var(--font-arq-display)] text-3xl tracking-tight text-[#F3EDE0] sm:text-4xl">
-          Clareza arquetípica em menos de dois minutos
+          Clareza arquetípica com precisão psicológica
         </h2>
         <p className="mt-4 max-w-lg text-base text-[#F3EDE0]/55">
-          Os 12 arquétipos de Jung organizam motivação, medo e legado — para
-          você se ver com mais precisão.
+          Quatro eixos situacionais revelam dominante, subarquétipo e a sombra
+          que opera quando a máscara social cai.
         </p>
         <ul className="mt-12 grid gap-6 sm:grid-cols-3">
           {BENEFITS.map((item) => (

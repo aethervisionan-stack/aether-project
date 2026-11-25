@@ -1,3 +1,5 @@
+import type { BehavioralTag } from "./behavioralTags";
+
 export type ArchetypeId =
   | "inocente"
   | "explorador"
@@ -39,13 +41,21 @@ export type QuestionOption = {
   id: string;
   letter: "A" | "B" | "C" | "D";
   text: string;
-  archetype: ArchetypeId;
+  /** +3 points */
+  primary: ArchetypeId;
+  /** +1 point */
+  secondary: ArchetypeId;
+  tags: BehavioralTag[];
+  /** Short human summary of the choice for diagnosis */
+  summary: string;
 };
+
+export type AxisId = 1 | 2 | 3 | 4;
 
 export type Question = {
   id: string;
   number: number;
-  stage: 1 | 2 | 3;
+  stage: AxisId;
   stageTitle: string;
   text: string;
   options: QuestionOption[];
@@ -200,8 +210,8 @@ export const ARCHETYPES: Record<ArchetypeId, ArchetypeProfile> = {
   },
   pessoa_comum: {
     id: "pessoa_comum",
-    title: "A Pessoa Comum",
-    subtitle: "O Conector Empático",
+    title: "O Órfão",
+    subtitle: "O Realista Empático",
     grupo: "Conectar-se",
     desejo: "Pertencimento, conexão e igualdade",
     forcas: "Empatia, realismo, lealdade, acessibilidade",
@@ -328,412 +338,17 @@ export const ARCHETYPES: Record<ArchetypeId, ArchetypeProfile> = {
   },
 };
 
-export const STAGE_TITLES: Record<1 | 2 | 3, string> = {
-  1: "Motivação e Propósito",
-  2: "Comportamento e Decisões",
-  3: "Medos e Legado",
+export const STAGE_TITLES: Record<AxisId, string> = {
+  1: "Reação sob Pressão e Crise",
+  2: "Relação com Poder, Regras e Autonomia",
+  3: "Vínculos, Afeto e Vulnerabilidade",
+  4: "Ambição, Criação e Autossabotagem",
 };
 
-export const QUESTIONS: Question[] = [
-  {
-    id: "q1",
-    number: 1,
-    stage: 1,
-    stageTitle: STAGE_TITLES[1],
-    text: "O que mais traz sensação de realização na sua vida?",
-    options: [
-      {
-        id: "q1a",
-        letter: "A",
-        text: "Superar um grande obstáculo, vencer um desafio difícil ou defender quem precisa.",
-        archetype: "heroi",
-      },
-      {
-        id: "q1b",
-        letter: "B",
-        text: "Entender profundamente como o mundo funciona, aprender algo novo e encontrar a verdade.",
-        archetype: "sabio",
-      },
-      {
-        id: "q1c",
-        letter: "C",
-        text: "Criar algo original do zero que expresse a minha visão única.",
-        archetype: "criador",
-      },
-      {
-        id: "q1d",
-        letter: "D",
-        text: "Fazer a diferença na vida das pessoas através do cuidado, acolhimento e generosidade.",
-        archetype: "cuidador",
-      },
-    ],
-  },
-  {
-    id: "q2",
-    number: 2,
-    stage: 1,
-    stageTitle: STAGE_TITLES[1],
-    text: "Qual destas situações mais gera desconforto ou frustração em você?",
-    options: [
-      {
-        id: "q2a",
-        letter: "A",
-        text: "Sentir-se preso, sem liberdade de escolha ou obrigado a seguir uma rotina rígida.",
-        archetype: "explorador",
-      },
-      {
-        id: "q2b",
-        letter: "B",
-        text: "Ser excluído, parecer arrogante ou não se sentir parte do grupo.",
-        archetype: "pessoa_comum",
-      },
-      {
-        id: "q2c",
-        letter: "C",
-        text: "Perder o controle da situação, lidar com desorganização ou falta de liderança.",
-        archetype: "governante",
-      },
-      {
-        id: "q2d",
-        letter: "D",
-        text: "Viver em um ambiente pesado, cheio de regras chatas, sem humor ou espontaneidade.",
-        archetype: "bobo_da_corte",
-      },
-    ],
-  },
-  {
-    id: "q3",
-    number: 3,
-    stage: 1,
-    stageTitle: STAGE_TITLES[1],
-    text: "Quando você enfrenta uma crise ou problema sério, qual é a sua reação natural?",
-    options: [
-      {
-        id: "q3a",
-        letter: "A",
-        text: "Quebrar as regras antigas e buscar uma mudança radical para resolver o problema na raiz.",
-        archetype: "rebelde",
-      },
-      {
-        id: "q3b",
-        letter: "B",
-        text: "Encontrar uma solução inovadora, mudando a perspectiva ou transformando o cenário.",
-        archetype: "mago",
-      },
-      {
-        id: "q3c",
-        letter: "C",
-        text: "Manter o otimismo, confiar que as coisas vão dar certo e buscar a solução mais simples.",
-        archetype: "inocente",
-      },
-      {
-        id: "q3d",
-        letter: "D",
-        text: "Mergulhar de cabeça nas emoções, fortalecer os laços com quem amo e buscar harmonia.",
-        archetype: "amante",
-      },
-    ],
-  },
-  {
-    id: "q4",
-    number: 4,
-    stage: 1,
-    stageTitle: STAGE_TITLES[1],
-    text: "Como as pessoas mais próximas costumam descrever a sua presença?",
-    options: [
-      {
-        id: "q4a",
-        letter: "A",
-        text: "Alguém confiável, pé no chão, acessível e fácil de conviver.",
-        archetype: "pessoa_comum",
-      },
-      {
-        id: "q4b",
-        letter: "B",
-        text: "Alguém inspirador, intenso, apaixonado e que valoriza a beleza e as conexões.",
-        archetype: "amante",
-      },
-      {
-        id: "q4c",
-        letter: "C",
-        text: "Alguém visionário, que parece saber como transformar ideias em realidade.",
-        archetype: "mago",
-      },
-      {
-        id: "q4d",
-        letter: "D",
-        text: "Alguém independente, curioso e sempre pronto para uma nova experiência.",
-        archetype: "explorador",
-      },
-    ],
-  },
-  {
-    id: "q5",
-    number: 5,
-    stage: 2,
-    stageTitle: STAGE_TITLES[2],
-    text: "Em um projeto em grupo ou trabalho em equipe, qual papel você assume naturalmente?",
-    options: [
-      {
-        id: "q5a",
-        letter: "A",
-        text: "O que organiza tudo, define as metas e garante a ordem e a qualidade.",
-        archetype: "governante",
-      },
-      {
-        id: "q5b",
-        letter: "B",
-        text: "O que traz ideias fora da caixa, protótipos e soluções criativas.",
-        archetype: "criador",
-      },
-      {
-        id: "q5c",
-        letter: "C",
-        text: "O que pesquisa os dados, analisa os fatos e aconselha o grupo com lógica.",
-        archetype: "sabio",
-      },
-      {
-        id: "q5d",
-        letter: "D",
-        text: "O que quebra o gelo, mantém o astral leve e faz todo mundo dar risada.",
-        archetype: "bobo_da_corte",
-      },
-    ],
-  },
-  {
-    id: "q6",
-    number: 6,
-    stage: 2,
-    stageTitle: STAGE_TITLES[2],
-    text: "Qual dessas frases mais parece um lema de vida para você?",
-    options: [
-      {
-        id: "q6a",
-        letter: "A",
-        text: '"A vida é feita para ser explorada, sem fronteiras."',
-        archetype: "explorador",
-      },
-      {
-        id: "q6b",
-        letter: "B",
-        text: '"Regras existem para serem questionadas e transformadas."',
-        archetype: "rebelde",
-      },
-      {
-        id: "q6c",
-        letter: "C",
-        text: '"Onde há vontade, há um caminho para a vitória."',
-        archetype: "heroi",
-      },
-      {
-        id: "q6d",
-        letter: "D",
-        text: '"A simplicidade e a esperança sempre vencem no final."',
-        archetype: "inocente",
-      },
-    ],
-  },
-  {
-    id: "q7",
-    number: 7,
-    stage: 2,
-    stageTitle: STAGE_TITLES[2],
-    text: "O que você mais valoriza nos seus relacionamentos (amizades ou amor)?",
-    options: [
-      {
-        id: "q7a",
-        letter: "A",
-        text: "Intimidade profunda, entrega, conexão emocional e admiração mútua.",
-        archetype: "amante",
-      },
-      {
-        id: "q7b",
-        letter: "B",
-        text: "Lealdade, igualdade e sentir que podemos ser quem realmente somos, sem máscaras.",
-        archetype: "pessoa_comum",
-      },
-      {
-        id: "q7c",
-        letter: "C",
-        text: "Apoio mútuo, segurança e saber que um sempre vai proteger e ajudar o outro.",
-        archetype: "cuidador",
-      },
-      {
-        id: "q7d",
-        letter: "D",
-        text: "Trocas intelectuais estimulantes, respeito à individualidade e conversas profundas.",
-        archetype: "sabio",
-      },
-    ],
-  },
-  {
-    id: "q8",
-    number: 8,
-    stage: 2,
-    stageTitle: STAGE_TITLES[2],
-    text: "Se você ganhasse um ano sabático totalmente pago, o que faria primeiro?",
-    options: [
-      {
-        id: "q8a",
-        letter: "A",
-        text: "Viajaria sem roteiro fixo para lugares desconhecidos em busca de aventura.",
-        archetype: "explorador",
-      },
-      {
-        id: "q8b",
-        letter: "B",
-        text: "Dedicaria o tempo para escrever, pintar, empreender ou construir um projeto pessoal.",
-        archetype: "criador",
-      },
-      {
-        id: "q8c",
-        letter: "C",
-        text: "Faria cursos, leria dezenas de livros e estudaria assuntos que sempre quis dominar.",
-        archetype: "sabio",
-      },
-      {
-        id: "q8d",
-        letter: "D",
-        text: "Aproveitaria para curtir os prazeres da vida, viajar com quem amo e viver intensamente.",
-        archetype: "amante",
-      },
-    ],
-  },
-  {
-    id: "q9",
-    number: 9,
-    stage: 3,
-    stageTitle: STAGE_TITLES[3],
-    text: "Qual destes cenários representa o seu maior medo interno?",
-    options: [
-      {
-        id: "q9a",
-        letter: "A",
-        text: "Ser enganado, manipulado ou viver na ignorância sem saber a verdade.",
-        archetype: "sabio",
-      },
-      {
-        id: "q9b",
-        letter: "B",
-        text: "Ser fraco, covarde ou falhar quando mais precisarem de mim.",
-        archetype: "heroi",
-      },
-      {
-        id: "q9c",
-        letter: "C",
-        text: "Ser comum demais, medíocre ou não deixar nenhuma marca original no mundo.",
-        archetype: "criador",
-      },
-      {
-        id: "q9d",
-        letter: "D",
-        text: "Ficar preso em uma vida entediante, previsível e sem liberdade.",
-        archetype: "explorador",
-      },
-    ],
-  },
-  {
-    id: "q10",
-    number: 10,
-    stage: 3,
-    stageTitle: STAGE_TITLES[3],
-    text: "Quando você olha para o seu trabalho ou projetos, o que te deixa mais orgulhoso?",
-    options: [
-      {
-        id: "q10a",
-        letter: "A",
-        text: "Ter construído uma estrutura sólida, próspera e que funciona com excelência.",
-        archetype: "governante",
-      },
-      {
-        id: "q10b",
-        letter: "B",
-        text: "Ter ajudado alguém a se reerguer ou tornado a vida de outras pessoas mais fácil.",
-        archetype: "cuidador",
-      },
-      {
-        id: "q10c",
-        letter: "C",
-        text: "Ter causado uma verdadeira revolução ou mudado um padrão que parecia imutável.",
-        archetype: "rebelde",
-      },
-      {
-        id: "q10d",
-        letter: "D",
-        text: 'Ter catalisado uma transformação, fazendo algo parecer "mágica" de tão bem-feito.',
-        archetype: "mago",
-      },
-    ],
-  },
-  {
-    id: "q11",
-    number: 11,
-    stage: 3,
-    stageTitle: STAGE_TITLES[3],
-    text: "Qual tipo de ambiente ou cultura te faz sentir mais em casa?",
-    options: [
-      {
-        id: "q11a",
-        letter: "A",
-        text: "Um lugar leve, divertido, onde ninguém se leva a sério demais e o humor reina.",
-        archetype: "bobo_da_corte",
-      },
-      {
-        id: "q11b",
-        letter: "B",
-        text: "Um lugar acolhedor, sem julgamentos, onde todos são tratados de igual para igual.",
-        archetype: "pessoa_comum",
-      },
-      {
-        id: "q11c",
-        letter: "C",
-        text: "Um lugar harmonioso, seguro, otimista e sem conflitos desnecessários.",
-        archetype: "inocente",
-      },
-      {
-        id: "q11d",
-        letter: "D",
-        text: "Um lugar dinâmico, cheio de novidades, estímulos e oportunidades de descoberta.",
-        archetype: "explorador",
-      },
-    ],
-  },
-  {
-    id: "q12",
-    number: 12,
-    stage: 3,
-    stageTitle: STAGE_TITLES[3],
-    text: "Se você pudesse deixar um único legado para o mundo, qual seria?",
-    options: [
-      {
-        id: "q12a",
-        letter: "A",
-        text: "Ter sido uma fonte de sabedoria, clareza e conhecimento para as futuras gerações.",
-        archetype: "sabio",
-      },
-      {
-        id: "q12b",
-        letter: "B",
-        text: "Ter inspirado paixão, beleza e conexões humanas verdadeiras.",
-        archetype: "amante",
-      },
-      {
-        id: "q12c",
-        letter: "C",
-        text: "Ter criado obras, ideias ou soluções que continuam funcionando e encantando.",
-        archetype: "criador",
-      },
-      {
-        id: "q12d",
-        letter: "D",
-        text: "Ter lutado pelo que é certo e inspirado outros a terem coragem.",
-        archetype: "heroi",
-      },
-    ],
-  },
-];
-
-export const TOTAL_QUESTIONS = QUESTIONS.length; // 12
+export const PRIMARY_POINTS = 3;
+export const SECONDARY_POINTS = 1;
+/** Points injected per answered question (primary + secondary). */
+export const POINTS_PER_ANSWER = PRIMARY_POINTS + SECONDARY_POINTS;
 
 export function emptyScores(): Record<ArchetypeId, number> {
   return ARCHETYPE_ORDER.reduce(
@@ -745,20 +360,23 @@ export function emptyScores(): Record<ArchetypeId, number> {
   );
 }
 
-/** +1 per answer mapped to that archetype (range 0–12). */
-export function scoreAnswers(
-  answers: Record<string, string>,
-): Record<ArchetypeId, number> {
-  const scores = emptyScores();
-  for (const question of QUESTIONS) {
-    const optionId = answers[question.id];
-    if (!optionId) continue;
-    const option = question.options.find((o) => o.id === optionId);
-    if (!option) continue;
-    scores[option.archetype] += 1;
-  }
-  return scores;
-}
+export type ChoiceRecord = {
+  questionId: string;
+  optionId: string;
+  primary: ArchetypeId;
+  secondary: ArchetypeId;
+  tags: BehavioralTag[];
+  summary: string;
+  optionText: string;
+  axis: AxisId;
+};
+
+export type HybridScoreBundle = {
+  scores: Record<ArchetypeId, number>;
+  choices: ChoiceRecord[];
+  tagCounts: Partial<Record<BehavioralTag, number>>;
+  totalPoints: number;
+};
 
 export type RankedArchetype = {
   id: ArchetypeId;
@@ -777,15 +395,24 @@ export function rankArchetypes(
 export type ScoredBandEntry = {
   profile: ArchetypeProfile;
   score: number;
+  /** Affinity vs theoretical max if always chosen as primary (16×3). */
+  affinityPct: number;
 };
 
 export type NarrativeResult = {
   hybrid: boolean;
   primary: ArchetypeProfile;
+  /** Clear 2nd place (sub-archetype); null only if no answers. */
+  secondaryProfile: ArchetypeProfile | null;
+  dominantPct: number;
+  secondaryPct: number;
   dominants: ScoredBandEntry[];
   secondaries: ScoredBandEntry[];
   complementary: ScoredBandEntry[];
   ranked: RankedArchetype[];
+  choices: ChoiceRecord[];
+  tagCounts: Partial<Record<BehavioralTag, number>>;
+  totalPoints: number;
 };
 
 /** Join list in pt-BR: A · A e B · A, B e C */
@@ -796,77 +423,116 @@ export function joinPt(items: string[]): string {
   return `${items.slice(0, -1).join(", ")} e ${items[items.length - 1]}`;
 }
 
+function affinityVsMax(score: number, questionCount: number): number {
+  const max = questionCount * PRIMARY_POINTS;
+  if (max <= 0) return 0;
+  return Math.round((score / max) * 100);
+}
+
 /**
  * Band scored archetypes (>0):
- * - dominants: highest score
- * - secondaries: second-highest (may be 1–3 tied)
+ * - dominants: highest score (ties allowed → hybrid)
+ * - secondaries: second-highest band
  * - complementary: remaining with points
  */
 export function calculateResult(
-  scores: Record<ArchetypeId, number>,
+  bundle: HybridScoreBundle,
+  questionCount: number,
 ): NarrativeResult {
+  const { scores, choices, tagCounts, totalPoints } = bundle;
   const ranked = rankArchetypes(scores).filter((r) => r.score > 0);
+
+  const toEntry = (r: RankedArchetype): ScoredBandEntry => ({
+    profile: ARCHETYPES[r.id],
+    score: r.score,
+    affinityPct: affinityVsMax(r.score, questionCount),
+  });
+
   if (ranked.length === 0) {
     const fallback = ARCHETYPES.inocente;
     return {
       hybrid: false,
       primary: fallback,
-      dominants: [{ profile: fallback, score: 0 }],
+      secondaryProfile: null,
+      dominantPct: 0,
+      secondaryPct: 0,
+      dominants: [{ profile: fallback, score: 0, affinityPct: 0 }],
       secondaries: [],
       complementary: [],
       ranked: rankArchetypes(scores),
+      choices,
+      tagCounts,
+      totalPoints,
     };
   }
 
   const topScore = ranked[0].score;
-  const dominants = ranked
-    .filter((r) => r.score === topScore)
-    .map((r) => ({ profile: ARCHETYPES[r.id], score: r.score }));
+  const dominants = ranked.filter((r) => r.score === topScore).map(toEntry);
 
   const rest = ranked.filter((r) => r.score < topScore);
   const secondScore = rest[0]?.score ?? 0;
   const secondaries = rest
     .filter((r) => r.score === secondScore && secondScore > 0)
-    .map((r) => ({ profile: ARCHETYPES[r.id], score: r.score }));
+    .map(toEntry);
   const complementary = rest
     .filter((r) => r.score < secondScore)
-    .map((r) => ({ profile: ARCHETYPES[r.id], score: r.score }));
+    .map(toEntry);
+
+  const primary = dominants[0].profile;
+  const secondaryProfile =
+    secondaries[0]?.profile ??
+    (dominants.length > 1 ? dominants[1].profile : null);
+
+  const domScore = dominants[0].score;
+  const subScore =
+    secondaryProfile != null
+      ? scores[secondaryProfile.id]
+      : 0;
+  const pair = domScore + subScore;
+  const dominantPct =
+    pair > 0 ? Math.round((domScore / pair) * 100) : dominants[0].affinityPct;
+  const secondaryPct =
+    secondaryProfile != null ? Math.max(0, 100 - dominantPct) : 0;
 
   return {
     hybrid: dominants.length > 1,
-    primary: dominants[0].profile,
+    primary,
+    secondaryProfile,
+    dominantPct,
+    secondaryPct,
     dominants,
     secondaries,
     complementary,
     ranked: rankArchetypes(scores),
+    choices,
+    tagCounts,
+    totalPoints,
   };
 }
 
 /** @deprecated use calculateResult */
 export function resolveOutcome(
-  scores: Record<ArchetypeId, number>,
+  bundle: HybridScoreBundle,
+  questionCount: number,
 ): NarrativeResult {
-  return calculateResult(scores);
+  return calculateResult(bundle, questionCount);
 }
 
 export function buildIntro(result: NarrativeResult): string {
+  const sub = result.secondaryProfile;
   if (result.hybrid) {
     const leaders = joinPt(result.dominants.map((d) => d.profile.title));
-    const sec =
-      result.secondaries.length > 0
-        ? `, com influências secundárias de ${joinPt(
-            result.secondaries.map((s) => s.profile.title),
-          )}`
-        : "";
+    const sec = sub
+      ? `, com subarquétipo ${sub.title} (${result.secondaryPct}% de afinidade relativa)`
+      : "";
     return `Você possui um perfil híbrido liderado por ${leaders}${sec}.`;
   }
 
-  const name = result.dominants[0].profile.title;
-  if (result.secondaries.length === 0) {
-    return `Com base nas suas 12 respostas, o seu arquétipo dominante é ${name}.`;
+  const name = result.primary.title;
+  if (!sub) {
+    return `Com base nas suas respostas, o seu arquétipo dominante é ${name} (${result.dominantPct}% na confluência).`;
   }
-  const subs = joinPt(result.secondaries.map((s) => s.profile.title));
-  return `Com base nas suas 12 respostas, o seu arquétipo dominante é ${name}, acompanhado por um forte equilíbrio entre ${subs} como influências secundárias.`;
+  return `Com base nas suas respostas, o seu arquétipo dominante é ${name} (${result.dominantPct}%), com ${sub.title} como subarquétipo (${result.secondaryPct}%).`;
 }
 
 export function formatShareText(result: NarrativeResult): string {
@@ -874,28 +540,28 @@ export function formatShareText(result: NarrativeResult): string {
   lines.push(buildIntro(result));
   lines.push("");
   lines.push("Resultado Completo da Sua Pontuação");
-  lines.push("Arquétipo | Pontos | Papel no Seu Perfil");
+  lines.push("Arquétipo | Pontos | Afinidade | Papel no Seu Perfil");
 
   for (const d of result.dominants) {
     lines.push(
-      `${d.profile.title} | ${d.score} pts | ${d.profile.dominantRole}`,
+      `${d.profile.title} | ${d.score} pts | ${d.affinityPct}% | ${d.profile.dominantRole}`,
     );
   }
   for (const s of result.secondaries) {
-    lines.push(`${s.profile.title} | ${s.score} pts | ${s.profile.subRole}`);
+    lines.push(
+      `${s.profile.title} | ${s.score} pts | ${s.affinityPct}% | ${s.profile.subRole}`,
+    );
   }
   if (result.complementary.length > 0) {
     const names = result.complementary
       .map((c) => c.profile.title)
       .join(" / ");
-    const pts = result.complementary.every((c) => c.score === 1)
-      ? "1 pt cada"
-      : result.complementary.map((c) => `${c.score} pts`).join(", ");
+    const pts = result.complementary.map((c) => `${c.score}`).join(", ");
     const traits = joinPt(
       result.complementary.map((c) => c.profile.traitKeyword),
     );
     lines.push(
-      `${names} | ${pts} | Traços complementares de ${traits}`,
+      `${names} | ${pts} pts | — | Traços complementares de ${traits}`,
     );
   }
 
@@ -907,16 +573,28 @@ export function formatShareText(result: NarrativeResult): string {
   lines.push(`• Pontos fortes: ${principal.forcas}`);
   lines.push(`• Maior medo: ${principal.medo}`);
   lines.push(
-    `• Ponto de atenção (Sombra): ${principal.sombra}. Observe esse padrão na prática e use seus sub-arquétipos para equilibrá-lo.`,
+    `• Ponto de atenção (Sombra): ${principal.sombra}. Observe esse padrão na prática e use seu subarquétipo para equilibrá-lo.`,
   );
 
-  if (result.secondaries.length > 0) {
+  if (result.secondaries.length > 0 || result.secondaryProfile) {
     lines.push("");
-    lines.push("Como os Seus Sub-arquétipos Equilibram Você");
+    lines.push("Como o Subarquétipo Equilibra Você");
+    const subs =
+      result.secondaries.length > 0
+        ? result.secondaries
+        : result.secondaryProfile
+          ? [
+              {
+                profile: result.secondaryProfile,
+                score: 0,
+                affinityPct: result.secondaryPct,
+              },
+            ]
+          : [];
     lines.push(
       `Diferente de ${principal.typicalTrap}, a sua combinação cria um perfil muito completo:`,
     );
-    for (const s of result.secondaries) {
+    for (const s of subs) {
       lines.push(
         `• O toque de ${s.profile.title}: Você ${s.profile.balanceBenefit}.`,
       );
@@ -926,4 +604,20 @@ export function formatShareText(result: NarrativeResult): string {
   lines.push("");
   lines.push("Faça o teste: Descubra o Seu Arquétipo Dominante");
   return lines.join("\n");
+}
+
+/** Count primary/secondary appearances across the question bank (balance audit). */
+export function countOptionBalance(questions: Question[]): {
+  primary: Record<ArchetypeId, number>;
+  secondary: Record<ArchetypeId, number>;
+} {
+  const primary = emptyScores();
+  const secondary = emptyScores();
+  for (const q of questions) {
+    for (const o of q.options) {
+      primary[o.primary] += 1;
+      secondary[o.secondary] += 1;
+    }
+  }
+  return { primary, secondary };
 }

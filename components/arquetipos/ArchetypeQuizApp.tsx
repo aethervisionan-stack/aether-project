@@ -2,15 +2,16 @@
 
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  QUESTIONS,
-  calculateResult,
-  scoreAnswers,
-} from "@/src/data/archetypes";
+import { buildNarrativeResult, QUESTIONS } from "@/src/data/scoring";
 import {
   readIsUnlocked,
   writeIsUnlocked,
 } from "@/src/utils/archetypeUnlock";
+import {
+  clearQuizSession,
+  readQuizSession,
+  writeQuizSession,
+} from "@/src/utils/quizSession";
 import { playRevealChord, playStageChime } from "@/src/utils/soundEffects";
 import { LandingFooter } from "./LandingFooter";
 import { LandingHeader } from "./LandingHeader";
@@ -38,12 +39,28 @@ export function ArchetypeQuizApp() {
 
   useEffect(() => {
     setMounted(true);
-    setUnlocked(readIsUnlocked());
+    const isUnlocked = readIsUnlocked();
+    setUnlocked(isUnlocked);
+    const session = readQuizSession();
+    if (session?.answers && Object.keys(session.answers).length > 0) {
+      setAnswers(session.answers);
+      if (session.completed) {
+        setStage(isUnlocked ? "result" : "paywall");
+      }
+    }
   }, []);
 
-  const result = useMemo(
-    () => calculateResult(scoreAnswers(answers)),
-    [answers],
+  const result = useMemo(() => buildNarrativeResult(answers), [answers]);
+
+  const persistAnswers = useCallback(
+    (next: Record<string, string>, completed: boolean) => {
+      writeQuizSession({
+        answers: next,
+        completed,
+        updatedAt: Date.now(),
+      });
+    },
+    [],
   );
 
   const startQuiz = useCallback(() => {
@@ -59,6 +76,7 @@ export function ArchetypeQuizApp() {
   useEffect(() => {
     if (stage !== "processing") return;
     const t = window.setTimeout(() => {
+      persistAnswers(answers, true);
       if (unlocked) {
         playRevealChord();
         setStage("result");
@@ -67,16 +85,21 @@ export function ArchetypeQuizApp() {
       }
     }, PROCESSING_MS);
     return () => window.clearTimeout(t);
-  }, [stage, unlocked]);
+  }, [stage, unlocked, answers, persistAnswers]);
 
   function handleSelect(questionId: string, optionId: string) {
-    setAnswers((prev) => ({ ...prev, [questionId]: optionId }));
+    setAnswers((prev) => {
+      const next = { ...prev, [questionId]: optionId };
+      persistAnswers(next, false);
+      return next;
+    });
     window.setTimeout(() => {
       if (index >= QUESTIONS.length - 1) {
         finishQuiz();
       } else {
         const next = index + 1;
-        if (next === 4 || next === 8) {
+        // Axis boundaries: 4, 8, 12
+        if (next === 4 || next === 8 || next === 12) {
           playStageChime();
         }
         setIndex(next);
@@ -98,12 +121,14 @@ export function ArchetypeQuizApp() {
     setAnswers({});
     setIndex(0);
     setStage("welcome");
+    clearQuizSession();
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function handleUnlocked() {
     writeIsUnlocked(true);
     setUnlocked(true);
+    persistAnswers(answers, true);
     setStage("result");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -174,7 +199,7 @@ export function ArchetypeQuizApp() {
             transition={{ duration: 0.35 }}
             className="pt-14 sm:pt-16"
           >
-            <PaywallScreen onUnlocked={handleUnlocked} />
+            <PaywallScreen result={result} onUnlocked={handleUnlocked} />
           </motion.div>
         )}
 
