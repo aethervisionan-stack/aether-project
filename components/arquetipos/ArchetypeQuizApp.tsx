@@ -2,6 +2,7 @@
 
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { CUSTOM_OPTION_ID } from "@/lib/custom-answer-analyzer";
 import { buildNarrativeResult, QUESTIONS } from "@/src/data/scoring";
 import {
   readIsUnlocked,
@@ -36,6 +37,9 @@ export function ArchetypeQuizApp() {
   const [stage, setStage] = useState<Stage>("welcome");
   const [index, setIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [customAnswers, setCustomAnswers] = useState<Record<string, string>>(
+    {},
+  );
 
   useEffect(() => {
     setMounted(true);
@@ -44,18 +48,27 @@ export function ArchetypeQuizApp() {
     const session = readQuizSession();
     if (session?.answers && Object.keys(session.answers).length > 0) {
       setAnswers(session.answers);
+      setCustomAnswers(session.customAnswers ?? {});
       if (session.completed) {
         setStage(isUnlocked ? "result" : "paywall");
       }
     }
   }, []);
 
-  const result = useMemo(() => buildNarrativeResult(answers), [answers]);
+  const result = useMemo(
+    () => buildNarrativeResult(answers, customAnswers),
+    [answers, customAnswers],
+  );
 
   const persistAnswers = useCallback(
-    (next: Record<string, string>, completed: boolean) => {
+    (
+      nextAnswers: Record<string, string>,
+      nextCustom: Record<string, string>,
+      completed: boolean,
+    ) => {
       writeQuizSession({
-        answers: next,
+        answers: nextAnswers,
+        customAnswers: nextCustom,
         completed,
         updatedAt: Date.now(),
       });
@@ -76,7 +89,7 @@ export function ArchetypeQuizApp() {
   useEffect(() => {
     if (stage !== "processing") return;
     const t = window.setTimeout(() => {
-      persistAnswers(answers, true);
+      persistAnswers(answers, customAnswers, true);
       if (unlocked) {
         playRevealChord();
         setStage("result");
@@ -85,14 +98,9 @@ export function ArchetypeQuizApp() {
       }
     }, PROCESSING_MS);
     return () => window.clearTimeout(t);
-  }, [stage, unlocked, answers, persistAnswers]);
+  }, [stage, unlocked, answers, customAnswers, persistAnswers]);
 
-  function handleSelect(questionId: string, optionId: string) {
-    setAnswers((prev) => {
-      const next = { ...prev, [questionId]: optionId };
-      persistAnswers(next, false);
-      return next;
-    });
+  function advanceAfterAnswer() {
     window.setTimeout(() => {
       if (index >= QUESTIONS.length - 1) {
         finishQuiz();
@@ -107,6 +115,25 @@ export function ArchetypeQuizApp() {
     }, ADVANCE_MS);
   }
 
+  function handleSelect(questionId: string, optionId: string) {
+    const nextAnswers = { ...answers, [questionId]: optionId };
+    const nextCustom = { ...customAnswers };
+    delete nextCustom[questionId];
+    setAnswers(nextAnswers);
+    setCustomAnswers(nextCustom);
+    persistAnswers(nextAnswers, nextCustom, false);
+    advanceAfterAnswer();
+  }
+
+  function handleCustomSelect(questionId: string, text: string) {
+    const nextAnswers = { ...answers, [questionId]: CUSTOM_OPTION_ID };
+    const nextCustom = { ...customAnswers, [questionId]: text };
+    setAnswers(nextAnswers);
+    setCustomAnswers(nextCustom);
+    persistAnswers(nextAnswers, nextCustom, false);
+    advanceAfterAnswer();
+  }
+
   function handleBack() {
     if (stage === "quiz" && index > 0) {
       setIndex((i) => i - 1);
@@ -119,6 +146,7 @@ export function ArchetypeQuizApp() {
 
   function handleRestart() {
     setAnswers({});
+    setCustomAnswers({});
     setIndex(0);
     setStage("welcome");
     clearQuizSession();
@@ -128,7 +156,7 @@ export function ArchetypeQuizApp() {
   function handleUnlocked() {
     writeIsUnlocked(true);
     setUnlocked(true);
-    persistAnswers(answers, true);
+    persistAnswers(answers, customAnswers, true);
     setStage("result");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -171,7 +199,9 @@ export function ArchetypeQuizApp() {
             <QuizFlow
               index={index}
               answers={answers}
+              customAnswers={customAnswers}
               onSelect={handleSelect}
+              onCustomSelect={handleCustomSelect}
               onBack={handleBack}
             />
           </motion.div>

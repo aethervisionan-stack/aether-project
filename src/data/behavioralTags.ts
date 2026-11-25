@@ -23,7 +23,10 @@ export type BehavioralTag =
   | "dependencia_afetiva"
   | "heroismo_compulsivo"
   | "isolamento_estrategico"
-  | "criatividade_procrastinada";
+  | "criatividade_procrastinada"
+  /** Safe fallbacks for free-text (5th option) answers */
+  | "ambiguidade_situacional"
+  | "resposta_unica_pessoal";
 
 export const TAG_LABELS: Record<BehavioralTag, string> = {
   hipercontrole: "hipercontrole",
@@ -50,6 +53,8 @@ export const TAG_LABELS: Record<BehavioralTag, string> = {
   heroismo_compulsivo: "heroísmo compulsivo",
   isolamento_estrategico: "isolamento estratégico",
   criatividade_procrastinada: "criatividade procrastinada",
+  ambiguidade_situacional: "ambiguidade situacional",
+  resposta_unica_pessoal: "resposta única pessoal",
 };
 
 export function tagLabel(tag: string): string {

@@ -104,6 +104,17 @@ function topTagsFrom(
     }));
 }
 
+function customExcerpts(choices: ChoiceRecord[], limit = 2): string[] {
+  return choices
+    .filter((c) => c.isCustom && c.customText && c.customText.trim().length >= 15)
+    .map((c) => {
+      const t = c.customText!.replace(/\s+/g, " ").trim();
+      const cut = t.slice(0, 110).trim();
+      return t.length > 110 ? `${cut}…` : cut;
+    })
+    .slice(0, limit);
+}
+
 function mirrorFromChoices(
   choices: ChoiceRecord[],
   tags: DiagnosisReport["topTags"],
@@ -130,15 +141,24 @@ function mirrorFromChoices(
         )}.`
       : "";
 
+  const customs = customExcerpts(choices, 2);
+  const customPhrase =
+    customs.length > 0
+      ? ` Nas suas palavras livres, você deixou ver: ${joinPt(
+          customs.map((t) => `“${t}”`),
+        )}.`
+      : "";
+
   return `Nas situações de crise, poder, vínculo e ambição, suas escolhas revelam alguém que ${joinPt(
     unique.slice(0, 4),
-  )}.${tagPhrase} Esse espelho não é um julgamento moral — é o mapa do que você já faz quando a máscara social cai.`;
+  )}.${tagPhrase}${customPhrase} Esse espelho não é um julgamento moral — é o mapa do que você já faz quando a máscara social cai.`;
 }
 
 function strengthsText(
   dominant: ArchetypeProfile,
   sub: ArchetypeProfile,
   tags: DiagnosisReport["topTags"],
+  choices: ChoiceRecord[] = [],
 ): string {
   const positiveHints: Partial<Record<BehavioralTag, string>> = {
     confronto_direto: "capacidade de nomear o elefante na sala",
@@ -151,6 +171,7 @@ function strengthsText(
     intensidade_emocional: "presença que faz o outro se sentir vivo",
     excesso_autonomia: "autossuficiência que desbloqueia caminhos",
     lealdade_excessiva: "confiabilidade rara em tempos líquidos",
+    resposta_unica_pessoal: "coragem de nomear o próprio impulso sem menu pronto",
   };
 
   const fromTags = tags
@@ -158,12 +179,18 @@ function strengthsText(
     .filter(Boolean)
     .slice(0, 3) as string[];
 
+  const customs = customExcerpts(choices, 1);
+  const customBoost =
+    customs.length > 0
+      ? ` Sua resposta livre reforça essa luz: “${customs[0]}”.`
+      : "";
+
   const core = `A luz da união ${dominant.title} + ${sub.title} aparece quando você combina ${dominant.forcas.toLowerCase()} com o toque de ${sub.traitKeyword}. ${dominant.modificador} Ao mesmo tempo, ${sub.modificador}`;
 
   if (fromTags.length === 0) {
-    return `${core} Na prática, isso vira força operacional — não só ideal.`;
+    return `${core} Na prática, isso vira força operacional — não só ideal.${customBoost}`;
   }
-  return `${core} Nos seus padrões recentes, brilham especialmente: ${joinPt(fromTags)}.`;
+  return `${core} Nos seus padrões recentes, brilham especialmente: ${joinPt(fromTags)}.${customBoost}`;
 }
 
 function weaknessesText(
@@ -188,6 +215,7 @@ function weaknessesText(
     fuga_compromisso: "sumir quando a intimidade pede constância",
     criatividade_procrastinada: "cultuar o potencial inacabado",
     otimismo_defensivo: "negar a gravidade até ela crescer",
+    ambiguidade_situacional: "hesitar tanto que a janela de ação fecha sozinha",
   };
 
   const fromTags = tags
@@ -201,26 +229,40 @@ function weaknessesText(
       ? ` No eixo de ambição, você mesmo apontou: ${joinPt(late.slice(0, 2))}.`
       : "";
 
+  const customLate = customExcerpts(
+    choices.filter((c) => c.isCustom && (c.axis === 3 || c.axis === 4)),
+    1,
+  );
+  const customTrap =
+    customLate.length > 0
+      ? ` Na sua linguagem espontânea, o gatilho ecoa em: “${customLate[0]}”.`
+      : "";
+
   const base = `Os gatilhos de autossabotagem nascem do excesso de ${dominant.traitKeyword} sem a integração madura de ${sub.traitKeyword}. O medo central de ${dominant.title} (“${dominant.medo}”) encontra eco em ${sub.title} (“${sub.medo}”).`;
 
   if (fromTags.length === 0) {
-    return `${base}${sabotageHint}`;
+    return `${base}${sabotageHint}${customTrap}`;
   }
-  return `${base} Pelas suas escolhas, o risco concreto é ${joinPt(fromTags)}.${sabotageHint}`;
+  return `${base} Pelas suas escolhas, o risco concreto é ${joinPt(fromTags)}.${sabotageHint}${customTrap}`;
 }
 
 function shadowAndSteps(
   dominant: ArchetypeProfile,
   sub: ArchetypeProfile,
   tags: DiagnosisReport["topTags"],
+  choices: ChoiceRecord[] = [],
 ): { shadow: string; steps: [string, string, string] } {
   const leadTag = tags[0]?.tag;
+  const customShadow = customExcerpts(choices, 1);
 
   const shadow =
     `A sombra deste perfil não é “ser ${dominant.title}” — é operar ${dominant.sombra.toLowerCase()} sem perceber, enquanto ${sub.title} tenta compensar por baixo do pano. ` +
     `O mecanismo inconsciente: quando ${dominant.medo.toLowerCase()} se ativa, você reforça ${dominant.traitKeyword} e silencia o antídoto que ${sub.title} oferece (${sub.balanceBenefit}).` +
     (leadTag
       ? ` O sintoma mais visível nas suas respostas foi o padrão de ${TAG_LABELS[leadTag]}.`
+      : "") +
+    (customShadow.length > 0
+      ? ` No que você escreveu com as próprias palavras, a sombra já assoma: “${customShadow[0]}”.`
       : "");
 
   const stepByDominant: Record<ArchetypeId, [string, string, string]> = {
@@ -317,7 +359,12 @@ export function buildDiagnosis(result: NarrativeResult): DiagnosisReport {
 
   const mode = resolveConfluenceMode(dominant.id, sub.id);
   const tags = topTagsFrom(result.tagCounts);
-  const { shadow, steps } = shadowAndSteps(dominant, sub, tags);
+  const { shadow, steps } = shadowAndSteps(
+    dominant,
+    sub,
+    tags,
+    result.choices,
+  );
   const choiceSummaries = result.choices.map((c) => c.summary);
 
   return {
@@ -335,7 +382,7 @@ export function buildDiagnosis(result: NarrativeResult): DiagnosisReport {
       result.secondaryPct,
     ),
     mirror: mirrorFromChoices(result.choices, tags),
-    strengths: strengthsText(dominant, sub, tags),
+    strengths: strengthsText(dominant, sub, tags, result.choices),
     weaknesses: weaknessesText(dominant, sub, tags, result.choices),
     shadow,
     integrationSteps: steps,

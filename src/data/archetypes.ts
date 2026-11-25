@@ -369,6 +369,12 @@ export type ChoiceRecord = {
   summary: string;
   optionText: string;
   axis: AxisId;
+  /** True when the user chose the free-text (5th) option */
+  isCustom?: boolean;
+  customText?: string;
+  confidenceScore?: number;
+  emotionalTone?: string;
+  actionStance?: string;
 };
 
 export type HybridScoreBundle = {
