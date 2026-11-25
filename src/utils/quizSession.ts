@@ -5,6 +5,10 @@ const LEGACY_SESSION_KEY = "archetypeQuizSession_v2";
 export const MENTOR_PASS_DAYS = 30;
 export const MENTOR_PASS_MS = MENTOR_PASS_DAYS * 24 * 60 * 60 * 1000;
 
+/** Paywall Pix plans (session v3). */
+export type PaywallPlan = "basic_3" | "combo_890";
+export type PaidPlan = PaywallPlan | "mentor_upgrade";
+
 export type MentorProfileSnapshot = {
   dominantId: string;
   dominantTitle: string;
@@ -36,6 +40,12 @@ export type QuizSessionPayload = {
   customAnswers: Record<string, string>;
   completed: boolean;
   updatedAt: number;
+  /** Diagnóstico completo liberado (Pix basic_3 ou combo_890) */
+  resultUnlocked?: boolean;
+  /** Mentor Passe ativo (combo_890 ou mentor_upgrade) */
+  mentorUnlocked?: boolean;
+  /** Last paid plan id */
+  paidPlan?: PaidPlan | null;
   /** Mentor Estratégico — Passe 30 dias */
   mentorUnlockedAt?: number | null;
   mentorExpiresAt?: number | null;
@@ -61,6 +71,25 @@ function parsePayload(raw: string): QuizSessionPayload | null {
   try {
     const parsed = JSON.parse(raw) as Partial<QuizSessionPayload>;
     if (!parsed || typeof parsed !== "object" || !parsed.answers) return null;
+    const mentorUnlockedAt =
+      typeof parsed.mentorUnlockedAt === "number"
+        ? parsed.mentorUnlockedAt
+        : null;
+    const mentorExpiresAt =
+      typeof parsed.mentorExpiresAt === "number"
+        ? parsed.mentorExpiresAt
+        : null;
+    const mentorPassLooksActive =
+      mentorUnlockedAt != null &&
+      mentorExpiresAt != null &&
+      mentorExpiresAt > Date.now();
+    const paidPlan =
+      parsed.paidPlan === "basic_3" ||
+      parsed.paidPlan === "combo_890" ||
+      parsed.paidPlan === "mentor_upgrade"
+        ? parsed.paidPlan
+        : null;
+
     return {
       answers: parsed.answers ?? {},
       customAnswers:
@@ -69,14 +98,11 @@ function parsePayload(raw: string): QuizSessionPayload | null {
           : {},
       completed: Boolean(parsed.completed),
       updatedAt: Number(parsed.updatedAt) || Date.now(),
-      mentorUnlockedAt:
-        typeof parsed.mentorUnlockedAt === "number"
-          ? parsed.mentorUnlockedAt
-          : null,
-      mentorExpiresAt:
-        typeof parsed.mentorExpiresAt === "number"
-          ? parsed.mentorExpiresAt
-          : null,
+      resultUnlocked: Boolean(parsed.resultUnlocked),
+      mentorUnlocked: Boolean(parsed.mentorUnlocked) || mentorPassLooksActive,
+      paidPlan,
+      mentorUnlockedAt,
+      mentorExpiresAt,
       mentorProfile: parsed.mentorProfile ?? null,
       mentorFreeUsed: Boolean(parsed.mentorFreeUsed),
       mentorHistory: Array.isArray(parsed.mentorHistory)
@@ -101,6 +127,9 @@ function toStored(payload: QuizSessionPayload): QuizSessionPayload {
     customAnswers: payload.customAnswers ?? {},
     completed: payload.completed,
     updatedAt: payload.updatedAt || Date.now(),
+    resultUnlocked: Boolean(payload.resultUnlocked),
+    mentorUnlocked: Boolean(payload.mentorUnlocked),
+    paidPlan: payload.paidPlan ?? null,
     mentorUnlockedAt: payload.mentorUnlockedAt ?? null,
     mentorExpiresAt: payload.mentorExpiresAt ?? null,
     mentorProfile: payload.mentorProfile ?? null,
@@ -183,6 +212,9 @@ export function clearQuizAnswersKeepMentor(): void {
     customAnswers: {},
     completed: false,
     updatedAt: Date.now(),
+    resultUnlocked: current.resultUnlocked,
+    mentorUnlocked: current.mentorUnlocked,
+    paidPlan: current.paidPlan,
     mentorUnlockedAt: current.mentorUnlockedAt,
     mentorExpiresAt: current.mentorExpiresAt,
     mentorProfile: current.mentorProfile,
@@ -198,6 +230,72 @@ export function isMentorPassActive(
 ): boolean {
   if (!session?.mentorExpiresAt || !session.mentorUnlockedAt) return false;
   return session.mentorExpiresAt > now;
+}
+
+export function isResultUnlocked(
+  session: QuizSessionPayload | null | undefined,
+): boolean {
+  return Boolean(session?.resultUnlocked);
+}
+
+/** basic_3: diagnóstico only — mentorUnlocked false, 1 free mentor msg. */
+export function unlockBasicPlan(
+  now = Date.now(),
+): QuizSessionPayload {
+  const current = readQuizSession() ?? {
+    answers: {},
+    customAnswers: {},
+    completed: true,
+    updatedAt: now,
+  };
+  const next: QuizSessionPayload = {
+    ...current,
+    completed: true,
+    updatedAt: now,
+    resultUnlocked: true,
+    mentorUnlocked: false,
+    paidPlan: "basic_3",
+    // do not grant mentor pass timestamps
+    mentorUnlockedAt: current.mentorUnlockedAt ?? null,
+    mentorExpiresAt: current.mentorExpiresAt ?? null,
+  };
+  // If a previous pass was still active, keep it; otherwise ensure locked.
+  if (!isMentorPassActive(next, now)) {
+    next.mentorUnlocked = false;
+    next.mentorUnlockedAt = null;
+    next.mentorExpiresAt = null;
+  }
+  writeQuizSession(next);
+  return next;
+}
+
+/** combo_890: diagnóstico + Mentor 30d + restore code. */
+export function unlockComboPlan(
+  profile: MentorProfileSnapshot,
+  now = Date.now(),
+): QuizSessionPayload {
+  const current = readQuizSession() ?? {
+    answers: {},
+    customAnswers: {},
+    completed: true,
+    updatedAt: now,
+  };
+  const code = current.restoreCode || generateRestoreCode();
+  const next: QuizSessionPayload = {
+    ...current,
+    completed: true,
+    updatedAt: now,
+    resultUnlocked: true,
+    mentorUnlocked: true,
+    paidPlan: "combo_890",
+    mentorUnlockedAt: now,
+    mentorExpiresAt: now + MENTOR_PASS_MS,
+    mentorProfile: profile,
+    mentorFreeUsed: true,
+    restoreCode: code,
+  };
+  writeQuizSession(next);
+  return next;
 }
 
 export function generateRestoreCode(): string {
@@ -301,6 +399,9 @@ export function applyMentorRestore(
       current?.completed ??
       Boolean(bundle.answers && Object.keys(bundle.answers).length > 0),
     updatedAt: Date.now(),
+    resultUnlocked: true,
+    mentorUnlocked: true,
+    paidPlan: current?.paidPlan ?? "combo_890",
     mentorUnlockedAt: bundle.mentorUnlockedAt,
     mentorExpiresAt: bundle.mentorExpiresAt,
     mentorProfile: bundle.mentorProfile,
@@ -312,6 +413,7 @@ export function applyMentorRestore(
   return { ok: true, session: next };
 }
 
+/** Upgrade after basic_3 (R$ 5,90) or legacy mentor unlock — 30d + restore. */
 export function unlockMentorPass(
   profile: MentorProfileSnapshot,
   now = Date.now(),
@@ -327,6 +429,9 @@ export function unlockMentorPass(
     ...current,
     completed: true,
     updatedAt: now,
+    resultUnlocked: true,
+    mentorUnlocked: true,
+    paidPlan: "mentor_upgrade",
     mentorUnlockedAt: now,
     mentorExpiresAt: now + MENTOR_PASS_MS,
     mentorProfile: profile,

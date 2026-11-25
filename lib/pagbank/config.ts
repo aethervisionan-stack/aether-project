@@ -1,27 +1,60 @@
-/** Unlock price in BRL centavos (R$ 3,00). */
-export const PAGBANK_UNLOCK_AMOUNT_CENTAVOS = 300;
+/** Diagnóstico completo — R$ 3,00. */
+export const PAGBANK_BASIC_AMOUNT_CENTAVOS = 300;
+/** Alias legado (status routes / client fallback). */
+export const PAGBANK_UNLOCK_AMOUNT_CENTAVOS = PAGBANK_BASIC_AMOUNT_CENTAVOS;
 
-/** Mentor Estratégico — Passe 30 dias (R$ 19,90). */
-export const PAGBANK_MENTOR_AMOUNT_CENTAVOS = 1990;
+/** Combo diagnóstico + Mentor 30d — R$ 8,90. */
+export const PAGBANK_COMBO_AMOUNT_CENTAVOS = 890;
 
-export type PagbankProduct = "unlock" | "mentor";
+/** Upgrade Mentor (diff após basic) — R$ 5,90. */
+export const PAGBANK_MENTOR_UPGRADE_AMOUNT_CENTAVOS = 590;
 
-export function pagbankProductMeta(product: PagbankProduct = "unlock") {
-  if (product === "mentor") {
+/** @deprecated use PAGBANK_MENTOR_UPGRADE_AMOUNT_CENTAVOS */
+export const PAGBANK_MENTOR_AMOUNT_CENTAVOS =
+  PAGBANK_MENTOR_UPGRADE_AMOUNT_CENTAVOS;
+
+export type PagbankProduct = "basic_3" | "combo_890" | "mentor_upgrade";
+
+export type PaywallPlanId = "basic_3" | "combo_890";
+
+export function parsePagbankProduct(raw: unknown): PagbankProduct {
+  if (raw === "combo_890") return "combo_890";
+  if (raw === "mentor_upgrade" || raw === "mentor") return "mentor_upgrade";
+  // basic_3 | unlock | default
+  return "basic_3";
+}
+
+export function pagbankProductMeta(product: PagbankProduct = "basic_3") {
+  if (product === "combo_890") {
     return {
-      product: "mentor" as const,
-      amountCentavos: PAGBANK_MENTOR_AMOUNT_CENTAVOS,
-      amountLabel: "R$ 19,90",
-      itemReference: "mentor-pass-30d",
-      itemName: "Passe Mentor Estratégico 30 dias",
-      chargeDescription: "Passe 30 dias — Mentor Estratégico de Arquétipos",
+      product: "combo_890" as const,
+      amountCentavos: PAGBANK_COMBO_AMOUNT_CENTAVOS,
+      amountLabel: "R$ 8,90",
+      amountBrl: 8.9,
+      itemReference: "archetype-combo-890",
+      itemName: "Diagnóstico + Mentor 30 dias",
+      chargeDescription:
+        "Combo — relatório de arquétipos + Passe Mentor 30 dias",
+    };
+  }
+  if (product === "mentor_upgrade") {
+    return {
+      product: "mentor_upgrade" as const,
+      amountCentavos: PAGBANK_MENTOR_UPGRADE_AMOUNT_CENTAVOS,
+      amountLabel: "R$ 5,90",
+      amountBrl: 5.9,
+      itemReference: "mentor-upgrade-590",
+      itemName: "Upgrade Mentor Estratégico 30 dias",
+      chargeDescription:
+        "Upgrade Mentor 30 dias (diferença após diagnóstico)",
     };
   }
   return {
-    product: "unlock" as const,
-    amountCentavos: PAGBANK_UNLOCK_AMOUNT_CENTAVOS,
+    product: "basic_3" as const,
+    amountCentavos: PAGBANK_BASIC_AMOUNT_CENTAVOS,
     amountLabel: "R$ 3,00",
-    itemReference: "archetype-unlock",
+    amountBrl: 3.0,
+    itemReference: "archetype-basic-3",
     itemName: "Relatório de Arquétipos",
     chargeDescription: "Desbloqueio do relatório de arquétipos",
   };

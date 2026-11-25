@@ -16,7 +16,7 @@ const BENEFITS = [
   {
     icon: Sparkles,
     title: "Sombra + integração",
-    body: "Luz, gatilhos de autossabotagem e 3 passos práticos adaptados ao seu perfil — após Pix R$ 3,00.",
+    body: "Luz, gatilhos de autossabotagem e 3 passos práticos adaptados ao seu perfil — a partir de Pix R$ 3,00.",
   },
 ] as const;
 

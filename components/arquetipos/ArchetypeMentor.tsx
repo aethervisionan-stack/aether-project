@@ -257,7 +257,7 @@ export function ArchetypeMentor({ result }: Props) {
   const statusLabel = passActive
     ? `Passe ativo · até ${formatExpiry(expiresAt ?? 0)}`
     : freeUsed
-      ? "1 consulta usada · desbloqueie o Passe 30 dias"
+      ? "1 consulta usada · upgrade Mentor R$ 5,90"
       : "1 consulta gratuita disponível";
 
   return (
@@ -277,8 +277,8 @@ export function ArchetypeMentor({ result }: Props) {
         </h3>
         <p className="mt-2 max-w-xl text-sm leading-relaxed text-[color:var(--cart-muted)]">
           Orientações personalizadas com seu dominante, sub, tags, respostas
-          livres e sombra. Visual de conselho medieval — uma consulta grátis;
-          depois, Passe {MENTOR_PASS_DAYS} dias por R$&nbsp;19,90 via Pix.
+          livres e sombra. Uma consulta grátis; depois, upgrade do Passe{" "}
+          {MENTOR_PASS_DAYS} dias por R$&nbsp;5,90 via Pix (diferença do combo).
         </p>
         <p className="mt-3 inline-flex items-center gap-1.5 text-[11px] uppercase tracking-[0.14em] text-[color:var(--cart-dim)]">
           <Sparkles size={12} className="text-[color:var(--cart-copper)]" />
@@ -385,7 +385,7 @@ export function ArchetypeMentor({ result }: Props) {
               className="inline-flex flex-1 items-center justify-center gap-2 border border-[color:var(--cart-copper)]/40 px-4 py-2.5 text-xs uppercase tracking-[0.16em] text-[color:var(--cart-copper-bright)] transition hover:bg-[rgba(155,44,44,0.12)]"
             >
               <KeyRound size={14} />
-              Passe 30 dias · R$ 19,90
+              Upgrade Mentor · R$ 5,90
             </button>
           ) : null}
           <button
@@ -481,7 +481,7 @@ function MentorPassModal({
   const [orderId, setOrderId] = useState<string | null>(null);
   const [pixCopyPaste, setPixCopyPaste] = useState("");
   const [qrUrl, setQrUrl] = useState<string | null>(null);
-  const [amountLabel, setAmountLabel] = useState("R$ 19,90");
+  const [amountLabel, setAmountLabel] = useState("R$ 5,90");
   const [simulateAllowed, setSimulateAllowed] = useState(false);
   const [mock, setMock] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -505,7 +505,10 @@ function MentorPassModal({
         const res = await fetch("/api/pagbank/create", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ product: "mentor" }),
+          body: JSON.stringify({
+            product: "mentor_upgrade",
+            plan: "mentor_upgrade",
+          }),
         });
         const data = (await res.json()) as CreateResponse;
         if (!res.ok || !data.orderId || !data.pixCopyPaste) {
@@ -515,7 +518,7 @@ function MentorPassModal({
         setOrderId(data.orderId);
         setPixCopyPaste(data.pixCopyPaste);
         setQrUrl(data.qrCodeImageUrl);
-        setAmountLabel(data.amountLabel || "R$ 19,90");
+        setAmountLabel(data.amountLabel || "R$ 5,90");
         setSimulateAllowed(Boolean(data.simulateAllowed));
         setMock(Boolean(data.mock));
         setPolling(true);
@@ -602,18 +605,19 @@ function MentorPassModal({
         className="w-full max-w-md"
         role="dialog"
         aria-modal="true"
-        aria-label="Passe Mentor 30 dias"
+        aria-label="Upgrade Mentor 30 dias"
       >
         <EmberCard className="p-5 sm:p-6">
           <p className="cart-display text-center text-[10px] uppercase tracking-[0.28em] text-[color:var(--cart-copper)]">
-            Passe do Mentor
+            Upgrade do Mentor
           </p>
           <h4 className="cart-display mt-2 text-center text-xl text-[color:var(--cart-ink)]">
             {MENTOR_PASS_DAYS} dias ilimitados · {amountLabel}
           </h4>
           <p className="mt-2 text-center text-xs leading-relaxed text-[color:var(--cart-muted)]">
-            Histórico e perfil ficam neste aparelho. Após o Pix, o Mentor
-            responde sem limite até a data de expiração.
+            Diferença do combo (R$&nbsp;8,90 − R$&nbsp;3,00). Após o Pix, o
+            Mentor responde sem limite por {MENTOR_PASS_DAYS} dias — com código
+            de restauração neste aparelho.
           </p>
 
           {loading ? (

@@ -104,7 +104,7 @@ function normalizeChargeStatus(raw: unknown): PagbankStatusResult["status"] {
 }
 
 export async function createPagbankPixOrder(
-  product: PagbankProduct = "unlock",
+  product: PagbankProduct = "basic_3",
 ): Promise<PagbankCreateResult> {
   const meta = pagbankProductMeta(product);
   const amount = meta.amountCentavos;

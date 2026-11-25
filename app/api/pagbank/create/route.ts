@@ -3,6 +3,7 @@ import {
   pagbankMockMode,
   pagbankProductMeta,
   pagbankSimulateAllowed,
+  parsePagbankProduct,
   type PagbankProduct,
 } from "@/lib/pagbank/config";
 import { createPagbankPixOrder } from "@/lib/pagbank/client";
@@ -10,10 +11,6 @@ import { putPagbankOrder } from "@/lib/pagbank/store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-function parseProduct(raw: unknown): PagbankProduct {
-  return raw === "mentor" ? "mentor" : "unlock";
-}
 
 function mockPixPayload(orderId: string, amountCentavos: number) {
   // Placeholder EMV-ish string for UI / copy in mock mode — not a real Pix.
@@ -27,12 +24,12 @@ function mockPixPayload(orderId: string, amountCentavos: number) {
 
 export async function POST(req: Request) {
   try {
-    let product: PagbankProduct = "unlock";
+    let product: PagbankProduct = "basic_3";
     try {
-      const body = (await req.json()) as { product?: unknown };
-      product = parseProduct(body?.product);
+      const body = (await req.json()) as { product?: unknown; plan?: unknown };
+      product = parsePagbankProduct(body?.product ?? body?.plan);
     } catch {
-      // empty body → default unlock (R$ 3)
+      // empty body → default basic_3 (R$ 3)
     }
 
     const meta = pagbankProductMeta(product);

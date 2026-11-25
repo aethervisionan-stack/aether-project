@@ -8,11 +8,16 @@ import {
   readIsUnlocked,
   writeIsUnlocked,
 } from "@/src/utils/archetypeUnlock";
+import { buildMentorProfile } from "@/lib/mentor/profile";
 import {
   applyMentorRestore,
   clearQuizAnswersKeepMentor,
+  isResultUnlocked,
   readQuizSession,
+  unlockBasicPlan,
+  unlockComboPlan,
   writeQuizSession,
+  type PaywallPlan,
 } from "@/src/utils/quizSession";
 import { playRevealChord, playStageChime } from "@/src/utils/soundEffects";
 import { LandingFooter } from "./LandingFooter";
@@ -44,8 +49,6 @@ export function ArchetypeQuizApp() {
 
   useEffect(() => {
     setMounted(true);
-    const isUnlocked = readIsUnlocked();
-    setUnlocked(isUnlocked);
 
     // ?restore=<token> — reabre Passe do Mentor neste aparelho
     try {
@@ -63,6 +66,24 @@ export function ArchetypeQuizApp() {
     }
 
     const session = readQuizSession();
+    const isUnlocked =
+      isResultUnlocked(session) || readIsUnlocked();
+    if (isUnlocked && !session?.resultUnlocked) {
+      // migrate legacy isUnlocked → session v3
+      writeQuizSession({
+        ...(session ?? {
+          answers: {},
+          customAnswers: {},
+          completed: false,
+          updatedAt: Date.now(),
+        }),
+        resultUnlocked: true,
+        updatedAt: Date.now(),
+      });
+    }
+    setUnlocked(isUnlocked);
+    if (isUnlocked) writeIsUnlocked(true);
+
     if (session?.answers && Object.keys(session.answers).length > 0) {
       setAnswers(session.answers);
       setCustomAnswers(session.customAnswers ?? {});
@@ -89,6 +110,9 @@ export function ArchetypeQuizApp() {
         customAnswers: nextCustom,
         completed,
         updatedAt: Date.now(),
+        resultUnlocked: prev?.resultUnlocked,
+        mentorUnlocked: prev?.mentorUnlocked,
+        paidPlan: prev?.paidPlan ?? null,
         mentorUnlockedAt: prev?.mentorUnlockedAt ?? null,
         mentorExpiresAt: prev?.mentorExpiresAt ?? null,
         mentorProfile: prev?.mentorProfile ?? null,
@@ -177,10 +201,16 @@ export function ArchetypeQuizApp() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  function handleUnlocked() {
+  function handleUnlocked(plan: PaywallPlan) {
+    // Persist answers first so unlock helpers merge onto current quiz data
+    persistAnswers(answers, customAnswers, true);
+    if (plan === "combo_890") {
+      unlockComboPlan(buildMentorProfile(result));
+    } else {
+      unlockBasicPlan();
+    }
     writeIsUnlocked(true);
     setUnlocked(true);
-    persistAnswers(answers, customAnswers, true);
     setStage("result");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
