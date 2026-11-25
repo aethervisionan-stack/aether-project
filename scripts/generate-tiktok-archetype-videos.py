@@ -2,14 +2,16 @@
 """
 Gera 12 vídeos verticais TikTok (9:16) dos arquétipos do quiz medieval.
 
-Paleta de legenda: base escura profunda + acento da ilustração + texto claro
-alto contraste; painel translúcido (~0.72) tingido com a base da carta.
+Legendas flutuantes (sem caixa): tipografia bold/semi-bold, cor clara da carta,
+stroke escuro fino + sombra suave; título no topo com acento da carta.
+Área segura TikTok (topo + base).
 
 Narração PT-BR fluida:
   - texto limpo para TTS (— / ... → vírgulas); legendas mantêm pontuação visual
   - ElevenLabs se ELEVENLABS_API_KEY (eleven_multilingual_v2)
   - senão edge-tts pt-BR ThalitaMultilingualNeural / AntonioNeural @ +10%
   - sync via WordBoundary (edge) ou duração real + proporção
+  - timings persistidos em <out>/.caption-timings/<slug>.json
 
 Uso:
   python scripts/generate-tiktok-archetype-videos.py
@@ -17,6 +19,8 @@ Uso:
   python scripts/generate-tiktok-archetype-videos.py --engine edge
   python scripts/generate-tiktok-archetype-videos.py --engine elevenlabs
   python scripts/generate-tiktok-archetype-videos.py --engine none
+  python scripts/generate-tiktok-archetype-videos.py --restyle
+    # reestiliza legendas/título preservando áudio + timings (sem re-TTS)
 """
 
 from __future__ import annotations
@@ -86,10 +90,22 @@ TAIL_HOLD_SEC = 0.55
 GAP_MIN_SEC = 0.150
 GAP_MAX_SEC = 0.220
 GAP_AFTER_HOOK_SEC = 0.300
-# Painel ASS: opacidade ~0.72 → alpha ASS (00=opaco) ≈ 0x47
+# Legado (paleta); legendas atuais são flutuantes (sem painel/caixa)
 PANEL_ALPHA_ASS = 0x47
 PANEL_OPACITY = 0.72
 CONTRAST_TEXT_MIN = 4.5
+# ASS flutuante — área segura TikTok (1080x1920)
+CAPTION_FONT_SIZE = 56
+TITLE_FONT_SIZE = 48
+CAPTION_OUTLINE = 2.2
+CAPTION_SHADOW = 2.4
+TITLE_OUTLINE = 2.6
+TITLE_SHADOW = 3.0
+CAPTION_MARGIN_V = 400  # distância da base (UI TikTok)
+TITLE_MARGIN_V = 168  # distância do topo (safe area)
+CAPTION_MARGIN_LR = 88
+TIMINGS_DIR_NAME = ".caption-timings"
+RESTYLE_ROI_FPS = 10
 
 # Ritmo/tom por personalidade
 TONE_FIRME = "firme"  # Governante / Sábio / Herói / Mago
@@ -656,12 +672,12 @@ def extract_palette(card: Path) -> dict:
         "secondary": accent,  # compat: keywords
         "center": center,
         "contrast": round(contrast_ratio(text, base), 2),
-        "needs_backdrop": True,
-        "panel_alpha": PANEL_OPACITY,
+        "needs_backdrop": False,
+        "panel_alpha": 0.0,
         "palette": merged[:6],
         "approach": (
-            f"deep base + illustration accent + light text; "
-            f"panel alpha={PANEL_OPACITY}"
+            "floating captions (no box) + top title; "
+            "card light text / accent + thin dark stroke + soft shadow"
         ),
     }
 
@@ -785,6 +801,24 @@ def accentize(
     return pattern.sub(repl, safe)
 
 
+def pick_ass_font() -> str:
+    """Fonte bold/semi-bold disponível no Windows para libass."""
+    windir = Path(os.environ.get("WINDIR", r"C:\Windows"))
+    fonts = windir / "Fonts"
+    # (arquivo, nome ASS)
+    candidates = [
+        ("segoeuib.ttf", "Segoe UI"),
+        ("seguisb.ttf", "Segoe UI Semibold"),
+        ("arialbd.ttf", "Arial"),
+        ("arial.ttf", "Arial"),
+        ("ariblk.ttf", "Arial Black"),
+    ]
+    for fname, name in candidates:
+        if (fonts / fname).is_file():
+            return name
+    return "Arial"
+
+
 def write_ass(
     path: Path,
     segments: list[tuple[float, float, str]],
@@ -792,16 +826,20 @@ def write_ass(
     text_rgb: tuple[int, int, int],
     accent_rgb: tuple[int, int, int],
     base_rgb: tuple[int, int, int],
+    duration: float | None = None,
 ) -> None:
     """
-    Painel translúcido tingido com base da carta, borda/acento, stroke + sombra.
-    Área segura TikTok: margens laterais + Alignment 2 (baixo) MarginV ~420.
+    Letras flutuantes (BorderStyle=1, sem caixa): texto claro + stroke escuro
+    fino + sombra suave. Título no topo (Alignment 8) com acento da carta.
+    Área segura TikTok: margens L/R + MarginV base/topo.
     """
-    outline = rgb_to_ass((0, 0, 0), alpha=0)
-    back = rgb_to_ass(base_rgb, alpha=PANEL_ALPHA_ASS)
-    # Outline color also doubles as box border tint when BorderStyle=3;
-    # use darkened accent for a subtle frame feel via OutlineColour.
-    border = rgb_to_ass(darken_deep(accent_rgb, target_v=0.22), alpha=0)
+    del base_rgb  # reservado p/ compat de assinatura / sombra já é preta
+    font = pick_ass_font()
+    stroke = rgb_to_ass((10, 8, 6), alpha=0)
+    shadow = rgb_to_ass((0, 0, 0), alpha=0x50)
+    title_fill = lighten_for_text(accent_rgb, min_v=0.82)
+    if contrast_ratio(title_fill, (20, 18, 16)) < 3.0:
+        title_fill = lighten_for_text(accent_rgb, min_v=0.90)
 
     header = f"""[Script Info]
 Title: {title}
@@ -814,23 +852,188 @@ YCbCr Matrix: TV.709
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Caption,Arial Black,60,{rgb_to_ass(text_rgb)},{rgb_to_ass(accent_rgb)},{border},{back},-1,0,0,0,100,100,0,0,3,5,3,2,100,100,420,1
+Style: Caption,{font},{CAPTION_FONT_SIZE},{rgb_to_ass(text_rgb)},{rgb_to_ass(accent_rgb)},{stroke},{shadow},-1,0,0,0,100,100,0.4,0,1,{CAPTION_OUTLINE},{CAPTION_SHADOW},2,{CAPTION_MARGIN_LR},{CAPTION_MARGIN_LR},{CAPTION_MARGIN_V},1
+Style: Title,{font},{TITLE_FONT_SIZE},{rgb_to_ass(title_fill)},{rgb_to_ass(accent_rgb)},{stroke},{shadow},-1,0,0,0,100,100,1.2,0,1,{TITLE_OUTLINE},{TITLE_SHADOW},8,{CAPTION_MARGIN_LR},{CAPTION_MARGIN_LR},{TITLE_MARGIN_V},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
-    events = []
+    events: list[str] = []
+    total = duration
+    if total is None:
+        total = (segments[-1][1] + TAIL_HOLD_SEC) if segments else 5.0
+
+    title_body = escape_ass_text(title.upper())
+    title_tagged = (
+        f"{{\\bord{TITLE_OUTLINE}\\shad{TITLE_SHADOW}"
+        f"\\3c{ass_color_no_alpha((10, 8, 6))}"
+        f"\\4c{ass_color_no_alpha((0, 0, 0))}}}{title_body}"
+    )
+    events.append(
+        f"Dialogue: 1,0:00:00.00,{ass_timestamp(total)},Title,,0,0,0,,{title_tagged}"
+    )
+
     for start, end, text in segments:
         body = accentize(text, text_rgb, accent_rgb)
-        # Borda de acento via shadow color nudge + leading tag
         tagged = (
-            f"{{\\bord5\\shad3\\3c{ass_color_no_alpha(accent_rgb)}"
-            f"\\4c{ass_color_no_alpha(base_rgb)}}}{body}"
+            f"{{\\bord{CAPTION_OUTLINE}\\shad{CAPTION_SHADOW}"
+            f"\\3c{ass_color_no_alpha((10, 8, 6))}"
+            f"\\4c{ass_color_no_alpha((0, 0, 0))}}}{body}"
         )
         events.append(
             f"Dialogue: 0,{ass_timestamp(start)},{ass_timestamp(end)},Caption,,0,0,0,,{tagged}"
         )
     path.write_text(header + "\n".join(events) + "\n", encoding="utf-8")
+
+
+def timings_dir(out_dir: Path) -> Path:
+    return out_dir / TIMINGS_DIR_NAME
+
+
+def timings_sidecar(out_dir: Path, slug: str) -> Path:
+    return timings_dir(out_dir) / f"{slug}.json"
+
+
+def save_caption_timings(
+    out_dir: Path,
+    slug: str,
+    segments: list[tuple[float, float, str]],
+    duration: float,
+) -> Path:
+    dest = timings_sidecar(out_dir, slug)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "slug": slug,
+        "duration": round(duration, 4),
+        "segments": [
+            {"start": round(s, 4), "end": round(e, 4), "text": t}
+            for s, e, t in segments
+        ],
+    }
+    dest.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    return dest
+
+
+def load_caption_timings(
+    out_dir: Path, slug: str
+) -> tuple[list[tuple[float, float, str]], float] | None:
+    path = timings_sidecar(out_dir, slug)
+    if not path.is_file():
+        return None
+    data = json.loads(path.read_text(encoding="utf-8"))
+    segs = [
+        (float(item["start"]), float(item["end"]), str(item["text"]))
+        for item in data.get("segments") or []
+    ]
+    if not segs:
+        return None
+    return segs, float(data.get("duration") or segs[-1][1])
+
+
+def recover_segments_from_burned_captions(
+    ffmpeg: str,
+    mp4: Path,
+    lines: list[str],
+    work_dir: Path,
+    duration: float,
+) -> list[tuple[float, float, str]]:
+    """
+    Recupera início/fim dos blocos já queimados via picos de mudança na ROI
+    inferior (painel BorderStyle=3 legado). Não re-TTS / não estima por chars.
+    """
+    roi = work_dir / "caption_roi"
+    if roi.exists():
+        shutil.rmtree(roi, ignore_errors=True)
+    roi.mkdir(parents=True, exist_ok=True)
+    # ROI alinhada ao painel antigo (MarginV≈420 → y≈1380–1600)
+    pattern = str((roi / "f_%04d.png").resolve())
+    run(
+        [
+            ffmpeg,
+            "-y",
+            "-i",
+            str(mp4),
+            "-vf",
+            f"crop=880:220:100:1380,fps={RESTYLE_ROI_FPS}",
+            pattern,
+        ]
+    )
+    frames = sorted(roi.glob("f_*.png"))
+    if len(frames) < 8:
+        raise RuntimeError(f"Poucos frames ROI em {mp4.name}: {len(frames)}")
+
+    def sample(path: Path) -> list[int]:
+        im = Image.open(path).convert("L")
+        w, h = im.size
+        crop = im.crop((w // 6, h // 3, 5 * w // 6, 2 * h // 3)).resize((120, 40))
+        return list(crop.get_flattened_data())
+
+    samples = [sample(p) for p in frames]
+    n = len(samples)
+    diffs = [0.0]
+    for i in range(1, n):
+        a, b = samples[i - 1], samples[i]
+        diffs.append(sum(abs(a[j] - b[j]) for j in range(len(a))) / len(a))
+
+    radius = 2
+    peaks: list[tuple[float, int]] = []
+    for i in range(1, n - 1):
+        window = diffs[max(0, i - radius) : i + radius + 1]
+        if diffs[i] == max(window) and diffs[i] > 10.0:
+            peaks.append((diffs[i], i))
+    peaks.sort(reverse=True)
+
+    fps = float(RESTYLE_ROI_FPS)
+    min_sep = max(int(0.50 * fps), 3)
+    n_lines = len(lines)
+    chosen: list[int] = []
+    for _score, idx in peaks:
+        if all(abs(idx - j) >= min_sep for j in chosen):
+            chosen.append(idx)
+        if len(chosen) >= n_lines + 1:
+            break
+    chosen.sort()
+
+    # Último pico perto do fim costuma ser sumiço do painel → fim, não início
+    end_frame = n
+    if chosen and (n - chosen[-1]) / fps <= 1.2:
+        end_frame = chosen[-1]
+        chosen = chosen[:-1]
+
+    while len(chosen) < n_lines:
+        points = [0] + chosen + [end_frame]
+        gaps = [(points[i + 1] - points[i], points[i], points[i + 1]) for i in range(len(points) - 1)]
+        gaps.sort(reverse=True)
+        _gap, a, b = gaps[0]
+        mid = (a + b) // 2
+        if mid <= a or mid >= b or mid in chosen:
+            break
+        chosen.append(mid)
+        chosen.sort()
+
+    if len(chosen) > n_lines:
+        # mantém os n_lines mais fortes entre os escolhidos
+        strength = {idx: diffs[idx] for idx in chosen}
+        chosen = sorted(sorted(chosen, key=lambda i: strength.get(i, 0.0), reverse=True)[:n_lines])
+
+    if len(chosen) < n_lines:
+        raise RuntimeError(
+            f"Falha ao recuperar {n_lines} blocos de legenda em {mp4.name} "
+            f"(achados={len(chosen)})"
+        )
+
+    starts = [idx / fps for idx in chosen]
+    segments: list[tuple[float, float, str]] = []
+    for i, line in enumerate(lines):
+        start = max(0.0, starts[i])
+        if i + 1 < n_lines:
+            end = max(start + 0.12, starts[i + 1])
+        else:
+            end = max(start + 0.12, min(duration - 0.15, end_frame / fps))
+            end = max(end, min(duration - 0.05, start + 0.35))
+        end = min(end, duration)
+        segments.append((start, end, line))
+    return segments
 
 
 def run(cmd: list[str]) -> None:
@@ -1364,7 +1567,7 @@ def generate_one(
     print(
         f"  palette base={palette['base']} accent={palette['accent']} "
         f"text={palette['text']} contrast={palette['contrast']} "
-        f"panel_a={palette['panel_alpha']}"
+        f"float_captions=1"
     )
 
     arch_work = work_dir / arch["slug"]
@@ -1395,7 +1598,9 @@ def generate_one(
         palette["text"],
         palette["accent"],
         palette["base"],
+        duration=duration,
     )
+    save_caption_timings(out_dir, arch["slug"], segments, duration)
 
     out_path = out_dir / f"{arch['slug']}.mp4"
     fade_start = max(0.0, duration - FADE_OUT_SEC)
@@ -1507,6 +1712,135 @@ def generate_one(
     return out_path, palette
 
 
+def restyle_one(
+    ffmpeg: str,
+    ffprobe: str,
+    arch: dict,
+    out_dir: Path,
+    work_dir: Path,
+) -> tuple[Path, dict]:
+    """
+    Reestiliza legendas/título preservando áudio misturado e timings.
+    Sem re-TTS e sem recalcular intervalos (sidecar ou ROI dos blocos queimados).
+    """
+    card = CARDS_DIR / arch["card"]
+    if not card.exists():
+        raise SystemExit(f"Carta não encontrada: {card}")
+
+    out_path = out_dir / f"{arch['slug']}.mp4"
+    if not out_path.is_file():
+        raise SystemExit(f"MP4 ausente para --restyle: {out_path}")
+
+    palette = extract_palette(card)
+    print(
+        f"  palette base={palette['base']} accent={palette['accent']} "
+        f"text={palette['text']} contrast={palette['contrast']} float_captions=1"
+    )
+
+    arch_work = work_dir / arch["slug"]
+    arch_work.mkdir(parents=True, exist_ok=True)
+
+    duration = probe_duration(ffprobe, out_path)
+    loaded = load_caption_timings(out_dir, arch["slug"])
+    if loaded is not None:
+        segments, timed_dur = loaded
+        duration = max(duration, timed_dur)
+        print(f"  timings: sidecar ({len(segments)} blocos)")
+        timing_src = "sidecar"
+    else:
+        print("  timings: recuperando ROI dos blocos já sincronizados (sem re-TTS)...")
+        segments = recover_segments_from_burned_captions(
+            ffmpeg, out_path, arch["lines"], arch_work, duration
+        )
+        timing_src = "burned-roi"
+        save_caption_timings(out_dir, arch["slug"], segments, duration)
+        print(f"  timings: salvos em {timings_sidecar(out_dir, arch['slug']).name}")
+
+    # Preserva áudio exato (voz + trilha já mixados)
+    audio_path = arch_work / "preserved_audio.m4a"
+    run(
+        [
+            ffmpeg,
+            "-y",
+            "-i",
+            str(out_path),
+            "-vn",
+            "-c:a",
+            "copy",
+            str(audio_path),
+        ]
+    )
+
+    frames = max(int(round(duration * FPS)), FPS)
+    zoom_end = 1.10
+    zoom_expr = f"1+({zoom_end}-1)*on/{max(frames - 1, 1)}"
+
+    ass_path = arch_work / f"{arch['slug']}.ass"
+    write_ass(
+        ass_path,
+        segments,
+        arch["title"],
+        palette["text"],
+        palette["accent"],
+        palette["base"],
+        duration=duration,
+    )
+
+    ass_escaped = str(ass_path.resolve()).replace("\\", "/").replace(":", "\\:")
+    vf = (
+        f"scale={WIDTH}:{HEIGHT}:force_original_aspect_ratio=increase,"
+        f"crop={WIDTH}:{HEIGHT},"
+        f"scale=8000:-1,"
+        f"zoompan=z='{zoom_expr}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
+        f":d={frames}:s={WIDTH}x{HEIGHT}:fps={FPS},"
+        f"ass='{ass_escaped}'"
+    )
+
+    staged = arch_work / f"{arch['slug']}.restyle.mp4"
+    run(
+        [
+            ffmpeg,
+            "-y",
+            "-loop",
+            "1",
+            "-i",
+            str(card),
+            "-i",
+            str(audio_path),
+            "-vf",
+            vf,
+            "-t",
+            f"{duration:.3f}",
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "-preset",
+            "medium",
+            "-crf",
+            "20",
+            "-c:a",
+            "copy",
+            "-movflags",
+            "+faststart",
+            "-shortest",
+            str(staged),
+        ]
+    )
+    # overwrite atômico
+    shutil.move(str(staged), str(out_path))
+
+    if not out_path.exists() or out_path.stat().st_size < 10_000:
+        raise SystemExit(f"Saída inválida: {out_path}")
+    probe_duration(ffprobe, out_path)
+
+    palette["tts"] = f"restyle (áudio preservado; timings={timing_src})"
+    palette["has_voice"] = True
+    # reafirma sidecar (mesmo conteúdo)
+    save_caption_timings(out_dir, arch["slug"], segments, duration)
+    return out_path, palette
+
+
 def main() -> None:
     load_env_files()
     parser = argparse.ArgumentParser(description="Gera vídeos TikTok dos 12 arquétipos")
@@ -1523,6 +1857,11 @@ def main() -> None:
         help="Motor de voz (auto: ElevenLabs se chave; senão edge-tts)",
     )
     parser.add_argument("--seed", type=int, default=42, help="Seed para gaps 150–220ms")
+    parser.add_argument(
+        "--restyle",
+        action="store_true",
+        help="Só reestiliza legendas/título; preserva áudio e timings (sem re-TTS)",
+    )
     args = parser.parse_args()
 
     if not CARDS_DIR.is_dir():
@@ -1532,10 +1871,8 @@ def main() -> None:
 
     ffmpeg = find_ffmpeg()
     ffprobe = find_ffprobe()
-    engine, engine_note = resolve_engine(args.engine)
     out_dir: Path = args.out
     out_dir.mkdir(parents=True, exist_ok=True)
-    rng = random.Random(args.seed)
 
     selected = ARCHETYPES
     if args.only:
@@ -1550,26 +1887,44 @@ def main() -> None:
     print(f"Trilha: {AUDIO_PATH}")
     print(f"Saída:  {out_dir}")
     print(f"ffmpeg: {ffmpeg}")
-    print(f"TTS:    {engine} — {engine_note}")
 
     results = []
     with tempfile.TemporaryDirectory(prefix="tiktok-archetypes-") as tmp:
         work = Path(tmp)
-        for arch in selected:
-            print(f"\n=== {arch['slug']} ({arch['title']}) tone={arch.get('tone')} ===")
-            path, palette = generate_one(
-                ffmpeg, ffprobe, arch, out_dir, work, engine, rng
-            )
-            meta = probe_stream(ffprobe, path)
-            stream = (meta.get("streams") or [{}])[0]
-            fmt = meta.get("format") or {}
-            dur = float(fmt.get("duration") or probe_duration(ffprobe, path))
-            size = path.stat().st_size
-            results.append((path, size, dur, palette, stream))
-            print(
-                f"OK {path.name}  {size/1_000_000:.2f} MB  {dur:.1f}s  "
-                f"{stream.get('width')}x{stream.get('height')} @{stream.get('r_frame_rate')}"
-            )
+        if args.restyle:
+            print("Modo: --restyle (áudio + timings preservados; sem re-TTS)")
+            for arch in selected:
+                print(f"\n=== restyle {arch['slug']} ({arch['title']}) ===")
+                path, palette = restyle_one(ffmpeg, ffprobe, arch, out_dir, work)
+                meta = probe_stream(ffprobe, path)
+                stream = (meta.get("streams") or [{}])[0]
+                fmt = meta.get("format") or {}
+                dur = float(fmt.get("duration") or probe_duration(ffprobe, path))
+                size = path.stat().st_size
+                results.append((path, size, dur, palette, stream))
+                print(
+                    f"OK {path.name}  {size/1_000_000:.2f} MB  {dur:.1f}s  "
+                    f"{stream.get('width')}x{stream.get('height')} @{stream.get('r_frame_rate')}"
+                )
+        else:
+            engine, engine_note = resolve_engine(args.engine)
+            rng = random.Random(args.seed)
+            print(f"TTS:    {engine} — {engine_note}")
+            for arch in selected:
+                print(f"\n=== {arch['slug']} ({arch['title']}) tone={arch.get('tone')} ===")
+                path, palette = generate_one(
+                    ffmpeg, ffprobe, arch, out_dir, work, engine, rng
+                )
+                meta = probe_stream(ffprobe, path)
+                stream = (meta.get("streams") or [{}])[0]
+                fmt = meta.get("format") or {}
+                dur = float(fmt.get("duration") or probe_duration(ffprobe, path))
+                size = path.stat().st_size
+                results.append((path, size, dur, palette, stream))
+                print(
+                    f"OK {path.name}  {size/1_000_000:.2f} MB  {dur:.1f}s  "
+                    f"{stream.get('width')}x{stream.get('height')} @{stream.get('r_frame_rate')}"
+                )
 
     print("\n--- Verificação ---")
     expected = [a["slug"] for a in (selected if args.only else ARCHETYPES)]
@@ -1617,7 +1972,11 @@ def main() -> None:
         )
 
     print(f"\nConcluído: {len(expected)} vídeo(s) em {out_dir}")
-    print(f"Engine: {engine} — {engine_note}")
+    if args.restyle:
+        print("Mode: restyle (áudio preservado; sem re-TTS)")
+    else:
+        engine, engine_note = resolve_engine(args.engine)
+        print(f"Engine: {engine} — {engine_note}")
     print(f"Average duration: {avg_dur:.2f}s")
     print(f"Approach: {results[0][3]['approach'] if results else 'n/a'}")
 
