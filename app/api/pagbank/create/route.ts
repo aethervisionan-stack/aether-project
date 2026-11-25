@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import {
-  PAGBANK_UNLOCK_AMOUNT_CENTAVOS,
   pagbankMockMode,
+  pagbankProductMeta,
   pagbankSimulateAllowed,
+  type PagbankProduct,
 } from "@/lib/pagbank/config";
 import { createPagbankPixOrder } from "@/lib/pagbank/client";
 import { putPagbankOrder } from "@/lib/pagbank/store";
@@ -10,26 +11,40 @@ import { putPagbankOrder } from "@/lib/pagbank/store";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function mockPixPayload(orderId: string) {
+function parseProduct(raw: unknown): PagbankProduct {
+  return raw === "mentor" ? "mentor" : "unlock";
+}
+
+function mockPixPayload(orderId: string, amountCentavos: number) {
   // Placeholder EMV-ish string for UI / copy in mock mode — not a real Pix.
-  const text = `00020126580014BR.GOV.BCB.PIX0136${orderId}52040000530398654043.005802BR5913Arquetipo Quiz6009SAO PAULO62070503***6304ABCD`;
+  const amount = (amountCentavos / 100).toFixed(2);
+  const text = `00020126580014BR.GOV.BCB.PIX0136${orderId}5204000053039865404${amount}5802BR5913Arquetipo Quiz6009SAO PAULO62070503***6304ABCD`;
   return {
     pixCopyPaste: text,
     qrCodeImageUrl: null as string | null,
   };
 }
 
-export async function POST() {
+export async function POST(req: Request) {
   try {
+    let product: PagbankProduct = "unlock";
+    try {
+      const body = (await req.json()) as { product?: unknown };
+      product = parseProduct(body?.product);
+    } catch {
+      // empty body → default unlock (R$ 3)
+    }
+
+    const meta = pagbankProductMeta(product);
     const simulateAllowed = pagbankSimulateAllowed();
 
     if (pagbankMockMode()) {
-      const orderId = `MOCK_${crypto.randomUUID()}`;
-      const pix = mockPixPayload(orderId);
+      const orderId = `MOCK_${product}_${crypto.randomUUID()}`;
+      const pix = mockPixPayload(orderId, meta.amountCentavos);
       putPagbankOrder({
         orderId,
         status: "waiting",
-        amountCentavos: PAGBANK_UNLOCK_AMOUNT_CENTAVOS,
+        amountCentavos: meta.amountCentavos,
         pixCopyPaste: pix.pixCopyPaste,
         qrCodeImageUrl: pix.qrCodeImageUrl,
         mock: true,
@@ -38,8 +53,9 @@ export async function POST() {
 
       return NextResponse.json({
         orderId,
-        amountCentavos: PAGBANK_UNLOCK_AMOUNT_CENTAVOS,
-        amountLabel: "R$ 3,00",
+        product,
+        amountCentavos: meta.amountCentavos,
+        amountLabel: meta.amountLabel,
         pixCopyPaste: pix.pixCopyPaste,
         qrCodeImageUrl: pix.qrCodeImageUrl,
         status: "waiting",
@@ -48,7 +64,7 @@ export async function POST() {
       });
     }
 
-    const created = await createPagbankPixOrder();
+    const created = await createPagbankPixOrder(product);
     putPagbankOrder({
       orderId: created.orderId,
       status: "waiting",
@@ -61,8 +77,9 @@ export async function POST() {
 
     return NextResponse.json({
       orderId: created.orderId,
+      product: created.product,
       amountCentavos: created.amountCentavos,
-      amountLabel: "R$ 3,00",
+      amountLabel: created.amountLabel,
       pixCopyPaste: created.pixCopyPaste,
       qrCodeImageUrl: created.qrCodeImageUrl,
       status: created.status,

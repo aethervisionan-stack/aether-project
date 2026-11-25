@@ -1,6 +1,32 @@
 /** Unlock price in BRL centavos (R$ 3,00). */
 export const PAGBANK_UNLOCK_AMOUNT_CENTAVOS = 300;
 
+/** Mentor Estratégico — Passe 30 dias (R$ 19,90). */
+export const PAGBANK_MENTOR_AMOUNT_CENTAVOS = 1990;
+
+export type PagbankProduct = "unlock" | "mentor";
+
+export function pagbankProductMeta(product: PagbankProduct = "unlock") {
+  if (product === "mentor") {
+    return {
+      product: "mentor" as const,
+      amountCentavos: PAGBANK_MENTOR_AMOUNT_CENTAVOS,
+      amountLabel: "R$ 19,90",
+      itemReference: "mentor-pass-30d",
+      itemName: "Passe Mentor Estratégico 30 dias",
+      chargeDescription: "Passe 30 dias — Mentor Estratégico de Arquétipos",
+    };
+  }
+  return {
+    product: "unlock" as const,
+    amountCentavos: PAGBANK_UNLOCK_AMOUNT_CENTAVOS,
+    amountLabel: "R$ 3,00",
+    itemReference: "archetype-unlock",
+    itemName: "Relatório de Arquétipos",
+    chargeDescription: "Desbloqueio do relatório de arquétipos",
+  };
+}
+
 export function pagbankToken(): string | undefined {
   return (
     process.env.PAGBANK_TOKEN?.trim() ||

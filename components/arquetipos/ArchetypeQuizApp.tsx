@@ -9,7 +9,8 @@ import {
   writeIsUnlocked,
 } from "@/src/utils/archetypeUnlock";
 import {
-  clearQuizSession,
+  applyMentorRestore,
+  clearQuizAnswersKeepMentor,
   readQuizSession,
   writeQuizSession,
 } from "@/src/utils/quizSession";
@@ -45,6 +46,22 @@ export function ArchetypeQuizApp() {
     setMounted(true);
     const isUnlocked = readIsUnlocked();
     setUnlocked(isUnlocked);
+
+    // ?restore=<token> — reabre Passe do Mentor neste aparelho
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const restoreToken = params.get("restore");
+      if (restoreToken) {
+        applyMentorRestore(restoreToken);
+        params.delete("restore");
+        const next = params.toString();
+        const url = `${window.location.pathname}${next ? `?${next}` : ""}${window.location.hash}`;
+        window.history.replaceState({}, "", url);
+      }
+    } catch {
+      // ignore
+    }
+
     const session = readQuizSession();
     if (session?.answers && Object.keys(session.answers).length > 0) {
       setAnswers(session.answers);
@@ -66,11 +83,18 @@ export function ArchetypeQuizApp() {
       nextCustom: Record<string, string>,
       completed: boolean,
     ) => {
+      const prev = readQuizSession();
       writeQuizSession({
         answers: nextAnswers,
         customAnswers: nextCustom,
         completed,
         updatedAt: Date.now(),
+        mentorUnlockedAt: prev?.mentorUnlockedAt ?? null,
+        mentorExpiresAt: prev?.mentorExpiresAt ?? null,
+        mentorProfile: prev?.mentorProfile ?? null,
+        mentorFreeUsed: prev?.mentorFreeUsed,
+        mentorHistory: prev?.mentorHistory ?? [],
+        restoreCode: prev?.restoreCode ?? null,
       });
     },
     [],
@@ -149,7 +173,7 @@ export function ArchetypeQuizApp() {
     setCustomAnswers({});
     setIndex(0);
     setStage("welcome");
-    clearQuizSession();
+    clearQuizAnswersKeepMentor();
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 

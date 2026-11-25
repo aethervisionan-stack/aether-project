@@ -1,7 +1,9 @@
 import {
   PAGBANK_UNLOCK_AMOUNT_CENTAVOS,
   pagbankApiBase,
+  pagbankProductMeta,
   pagbankToken,
+  type PagbankProduct,
 } from "./config";
 import { generateValidCPF } from "./cpf";
 
@@ -10,6 +12,8 @@ export type PagbankCreateResult = {
   pixCopyPaste: string;
   qrCodeImageUrl: string | null;
   amountCentavos: number;
+  amountLabel: string;
+  product: PagbankProduct;
   status: "waiting";
 };
 
@@ -99,9 +103,12 @@ function normalizeChargeStatus(raw: unknown): PagbankStatusResult["status"] {
   return "waiting";
 }
 
-export async function createPagbankPixOrder(): Promise<PagbankCreateResult> {
-  const amount = PAGBANK_UNLOCK_AMOUNT_CENTAVOS;
-  const reference = `arq-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+export async function createPagbankPixOrder(
+  product: PagbankProduct = "unlock",
+): Promise<PagbankCreateResult> {
+  const meta = pagbankProductMeta(product);
+  const amount = meta.amountCentavos;
+  const reference = `arq-${product}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const taxId = generateValidCPF();
 
   const payload = {
@@ -121,8 +128,8 @@ export async function createPagbankPixOrder(): Promise<PagbankCreateResult> {
     },
     items: [
       {
-        reference_id: "archetype-unlock",
-        name: "Relatório de Arquétipos",
+        reference_id: meta.itemReference,
+        name: meta.itemName,
         quantity: 1,
         unit_amount: amount,
       },
@@ -130,7 +137,7 @@ export async function createPagbankPixOrder(): Promise<PagbankCreateResult> {
     charges: [
       {
         reference_id: `charge-${reference}`,
-        description: "Desbloqueio do relatório de arquétipos",
+        description: meta.chargeDescription,
         amount: { value: amount, currency: "BRL" },
         payment_method: {
           type: "PIX",
@@ -163,6 +170,8 @@ export async function createPagbankPixOrder(): Promise<PagbankCreateResult> {
     pixCopyPaste: pix.pixCopyPaste,
     qrCodeImageUrl: pix.qrCodeImageUrl,
     amountCentavos: amount,
+    amountLabel: meta.amountLabel,
+    product,
     status: "waiting",
   };
 }

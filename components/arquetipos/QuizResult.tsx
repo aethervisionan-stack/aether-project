@@ -16,6 +16,7 @@ import {
 } from "@/src/data/diagnosis";
 import { TOTAL_QUESTIONS } from "@/src/data/scoring";
 import { OrnateCorners, SanctuaryBackdrop } from "./CinematicChrome";
+import { ArchetypeMentor } from "./ArchetypeMentor";
 import {
   SHARE_CARD_HEIGHT,
   SHARE_CARD_WIDTH,
@@ -385,6 +386,8 @@ export function QuizResult({ result, onRestart }: Props) {
           Escala híbrida · até {TOTAL_QUESTIONS * 3} pts teóricos por arquétipo
           (sempre primário)
         </p>
+
+        <ArchetypeMentor result={result} />
 
         <div className="mt-8 flex flex-col gap-3">
           <button
