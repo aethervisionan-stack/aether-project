@@ -15,8 +15,17 @@ import {
   LEADERBOARD_CURRENT_ID_KEY,
   LEADERBOARD_STORAGE_KEY,
 } from "@/src/types/quiz";
+import { isDataUrlAvatar } from "@/src/lib/avatarImage";
 
 export type { LeaderboardEntry, LeaderboardFilter, LeaderboardMode };
+
+/** Accept local data URLs or future remote http(s) avatar URLs. */
+function normalizeAvatarUrl(value: unknown): string | undefined {
+  if (typeof value !== "string" || !value) return undefined;
+  if (isDataUrlAvatar(value)) return value;
+  if (/^https?:\/\//i.test(value) && value.length < 2048) return value;
+  return undefined;
+}
 
 export function assessmentModeToLeaderboardMode(
   mode: AssessmentMode,
@@ -65,14 +74,19 @@ function readRawEntries(): LeaderboardEntry[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw) as LeaderboardEntry[];
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
-      (e) =>
-        e &&
-        typeof e.id === "string" &&
-        typeof e.name === "string" &&
-        typeof e.iqScore === "number" &&
-        typeof e.mode === "string",
-    );
+    return parsed
+      .filter(
+        (e) =>
+          e &&
+          typeof e.id === "string" &&
+          typeof e.name === "string" &&
+          typeof e.iqScore === "number" &&
+          typeof e.mode === "string",
+      )
+      .map((e) => {
+        const avatarUrl = normalizeAvatarUrl(e.avatarUrl);
+        return avatarUrl ? { ...e, avatarUrl } : { ...e, avatarUrl: undefined };
+      });
   } catch {
     return [];
   }
@@ -84,6 +98,12 @@ function writeRawEntries(entries: LeaderboardEntry[]): void {
     const persisted = entries.map((entry) => {
       const { isCurrentUser: _ignored, ...rest } = entry;
       void _ignored;
+      // Keep avatarUrl when present; omit when absent so payload stays remote-ready.
+      if (!rest.avatarUrl) {
+        const { avatarUrl: _noAvatar, ...withoutAvatar } = rest;
+        void _noAvatar;
+        return withoutAvatar;
+      }
       return rest;
     });
     localStorage.setItem(LEADERBOARD_STORAGE_KEY, JSON.stringify(persisted));
@@ -148,10 +168,13 @@ export function buildLeaderboardEntry(input: {
   result: IqResult;
   durationSeconds: number;
   createdAt?: number;
+  avatarUrl?: string | null;
 }): LeaderboardEntry {
+  const avatarUrl = normalizeAvatarUrl(input.avatarUrl ?? undefined);
   return {
     id: createId(),
     name: normalizeParticipantName(input.name),
+    ...(avatarUrl ? { avatarUrl } : {}),
     iqScore: input.result.iq,
     confidenceMargin: input.result.marginOfError,
     percentile: input.result.percentile,

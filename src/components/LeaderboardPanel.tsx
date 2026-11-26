@@ -7,6 +7,7 @@ import {
   clearLeaderboard,
   getTopLeaderboard,
 } from "@/src/lib/leaderboard";
+import { ParticipantAvatar } from "@/src/components/ParticipantAvatar";
 
 const FILTERS: { id: LeaderboardFilter; label: string }[] = [
   { id: "all", label: "Todos" },
@@ -151,6 +152,12 @@ function LeaderboardRow({
       >
         #{position}
       </span>
+      <ParticipantAvatar
+        name={entry.name}
+        avatarUrl={entry.avatarUrl}
+        size="sm"
+        ring={current}
+      />
       <span className="min-w-0 flex-1 truncate font-medium text-zinc-200">
         {entry.name}
         {current ? (
@@ -178,13 +185,25 @@ function LeaderboardRow({
 export function UserRankBanner({
   rank,
   total,
+  name,
+  avatarUrl,
 }: {
   rank: number | null;
   total: number;
+  name?: string;
+  avatarUrl?: string | null;
 }) {
   if (rank == null) return null;
   return (
     <div className="rounded-2xl border border-emerald-500/35 bg-emerald-500/8 px-4 py-3 text-center">
+      <div className="mb-2 flex justify-center">
+        <ParticipantAvatar
+          name={name || "Você"}
+          avatarUrl={avatarUrl}
+          size="md"
+          ring
+        />
+      </div>
       <p className="font-iq-display text-lg text-emerald-300 sm:text-xl">
         Você alcançou o #{rank} lugar
       </p>

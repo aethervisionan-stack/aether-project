@@ -232,6 +232,8 @@ export interface QuizPersistedState {
   totalQuestions: number;
   /** Display name for ranking (empty → anonymous default at submit) */
   participantName: string;
+  /** Optional compressed avatar data URL for ranking / result identity */
+  participantAvatarUrl: string | null;
   /** Leaderboard entry id written after this session finished */
   leaderboardEntryId: string | null;
 }
@@ -244,6 +246,8 @@ export type LeaderboardFilter = "all" | "figures" | "questions";
 export interface LeaderboardEntry {
   id: string;
   name: string;
+  /** Optional compressed avatar (data URL locally; remote URL when backend lands) */
+  avatarUrl?: string;
   iqScore: number;
   confidenceMargin: number;
   percentile: number;

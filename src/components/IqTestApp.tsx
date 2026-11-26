@@ -47,6 +47,10 @@ import {
   LeaderboardPanel,
   UserRankBanner,
 } from "@/src/components/LeaderboardPanel";
+import {
+  AvatarPicker,
+  ParticipantAvatar,
+} from "@/src/components/ParticipantAvatar";
 import { MatrixRenderer, OptionGrid } from "@/src/components/MatrixRenderer";
 
 function formatTime(ms: number): string {
@@ -78,6 +82,7 @@ export function IqTestApp() {
   const [tutorialOk, setTutorialOk] = useState(false);
   const [reviewIndex, setReviewIndex] = useState(0);
   const [nameError, setNameError] = useState<string | null>(null);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
   const [leaderboardTick, setLeaderboardTick] = useState(0);
 
   const mode: AssessmentMode | null =
@@ -126,6 +131,7 @@ export function IqTestApp() {
       );
       const finishedAt = Date.now();
       const displayName = normalizeParticipantName(prev.participantName ?? "");
+      const avatarUrl = prev.participantAvatarUrl || null;
       let leaderboardEntryId = prev.leaderboardEntryId;
       if (!leaderboardEntryId) {
         const entry = buildLeaderboardEntry({
@@ -137,6 +143,7 @@ export function IqTestApp() {
             timeSpent,
           ),
           createdAt: finishedAt,
+          avatarUrl,
         });
         submitLeaderboardEntry(entry);
         leaderboardEntryId = entry.id;
@@ -144,6 +151,7 @@ export function IqTestApp() {
       return {
         ...prev,
         participantName: displayName,
+        participantAvatarUrl: avatarUrl,
         phase: "results",
         timeSpentMs: timeSpent,
         questionStartedAt: null,
@@ -183,18 +191,29 @@ export function IqTestApp() {
     setTutorialPick(null);
     setTutorialOk(false);
     setNameError(null);
+    setAvatarError(null);
     setReviewIndex(0);
     const keepName = state.participantName ?? "";
+    const keepAvatar = state.participantAvatarUrl ?? null;
     if (saved && saved.phase !== "onboarding" && saved.phase !== "modeSelect") {
       setState({
         ...saved,
         participantName: saved.participantName || keepName,
+        participantAvatarUrl:
+          saved.participantAvatarUrl ?? keepAvatar ?? null,
       });
       return;
     }
     setState({
-      ...createInitialState(m, getAssessmentItems(m).length, keepName),
+      ...createInitialState(
+        m,
+        getAssessmentItems(m).length,
+        keepName,
+        keepAvatar,
+      ),
       participantName: saved?.participantName || keepName,
+      participantAvatarUrl:
+        saved?.participantAvatarUrl ?? keepAvatar ?? null,
     });
   };
 
@@ -209,16 +228,19 @@ export function IqTestApp() {
       return;
     }
     setNameError(null);
+    setAvatarError(null);
     const name = raw.trim();
+    const avatarUrl = state.participantAvatarUrl ?? null;
     const now = Date.now();
     const n = getAssessmentItems(mode).length;
     setState({
-      ...createInitialState(mode, n, name),
+      ...createInitialState(mode, n, name, avatarUrl),
       phase: "test",
       startedAt: now,
       endsAt: now + QUIZ_DURATION_MS,
       questionStartedAt: now,
       participantName: name,
+      participantAvatarUrl: avatarUrl,
     });
   };
 
@@ -346,12 +368,18 @@ export function IqTestApp() {
 
   const resetAll = (keepName = true) => {
     const name = keepName ? (state.participantName ?? "") : "";
+    const avatar = keepName ? (state.participantAvatarUrl ?? null) : null;
     if (mode) clearQuizState(mode);
     setTutorialPick(null);
     setTutorialOk(false);
     setNameError(null);
+    setAvatarError(null);
     setReviewIndex(0);
-    setState({ ...createModeSelectState(), participantName: name });
+    setState({
+      ...createModeSelectState(),
+      participantName: name,
+      participantAvatarUrl: avatar,
+    });
   };
 
   if (!hydrated) {
@@ -469,38 +497,58 @@ export function IqTestApp() {
 
             <PsychometricTransparencyBlock compact />
 
-            <div className="mx-auto w-full max-w-md space-y-2 rounded-2xl border border-zinc-800 bg-zinc-950/70 p-5">
-              <label
-                htmlFor="iq-participant-name"
-                className="block text-sm font-medium text-zinc-200"
-              >
-                Nome / Apelido
-              </label>
-              <input
-                id="iq-participant-name"
-                type="text"
-                autoComplete="nickname"
-                maxLength={40}
-                value={state.participantName ?? ""}
-                onChange={(e) => {
-                  setNameError(null);
-                  setState((prev) => ({
-                    ...prev,
-                    participantName: e.target.value,
-                  }));
-                }}
-                placeholder={`Ex.: Maria Silva (vazio → ${ANONYMOUS_PARTICIPANT_NAME})`}
-                className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2.5 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/30"
-              />
-              <p className="text-xs leading-relaxed text-zinc-500">
-                Use um nome real para figurar com clareza no ranking local.
-                Campo vazio registra como {ANONYMOUS_PARTICIPANT_NAME}.
-              </p>
-              {nameError ? (
-                <p className="text-xs text-amber-400" role="alert">
-                  {nameError}
+            <div className="mx-auto w-full max-w-md space-y-4 rounded-2xl border border-zinc-800 bg-zinc-950/70 p-5">
+              <div className="space-y-2">
+                <label
+                  htmlFor="iq-participant-name"
+                  className="block text-sm font-medium text-zinc-200"
+                >
+                  Nome / Apelido
+                </label>
+                <input
+                  id="iq-participant-name"
+                  type="text"
+                  autoComplete="nickname"
+                  maxLength={40}
+                  value={state.participantName ?? ""}
+                  onChange={(e) => {
+                    setNameError(null);
+                    setState((prev) => ({
+                      ...prev,
+                      participantName: e.target.value,
+                    }));
+                  }}
+                  placeholder={`Ex.: Maria Silva (vazio → ${ANONYMOUS_PARTICIPANT_NAME})`}
+                  className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2.5 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/30"
+                />
+                <p className="text-xs leading-relaxed text-zinc-500">
+                  Use um nome real para figurar com clareza no ranking local.
+                  Campo vazio registra como {ANONYMOUS_PARTICIPANT_NAME}.
                 </p>
-              ) : null}
+                {nameError ? (
+                  <p className="text-xs text-amber-400" role="alert">
+                    {nameError}
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="border-t border-zinc-800/80 pt-4">
+                <AvatarPicker
+                  name={
+                    state.participantName?.trim() || ANONYMOUS_PARTICIPANT_NAME
+                  }
+                  avatarUrl={state.participantAvatarUrl ?? null}
+                  error={avatarError}
+                  onError={setAvatarError}
+                  onChange={(next) => {
+                    setAvatarError(null);
+                    setState((prev) => ({
+                      ...prev,
+                      participantAvatarUrl: next,
+                    }));
+                  }}
+                />
+              </div>
             </div>
 
             <div className="grid gap-4 rounded-2xl border border-zinc-800 bg-zinc-900/50 p-5 sm:grid-cols-3 sm:p-6">
@@ -755,6 +803,7 @@ export function IqTestApp() {
               participantName={
                 state.participantName || ANONYMOUS_PARTICIPANT_NAME
               }
+              participantAvatarUrl={state.participantAvatarUrl ?? null}
               leaderboardEntryId={state.leaderboardEntryId}
               leaderboardTick={leaderboardTick}
               onOpenReview={() => {
@@ -843,6 +892,7 @@ function ResultsDashboard({
   reviewIndex,
   setReviewIndex,
   participantName,
+  participantAvatarUrl,
   leaderboardEntryId,
   leaderboardTick,
   onOpenReview,
@@ -857,6 +907,7 @@ function ResultsDashboard({
   reviewIndex: number;
   setReviewIndex: (n: number) => void;
   participantName: string;
+  participantAvatarUrl: string | null;
   leaderboardEntryId: string | null;
   leaderboardTick: number;
   onOpenReview: () => void;
@@ -891,10 +942,18 @@ function ResultsDashboard({
       className="space-y-6 pt-4"
     >
       <header className="space-y-3 text-center">
-        <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">
-          Resultado · {MODE_META[result.mode].label}
-          {participantName ? ` · ${participantName}` : ""}
-        </p>
+        <div className="flex flex-col items-center gap-2">
+          <ParticipantAvatar
+            name={participantName}
+            avatarUrl={participantAvatarUrl}
+            size="lg"
+            ring
+          />
+          <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">
+            Resultado · {MODE_META[result.mode].label}
+            {participantName ? ` · ${participantName}` : ""}
+          </p>
+        </div>
         <motion.h1
           className="font-iq-display text-5xl text-zinc-50 tabular-nums sm:text-6xl"
           initial={{ scale: 0.92, opacity: 0 }}
@@ -913,7 +972,12 @@ function ResultsDashboard({
         </p>
       </header>
 
-      <UserRankBanner rank={userRank} total={allRanked.length} />
+      <UserRankBanner
+        rank={userRank}
+        total={allRanked.length}
+        name={participantName}
+        avatarUrl={participantAvatarUrl}
+      />
 
       <LeaderboardPanel
         refreshKey={leaderboardTick}
