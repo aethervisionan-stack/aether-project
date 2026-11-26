@@ -1,15 +1,23 @@
 import type {
   AnswerRecord,
+  AnyDistractorError,
+  AssessmentMode,
   BandTelemetry,
   CompetenceScores,
   DifficultyBand,
   DistractorError,
   IqResult,
-  MatrixQuestion,
   PrecisionDiagnosis,
+  QuestionSkill,
+  QuizItem,
   RuleCategory,
+  TextDistractorError,
 } from "@/src/types/quiz";
-import { BAND_META } from "@/src/types/quiz";
+import {
+  BAND_META,
+  competenceKeysForMode,
+  isMatrixItem,
+} from "@/src/types/quiz";
 
 /** Standard normal CDF via Abramowitz & Stegun approximation */
 export function normalCdf(z: number): number {
@@ -90,15 +98,22 @@ export function iqBand(iq: number): string {
   return "Muito superior / faixa gênio";
 }
 
-const CATEGORY_KEYS: RuleCategory[] = [
-  "spatial",
-  "boolean",
-  "pattern",
-  "numerical",
-];
-
 function emptyCompetences(): CompetenceScores {
-  return { spatial: 0, boolean: 0, pattern: 0, numerical: 0 };
+  return {
+    spatial: 0,
+    boolean: 0,
+    pattern: 0,
+    numerical: 0,
+    logical: 0,
+    numeric: 0,
+    verbal: 0,
+    analytical: 0,
+  };
+}
+
+function itemSkillKeys(item: QuizItem): (keyof CompetenceScores)[] {
+  if (isMatrixItem(item)) return item.categories;
+  return item.skills;
 }
 
 /** 2PL-ish P(correct | θ) */
@@ -114,7 +129,7 @@ function pCorrect(theta: number, a: number, b: number): number {
  * Discrimination a derived from item weight; difficulty from irtB.
  */
 export function estimateTheta(
-  questions: MatrixQuestion[],
+  questions: QuizItem[],
   correct: boolean[],
 ): { theta: number; se: number; information: number } {
   let theta = 0;
@@ -159,7 +174,6 @@ export function thetaToIq(
   hardTotal: number,
 ): number {
   let iq = 100 + 15 * theta;
-  // Soft ceiling: only exceptional high-band accuracy pushes past ~145–155
   if (hardTotal > 0) {
     const hardRate = hardHits / hardTotal;
     if (hardRate >= 0.75 && theta > 1.8) {
@@ -171,23 +185,27 @@ export function thetaToIq(
   return Math.round(Math.min(160, Math.max(68, iq)));
 }
 
-function expectedTimeMs(band: DifficultyBand): number {
-  switch (band) {
-    case 1:
-      return 18_000;
-    case 2:
-      return 28_000;
-    case 3:
-      return 40_000;
-    case 4:
-      return 55_000;
-    case 5:
-      return 70_000;
-  }
+function expectedTimeMs(band: DifficultyBand, kind: QuizItem["kind"]): number {
+  const base = (() => {
+    switch (band) {
+      case 1:
+        return 18_000;
+      case 2:
+        return 28_000;
+      case 3:
+        return 40_000;
+      case 4:
+        return 55_000;
+      case 5:
+        return 70_000;
+    }
+  })();
+  // Text items typically need a bit more reading time
+  return kind === "text" ? Math.round(base * 1.15) : base;
 }
 
 function buildDiagnosis(
-  questions: MatrixQuestion[],
+  questions: QuizItem[],
   answers: AnswerRecord[],
   optionSwitches: number[],
 ): PrecisionDiagnosis {
@@ -224,22 +242,19 @@ function buildDiagnosis(
     ? hardCorrect.length / hardAnswered.length
     : 0;
 
-  // Guessing: ultra-fast on complex items
   let guessCount = 0;
   for (const { q, i } of hardIdx) {
     const t = answers[i].timeMs;
     const selected = answers[i].selectedIndex !== null;
-    if (selected && t > 0 && t < expectedTimeMs(q.difficulty) * 0.28) {
+    if (selected && t > 0 && t < expectedTimeMs(q.difficulty, q.kind) * 0.28) {
       guessCount += 1;
     }
   }
   const guessingFlag = guessCount >= 2;
 
-  // Incomplete / early abort
   const unanswered = answers.filter((a) => a.selectedIndex === null).length;
   const incompleteFlag = unanswered >= 5;
 
-  // Consistency within bands: variance of correctness mid-band
   let inconsistencyHits = 0;
   for (const band of [2, 3, 4] as DifficultyBand[]) {
     const bt = bandTelemetry.find((b) => b.band === band)!;
@@ -256,7 +271,6 @@ function buildDiagnosis(
     const var_ =
       outcomes.reduce<number>((a, b) => a + (b - mean) ** 2, 0) /
       Math.max(outcomes.length, 1);
-    // High variance with medium accuracy → zigzag / inconsistent
     if (var_ > 0.22 && mean > 0.25 && mean < 0.75) inconsistencyHits += 1;
   }
   const inconsistentFlag = inconsistencyHits >= 2;
@@ -266,7 +280,6 @@ function buildDiagnosis(
   const avgOptionSwitches =
     answeredCount > 0 ? switchSum / answeredCount : 0;
 
-  // Reliability / consistency composites (0–100)
   let reliabilityIndex = 100;
   if (guessingFlag) reliabilityIndex -= 18 + guessCount * 4;
   if (incompleteFlag) reliabilityIndex -= 10 + unanswered * 2;
@@ -322,15 +335,16 @@ function buildDiagnosis(
 }
 
 export function calculateIqResult(
-  questions: MatrixQuestion[],
+  questions: QuizItem[],
   selected: (number | null)[],
   timeSpentMs: number[],
   optionSwitches: number[] = [],
+  mode: AssessmentMode = "figures",
 ): IqResult {
   const answers: AnswerRecord[] = questions.map((q, i) => {
     const selectedIndex = selected[i] ?? null;
     const correct = selectedIndex === q.correctIndex;
-    let distractorError: DistractorError | null = null;
+    let distractorError: AnyDistractorError | null = null;
     if (
       selectedIndex !== null &&
       !correct &&
@@ -353,12 +367,14 @@ export function calculateIqResult(
   const catCorrect = emptyCompetences();
   const catTotal = emptyCompetences();
   const correctFlags = answers.map((a) => a.correct);
+  const seenSkills = new Set<keyof CompetenceScores>();
 
   for (let i = 0; i < questions.length; i++) {
     const q = questions[i];
     maxScore += q.weight;
     if (answers[i].correct) rawScore += q.weight;
-    for (const cat of q.categories) {
+    for (const cat of itemSkillKeys(q)) {
+      seenSkills.add(cat);
       catTotal[cat] += q.weight;
       if (answers[i].correct) catCorrect[cat] += q.weight;
     }
@@ -367,11 +383,6 @@ export function calculateIqResult(
   const accuracy = maxScore > 0 ? rawScore / maxScore : 0;
   const { theta, se } = estimateTheta(questions, correctFlags);
 
-  const hardQs = questions.filter((q) => q.difficulty >= 4);
-  const hardHits = hardQs.filter(
-    (q) => answers[questions.indexOf(q)]?.correct,
-  ).length;
-  // Prefer index-based hard hits
   let hardHits2 = 0;
   let hardTotal = 0;
   for (let i = 0; i < questions.length; i++) {
@@ -382,7 +393,6 @@ export function calculateIqResult(
   }
 
   const iq = thetaToIq(theta, hardHits2, hardTotal);
-  // SE on IQ scale; inflate when reliability low
   const diagnosis = buildDiagnosis(
     questions,
     answers,
@@ -399,12 +409,15 @@ export function calculateIqResult(
   const percentile = Math.round(normalCdf((iq - 100) / 15) * 1000) / 10;
 
   const competences = emptyCompetences();
-  for (const key of CATEGORY_KEYS) {
+  for (const key of Object.keys(competences) as (keyof CompetenceScores)[]) {
     competences[key] =
       catTotal[key] > 0
         ? Math.round((catCorrect[key] / catTotal[key]) * 100)
         : 0;
   }
+
+  const modeKeys = competenceKeysForMode(mode);
+  const activeCompetences = modeKeys.filter((k) => seenSkills.has(k));
 
   const answeredTimes = timeSpentMs.filter((t) => t > 0);
   const avgTimeMs =
@@ -414,9 +427,8 @@ export function calculateIqResult(
         )
       : 0;
 
-  void hardHits; // kept for clarity; hardHits2 is authoritative
-
   return {
+    mode,
     rawScore,
     maxScore,
     accuracy,
@@ -427,6 +439,7 @@ export function calculateIqResult(
     percentile,
     band: iqBand(iq),
     competences,
+    activeCompetences,
     avgTimeMs,
     answers,
     diagnosis,
@@ -442,39 +455,50 @@ export function competenceLabel(key: keyof CompetenceScores): string {
     case "pattern":
       return "Reconhecimento de Padrões";
     case "numerical":
-      return "Progressão Numérica";
+      return "Progressão Numérica (figuras)";
+    case "logical":
+      return "Lógica Dedutiva";
+    case "numeric":
+      return "Sequências Numéricas";
+    case "verbal":
+      return "Relações Verbais / Semânticas";
+    case "analytical":
+      return "Resolução Analítica";
   }
 }
 
-export function distractorErrorLabel(err: DistractorError): string {
-  switch (err) {
-    case "incomplete_rotation":
-      return "Rotação incompleta";
-    case "horizontal_only":
-      return "Só regra horizontal";
-    case "vertical_only":
-      return "Só regra vertical";
-    case "polarity_flip":
-      return "Inversão de polaridade";
-    case "wrong_count":
-      return "Contagem incorreta";
-    case "shape_swap":
-      return "Troca de forma";
-    case "fill_only":
-      return "Só preenchimento";
-    case "or_instead_of_xor":
-      return "OR no lugar de XOR";
-    case "and_instead_of_xor":
-      return "AND no lugar de XOR";
-    case "missing_rule":
-      return "Regra omitida";
-    case "extra_element":
-      return "Elemento extra";
-    case "mirror_instead_of_rotate":
-      return "Espelho em vez de rotação";
-    case "wrong_scale":
-      return "Escala incorreta";
-    case "partial_union":
-      return "União parcial";
-  }
+export function distractorErrorLabel(err: AnyDistractorError): string {
+  const figure: Record<DistractorError, string> = {
+    incomplete_rotation: "Rotação incompleta",
+    horizontal_only: "Só regra horizontal",
+    vertical_only: "Só regra vertical",
+    polarity_flip: "Inversão de polaridade",
+    wrong_count: "Contagem incorreta",
+    shape_swap: "Troca de forma",
+    fill_only: "Só preenchimento",
+    or_instead_of_xor: "OR no lugar de XOR",
+    and_instead_of_xor: "AND no lugar de XOR",
+    missing_rule: "Regra omitida",
+    extra_element: "Elemento extra",
+    mirror_instead_of_rotate: "Espelho em vez de rotação",
+    wrong_scale: "Escala incorreta",
+    partial_union: "União parcial",
+  };
+  const text: Record<TextDistractorError, string> = {
+    premise_ignore: "Ignorou premissa",
+    scope_error: "Erro de escopo",
+    wrong_operation: "Operação / inferência errada",
+    near_miss: "Quase certo (erro fino)",
+    semantic_swap: "Troca semântica",
+    quantifier_error: "Erro de quantificador",
+    order_error: "Erro de ordem",
+    incomplete_chain: "Cadeia incompleta",
+    false_analogy: "Analogia falsa",
+    arithmetic_slip: "Deslize aritmético",
+  };
+  if (err in figure) return figure[err as DistractorError];
+  if (err in text) return text[err as TextDistractorError];
+  return err;
 }
+
+export type { RuleCategory, QuestionSkill };

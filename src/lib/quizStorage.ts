@@ -1,28 +1,29 @@
-import type { QuizPersistedState } from "@/src/types/quiz";
+import type { AssessmentMode, QuizPersistedState } from "@/src/types/quiz";
 import {
-  QUIZ_STORAGE_KEY,
-  QUIZ_STORAGE_KEY_LEGACY,
+  QUIZ_STORAGE_KEY_LEGACY_V1,
+  QUIZ_STORAGE_KEY_LEGACY_V2,
+  QUIZ_STORAGE_VERSION,
   QUIZ_TOTAL_QUESTIONS,
+  quizStorageKey,
 } from "@/src/types/quiz";
 
-export function loadQuizState(): QuizPersistedState | null {
+export function loadQuizState(mode: AssessmentMode): QuizPersistedState | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = localStorage.getItem(QUIZ_STORAGE_KEY);
-    if (!raw) {
-      // Ignore legacy v1 sessions — clean restart without breaking key presence
-      return null;
-    }
+    const raw = localStorage.getItem(quizStorageKey(mode));
+    if (!raw) return null;
     const parsed = JSON.parse(raw) as QuizPersistedState;
-    if (parsed?.version !== 2) return null;
-    if (
-      !Array.isArray(parsed.answers) ||
-      parsed.answers.length !== QUIZ_TOTAL_QUESTIONS
-    ) {
+    if (parsed?.version !== QUIZ_STORAGE_VERSION) return null;
+    if (parsed.mode !== mode) return null;
+    const total = parsed.totalQuestions ?? QUIZ_TOTAL_QUESTIONS;
+    if (!Array.isArray(parsed.answers) || parsed.answers.length !== total) {
       return null;
     }
     if (!Array.isArray(parsed.optionSwitches)) {
-      parsed.optionSwitches = Array(QUIZ_TOTAL_QUESTIONS).fill(0);
+      parsed.optionSwitches = Array(total).fill(0);
+    }
+    if (!Array.isArray(parsed.timeSpentMs)) {
+      parsed.timeSpentMs = Array(total).fill(0);
     }
     return parsed;
   } catch {
@@ -32,35 +33,66 @@ export function loadQuizState(): QuizPersistedState | null {
 
 export function saveQuizState(state: QuizPersistedState): void {
   if (typeof window === "undefined") return;
+  if (state.phase === "modeSelect") return;
   try {
-    localStorage.setItem(QUIZ_STORAGE_KEY, JSON.stringify(state));
+    localStorage.setItem(quizStorageKey(state.mode), JSON.stringify(state));
   } catch {
     // quota / private mode — ignore
   }
 }
 
-export function clearQuizState(): void {
+export function clearQuizState(mode?: AssessmentMode): void {
   if (typeof window === "undefined") return;
   try {
-    localStorage.removeItem(QUIZ_STORAGE_KEY);
-    localStorage.removeItem(QUIZ_STORAGE_KEY_LEGACY);
+    if (mode) {
+      localStorage.removeItem(quizStorageKey(mode));
+    } else {
+      for (const m of ["figures", "questions", "hybrid"] as AssessmentMode[]) {
+        localStorage.removeItem(quizStorageKey(m));
+      }
+    }
+    localStorage.removeItem(QUIZ_STORAGE_KEY_LEGACY_V2);
+    localStorage.removeItem(QUIZ_STORAGE_KEY_LEGACY_V1);
   } catch {
     // ignore
   }
 }
 
-export function createInitialState(): QuizPersistedState {
+export function createInitialState(
+  mode: AssessmentMode,
+  totalQuestions = QUIZ_TOTAL_QUESTIONS,
+): QuizPersistedState {
   return {
-    version: 2,
+    version: QUIZ_STORAGE_VERSION,
+    mode,
     phase: "onboarding",
     currentIndex: 0,
-    answers: Array(QUIZ_TOTAL_QUESTIONS).fill(null),
+    answers: Array(totalQuestions).fill(null),
     startedAt: null,
     endsAt: null,
     questionStartedAt: null,
-    timeSpentMs: Array(QUIZ_TOTAL_QUESTIONS).fill(0),
-    optionSwitches: Array(QUIZ_TOTAL_QUESTIONS).fill(0),
+    timeSpentMs: Array(totalQuestions).fill(0),
+    optionSwitches: Array(totalQuestions).fill(0),
     finishedAt: null,
     result: null,
+    totalQuestions,
+  };
+}
+
+export function createModeSelectState(): QuizPersistedState {
+  return {
+    version: QUIZ_STORAGE_VERSION,
+    mode: "figures",
+    phase: "modeSelect",
+    currentIndex: 0,
+    answers: [],
+    startedAt: null,
+    endsAt: null,
+    questionStartedAt: null,
+    timeSpentMs: [],
+    optionSwitches: [],
+    finishedAt: null,
+    result: null,
+    totalQuestions: QUIZ_TOTAL_QUESTIONS,
   };
 }

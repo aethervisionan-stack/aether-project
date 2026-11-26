@@ -3,9 +3,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  getMatrixQuestions,
-  getTutorialExample,
-} from "@/src/lib/matrixGenerator";
+  getAssessmentItems,
+  getModeRules,
+  getModeTutorial,
+  isMatrixQuestion,
+  isTextQuestion,
+} from "@/src/lib/assessmentBank";
 import {
   calculateIqResult,
   competenceLabel,
@@ -14,14 +17,18 @@ import {
 import {
   clearQuizState,
   createInitialState,
+  createModeSelectState,
   loadQuizState,
   saveQuizState,
 } from "@/src/lib/quizStorage";
 import {
+  MODE_META,
   QUIZ_DURATION_MS,
   QUIZ_TOTAL_QUESTIONS,
   bandProgressLabel,
+  type AssessmentMode,
   type CompetenceScores,
+  type QuizItem,
   type QuizPersistedState,
 } from "@/src/types/quiz";
 import { BellCurveChart } from "@/src/components/BellCurveChart";
@@ -47,18 +54,30 @@ function useCountdown(endsAt: number | null, onExpire: () => void) {
   return endsAt ? Math.max(0, endsAt - now) : QUIZ_DURATION_MS;
 }
 
+const LETTERS = "ABCDEFGH";
+
 export function IqTestApp() {
-  const questions = useMemo(() => getMatrixQuestions(), []);
-  const tutorial = useMemo(() => getTutorialExample(), []);
   const [hydrated, setHydrated] = useState(false);
-  const [state, setState] = useState<QuizPersistedState>(createInitialState);
+  const [state, setState] = useState<QuizPersistedState>(createModeSelectState);
   const [tutorialPick, setTutorialPick] = useState<number | null>(null);
   const [tutorialOk, setTutorialOk] = useState(false);
   const [reviewIndex, setReviewIndex] = useState(0);
 
+  const mode: AssessmentMode | null =
+    state.phase === "modeSelect" ? null : state.mode;
+
+  const questions = useMemo(
+    () => (mode ? getAssessmentItems(mode) : []),
+    [mode],
+  );
+  const totalQ = questions.length || QUIZ_TOTAL_QUESTIONS;
+  const tutorial = useMemo(
+    () => (mode ? getModeTutorial(mode) : null),
+    [mode],
+  );
+  const rules = useMemo(() => (mode ? getModeRules(mode) : null), [mode]);
+
   useEffect(() => {
-    const saved = loadQuizState();
-    if (saved) setState(saved);
     setHydrated(true);
   }, []);
 
@@ -70,20 +89,23 @@ export function IqTestApp() {
   const finishTest = useCallback(
     (prev: QuizPersistedState): QuizPersistedState => {
       if (prev.phase === "results" || prev.phase === "review") return prev;
+      const items = getAssessmentItems(prev.mode);
+      const n = items.length;
       const timeSpent = [...prev.timeSpentMs];
       if (
         prev.questionStartedAt &&
         prev.currentIndex >= 0 &&
-        prev.currentIndex < QUIZ_TOTAL_QUESTIONS
+        prev.currentIndex < n
       ) {
         timeSpent[prev.currentIndex] += Date.now() - prev.questionStartedAt;
       }
-      const switches = prev.optionSwitches ?? Array(QUIZ_TOTAL_QUESTIONS).fill(0);
+      const switches = prev.optionSwitches ?? Array(n).fill(0);
       const result = calculateIqResult(
-        questions,
+        items,
         prev.answers,
         timeSpent,
         switches,
+        prev.mode,
       );
       return {
         ...prev,
@@ -94,7 +116,7 @@ export function IqTestApp() {
         result,
       };
     },
-    [questions],
+    [],
   );
 
   const onExpire = useCallback(() => {
@@ -110,12 +132,28 @@ export function IqTestApp() {
   );
 
   const progress =
-    state.answers.filter((a) => a !== null).length / QUIZ_TOTAL_QUESTIONS;
+    totalQ > 0
+      ? state.answers.filter((a) => a !== null).length / totalQ
+      : 0;
+
+  const selectMode = (m: AssessmentMode) => {
+    const saved = loadQuizState(m);
+    setTutorialPick(null);
+    setTutorialOk(false);
+    setReviewIndex(0);
+    if (saved && saved.phase !== "onboarding" && saved.phase !== "modeSelect") {
+      setState(saved);
+      return;
+    }
+    setState(createInitialState(m, getAssessmentItems(m).length));
+  };
 
   const startOfficial = () => {
+    if (!mode) return;
     const now = Date.now();
+    const n = getAssessmentItems(mode).length;
     setState({
-      ...createInitialState(),
+      ...createInitialState(mode, n),
       phase: "test",
       startedAt: now,
       endsAt: now + QUIZ_DURATION_MS,
@@ -126,13 +164,12 @@ export function IqTestApp() {
   const selectAnswer = (optionIndex: number) => {
     setState((prev) => {
       if (prev.phase !== "test") return prev;
+      const n = prev.totalQuestions || QUIZ_TOTAL_QUESTIONS;
       const answers = [...prev.answers];
-      const switches = [...(prev.optionSwitches ?? Array(QUIZ_TOTAL_QUESTIONS).fill(0))];
+      const switches = [...(prev.optionSwitches ?? Array(n).fill(0))];
       const prevSel = answers[prev.currentIndex];
       if (prevSel !== null && prevSel !== optionIndex) {
         switches[prev.currentIndex] += 1;
-      } else if (prevSel === null) {
-        // first pick — not a switch
       }
       answers[prev.currentIndex] = optionIndex;
       return { ...prev, answers, optionSwitches: switches };
@@ -158,7 +195,8 @@ export function IqTestApp() {
   const advance = () => {
     setState((prev) => {
       if (prev.phase !== "test") return prev;
-      if (prev.currentIndex >= QUIZ_TOTAL_QUESTIONS - 1) {
+      const n = prev.totalQuestions || questions.length;
+      if (prev.currentIndex >= n - 1) {
         return finishTest(prev);
       }
       const timeSpent = [...prev.timeSpentMs];
@@ -222,7 +260,12 @@ export function IqTestApp() {
       };
       if (e.key in map) {
         const q = questions[state.currentIndex];
-        if (map[e.key] >= (q?.options.length ?? 0)) return;
+        const optLen = q
+          ? isMatrixQuestion(q)
+            ? q.options.length
+            : q.options.length
+          : 0;
+        if (map[e.key] >= optLen) return;
         e.preventDefault();
         selectAnswer(map[e.key]);
         return;
@@ -241,11 +284,11 @@ export function IqTestApp() {
   });
 
   const resetAll = () => {
-    clearQuizState();
+    if (mode) clearQuizState(mode);
     setTutorialPick(null);
     setTutorialOk(false);
     setReviewIndex(0);
-    setState(createInitialState());
+    setState(createModeSelectState());
   };
 
   if (!hydrated) {
@@ -278,9 +321,9 @@ export function IqTestApp() {
       </div>
 
       <AnimatePresence mode="wait">
-        {state.phase === "onboarding" && (
+        {state.phase === "modeSelect" && (
           <motion.section
-            key="onboarding"
+            key="modeSelect"
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
@@ -295,27 +338,70 @@ export function IqTestApp() {
                 Teste de QI Profissional
               </h1>
               <p className="mx-auto max-w-xl text-base text-zinc-400 sm:text-lg">
-                Matrizes progressivas — 30 itens em 5 níveis de complexidade,
-                teto alto (QI ~155+), distratores diagnósticos e índice de
-                confiabilidade da sessão.
+                Escolha o modo de avaliação. Cada modo tem regras próprias,
+                exemplo rápido e armazenamento isolado.
+              </p>
+            </header>
+
+            <div className="grid gap-4 sm:grid-cols-3">
+              {(Object.keys(MODE_META) as AssessmentMode[]).map((m) => {
+                const meta = MODE_META[m];
+                return (
+                  <motion.button
+                    key={m}
+                    type="button"
+                    whileHover={{ y: -2 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => selectMode(m)}
+                    className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5 text-left transition hover:border-emerald-500/40 hover:bg-zinc-900"
+                  >
+                    <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">
+                      Modo
+                    </p>
+                    <h2 className="mt-1 font-iq-display text-xl text-zinc-50">
+                      {meta.label}
+                    </h2>
+                    <p className="mt-2 text-sm leading-relaxed text-zinc-400">
+                      {meta.blurb}
+                    </p>
+                  </motion.button>
+                );
+              })}
+            </div>
+          </motion.section>
+        )}
+
+        {state.phase === "onboarding" && mode && tutorial && rules && (
+          <motion.section
+            key={`onboarding-${mode}`}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.35 }}
+            className="space-y-8"
+          >
+            <header className="space-y-3 pt-4 text-center sm:pt-10">
+              <button
+                type="button"
+                onClick={() => setState(createModeSelectState())}
+                className="text-xs text-zinc-500 underline-offset-2 hover:text-zinc-300 hover:underline"
+              >
+                ← Trocar modo
+              </button>
+              <p className="text-xs font-medium uppercase tracking-[0.22em] text-emerald-400/90">
+                {MODE_META[mode].short}
+              </p>
+              <h1 className="font-iq-display text-4xl tracking-tight text-zinc-50 sm:text-5xl">
+                {rules.title}
+              </h1>
+              <p className="mx-auto max-w-xl text-base text-zinc-400 sm:text-lg">
+                {MODE_META[mode].blurb} 30 itens · 5 níveis · QI média 100 (DP
+                15) com IC e diagnóstico de precisão.
               </p>
             </header>
 
             <div className="grid gap-4 rounded-2xl border border-zinc-800 bg-zinc-900/50 p-5 sm:grid-cols-3 sm:p-6">
-              {[
-                {
-                  t: "Visual",
-                  d: "Sem texto nas questões. Padrões SVG com regras combinadas nos níveis altos.",
-                },
-                {
-                  t: "30 minutos",
-                  d: "Cronômetro global. Telemetria de tempo e hesitação por item.",
-                },
-                {
-                  t: "Teclado",
-                  d: "A–H / 1–8 para escolher; Enter / → avançar; ← voltar.",
-                },
-              ].map((item) => (
+              {rules.bullets.map((item) => (
                 <div key={item.t} className="space-y-1.5">
                   <h2 className="text-sm font-semibold text-zinc-200">
                     {item.t}
@@ -334,7 +420,7 @@ export function IqTestApp() {
                     Mini-exemplo (sem cronômetro)
                   </h2>
                   <p className="text-sm text-zinc-500">
-                    Complete a matriz. A regra é só visual.
+                    Resolva o exemplo antes de iniciar o timer oficial.
                   </p>
                 </div>
                 {tutorialOk ? (
@@ -344,26 +430,53 @@ export function IqTestApp() {
                 ) : null}
               </div>
 
-              <div className="flex flex-col items-center gap-6 lg:flex-row lg:items-start lg:justify-center">
-                <MatrixRenderer cells={tutorial.cells} size={280} />
-                <div className="w-full max-w-md space-y-3">
-                  <OptionGrid
+              {tutorial.kind === "matrix" ? (
+                <div className="flex flex-col items-center gap-6 lg:flex-row lg:items-start lg:justify-center">
+                  <MatrixRenderer cells={tutorial.cells} size={280} />
+                  <div className="w-full max-w-md space-y-3">
+                    <OptionGrid
+                      options={tutorial.options}
+                      selectedIndex={tutorialPick}
+                      cellSize={72}
+                      onSelect={(i) => {
+                        setTutorialPick(i);
+                        setTutorialOk(i === tutorial.correctIndex);
+                      }}
+                      revealedCorrect={
+                        tutorialPick !== null ? tutorial.correctIndex : null
+                      }
+                    />
+                    <p className="text-center text-xs text-zinc-500">
+                      {tutorial.explanation}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="mx-auto max-w-2xl space-y-4">
+                  <p className="text-base text-zinc-200">{tutorial.stem}</p>
+                  {tutorial.premises.length > 0 ? (
+                    <ul className="list-disc space-y-1 pl-5 text-sm text-zinc-400">
+                      {tutorial.premises.map((p) => (
+                        <li key={p}>{p}</li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  <TextOptionList
                     options={tutorial.options}
                     selectedIndex={tutorialPick}
-                    cellSize={72}
+                    revealedCorrect={
+                      tutorialPick !== null ? tutorial.correctIndex : null
+                    }
                     onSelect={(i) => {
                       setTutorialPick(i);
                       setTutorialOk(i === tutorial.correctIndex);
                     }}
-                    revealedCorrect={
-                      tutorialPick !== null ? tutorial.correctIndex : null
-                    }
                   />
                   <p className="text-center text-xs text-zinc-500">
                     {tutorial.explanation}
                   </p>
                 </div>
-              </div>
+              )}
             </div>
 
             <div className="flex flex-col items-center gap-3 pb-8">
@@ -377,8 +490,7 @@ export function IqTestApp() {
                 Iniciar Avaliação Oficial
               </motion.button>
               <p className="text-xs text-zinc-600">
-                Progresso versionado (v2) neste navegador — sessões antigas não
-                interferem.
+                Progresso v3 isolado por modo neste navegador.
               </p>
             </div>
           </motion.section>
@@ -397,11 +509,12 @@ export function IqTestApp() {
                 <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-3">
                   <span className="font-iq-display text-lg text-zinc-100 tabular-nums">
                     {state.currentIndex + 1}
-                    <span className="text-zinc-600">
-                      /{QUIZ_TOTAL_QUESTIONS}
-                    </span>
+                    <span className="text-zinc-600">/{totalQ}</span>
                   </span>
-                  <span className="text-xs text-zinc-400">{bandLabel}</span>
+                  <span className="text-xs text-zinc-400">
+                    {mode ? MODE_META[mode].short : ""} · {bandLabel}
+                    {isTextQuestion(q) ? " · Pergunta" : " · Figura"}
+                  </span>
                 </div>
                 <div
                   className={`font-mono text-lg tabular-nums ${
@@ -430,19 +543,21 @@ export function IqTestApp() {
             </header>
 
             <div className="flex flex-wrap justify-center gap-1.5 py-1">
-              {questions.map((_, i) => {
+              {questions.map((item, i) => {
                 const answered = state.answers[i] !== null;
                 const current = i === state.currentIndex;
                 return (
                   <button
-                    key={i}
+                    key={`${item.kind}-${item.id}-${i}`}
                     type="button"
                     onClick={() => goTo(i)}
                     className={`h-2.5 w-2.5 rounded-full transition ${
                       current
                         ? "bg-emerald-400 ring-2 ring-emerald-400/30"
                         : answered
-                          ? "bg-indigo-400/80"
+                          ? isTextQuestion(item)
+                            ? "bg-amber-400/80"
+                            : "bg-indigo-400/80"
                           : "bg-zinc-700"
                     }`}
                     aria-label={`Ir para questão ${i + 1}`}
@@ -453,28 +568,53 @@ export function IqTestApp() {
 
             <AnimatePresence mode="wait">
               <motion.div
-                key={q.id}
+                key={`${q.kind}-${q.id}`}
                 initial={{ opacity: 0, x: 16 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -12 }}
                 transition={{ duration: 0.25 }}
                 className="flex flex-col items-center gap-6"
               >
-                <div className="w-full max-w-[360px]">
-                  <MatrixRenderer
-                    cells={q.cells}
-                    size={320}
-                    className="!h-auto !w-full max-w-full"
-                  />
-                </div>
-                <div className="w-full max-w-4xl">
-                  <OptionGrid
-                    options={q.options}
-                    selectedIndex={state.answers[state.currentIndex]}
-                    onSelect={selectAnswer}
-                    cellSize={q.options.length >= 8 ? 78 : 88}
-                  />
-                </div>
+                {isMatrixQuestion(q) ? (
+                  <>
+                    <div className="w-full max-w-[360px]">
+                      <MatrixRenderer
+                        cells={q.cells}
+                        size={320}
+                        className="!h-auto !w-full max-w-full"
+                      />
+                    </div>
+                    <div className="w-full max-w-4xl">
+                      <OptionGrid
+                        options={q.options}
+                        selectedIndex={state.answers[state.currentIndex]}
+                        onSelect={selectAnswer}
+                        cellSize={q.options.length >= 8 ? 78 : 88}
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <div className="w-full max-w-2xl space-y-4">
+                    <p className="text-lg leading-relaxed text-zinc-100">
+                      {q.stem}
+                    </p>
+                    {q.premises && q.premises.length > 0 ? (
+                      <ul className="space-y-1.5 rounded-xl border border-zinc-800 bg-zinc-950/70 p-4 text-sm text-zinc-300">
+                        {q.premises.map((p) => (
+                          <li key={p} className="flex gap-2">
+                            <span className="text-zinc-600">•</span>
+                            <span>{p}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                    <TextOptionList
+                      options={q.options}
+                      selectedIndex={state.answers[state.currentIndex]}
+                      onSelect={selectAnswer}
+                    />
+                  </div>
+                )}
               </motion.div>
             </AnimatePresence>
 
@@ -492,7 +632,7 @@ export function IqTestApp() {
                 onClick={advance}
                 className="rounded-lg bg-indigo-500 px-5 py-2 text-sm font-medium text-white hover:bg-indigo-400"
               >
-                {state.currentIndex === QUIZ_TOTAL_QUESTIONS - 1
+                {state.currentIndex === totalQ - 1
                   ? "Ver resultados"
                   : "Próxima →"}
               </button>
@@ -510,7 +650,7 @@ export function IqTestApp() {
             >
               <header className="space-y-2 text-center">
                 <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">
-                  Resultado estimado
+                  Resultado · {MODE_META[state.result.mode].label}
                 </p>
                 <motion.h1
                   className="font-iq-display text-6xl text-zinc-50 tabular-nums sm:text-7xl"
@@ -539,40 +679,46 @@ export function IqTestApp() {
                 />
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2">
-                {(
-                  Object.keys(
-                    state.result.competences,
-                  ) as (keyof CompetenceScores)[]
-                ).map((key) => {
-                  const value = state.result!.competences[key];
-                  return (
-                    <div
-                      key={key}
-                      className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4"
-                    >
-                      <div className="mb-2 flex items-center justify-between text-sm">
-                        <span className="text-zinc-300">
-                          {competenceLabel(key)}
-                        </span>
-                        <span className="tabular-nums text-zinc-400">
-                          {value}%
-                        </span>
+              <div>
+                <h2 className="mb-3 text-center text-sm font-medium text-zinc-400">
+                  Sub-habilidades
+                </h2>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {(
+                    state.result.activeCompetences.length
+                      ? state.result.activeCompetences
+                      : (Object.keys(
+                          state.result.competences,
+                        ) as (keyof CompetenceScores)[])
+                  ).map((key) => {
+                    const value = state.result!.competences[key];
+                    return (
+                      <div
+                        key={key}
+                        className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4"
+                      >
+                        <div className="mb-2 flex items-center justify-between text-sm">
+                          <span className="text-zinc-300">
+                            {competenceLabel(key)}
+                          </span>
+                          <span className="tabular-nums text-zinc-400">
+                            {value}%
+                          </span>
+                        </div>
+                        <div className="h-1.5 overflow-hidden rounded-full bg-zinc-800">
+                          <motion.div
+                            className="h-full bg-indigo-400"
+                            initial={{ width: 0 }}
+                            animate={{ width: `${value}%` }}
+                            transition={{ duration: 0.7, delay: 0.1 }}
+                          />
+                        </div>
                       </div>
-                      <div className="h-1.5 overflow-hidden rounded-full bg-zinc-800">
-                        <motion.div
-                          className="h-full bg-indigo-400"
-                          initial={{ width: 0 }}
-                          animate={{ width: `${value}%` }}
-                          transition={{ duration: 0.7, delay: 0.1 }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
 
-              {/* Precision Diagnosis */}
               <div className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-950/70 p-5 sm:p-6">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <h2 className="text-lg font-semibold text-zinc-100">
@@ -684,6 +830,53 @@ export function IqTestApp() {
   );
 }
 
+function TextOptionList({
+  options,
+  selectedIndex,
+  onSelect,
+  revealedCorrect = null,
+  disabled = false,
+}: {
+  options: string[];
+  selectedIndex: number | null;
+  onSelect: (i: number) => void;
+  revealedCorrect?: number | null;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="space-y-2">
+      {options.map((opt, i) => {
+        const selected = selectedIndex === i;
+        const isCorrect = revealedCorrect === i;
+        const isWrong =
+          revealedCorrect !== null && selected && revealedCorrect !== i;
+        return (
+          <button
+            key={`${i}-${opt.slice(0, 24)}`}
+            type="button"
+            disabled={disabled}
+            onClick={() => onSelect(i)}
+            className={`flex w-full items-start gap-3 rounded-xl border px-4 py-3 text-left text-sm transition ${
+              isCorrect
+                ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-100"
+                : isWrong
+                  ? "border-red-500/40 bg-red-500/10 text-red-100"
+                  : selected
+                    ? "border-indigo-400/60 bg-indigo-500/10 text-zinc-100"
+                    : "border-zinc-800 bg-zinc-950/50 text-zinc-300 hover:border-zinc-600"
+            }`}
+          >
+            <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-zinc-700 text-xs font-medium text-zinc-400">
+              {LETTERS[i]}
+            </span>
+            <span className="leading-relaxed">{opt}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function ReviewPanel({
   questions,
   answers,
@@ -691,7 +884,7 @@ function ReviewPanel({
   setIndex,
   onBack,
 }: {
-  questions: ReturnType<typeof getMatrixQuestions>;
+  questions: QuizItem[];
   answers: (number | null)[];
   index: number;
   setIndex: (n: number) => void;
@@ -730,6 +923,7 @@ function ReviewPanel({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-base font-semibold text-zinc-100">
           Revisão {safe + 1}/{wrong.length} — Questão {item.q.id} ·{" "}
+          {isTextQuestion(item.q) ? "Pergunta" : "Figura"} ·{" "}
           {bandProgressLabel(item.q.difficulty)}
         </h3>
         <button
@@ -741,37 +935,79 @@ function ReviewPanel({
         </button>
       </div>
       <div className="flex flex-col items-center gap-5 lg:flex-row lg:items-start lg:justify-center">
-        <MatrixRenderer cells={item.q.cells} size={260} />
-        <div className="w-full max-w-lg space-y-3">
-          <OptionGrid
-            options={item.q.options}
-            selectedIndex={item.selected}
-            revealedCorrect={item.q.correctIndex}
-            onSelect={() => {}}
-            disabled
-            cellSize={64}
-          />
-          {err ? (
-            <p className="text-xs text-amber-400/90">
-              Erro diagnóstico: {distractorErrorLabel(err)}
+        {isMatrixQuestion(item.q) ? (
+          <>
+            <MatrixRenderer cells={item.q.cells} size={260} />
+            <div className="w-full max-w-lg space-y-3">
+              <OptionGrid
+                options={item.q.options}
+                selectedIndex={item.selected}
+                revealedCorrect={item.q.correctIndex}
+                onSelect={() => {}}
+                disabled
+                cellSize={64}
+              />
+              {err ? (
+                <p className="text-xs text-amber-400/90">
+                  Erro diagnóstico: {distractorErrorLabel(err)}
+                </p>
+              ) : item.selected == null ? (
+                <p className="text-xs text-zinc-500">Sem resposta</p>
+              ) : null}
+              <p className="rounded-lg border border-zinc-800 bg-zinc-900/80 p-3 text-sm leading-relaxed text-zinc-300">
+                {item.q.explanation.pt}
+              </p>
+              <ul className="flex flex-wrap gap-2">
+                {item.q.explanation.rules.map((r) => (
+                  <li
+                    key={r}
+                    className="rounded-md border border-zinc-700 px-2 py-0.5 text-[11px] text-zinc-400"
+                  >
+                    {r}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </>
+        ) : (
+          <div className="w-full max-w-2xl space-y-3">
+            <p className="text-base text-zinc-100">{item.q.stem}</p>
+            {item.q.premises?.length ? (
+              <ul className="list-disc space-y-1 pl-5 text-sm text-zinc-400">
+                {item.q.premises.map((p) => (
+                  <li key={p}>{p}</li>
+                ))}
+              </ul>
+            ) : null}
+            <TextOptionList
+              options={item.q.options}
+              selectedIndex={item.selected}
+              revealedCorrect={item.q.correctIndex}
+              onSelect={() => {}}
+              disabled
+            />
+            {err ? (
+              <p className="text-xs text-amber-400/90">
+                Erro diagnóstico: {distractorErrorLabel(err)}
+              </p>
+            ) : item.selected == null ? (
+              <p className="text-xs text-zinc-500">Sem resposta</p>
+            ) : null}
+            <p className="rounded-lg border border-zinc-800 bg-zinc-900/80 p-3 text-sm leading-relaxed text-zinc-300">
+              {item.q.explanation.pt}
             </p>
-          ) : item.selected == null ? (
-            <p className="text-xs text-zinc-500">Sem resposta</p>
-          ) : null}
-          <p className="rounded-lg border border-zinc-800 bg-zinc-900/80 p-3 text-sm leading-relaxed text-zinc-300">
-            {item.q.explanation.pt}
-          </p>
-          <ul className="flex flex-wrap gap-2">
-            {item.q.explanation.rules.map((r) => (
-              <li
-                key={r}
-                className="rounded-md border border-zinc-700 px-2 py-0.5 text-[11px] text-zinc-400"
-              >
-                {r}
-              </li>
-            ))}
-          </ul>
-        </div>
+            <ul className="flex flex-wrap gap-2">
+              {item.q.explanation.rules.map((r) => (
+                <li
+                  key={r}
+                  className="rounded-md border border-zinc-700 px-2 py-0.5 text-[11px] text-zinc-400"
+                >
+                  {r}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
       <div className="flex justify-between">
         <button

@@ -1,4 +1,6 @@
-/** Professional IQ Test — psychometric & SVG matrix types (v2) */
+/** Professional IQ Test — multi-mode psychometric types (v3) */
+
+export type AssessmentMode = "figures" | "questions" | "hybrid";
 
 export type ShapeKind =
   | "circle"
@@ -19,6 +21,13 @@ export type RuleCategory =
   | "pattern"
   | "numerical";
 
+/** Skills for objective (Perguntas) items */
+export type QuestionSkill =
+  | "logical"
+  | "numeric"
+  | "verbal"
+  | "analytical";
+
 /** 1 Basic → 5 Extreme (high ceiling QI 135–155+) */
 export type DifficultyBand = 1 | 2 | 3 | 4 | 5;
 
@@ -31,7 +40,7 @@ export type Arrangement =
   | "corners"
   | "ring";
 
-/** Logical error encoded by each wrong option (diagnostic distractors) */
+/** Logical error encoded by each wrong figure option */
 export type DistractorError =
   | "incomplete_rotation"
   | "horizontal_only"
@@ -47,6 +56,21 @@ export type DistractorError =
   | "mirror_instead_of_rotate"
   | "wrong_scale"
   | "partial_union";
+
+/** Logical error encoded by each wrong text option */
+export type TextDistractorError =
+  | "premise_ignore"
+  | "scope_error"
+  | "wrong_operation"
+  | "near_miss"
+  | "semantic_swap"
+  | "quantifier_error"
+  | "order_error"
+  | "incomplete_chain"
+  | "false_analogy"
+  | "arithmetic_slip";
+
+export type AnyDistractorError = DistractorError | TextDistractorError;
 
 export interface Glyph {
   shape: ShapeKind;
@@ -74,6 +98,7 @@ export interface DistractorSpec {
 }
 
 export interface MatrixQuestion {
+  kind: "matrix";
   id: number;
   /** Band 1–5 */
   difficulty: DifficultyBand;
@@ -97,7 +122,32 @@ export interface MatrixQuestion {
   };
 }
 
-export type QuizPhase = "onboarding" | "test" | "results" | "review";
+export interface TextQuestion {
+  kind: "text";
+  id: number;
+  difficulty: DifficultyBand;
+  weight: number;
+  irtB: number;
+  skills: QuestionSkill[];
+  stem: string;
+  premises?: string[];
+  options: string[];
+  correctIndex: number;
+  distractorErrors: (TextDistractorError | null)[];
+  explanation: {
+    pt: string;
+    rules: string[];
+  };
+}
+
+export type QuizItem = MatrixQuestion | TextQuestion;
+
+export type QuizPhase =
+  | "modeSelect"
+  | "onboarding"
+  | "test"
+  | "results"
+  | "review";
 
 export interface AnswerRecord {
   questionId: number;
@@ -105,14 +155,19 @@ export interface AnswerRecord {
   correct: boolean;
   timeMs: number;
   optionSwitches: number;
-  distractorError: DistractorError | null;
+  distractorError: AnyDistractorError | null;
 }
 
+/** Sub-skills across both modes (unused keys stay 0) */
 export interface CompetenceScores {
   spatial: number;
   boolean: number;
   pattern: number;
   numerical: number;
+  logical: number;
+  numeric: number;
+  verbal: number;
+  analytical: number;
 }
 
 export interface BandTelemetry {
@@ -139,6 +194,7 @@ export interface PrecisionDiagnosis {
 }
 
 export interface IqResult {
+  mode: AssessmentMode;
   rawScore: number;
   maxScore: number;
   accuracy: number;
@@ -151,6 +207,8 @@ export interface IqResult {
   percentile: number;
   band: string;
   competences: CompetenceScores;
+  /** Which competence keys had items in this session */
+  activeCompetences: (keyof CompetenceScores)[];
   avgTimeMs: number;
   answers: AnswerRecord[];
   diagnosis: PrecisionDiagnosis;
@@ -158,7 +216,8 @@ export interface IqResult {
 
 export interface QuizPersistedState {
   /** Storage schema version — bump when incompatible */
-  version: 2;
+  version: 3;
+  mode: AssessmentMode;
   phase: QuizPhase;
   currentIndex: number;
   answers: (number | null)[];
@@ -170,13 +229,45 @@ export interface QuizPersistedState {
   optionSwitches: number[];
   finishedAt: number | null;
   result: IqResult | null;
+  totalQuestions: number;
 }
 
 export const QUIZ_TOTAL_QUESTIONS = 30;
 export const QUIZ_DURATION_MS = 30 * 60 * 1000;
-/** Current key; v1 key is ignored (clean restart) */
-export const QUIZ_STORAGE_KEY = "professional-iq-test-v2";
-export const QUIZ_STORAGE_KEY_LEGACY = "professional-iq-test-v1";
+
+/** v3 keys are mode-isolated; legacy keys ignored */
+export const QUIZ_STORAGE_VERSION = 3 as const;
+export const QUIZ_STORAGE_KEY_PREFIX = "professional-iq-test-v3";
+export const QUIZ_STORAGE_KEY_LEGACY_V2 = "professional-iq-test-v2";
+export const QUIZ_STORAGE_KEY_LEGACY_V1 = "professional-iq-test-v1";
+
+export function quizStorageKey(mode: AssessmentMode): string {
+  return `${QUIZ_STORAGE_KEY_PREFIX}-${mode}`;
+}
+
+export const MODE_META: Record<
+  AssessmentMode,
+  { label: string; short: string; blurb: string }
+> = {
+  figures: {
+    label: "Figuras Geométricas",
+    short: "Figuras",
+    blurb:
+      "Matrizes 3×3 de alta dificuldade, multi-regras e até 8 opções com distratores diagnósticos.",
+  },
+  questions: {
+    label: "Perguntas",
+    short: "Perguntas",
+    blurb:
+      "Itens objetivos: lógica dedutiva, sequências numéricas, relações verbais e resolução analítica.",
+  },
+  hybrid: {
+    label: "Completo / Híbrido",
+    short: "Híbrido",
+    blurb:
+      "Combina matrizes visuais e perguntas objetivas na mesma bateria ponderada.",
+  },
+};
 
 export const BAND_META: Record<
   DifficultyBand,
@@ -189,7 +280,37 @@ export const BAND_META: Record<
   5: { label: "Extremo", short: "Extremo" },
 };
 
+export const FIGURE_COMPETENCE_KEYS: (keyof CompetenceScores)[] = [
+  "spatial",
+  "boolean",
+  "pattern",
+  "numerical",
+];
+
+export const QUESTION_COMPETENCE_KEYS: (keyof CompetenceScores)[] = [
+  "logical",
+  "numeric",
+  "verbal",
+  "analytical",
+];
+
+export function competenceKeysForMode(
+  mode: AssessmentMode,
+): (keyof CompetenceScores)[] {
+  if (mode === "figures") return FIGURE_COMPETENCE_KEYS;
+  if (mode === "questions") return QUESTION_COMPETENCE_KEYS;
+  return [...FIGURE_COMPETENCE_KEYS, ...QUESTION_COMPETENCE_KEYS];
+}
+
 export function bandProgressLabel(band: DifficultyBand): string {
   const meta = BAND_META[band];
   return `Nível ${band}/5 • ${meta.label}`;
+}
+
+export function isMatrixItem(item: QuizItem): item is MatrixQuestion {
+  return item.kind === "matrix";
+}
+
+export function isTextItem(item: QuizItem): item is TextQuestion {
+  return item.kind === "text";
 }

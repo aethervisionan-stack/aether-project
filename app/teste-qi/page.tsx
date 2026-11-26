@@ -4,7 +4,7 @@ import { IqTestApp } from "@/src/components/IqTestApp";
 export const metadata: Metadata = {
   title: "Teste de QI Profissional",
   description:
-    "Avaliação de inteligência fluida (Gf) com 30 matrizes progressivas em 5 níveis, distratores diagnósticos, QI Wechsler com IC e índice de confiabilidade.",
+    "Avaliação multimodo: figuras geométricas, perguntas objetivas ou híbrido — 30 itens, 5 níveis, QI Wechsler (média 100, DP 15) com IC e diagnóstico de precisão.",
   robots: { index: false, follow: false },
 };
 

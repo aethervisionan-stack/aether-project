@@ -212,7 +212,10 @@ function matrix9(cells: (CellContent | null)[]): (CellContent | null)[] {
 
 function pushQ(
   qs: MatrixQuestion[],
-  partial: Omit<MatrixQuestion, "options" | "correctIndex" | "distractorErrors"> & {
+  partial: Omit<
+    MatrixQuestion,
+    "kind" | "options" | "correctIndex" | "distractorErrors"
+  > & {
     correct: CellContent;
     distractors: DistractorSpec[];
     seed: number;
@@ -228,6 +231,7 @@ function pushQ(
     optionCount,
   );
   qs.push({
+    kind: "matrix",
     id: partial.id,
     difficulty: partial.difficulty,
     weight: partial.weight,
