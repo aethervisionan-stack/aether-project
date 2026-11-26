@@ -167,17 +167,20 @@ export function ChallengeInviteBanner({
   return (
     <aside
       role="status"
-      className="mx-auto flex max-w-2xl items-start gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] px-3.5 py-2.5 text-left sm:px-4"
+      className="mx-auto flex w-full max-w-4xl items-start gap-3 overflow-hidden rounded-2xl border border-emerald-400/25 bg-gradient-to-r from-emerald-400/[0.08] via-[#0C0E16]/80 to-cyan-400/[0.06] px-4 py-3 text-left shadow-[0_0_40px_-18px_rgba(52,211,153,0.45)] backdrop-blur-md sm:px-5"
     >
       <span
         aria-hidden
-        className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400/80"
+        className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.8)]"
       />
-      <p className="text-xs leading-relaxed text-zinc-400 sm:text-sm">
+      <p className="min-w-0 text-xs leading-relaxed text-zinc-400 sm:text-sm">
         <span className="font-medium text-emerald-300/90">Desafio ativo</span>
         {" — "}
-        {challenger} desafiou você a superar QI {targetIq} ({modeLabel}).
-        Escolha o modo e comece quando quiser.
+        {challenger} desafiou você a superar QI{" "}
+        <span className="font-iq-display tabular-nums text-zinc-200">
+          {targetIq}
+        </span>{" "}
+        ({modeLabel}). Escolha o modo e comece quando quiser.
       </p>
     </aside>
   );

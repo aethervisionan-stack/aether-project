@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   getAssessmentItems,
   getModeRules,
@@ -34,7 +34,6 @@ import {
 } from "@/src/lib/quizStorage";
 import {
   ANONYMOUS_PARTICIPANT_NAME,
-  LEADERBOARD_MODE_LABEL,
   MODE_META,
   QUIZ_DURATION_MS,
   QUIZ_TOTAL_QUESTIONS,
@@ -45,10 +44,11 @@ import {
   type QuizPersistedState,
 } from "@/src/types/quiz";
 import { BellCurveChart } from "@/src/components/BellCurveChart";
+import { ChallengeSharePanel } from "@/src/components/ChallengeSharePanel";
 import {
-  ChallengeInviteBanner,
-  ChallengeSharePanel,
-} from "@/src/components/ChallengeSharePanel";
+  IqLanding,
+  PsychometricTransparencyBlock,
+} from "@/src/components/IqLanding";
 import { SkillHelpTip } from "@/src/components/SkillHelpTip";
 import {
   LeaderboardPanel,
@@ -410,265 +410,93 @@ export function IqTestApp() {
   const bandLabel = q ? bandProgressLabel(q.difficulty) : "";
 
   return (
-    <div className="iq-shell relative mx-auto min-h-screen max-w-5xl px-4 pb-16 pt-6 sm:px-6">
+    <div className="iq-shell relative mx-auto min-h-screen max-w-6xl overflow-x-hidden px-4 pb-16 pt-4 sm:px-6 sm:pt-6">
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 -z-10 overflow-hidden"
       >
-        <div className="absolute -left-24 top-0 h-72 w-72 rounded-full bg-indigo-500/10 blur-3xl" />
-        <div className="absolute -right-16 top-40 h-64 w-64 rounded-full bg-emerald-500/10 blur-3xl" />
+        <div className="absolute inset-0 bg-[#06070A]" />
+        <div className="absolute inset-0 bg-[#090A0F]/80" />
+        <div className="absolute -left-28 top-[-4rem] h-[28rem] w-[28rem] rounded-full bg-indigo-500/15 blur-[100px]" />
+        <div className="absolute -right-20 top-32 h-[22rem] w-[22rem] rounded-full bg-cyan-400/10 blur-[90px]" />
+        <div className="absolute bottom-0 left-1/3 h-64 w-64 rounded-full bg-emerald-400/10 blur-[80px]" />
         <div
-          className="absolute inset-0 opacity-[0.035]"
+          className="absolute inset-0 opacity-[0.045]"
           style={{
             backgroundImage:
               "linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px)",
-            backgroundSize: "48px 48px",
+            backgroundSize: "56px 56px",
+            maskImage:
+              "radial-gradient(ellipse 80% 60% at 50% 20%, #000 20%, transparent 75%)",
+          }}
+        />
+        <div
+          className="absolute inset-0 opacity-[0.08]"
+          style={{
+            backgroundImage:
+              "radial-gradient(circle at 1px 1px, rgba(255,255,255,0.35) 1px, transparent 0)",
+            backgroundSize: "22px 22px",
+            maskImage:
+              "radial-gradient(ellipse 70% 50% at 70% 10%, #000 10%, transparent 70%)",
           }}
         />
       </div>
 
       <AnimatePresence mode="wait">
         {state.phase === "modeSelect" && (
-          <motion.section
-            key="modeSelect"
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.35 }}
-            className="space-y-8"
-          >
-            <header className="space-y-3 pt-4 text-center sm:pt-10">
-              <p className="text-xs font-medium uppercase tracking-[0.22em] text-emerald-400/90">
-                Avaliação psicométrica
-              </p>
-              <h1 className="font-iq-display text-4xl tracking-tight text-zinc-50 sm:text-5xl">
-                Teste de QI Profissional
-              </h1>
-              <p className="mx-auto max-w-xl text-base text-zinc-400 sm:text-lg">
-                Escolha o modo de avaliação. Cada modo tem regras próprias,
-                exemplo rápido e armazenamento isolado.
-              </p>
-            </header>
-
-            {challengeInvite ? (
-              <ChallengeInviteBanner
-                challenger={challengeInvite.challenger}
-                targetIq={challengeInvite.targetIq}
-                modeLabel={LEADERBOARD_MODE_LABEL[challengeInvite.mode]}
-              />
-            ) : null}
-
-            <PsychometricTransparencyBlock />
-
-            <LeaderboardPanel refreshKey={leaderboardTick} />
-
-            <div className="grid gap-4 sm:grid-cols-3">
-              {(Object.keys(MODE_META) as AssessmentMode[]).map((m) => {
-                const meta = MODE_META[m];
-                return (
-                  <motion.button
-                    key={m}
-                    type="button"
-                    whileHover={{ y: -2 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => selectMode(m)}
-                    className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5 text-left transition hover:border-emerald-500/40 hover:bg-zinc-900"
-                  >
-                    <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">
-                      Modo
-                    </p>
-                    <h2 className="mt-1 font-iq-display text-xl text-zinc-50">
-                      {meta.label}
-                    </h2>
-                    <p className="mt-2 text-sm leading-relaxed text-zinc-400">
-                      {meta.blurb}
-                    </p>
-                  </motion.button>
-                );
-              })}
-            </div>
-          </motion.section>
+          <IqLanding
+            participantName={state.participantName ?? ""}
+            participantAvatarUrl={state.participantAvatarUrl ?? null}
+            nameError={nameError}
+            avatarError={avatarError}
+            challengeInvite={challengeInvite}
+            leaderboardTick={leaderboardTick}
+            onNameChange={(value) => {
+              setNameError(null);
+              setState((prev) => ({ ...prev, participantName: value }));
+            }}
+            onAvatarChange={(next) => {
+              setAvatarError(null);
+              setState((prev) => ({ ...prev, participantAvatarUrl: next }));
+            }}
+            onAvatarError={setAvatarError}
+            onSelectMode={selectMode}
+          />
         )}
 
         {state.phase === "onboarding" && mode && tutorial && rules && (
-          <motion.section
-            key={`onboarding-${mode}`}
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.35 }}
-            className="space-y-8"
-          >
-            <header className="space-y-3 pt-4 text-center sm:pt-10">
-              <button
-                type="button"
-                onClick={() => setState(createModeSelectState())}
-                className="text-xs text-zinc-500 underline-offset-2 hover:text-zinc-300 hover:underline"
-              >
-                ← Trocar modo
-              </button>
-              <p className="text-xs font-medium uppercase tracking-[0.22em] text-emerald-400/90">
-                {MODE_META[mode].short}
-              </p>
-              <h1 className="font-iq-display text-4xl tracking-tight text-zinc-50 sm:text-5xl">
-                {rules.title}
-              </h1>
-              <p className="mx-auto max-w-xl text-base text-zinc-400 sm:text-lg">
-                {MODE_META[mode].blurb} 30 itens · 5 níveis · escala com média
-                100 e desvio padrão 15.
-              </p>
-            </header>
-
-            <PsychometricTransparencyBlock compact />
-
-            <div className="mx-auto w-full max-w-md space-y-4 rounded-2xl border border-zinc-800 bg-zinc-950/70 p-5">
-              <div className="space-y-2">
-                <label
-                  htmlFor="iq-participant-name"
-                  className="block text-sm font-medium text-zinc-200"
-                >
-                  Nome / Apelido
-                </label>
-                <input
-                  id="iq-participant-name"
-                  type="text"
-                  autoComplete="nickname"
-                  maxLength={40}
-                  value={state.participantName ?? ""}
-                  onChange={(e) => {
-                    setNameError(null);
-                    setState((prev) => ({
-                      ...prev,
-                      participantName: e.target.value,
-                    }));
-                  }}
-                  placeholder={`Ex.: Maria Silva (vazio → ${ANONYMOUS_PARTICIPANT_NAME})`}
-                  className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2.5 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/30"
-                />
-                <p className="text-xs leading-relaxed text-zinc-500">
-                  Use um nome real para figurar com clareza no ranking local.
-                  Campo vazio registra como {ANONYMOUS_PARTICIPANT_NAME}.
-                </p>
-                {nameError ? (
-                  <p className="text-xs text-amber-400" role="alert">
-                    {nameError}
-                  </p>
-                ) : null}
-              </div>
-
-              <div className="border-t border-zinc-800/80 pt-4">
-                <AvatarPicker
-                  name={
-                    state.participantName?.trim() || ANONYMOUS_PARTICIPANT_NAME
-                  }
-                  avatarUrl={state.participantAvatarUrl ?? null}
-                  error={avatarError}
-                  onError={setAvatarError}
-                  onChange={(next) => {
-                    setAvatarError(null);
-                    setState((prev) => ({
-                      ...prev,
-                      participantAvatarUrl: next,
-                    }));
-                  }}
-                />
-              </div>
-            </div>
-
-            <div className="grid gap-4 rounded-2xl border border-zinc-800 bg-zinc-900/50 p-5 sm:grid-cols-3 sm:p-6">
-              {rules.bullets.map((item) => (
-                <div key={item.t} className="space-y-1.5">
-                  <h2 className="text-sm font-semibold text-zinc-200">
-                    {item.t}
-                  </h2>
-                  <p className="text-sm leading-relaxed text-zinc-500">
-                    {item.d}
-                  </p>
-                </div>
-              ))}
-            </div>
-
-            <div className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-950/80 p-5 sm:p-6">
-              <div className="flex flex-wrap items-end justify-between gap-2">
-                <div>
-                  <h2 className="text-lg font-semibold text-zinc-100">
-                    Mini-exemplo (sem cronômetro)
-                  </h2>
-                  <p className="text-sm text-zinc-500">
-                    Resolva o exemplo antes de iniciar o timer oficial.
-                  </p>
-                </div>
-                {tutorialOk ? (
-                  <span className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2 py-1 text-xs text-emerald-400">
-                    Correto — pode iniciar
-                  </span>
-                ) : null}
-              </div>
-
-              {tutorial.kind === "matrix" ? (
-                <div className="flex flex-col items-center gap-6 lg:flex-row lg:items-start lg:justify-center">
-                  <MatrixRenderer cells={tutorial.cells} size={280} />
-                  <div className="w-full max-w-md space-y-3">
-                    <OptionGrid
-                      options={tutorial.options}
-                      selectedIndex={tutorialPick}
-                      cellSize={72}
-                      onSelect={(i) => {
-                        setTutorialPick(i);
-                        setTutorialOk(i === tutorial.correctIndex);
-                      }}
-                      revealedCorrect={
-                        tutorialPick !== null ? tutorial.correctIndex : null
-                      }
-                    />
-                    <p className="text-center text-xs text-zinc-500">
-                      {tutorial.explanation}
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <div className="mx-auto max-w-2xl space-y-4">
-                  <p className="text-base text-zinc-200">{tutorial.stem}</p>
-                  {tutorial.premises.length > 0 ? (
-                    <ul className="list-disc space-y-1 pl-5 text-sm text-zinc-400">
-                      {tutorial.premises.map((p) => (
-                        <li key={p}>{p}</li>
-                      ))}
-                    </ul>
-                  ) : null}
-                  <TextOptionList
-                    options={tutorial.options}
-                    selectedIndex={tutorialPick}
-                    revealedCorrect={
-                      tutorialPick !== null ? tutorial.correctIndex : null
-                    }
-                    onSelect={(i) => {
-                      setTutorialPick(i);
-                      setTutorialOk(i === tutorial.correctIndex);
-                    }}
-                  />
-                  <p className="text-center text-xs text-zinc-500">
-                    {tutorial.explanation}
-                  </p>
-                </div>
-              )}
-            </div>
-
-            <div className="flex flex-col items-center gap-3 pb-8">
-              <motion.button
-                type="button"
-                whileTap={{ scale: 0.98 }}
-                disabled={!tutorialOk}
-                onClick={startOfficial}
-                className="rounded-xl bg-emerald-500 px-8 py-3.5 text-sm font-semibold text-zinc-950 transition enabled:hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                Iniciar Avaliação Oficial
-              </motion.button>
-              <p className="text-xs text-zinc-600">
-                Progresso v3 isolado por modo neste navegador.
-              </p>
-            </div>
-          </motion.section>
+          <OnboardingTransition
+            mode={mode}
+            rules={rules}
+            tutorial={tutorial}
+            tutorialPick={tutorialPick}
+            tutorialOk={tutorialOk}
+            participantName={state.participantName ?? ""}
+            participantAvatarUrl={state.participantAvatarUrl ?? null}
+            nameError={nameError}
+            avatarError={avatarError}
+            onBack={() =>
+              setState({
+                ...createModeSelectState(),
+                participantName: state.participantName ?? "",
+                participantAvatarUrl: state.participantAvatarUrl ?? null,
+              })
+            }
+            onNameChange={(value) => {
+              setNameError(null);
+              setState((prev) => ({ ...prev, participantName: value }));
+            }}
+            onAvatarChange={(next) => {
+              setAvatarError(null);
+              setState((prev) => ({ ...prev, participantAvatarUrl: next }));
+            }}
+            onAvatarError={setAvatarError}
+            onTutorialSelect={(i) => {
+              setTutorialPick(i);
+              setTutorialOk(i === tutorial.correctIndex);
+            }}
+            onStart={startOfficial}
+          />
         )}
 
         {state.phase === "test" && q && (
@@ -846,65 +674,231 @@ export function IqTestApp() {
   );
 }
 
-function PsychometricTransparencyBlock({
-  compact = false,
+function OnboardingTransition({
+  mode,
+  rules,
+  tutorial,
+  tutorialPick,
+  tutorialOk,
+  participantName,
+  participantAvatarUrl,
+  nameError,
+  avatarError,
+  onBack,
+  onNameChange,
+  onAvatarChange,
+  onAvatarError,
+  onTutorialSelect,
+  onStart,
 }: {
-  compact?: boolean;
+  mode: AssessmentMode;
+  rules: { title: string; bullets: { t: string; d: string }[] };
+  tutorial: import("@/src/lib/assessmentBank").TutorialExample;
+  tutorialPick: number | null;
+  tutorialOk: boolean;
+  participantName: string;
+  participantAvatarUrl: string | null;
+  nameError: string | null;
+  avatarError: string | null;
+  onBack: () => void;
+  onNameChange: (value: string) => void;
+  onAvatarChange: (next: string | null) => void;
+  onAvatarError: (msg: string | null) => void;
+  onTutorialSelect: (i: number) => void;
+  onStart: () => void;
 }) {
-  const cards = [
-    {
-      t: "Base teórica",
-      d: "Inspirado em modelos clássicos de inteligência fluida e raciocínio abstrato-lógico — em especial Matrizes Progressivas de Raven e provas de raciocínio dedutivo/analítico. O foco é padrão, regra e inferência, não conhecimento escolar.",
-    },
-    {
-      t: "Arquitetura das questões",
-      d: "Itens estruturados com apoio de IA para definir regras lógicas objetivas, dificuldade progressiva e distratores coerentes. A alternativa correta exige raciocínio real; chutar sem método tende a falhar.",
-    },
-    {
-      t: "Limite deste resultado",
-      d: "Este teste oferece uma estimativa digital de desempenho lógico. Não é avaliação neuropsicológica clínica presencial nem laudo emitido por profissional habilitado.",
-    },
-  ];
+  const reduce = useReducedMotion();
+  const ease = [0.22, 1, 0.36, 1] as const;
 
   return (
-    <section
-      aria-labelledby="iq-transparency-heading"
-      className={`rounded-2xl border border-zinc-800 bg-zinc-900/45 ${
-        compact ? "p-4 sm:p-5" : "p-5 sm:p-6"
-      }`}
+    <motion.section
+      key={`onboarding-${mode}`}
+      initial={reduce ? false : { opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={reduce ? undefined : { opacity: 0, y: -8 }}
+      transition={{ duration: reduce ? 0 : 0.4, ease }}
+      className="space-y-8"
     >
-      <div className="mb-4 space-y-1">
-        <h2
-          id="iq-transparency-heading"
-          className="text-sm font-semibold text-zinc-100 sm:text-base"
+      <header className="space-y-3 pt-2 text-center sm:pt-6">
+        <button
+          type="button"
+          onClick={onBack}
+          className="text-xs text-zinc-500 underline-offset-2 hover:text-zinc-300 hover:underline"
         >
-          Transparência da avaliação
-        </h2>
-        <p
-          className={
-            compact
-              ? "text-xs text-zinc-500 sm:text-sm"
-              : "text-sm text-zinc-500"
+          ← Trocar modo
+        </button>
+        <p className="text-[11px] font-medium uppercase tracking-[0.28em] text-cyan-300/80">
+          {MODE_META[mode].short} · Preparação
+        </p>
+        <h1 className="font-iq-display text-4xl tracking-tight text-zinc-50 sm:text-5xl">
+          {rules.title}
+        </h1>
+        <p className="mx-auto max-w-xl text-base text-zinc-400 sm:text-lg">
+          {MODE_META[mode].blurb}{" "}
+          <span className="tabular-nums text-zinc-300">30</span> itens ·{" "}
+          <span className="tabular-nums text-zinc-300">5</span> níveis · escala
+          com média <span className="tabular-nums text-zinc-300">100</span> e
+          desvio padrão <span className="tabular-nums text-zinc-300">15</span>.
+        </p>
+      </header>
+
+      <PsychometricTransparencyBlock compact />
+
+      <motion.div
+        initial={reduce ? false : { opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: reduce ? 0 : 0.08, duration: 0.35 }}
+        className="mx-auto w-full max-w-md space-y-4 rounded-3xl border border-white/[0.1] bg-[#0C0E16]/75 p-5 shadow-[0_0_40px_-18px_rgba(99,102,241,0.35)] backdrop-blur-xl"
+      >
+        <div className="space-y-2">
+          <label
+            htmlFor="iq-participant-name"
+            className="block text-sm font-medium text-zinc-200"
+          >
+            Nome / Apelido
+          </label>
+          <input
+            id="iq-participant-name"
+            type="text"
+            autoComplete="nickname"
+            maxLength={40}
+            value={participantName}
+            onChange={(e) => onNameChange(e.target.value)}
+            placeholder={`Ex.: Maria Silva (vazio → ${ANONYMOUS_PARTICIPANT_NAME})`}
+            className="w-full rounded-xl border border-white/[0.08] bg-[#06070A]/80 px-3 py-2.5 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:border-cyan-400/40 focus:ring-1 focus:ring-cyan-400/25"
+          />
+          <p className="text-xs leading-relaxed text-zinc-500">
+            Use um nome real para figurar com clareza no ranking local. Campo
+            vazio registra como {ANONYMOUS_PARTICIPANT_NAME}.
+          </p>
+          {nameError ? (
+            <p className="text-xs text-amber-400" role="alert">
+              {nameError}
+            </p>
+          ) : null}
+        </div>
+
+        <div className="border-t border-white/[0.06] pt-4">
+          <AvatarPicker
+            name={participantName.trim() || ANONYMOUS_PARTICIPANT_NAME}
+            avatarUrl={participantAvatarUrl}
+            error={avatarError}
+            onError={onAvatarError}
+            onChange={onAvatarChange}
+          />
+        </div>
+      </motion.div>
+
+      <motion.div
+        initial={reduce ? false : { opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: reduce ? 0 : 0.12, duration: 0.35 }}
+        className="grid gap-4 rounded-3xl border border-white/[0.08] bg-[#0C0E16]/65 p-5 backdrop-blur-md sm:grid-cols-3 sm:p-6"
+      >
+        {rules.bullets.map((item, i) => (
+          <motion.div
+            key={item.t}
+            initial={reduce ? false : { opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: reduce ? 0 : 0.14 + i * 0.05 }}
+            className="space-y-1.5"
+          >
+            <h2 className="font-iq-display text-sm tracking-tight text-zinc-200">
+              {item.t}
+            </h2>
+            <p className="text-sm leading-relaxed text-zinc-500">{item.d}</p>
+          </motion.div>
+        ))}
+      </motion.div>
+
+      <motion.div
+        initial={reduce ? false : { opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: reduce ? 0 : 0.16, duration: 0.35 }}
+        className="space-y-4 rounded-3xl border border-white/[0.08] bg-[#0C0E16]/80 p-5 backdrop-blur-xl sm:p-6"
+      >
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <div>
+            <h2 className="font-iq-display text-lg tracking-tight text-zinc-100">
+              Mini-exemplo (sem cronômetro)
+            </h2>
+            <p className="text-sm text-zinc-500">
+              Resolva o exemplo antes de iniciar o timer oficial.
+            </p>
+          </div>
+          {tutorialOk ? (
+            <span className="rounded-full border border-emerald-400/40 bg-emerald-400/10 px-3 py-1 text-xs text-emerald-300">
+              Correto — pode iniciar
+            </span>
+          ) : null}
+        </div>
+
+        {tutorial.kind === "matrix" ? (
+          <div className="flex flex-col items-center gap-6 lg:flex-row lg:items-start lg:justify-center">
+            <MatrixRenderer cells={tutorial.cells} size={280} />
+            <div className="w-full max-w-md space-y-3">
+              <OptionGrid
+                options={tutorial.options}
+                selectedIndex={tutorialPick}
+                cellSize={72}
+                onSelect={onTutorialSelect}
+                revealedCorrect={
+                  tutorialPick !== null ? tutorial.correctIndex : null
+                }
+              />
+              <p className="text-center text-xs text-zinc-500">
+                {tutorial.explanation}
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="mx-auto max-w-2xl space-y-4">
+            <p className="text-base text-zinc-200">{tutorial.stem}</p>
+            {tutorial.premises.length > 0 ? (
+              <ul className="list-disc space-y-1 pl-5 text-sm text-zinc-400">
+                {tutorial.premises.map((p) => (
+                  <li key={p}>{p}</li>
+                ))}
+              </ul>
+            ) : null}
+            <TextOptionList
+              options={tutorial.options}
+              selectedIndex={tutorialPick}
+              revealedCorrect={
+                tutorialPick !== null ? tutorial.correctIndex : null
+              }
+              onSelect={onTutorialSelect}
+            />
+            <p className="text-center text-xs text-zinc-500">
+              {tutorial.explanation}
+            </p>
+          </div>
+        )}
+      </motion.div>
+
+      <div className="flex flex-col items-center gap-3 pb-8">
+        <motion.button
+          type="button"
+          whileHover={
+            reduce || !tutorialOk
+              ? undefined
+              : {
+                  boxShadow:
+                    "0 0 36px -6px rgba(52,211,153,0.55), 0 0 0 1px rgba(52,211,153,0.25)",
+                }
           }
+          whileTap={reduce ? undefined : { scale: 0.98 }}
+          disabled={!tutorialOk}
+          onClick={onStart}
+          className="rounded-xl bg-gradient-to-r from-emerald-400 via-cyan-400 to-indigo-400 px-8 py-3.5 text-sm font-semibold text-[#06070A] shadow-[0_0_28px_-6px_rgba(52,211,153,0.45)] transition enabled:hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          Base teórica, construção dos itens e limite do resultado — com
-          transparência.
+          Iniciar Avaliação Oficial
+        </motion.button>
+        <p className="text-xs text-zinc-600">
+          Progresso v3 isolado por modo neste navegador.
         </p>
       </div>
-      <div
-        className={`grid gap-3 ${compact ? "sm:grid-cols-3" : "sm:grid-cols-3"}`}
-      >
-        {cards.map((c) => (
-          <div
-            key={c.t}
-            className="space-y-1.5 rounded-xl border border-zinc-800/80 bg-zinc-950/50 p-3.5"
-          >
-            <h3 className="text-sm font-medium text-zinc-200">{c.t}</h3>
-            <p className="text-sm leading-relaxed text-zinc-500">{c.d}</p>
-          </div>
-        ))}
-      </div>
-    </section>
+    </motion.section>
   );
 }
 
