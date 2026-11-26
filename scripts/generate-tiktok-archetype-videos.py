@@ -9,8 +9,8 @@ stroke escuro fino + sombra suave; título no topo com acento da carta.
 Narração PT-BR fluida:
   - texto limpo para TTS (— / ... → vírgulas); legendas mantêm pontuação visual
   - ElevenLabs se ELEVENLABS_API_KEY (eleven_multilingual_v2)
-  - senão edge-tts pt-BR ThalitaMultilingualNeural / AntonioNeural @ +10%
-  - sync via WordBoundary (edge) ou duração real + proporção
+  - senão edge-tts pt-BR Francisca / Thalita / Antonio @ rate ~0–3% (mais humano)
+  - sync via WordBoundary karaoke (2–4 palavras) ou duração real + proporção
   - timings persistidos em <out>/.caption-timings/<slug>.json
 
 Uso:
@@ -118,26 +118,28 @@ ELEVEN_SIMILARITY = 0.78
 ELEVEN_STYLE = 0.35
 ELEVEN_MODEL = "eleven_multilingual_v2"
 
+# Voz mais fluida/humana: rate perto de 0, pitch leve, frases curtas + pausas.
+# Francisca = PT-BR natural conversacional; Thalita = multilíngue intensa; Antonio = firme.
 VOICE_PROFILES = {
     TONE_FIRME: {
         "edge_voice": "pt-BR-AntonioNeural",
-        "edge_rate": "+10%",
-        "edge_pitch": "-1Hz",
+        "edge_rate": "+2%",
+        "edge_pitch": "-2Hz",
         "sapi_rate": -1,
         "eleven_voice_env": "ELEVENLABS_VOICE_ID_MALE",
         "eleven_voice_default": "pNInz6obpgDQGcFmaJgB",  # Adam-ish
     },
     TONE_LEVE: {
-        "edge_voice": "pt-BR-ThalitaMultilingualNeural",
-        "edge_rate": "+10%",
-        "edge_pitch": "+0Hz",
-        "sapi_rate": 2,
+        "edge_voice": "pt-BR-FranciscaNeural",
+        "edge_rate": "+0%",
+        "edge_pitch": "+1Hz",
+        "sapi_rate": 1,
         "eleven_voice_env": "ELEVENLABS_VOICE_ID_FEMALE",
         "eleven_voice_default": "EXAVITQu4vr4xnSDxMaL",  # Rachel-ish
     },
     TONE_INTENSO: {
         "edge_voice": "pt-BR-ThalitaMultilingualNeural",
-        "edge_rate": "+10%",
+        "edge_rate": "+3%",
         "edge_pitch": "-1Hz",
         "sapi_rate": 0,
         "eleven_voice_env": "ELEVENLABS_VOICE_ID_FEMALE",
@@ -689,15 +691,18 @@ def rgb_to_ass(rgb: tuple[int, int, int], alpha: int = 0) -> str:
 
 
 def clean_tts_text(text: str) -> str:
-    """Versão limpa para TTS: — e ... viram vírgulas; legendas mantêm visual."""
+    """TTS mais humano: travessões/reticências viram pausas respiratórias (vírgula/ponto)."""
     t = text
-    t = t.replace("—", ",")
-    t = t.replace("–", ",")
-    t = t.replace("…", ",")
-    t = re.sub(r"\.{3,}", ",", t)
+    t = t.replace("—", ", ")
+    t = t.replace("–", ", ")
+    t = t.replace("…", "... ")
+    # Mantém "..." como micro-pausa (edge-tts respira melhor que vírgula seca)
+    t = re.sub(r"\.{4,}", "...", t)
     t = re.sub(r"\s*,\s*", ", ", t)
     t = re.sub(r"\s{2,}", " ", t)
     t = re.sub(r"\s+([?!.])", r"\1", t)
+    # Evita rajada: ponto entre cláusulas longas coladas com "e"
+    t = re.sub(r"([a-zà-ú]{5,}), e ", r"\1. E ", t, flags=re.IGNORECASE)
     return t.strip(" ,")
 
 
@@ -1119,7 +1124,7 @@ def resolve_engine(requested: str | None) -> tuple[str, str]:
         try:
             import edge_tts  # noqa: F401
 
-            return "edge", "edge-tts (ThalitaMultilingual / Antonio @ +10%)"
+            return "edge", "edge-tts (Francisca / Thalita / Antonio · rate ~0–3%)"
         except ImportError:
             print("AVISO: edge-tts não instalado.")
             if eleven_key:
@@ -1137,7 +1142,7 @@ def resolve_engine(requested: str | None) -> tuple[str, str]:
         try:
             import edge_tts  # noqa: F401
 
-            return "edge", "edge-tts (ThalitaMultilingual / Antonio @ +10%)"
+            return "edge", "edge-tts (Francisca / Thalita / Antonio · rate ~0–3%)"
         except ImportError:
             print("AVISO: edge-tts não instalado; tentando SAPI.")
             return "sapi", "Windows SAPI (fallback)"
@@ -1154,6 +1159,20 @@ def _normalize_word(w: str) -> str:
     return re.sub(r"[^\wàáâãäéêëíîïóôõöúûüçñ]", "", w, flags=re.IGNORECASE).lower()
 
 
+def _extract_wb_words(boundaries: list[dict]) -> list[tuple[str, float, float]]:
+    wb_words: list[tuple[str, float, float]] = []
+    for b in boundaries:
+        if b.get("type") != "WordBoundary":
+            continue
+        nw = _normalize_word(str(b.get("text", "")))
+        if not nw:
+            continue
+        start = _ticks_to_sec(b["offset"])
+        end = start + _ticks_to_sec(b["duration"])
+        wb_words.append((nw, start, end))
+    return wb_words
+
+
 def map_lines_from_word_boundaries(
     display_lines: list[str],
     boundaries: list[dict],
@@ -1168,20 +1187,7 @@ def map_lines_from_word_boundaries(
         words = [_normalize_word(w) for w in line.split() if _normalize_word(w)]
         line_words.append(words)
 
-    wb_words = []
-    for b in boundaries:
-        if b.get("type") != "WordBoundary":
-            continue
-        nw = _normalize_word(str(b.get("text", "")))
-        if not nw:
-            continue
-        wb_words.append(
-            (
-                nw,
-                _ticks_to_sec(b["offset"]),
-                _ticks_to_sec(b["offset"]) + _ticks_to_sec(b["duration"]),
-            )
-        )
+    wb_words = _extract_wb_words(boundaries)
 
     if not wb_words:
         # fallback proporcional por caracteres
@@ -1239,6 +1245,56 @@ def map_lines_from_word_boundaries(
     if fixed:
         fixed[-1] = (fixed[-1][0], max(fixed[-1][1], audio_dur))
     return fixed
+
+
+def karaoke_segments_from_boundaries(
+    display_lines: list[str],
+    boundaries: list[dict],
+    audio_dur: float,
+    words_per_chunk: int = 3,
+) -> list[tuple[float, float, str]] | None:
+    """
+    Legendas curtas (2–4 palavras) sincronizadas palavra-a-palavra via WordBoundary.
+    Retorna None se não houver boundaries (caller usa mapeamento por linha).
+    """
+    wb = _extract_wb_words(boundaries)
+    if not wb:
+        return None
+
+    # Texto visual original (ordem das palavras) alinhado aos WB
+    visual_words: list[str] = []
+    for line in display_lines:
+        visual_words.extend([w for w in line.split() if w.strip()])
+
+    # Emparelha visual ↔ WB por índice (edge-tts costuma 1:1 após clean)
+    n = min(len(visual_words), len(wb))
+    if n == 0:
+        return None
+
+    chunks: list[tuple[float, float, str]] = []
+    i = 0
+    while i < n:
+        # Chunks menores perto de pontuação / fim
+        take = words_per_chunk
+        window = visual_words[i : i + take]
+        # Se algum token no chunk tem ? ! . encerra ali
+        cut = take
+        for k, tok in enumerate(window):
+            if tok.rstrip("\"'”’").endswith(("?", "!", ".", "…")):
+                cut = k + 1
+                break
+        end_i = min(i + cut, n)
+        text = " ".join(visual_words[i:end_i])
+        start = wb[i][1]
+        end = wb[end_i - 1][2]
+        end = max(start + 0.08, min(end, audio_dur))
+        chunks.append((start, end, text))
+        i = end_i
+
+    if chunks:
+        last_s, _, last_t = chunks[-1]
+        chunks[-1] = (last_s, max(chunks[-1][1], audio_dur), last_t)
+    return chunks
 
 
 async def _edge_synth_utterance(
@@ -1470,15 +1526,20 @@ def concat_voice_track_utterances(
         ]
     )
 
-    # Timeline de legendas a partir de WordBoundary / duração real
+    # Timeline de legendas: karaoke (2–4 palavras) via WordBoundary; fallback por linha
     segments: list[tuple[float, float, str]] = []
     t_cursor = LEAD_IN_SEC
     for i, (lines, dur, bounds) in enumerate(
         zip(utterances, durs, boundaries_per_utt)
     ):
-        local_spans = map_lines_from_word_boundaries(lines, bounds, dur)
-        for line, (ls, le) in zip(lines, local_spans):
-            segments.append((t_cursor + ls, t_cursor + le, line))
+        karaoke = karaoke_segments_from_boundaries(lines, bounds, dur, words_per_chunk=3)
+        if karaoke:
+            for ls, le, text in karaoke:
+                segments.append((t_cursor + ls, t_cursor + le, text))
+        else:
+            local_spans = map_lines_from_word_boundaries(lines, bounds, dur)
+            for line, (ls, le) in zip(lines, local_spans):
+                segments.append((t_cursor + ls, t_cursor + le, line))
         t_cursor += dur
         if i < len(gaps):
             t_cursor += gaps[i]

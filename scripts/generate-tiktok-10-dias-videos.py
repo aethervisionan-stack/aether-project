@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import importlib.util
+import os
 import random
 import re
 import sys
@@ -182,15 +183,14 @@ def parse_roteiro(path: Path) -> dict:
     }
 
 
-def split_caption_lines(text: str, max_chars: int = 34) -> list[str]:
-    """Quebra narração em linhas curtas para legenda flutuante."""
+def split_caption_lines(text: str, max_chars: int = 28) -> list[str]:
+    """Quebra narração em frases curtas (respiração TTS + sync de legenda)."""
     text = re.sub(r"\s+", " ", text).strip()
     if not text:
         return []
-    # Prefer breaks after . ? ! … — ;
     chunks: list[str] = []
-    # First split by sentence-ish punctuation keeping delimiter
-    parts = re.split(r"(?<=[\.\!\?…])\s+|(?<=[;—–])\s+", text)
+    # Split por pontuação + vírgulas longas (respiração humana)
+    parts = re.split(r"(?<=[\.\!\?…])\s+|(?<=[;—–])\s+|(?<=,)\s+(?=[A-ZÁÉÍÓÚÀÃÕÂÊÔ])", text)
     for part in parts:
         part = part.strip()
         if not part:
@@ -209,10 +209,10 @@ def split_caption_lines(text: str, max_chars: int = 34) -> list[str]:
                 buf.append(w)
         if buf:
             chunks.append(" ".join(buf))
-    # Merge very short leftovers with previous when possible
+    # Não fundir demais — frases curtas soam mais humanas no edge-tts
     merged: list[str] = []
     for c in chunks:
-        if merged and len(c) < 12 and len(merged[-1]) + 1 + len(c) <= max_chars + 6:
+        if merged and len(c) < 8 and len(merged[-1]) + 1 + len(c) <= max_chars:
             merged[-1] = f"{merged[-1]} {c}"
         else:
             merged.append(c)
@@ -220,15 +220,14 @@ def split_caption_lines(text: str, max_chars: int = 34) -> list[str]:
 
 
 def build_lines(script: dict) -> list[str]:
-    """Gancho + desenvolvimento + CTA → linhas de legenda/TTS."""
+    """Gancho + desenvolvimento + CTA → frases curtas (karaoke WordBoundary no pipeline)."""
     parts: list[str] = []
     if script["gancho"]:
-        parts.extend(split_caption_lines(script["gancho"], max_chars=36))
+        parts.extend(split_caption_lines(script["gancho"], max_chars=30))
     if script["desenvolvimento"]:
-        parts.extend(split_caption_lines(script["desenvolvimento"], max_chars=34))
+        parts.extend(split_caption_lines(script["desenvolvimento"], max_chars=28))
     if script["cta"]:
-        parts.extend(split_caption_lines(script["cta"], max_chars=36))
-    # Guarantee at least something
+        parts.extend(split_caption_lines(script["cta"], max_chars=30))
     if not parts:
         parts = [script["title"], "Link na bio. Faça o quiz."]
     return parts
@@ -294,7 +293,15 @@ def main() -> None:
     results: list[tuple[Path, float, str]] = []
     failures: list[str] = []
 
-    with tempfile.TemporaryDirectory(prefix="tiktok-10dias-") as tmp:
+    # Prefer D: temp when C: is tight (rodada anterior)
+    temp_root = Path(os.environ.get("TIKTOK_TEMP") or r"D:\tiktok-temp")
+    try:
+        temp_root.mkdir(parents=True, exist_ok=True)
+        work_ctx = tempfile.TemporaryDirectory(prefix="tiktok-10dias-", dir=str(temp_root))
+    except OSError:
+        work_ctx = tempfile.TemporaryDirectory(prefix="tiktok-10dias-")
+
+    with work_ctx as tmp:
         work = Path(tmp)
         for script in scripts:
             lines = build_lines(script)
