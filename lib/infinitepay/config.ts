@@ -16,14 +16,14 @@ export const INFINITEPAY_TIERS: Record<
     amountLabel: "R$ 1,00",
   },
   mentor_upgrade: {
-    priceCentavos: 100,
+    priceCentavos: 500,
     description: "Consultoria IA Mentor Estratégico — 30 dias",
-    amountLabel: "R$ 1,00",
+    amountLabel: "R$ 5,00",
   },
   combo: {
-    priceCentavos: 200,
+    priceCentavos: 600,
     description: "Combo Diagnóstico Completo + Consultoria IA 30 dias",
-    amountLabel: "R$ 2,00",
+    amountLabel: "R$ 6,00",
   },
 };
 
@@ -85,7 +85,7 @@ export function appPublicUrl(): string {
   if (process.env.VERCEL_URL) {
     return `https://${process.env.VERCEL_URL.replace(/\/$/, "")}`;
   }
-  return "http://localhost:3000";
+  return "http://localhost:3010";
 }
 
 export function parseInfinitePayTier(raw: unknown): InfinitePayTier | null {

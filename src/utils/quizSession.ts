@@ -307,7 +307,7 @@ export function unlockBasicPlan(now = Date.now()): QuizSessionPayload {
   return unlockResultTier(null, now);
 }
 
-/** combo (R$2): diagnóstico + Mentor 30d + restore code. */
+/** combo (R$6): diagnóstico + Mentor 30d + restore code. */
 export function unlockComboTier(
   profile: MentorProfileSnapshot,
   orderNsu?: string | null,
@@ -478,7 +478,7 @@ export function applyMentorRestore(
   return { ok: true, session: next };
 }
 
-/** Upgrade Mentor (R$1) — 30d + restore. Does NOT grant diagnosis by itself. */
+/** Upgrade Mentor (R$5) — 30d + restore. Does NOT grant diagnosis by itself. */
 export function unlockMentorPass(
   profile: MentorProfileSnapshot,
   orderNsu?: string | null,

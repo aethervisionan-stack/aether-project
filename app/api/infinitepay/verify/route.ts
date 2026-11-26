@@ -80,9 +80,41 @@ export async function POST(req: Request) {
         paid: true,
         tier,
         order_nsu,
-        amount: local.amountCentavos || expectedAmountForTier(tier as InfinitePayTier),
+        amount:
+          local.amountCentavos ||
+          expectedAmountForTier(tier as InfinitePayTier),
         from: "store",
       });
+    }
+
+    // Pix EMV fallback: PagBank charge paid → unlock the InfinitePay order_nsu.
+    if (local?.pagbankOrderId) {
+      try {
+        const { fetchPagbankOrderStatus } = await import(
+          "@/lib/pagbank/client"
+        );
+        const remote = await fetchPagbankOrderStatus(local.pagbankOrderId);
+        if (remote.status === "paid") {
+          const tier =
+            tierFromNsu ??
+            (parseInfinitePayTier(local.tier) as InfinitePayTier | null);
+          await markInfinitePayPaidAsync(order_nsu, {
+            transaction_nsu: `PAGBANK_${local.pagbankOrderId}`,
+            slug: local.slug,
+          });
+          return NextResponse.json({
+            paid: true,
+            tier,
+            order_nsu,
+            amount:
+              local.amountCentavos ||
+              (tier ? expectedAmountForTier(tier) : remote.amountCentavos),
+            from: "pagbank",
+          });
+        }
+      } catch {
+        // keep polling InfinitePay / wait for webhook
+      }
     }
 
     const wantsSimComplete =
@@ -118,7 +150,7 @@ export async function POST(req: Request) {
       });
     }
 
-    // Poll with only order_nsu — wait for webhook / payment_return.
+    // Modal poll: only order_nsu — wait for webhook / payment_return / PagBank.
     if (!transaction_nsu || !slug) {
       return NextResponse.json({
         paid: false,
@@ -136,11 +168,14 @@ export async function POST(req: Request) {
       slug,
     };
 
-    const res = await fetch("https://api.checkout.infinitepay.io/payment_check", {
-      method: "POST",
-      headers: buildAuthHeaders(),
-      body: JSON.stringify(checkBody),
-    });
+    const res = await fetch(
+      "https://api.checkout.infinitepay.io/payment_check",
+      {
+        method: "POST",
+        headers: buildAuthHeaders(),
+        body: JSON.stringify(checkBody),
+      },
+    );
 
     const data = (await res.json().catch(() => ({}))) as Record<
       string,
@@ -196,7 +231,8 @@ export async function POST(req: Request) {
     return NextResponse.json(
       {
         paid: false,
-        error: err instanceof Error ? err.message : "Erro ao verificar pagamento",
+        error:
+          err instanceof Error ? err.message : "Erro ao verificar pagamento",
       },
       { status: 500 },
     );

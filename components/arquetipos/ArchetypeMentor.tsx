@@ -13,10 +13,11 @@ import {
   Shield,
   Sparkles,
 } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { isValidPixEmv, pickClientPixEmv } from "@/lib/infinitepay/pixEmv";
 import { buildMentorProfile } from "@/lib/mentor/profile";
 import type { NarrativeResult } from "@/src/data/archetypes";
-import { redirectToCheckout } from "@/src/utils/checkoutRedirect";
 import {
   applyMentorRestore,
   encodeMentorRestoreBundle,
@@ -177,7 +178,7 @@ export function ArchetypeMentor({ result }: Props) {
             : data.code === "QUOTA"
               ? "Cota do Gemini esgotada. Tente novamente em instantes."
               : data.code === "MENTOR_LOCKED"
-                ? "Seu passe do Mentor expirou. Renove com R$ 1 ou o combo R$ 2."
+                ? "Seu passe do Mentor expirou. Renove com R$ 5 ou o combo R$ 6."
                 : data.error || "Não foi possível obter resposta do Mentor.";
         setError(msg);
         setLastFailedText(trimmed);
@@ -260,7 +261,7 @@ export function ArchetypeMentor({ result }: Props) {
 
   const statusLabel = passActive
     ? `Passe ativo · até ${formatExpiry(expiresAt ?? 0)}`
-    : "Mentor bloqueado · R$ 1 passe ou R$ 2 combo";
+    : "Mentor bloqueado · R$ 5 passe ou R$ 6 combo";
 
   return (
     <motion.section
@@ -280,7 +281,7 @@ export function ArchetypeMentor({ result }: Props) {
         <p className="mt-2 max-w-xl text-sm leading-relaxed text-[color:var(--cart-muted)]">
           Orientações personalizadas com seu dominante, sub, tags, respostas
           livres e sombra. Desbloqueie o Passe {MENTOR_PASS_DAYS} dias por
-          R$&nbsp;1 ou o combo completo por R$&nbsp;2.
+          R$&nbsp;5 ou o combo completo por R$&nbsp;6.
         </p>
         <p className="mt-3 inline-flex items-center gap-1.5 text-[11px] uppercase tracking-[0.14em] text-[color:var(--cart-dim)]">
           <Sparkles size={12} className="text-[color:var(--cart-copper)]" />
@@ -303,14 +304,14 @@ export function ArchetypeMentor({ result }: Props) {
                 className="cart-cta inline-flex flex-1 items-center justify-center gap-2 rounded-sm px-4 py-2.5 text-sm font-semibold"
               >
                 <KeyRound size={14} />
-                Mentor · R$ 1
+                Mentor · R$ 5
               </button>
               <button
                 type="button"
                 onClick={() => setShowPaywall(true)}
                 className="inline-flex flex-1 items-center justify-center gap-2 border border-[color:var(--cart-copper)]/40 px-4 py-2.5 text-xs uppercase tracking-[0.16em] text-[color:var(--cart-copper-bright)] transition hover:bg-[rgba(155,44,44,0.12)]"
               >
-                Combo · R$ 2
+                Combo · R$ 6
               </button>
             </div>
           </div>
@@ -437,7 +438,7 @@ export function ArchetypeMentor({ result }: Props) {
               className="inline-flex flex-1 items-center justify-center gap-2 border border-[color:var(--cart-copper)]/40 px-4 py-2.5 text-xs uppercase tracking-[0.16em] text-[color:var(--cart-copper-bright)] transition hover:bg-[rgba(155,44,44,0.12)]"
             >
               <KeyRound size={14} />
-              Upgrade Mentor · R$ 1
+              Upgrade Mentor · R$ 5
             </button>
           ) : null}
           <button
@@ -524,8 +525,37 @@ export function ArchetypeMentor({ result }: Props) {
   );
 }
 
+const MENTOR_POLL_MS = 3000;
+const MENTOR_POLL_MAX_MS = 120_000;
+
+async function writeClipboard(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    // fall through
+  }
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.left = "-9999px";
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
 function MentorPassModal({
   onClose,
+  onUnlocked,
 }: {
   onClose: () => void;
   onUnlocked: () => void;
@@ -534,6 +564,59 @@ function MentorPassModal({
     null,
   );
   const [error, setError] = useState<string | null>(null);
+  const [pixCode, setPixCode] = useState<string | null>(null);
+  const [amountLabel, setAmountLabel] = useState("R$ 5,00");
+  const [orderNsu, setOrderNsu] = useState<string | null>(null);
+  const [pollTimedOut, setPollTimedOut] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const pollAbortRef = useRef(false);
+  const onUnlockedRef = useRef(onUnlocked);
+  onUnlockedRef.current = onUnlocked;
+
+  useEffect(() => {
+    if (!orderNsu || !pixCode) return;
+    pollAbortRef.current = false;
+    setPollTimedOut(false);
+    const started = Date.now();
+    let timer: number | undefined;
+
+    async function pollOnce() {
+      if (pollAbortRef.current || !orderNsu) return;
+      try {
+        const res = await fetch("/api/infinitepay/verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ order_nsu: orderNsu }),
+        });
+        const data = (await res.json()) as { paid?: boolean };
+        if (pollAbortRef.current) return;
+        if (data.paid) {
+          pollAbortRef.current = true;
+          onUnlockedRef.current();
+          return;
+        }
+      } catch {
+        // keep polling
+      }
+      if (pollAbortRef.current) return;
+      if (Date.now() - started >= MENTOR_POLL_MAX_MS) {
+        setPollTimedOut(true);
+        return;
+      }
+      timer = window.setTimeout(() => {
+        void pollOnce();
+      }, MENTOR_POLL_MS);
+    }
+
+    timer = window.setTimeout(() => {
+      void pollOnce();
+    }, MENTOR_POLL_MS);
+
+    return () => {
+      pollAbortRef.current = true;
+      if (timer) window.clearTimeout(timer);
+    };
+  }, [orderNsu, pixCode]);
 
   async function startCheckout(tier: "mentor_upgrade" | "combo") {
     if (loading) return;
@@ -562,22 +645,19 @@ function MentorPassModal({
       } catch {
         throw new Error("Resposta inválida do servidor de pagamento");
       }
-      const urlCandidates = [
-        data.url,
-        data.checkout_url,
-        data.payment_url,
-        data.link,
-      ];
-      const url = urlCandidates.find(
-        (u): u is string =>
-          typeof u === "string" && /^https?:\/\//i.test(u.trim()),
-      );
       const nsu =
         typeof data.order_nsu === "string" ? data.order_nsu : null;
-      if (!res.ok || !url || !nsu) {
+      const pixRaw =
+        (typeof data.pixCode === "string" && data.pixCode) ||
+        pickClientPixEmv(data);
+      const emv =
+        pixRaw && isValidPixEmv(pixRaw) && !/^https?:\/\//i.test(pixRaw)
+          ? pixRaw.trim()
+          : null;
+      if (!res.ok || !nsu || !emv) {
         throw new Error(
           (typeof data.error === "string" && data.error) ||
-            "Não foi possível abrir o checkout",
+            "Não foi possível gerar o Pix (EMV).",
         );
       }
       try {
@@ -591,11 +671,33 @@ function MentorPassModal({
       } catch {
         // ignore
       }
-      redirectToCheckout(url.trim());
+      setAmountLabel(
+        typeof data.amountLabel === "string" && data.amountLabel
+          ? data.amountLabel
+          : tier === "combo"
+            ? "R$ 6,00"
+            : "R$ 5,00",
+      );
+      setPixCode(emv);
+      setOrderNsu(nsu);
+      setLoading(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao iniciar pagamento");
       setLoading(null);
     }
+  }
+
+  async function copyPixCode(emv: string) {
+    const ok = await writeClipboard(emv);
+    if (ok) {
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    }
+  }
+
+  function handleClose() {
+    pollAbortRef.current = true;
+    onClose();
   }
 
   return (
@@ -611,11 +713,14 @@ function MentorPassModal({
             Consultoria IA
           </p>
           <h4 className="cart-display mt-2 text-center text-xl text-[color:var(--cart-ink)]">
-            Mentor · R$ 1 · ou combo R$ 2
+            {pixCode
+              ? amountLabel
+              : `Mentor · R$ 5 · ou combo R$ 6`}
           </h4>
           <p className="mt-2 text-center text-xs leading-relaxed text-[color:var(--cart-muted)]">
-            Sem cadastro. R$&nbsp;1 libera o Mentor por {MENTOR_PASS_DAYS} dias;
-            R$&nbsp;2 é o combo (diagnóstico + Mentor).
+            {pixCode
+              ? "Escaneie o QR ou cole o código no app do banco e aguarde a liberação automática."
+              : `Sem cadastro. R$ 5 libera o Mentor por ${MENTOR_PASS_DAYS} dias; R$ 6 é o combo (diagnóstico + Mentor).`}
           </p>
 
           {error ? (
@@ -624,41 +729,82 @@ function MentorPassModal({
             </p>
           ) : null}
 
-          <button
-            type="button"
-            disabled={loading !== null}
-            onClick={() => void startCheckout("mentor_upgrade")}
-            className="cart-cta mt-6 inline-flex w-full items-center justify-center gap-2 rounded-sm px-5 py-3 text-sm font-semibold disabled:opacity-50"
-          >
-            {loading === "mentor_upgrade" ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Abrindo checkout…
-              </>
-            ) : (
-              "Pagar R$ 1 — só Mentor"
-            )}
-          </button>
+          {pixCode ? (
+            <>
+              <div className="mx-auto mt-5 flex w-fit items-center justify-center rounded-sm bg-white p-3">
+                <QRCodeSVG
+                  value={pixCode}
+                  size={160}
+                  level="M"
+                  includeMargin
+                />
+              </div>
+              <div className="mt-4 rounded-sm border border-[color:var(--cart-border-soft)] bg-black/30 p-3">
+                <p className="break-all font-mono text-[11px] leading-relaxed text-[color:var(--cart-muted)]">
+                  {pixCode}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => void copyPixCode(pixCode)}
+                className="cart-cta mt-4 inline-flex w-full items-center justify-center gap-2 rounded-sm px-5 py-3 text-sm font-semibold"
+              >
+                <Copy size={16} />
+                {copied ? "Código copiado!" : "Copiar código Pix"}
+              </button>
+              <div className="mt-3 flex items-center justify-center gap-2 text-sm text-[color:var(--cart-muted)]">
+                {!pollTimedOut ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin text-[color:var(--cart-copper)]" />
+                    <span>Aguardando confirmação…</span>
+                  </>
+                ) : (
+                  <span className="text-center text-xs text-amber-200/90">
+                    Ainda não confirmamos. Se já pagou, aguarde ou feche e tente
+                    de novo.
+                  </span>
+                )}
+              </div>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                disabled={loading !== null}
+                onClick={() => void startCheckout("mentor_upgrade")}
+                className="cart-cta mt-6 inline-flex w-full items-center justify-center gap-2 rounded-sm px-5 py-3 text-sm font-semibold disabled:opacity-50"
+              >
+                {loading === "mentor_upgrade" ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Gerando Pix…
+                  </>
+                ) : (
+                  "Pagar R$ 5 — só Mentor"
+                )}
+              </button>
+
+              <button
+                type="button"
+                disabled={loading !== null}
+                onClick={() => void startCheckout("combo")}
+                className="mt-3 inline-flex w-full items-center justify-center gap-2 border border-[color:var(--cart-copper)]/40 px-5 py-3 text-sm text-[color:var(--cart-copper-bright)] transition hover:bg-[rgba(155,44,44,0.12)] disabled:opacity-50"
+              >
+                {loading === "combo" ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Gerando Pix…
+                  </>
+                ) : (
+                  "Combo R$ 6 — diagnóstico + Mentor"
+                )}
+              </button>
+            </>
+          )}
 
           <button
             type="button"
-            disabled={loading !== null}
-            onClick={() => void startCheckout("combo")}
-            className="mt-3 inline-flex w-full items-center justify-center gap-2 border border-[color:var(--cart-copper)]/40 px-5 py-3 text-sm text-[color:var(--cart-copper-bright)] transition hover:bg-[rgba(155,44,44,0.12)] disabled:opacity-50"
-          >
-            {loading === "combo" ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Abrindo checkout…
-              </>
-            ) : (
-              "Combo R$ 2 — diagnóstico + Mentor"
-            )}
-          </button>
-
-          <button
-            type="button"
-            onClick={onClose}
+            onClick={handleClose}
             className="mt-4 w-full py-2 text-xs uppercase tracking-[0.16em] text-[color:var(--cart-dim)] hover:text-[color:var(--cart-copper)]"
           >
             Fechar

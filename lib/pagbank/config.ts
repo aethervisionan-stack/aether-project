@@ -1,13 +1,13 @@
-/** Diagnóstico completo — R$ 3,00. */
-export const PAGBANK_BASIC_AMOUNT_CENTAVOS = 300;
+/** Diagnóstico completo — R$ 1,00 (alinhado ao tier InfinitePay `result`). */
+export const PAGBANK_BASIC_AMOUNT_CENTAVOS = 100;
 /** Alias legado (status routes / client fallback). */
 export const PAGBANK_UNLOCK_AMOUNT_CENTAVOS = PAGBANK_BASIC_AMOUNT_CENTAVOS;
 
-/** Combo diagnóstico + Mentor 30d — R$ 8,90. */
-export const PAGBANK_COMBO_AMOUNT_CENTAVOS = 890;
+/** Combo diagnóstico + Mentor 30d — R$ 6,00. */
+export const PAGBANK_COMBO_AMOUNT_CENTAVOS = 600;
 
-/** Upgrade Mentor (diff após basic) — R$ 5,90. */
-export const PAGBANK_MENTOR_UPGRADE_AMOUNT_CENTAVOS = 590;
+/** Upgrade Mentor (após basic) — R$ 5,00. */
+export const PAGBANK_MENTOR_UPGRADE_AMOUNT_CENTAVOS = 500;
 
 /** @deprecated use PAGBANK_MENTOR_UPGRADE_AMOUNT_CENTAVOS */
 export const PAGBANK_MENTOR_AMOUNT_CENTAVOS =
@@ -29,9 +29,9 @@ export function pagbankProductMeta(product: PagbankProduct = "basic_3") {
     return {
       product: "combo_890" as const,
       amountCentavos: PAGBANK_COMBO_AMOUNT_CENTAVOS,
-      amountLabel: "R$ 8,90",
-      amountBrl: 8.9,
-      itemReference: "archetype-combo-890",
+      amountLabel: "R$ 6,00",
+      amountBrl: 6.0,
+      itemReference: "archetype-combo-600",
       itemName: "Diagnóstico + Mentor 30 dias",
       chargeDescription:
         "Combo — relatório de arquétipos + Passe Mentor 30 dias",
@@ -41,9 +41,9 @@ export function pagbankProductMeta(product: PagbankProduct = "basic_3") {
     return {
       product: "mentor_upgrade" as const,
       amountCentavos: PAGBANK_MENTOR_UPGRADE_AMOUNT_CENTAVOS,
-      amountLabel: "R$ 5,90",
-      amountBrl: 5.9,
-      itemReference: "mentor-upgrade-590",
+      amountLabel: "R$ 5,00",
+      amountBrl: 5.0,
+      itemReference: "mentor-upgrade-500",
       itemName: "Upgrade Mentor Estratégico 30 dias",
       chargeDescription:
         "Upgrade Mentor 30 dias (diferença após diagnóstico)",
@@ -52,9 +52,9 @@ export function pagbankProductMeta(product: PagbankProduct = "basic_3") {
   return {
     product: "basic_3" as const,
     amountCentavos: PAGBANK_BASIC_AMOUNT_CENTAVOS,
-    amountLabel: "R$ 3,00",
-    amountBrl: 3.0,
-    itemReference: "archetype-basic-3",
+    amountLabel: "R$ 1,00",
+    amountBrl: 1.0,
+    itemReference: "archetype-basic-100",
     itemName: "Relatório de Arquétipos",
     chargeDescription: "Desbloqueio do relatório de arquétipos",
   };
