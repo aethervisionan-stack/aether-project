@@ -237,7 +237,8 @@ export function isMentorPassActive(
   session: QuizSessionPayload | null | undefined,
   now = Date.now(),
 ): boolean {
-  if (!session?.mentorExpiresAt || !session.mentorUnlockedAt) return false;
+  if (!session?.mentorUnlocked) return false;
+  if (typeof session.mentorExpiresAt !== "number") return false;
   return session.mentorExpiresAt > now;
 }
 

@@ -7,6 +7,7 @@ import {
   KeyRound,
   Loader2,
   Lock,
+  RefreshCw,
   ScrollText,
   Send,
   Shield,
@@ -59,11 +60,11 @@ export function ArchetypeMentor({ result }: Props) {
   const [mounted, setMounted] = useState(false);
   const [passActive, setPassActive] = useState(false);
   const [expiresAt, setExpiresAt] = useState<number | null>(null);
-  const [freeUsed, setFreeUsed] = useState(false);
   const [history, setHistory] = useState<MentorChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lastFailedText, setLastFailedText] = useState<string | null>(null);
   const [showPaywall, setShowPaywall] = useState(false);
   const [showRestore, setShowRestore] = useState(false);
   const [restoreInput, setRestoreInput] = useState("");
@@ -77,7 +78,6 @@ export function ArchetypeMentor({ result }: Props) {
     const active = isMentorPassActive(session);
     setPassActive(active);
     setExpiresAt(session?.mentorExpiresAt ?? null);
-    setFreeUsed(Boolean(session?.mentorFreeUsed));
     setHistory(session?.mentorHistory ?? []);
     setSavedCode(session?.restoreCode ?? null);
     if (session && !session.mentorProfile) {
@@ -95,39 +95,60 @@ export function ArchetypeMentor({ result }: Props) {
     listRef.current.scrollTop = listRef.current.scrollHeight;
   }, [history, sending]);
 
-  function persistHistory(next: MentorChatMessage[], free: boolean) {
+  function persistHistory(next: MentorChatMessage[]) {
     patchQuizSession({
       mentorHistory: next,
-      mentorFreeUsed: free,
       mentorProfile: profile,
     });
     setHistory(next);
-    setFreeUsed(free);
   }
 
-  async function sendMessage(text: string) {
+  async function sendMessage(text: string, opts?: { retry?: boolean }) {
     const trimmed = text.trim();
     if (!trimmed || sending) return;
 
-    const needsPass = freeUsed && !passActive;
-    if (needsPass) {
+    const session = readQuizSession();
+    const active = isMentorPassActive(session);
+    setPassActive(active);
+    setExpiresAt(session?.mentorExpiresAt ?? null);
+
+    if (!active) {
       setShowPaywall(true);
+      setError(null);
       return;
     }
 
     setError(null);
-    setInput("");
+    setLastFailedText(null);
+    if (!opts?.retry) setInput("");
+
+    const baseHistory = opts?.retry
+      ? history.filter(
+          (m, i, arr) =>
+            !(
+              i === arr.length - 1 &&
+              m.role === "user" &&
+              m.content === trimmed
+            ),
+        )
+      : history;
+
     const userMsg: MentorChatMessage = {
       role: "user",
       content: trimmed,
       at: Date.now(),
     };
-    const nextHistory = [...history, userMsg];
-    const nextFree = true;
-    persistHistory(nextHistory, nextFree);
+    const nextHistory = [...baseHistory, userMsg];
+    persistHistory(nextHistory);
     setSending(true);
 
     try {
+      const quizAnswers =
+        session?.customAnswers &&
+        Object.keys(session.customAnswers).length > 0
+          ? session.customAnswers
+          : session?.answers ?? {};
+
       const res = await fetch("/api/mentor", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -136,27 +157,34 @@ export function ArchetypeMentor({ result }: Props) {
             role: m.role,
             content: m.content,
           })),
+          archetype: profile,
           profile,
+          quizAnswers,
+          mentorUnlocked: true,
+          mentorExpiresAt: session?.mentorExpiresAt ?? expiresAt,
         }),
       });
       const data = (await res.json()) as {
         reply?: string;
         error?: string;
         code?: string;
-        adminHint?: string;
       };
 
       if (!res.ok || !data.reply) {
         const msg =
           data.code === "MISSING_API_KEY"
-            ? "O Mentor está em configuração. Peça ao admin para definir GEMINI_API_KEY ou OPENAI_API_KEY."
-            : data.error || "Não foi possível obter resposta do Mentor.";
+            ? "O Mentor está em configuração. Peça ao admin para definir GEMINI_API_KEY no servidor."
+            : data.code === "QUOTA"
+              ? "Cota do Gemini esgotada. Tente novamente em instantes."
+              : data.code === "MENTOR_LOCKED"
+                ? "Seu passe do Mentor expirou. Renove com R$ 5 ou o combo R$ 6."
+                : data.error || "Não foi possível obter resposta do Mentor.";
         setError(msg);
-        // roll back user message on hard failure so free credit isn't burned silently
-        if (!freeUsed) {
-          persistHistory(history, false);
-        } else {
-          persistHistory(history, true);
+        setLastFailedText(trimmed);
+        persistHistory(baseHistory);
+        if (data.code === "MENTOR_LOCKED") {
+          setPassActive(false);
+          setShowPaywall(true);
         }
         return;
       }
@@ -166,14 +194,11 @@ export function ArchetypeMentor({ result }: Props) {
         content: data.reply,
         at: Date.now(),
       };
-      persistHistory([...nextHistory, assistantMsg], nextFree);
-
-      if (!passActive && nextFree) {
-        // after first successful free reply, next send opens paywall
-      }
+      persistHistory([...nextHistory, assistantMsg]);
     } catch {
       setError("Falha de rede ao falar com o Mentor.");
-      if (!freeUsed) persistHistory(history, false);
+      setLastFailedText(trimmed);
+      persistHistory(baseHistory);
     } finally {
       setSending(false);
     }
@@ -184,7 +209,6 @@ export function ArchetypeMentor({ result }: Props) {
     setPassActive(true);
     setExpiresAt(session.mentorExpiresAt ?? null);
     setSavedCode(session.restoreCode ?? null);
-    setFreeUsed(true);
     setShowPaywall(false);
     setError(null);
   }
@@ -236,9 +260,7 @@ export function ArchetypeMentor({ result }: Props) {
 
   const statusLabel = passActive
     ? `Passe ativo · até ${formatExpiry(expiresAt ?? 0)}`
-    : freeUsed
-      ? "1 consulta usada · upgrade Mentor R$ 5,90"
-      : "1 consulta gratuita disponível";
+    : "Mentor bloqueado · R$ 5 passe ou R$ 6 combo";
 
   return (
     <motion.section
@@ -257,8 +279,8 @@ export function ArchetypeMentor({ result }: Props) {
         </h3>
         <p className="mt-2 max-w-xl text-sm leading-relaxed text-[color:var(--cart-muted)]">
           Orientações personalizadas com seu dominante, sub, tags, respostas
-          livres e sombra. Uma consulta grátis; depois, upgrade do Passe{" "}
-          {MENTOR_PASS_DAYS} dias por R$&nbsp;5,90 via Pix (diferença do combo).
+          livres e sombra. Desbloqueie o Passe {MENTOR_PASS_DAYS} dias por
+          R$&nbsp;5 ou o combo completo por R$&nbsp;6.
         </p>
         <p className="mt-3 inline-flex items-center gap-1.5 text-[11px] uppercase tracking-[0.14em] text-[color:var(--cart-dim)]">
           <Sparkles size={12} className="text-[color:var(--cart-copper)]" />
@@ -267,12 +289,39 @@ export function ArchetypeMentor({ result }: Props) {
       </div>
 
       <div className="px-4 py-4 sm:px-6">
+        {!passActive ? (
+          <div className="mb-4 rounded-sm border border-[color:var(--cart-copper)]/35 bg-[rgba(155,44,44,0.1)] px-4 py-4">
+            <p className="text-sm leading-relaxed text-[color:var(--cart-muted)]">
+              O chat do Mentor só abre com passe ativo e dentro da validade.
+              Escolha R$&nbsp;5 (só Mentor) ou R$&nbsp;6 (combo diagnóstico +
+              Mentor).
+            </p>
+            <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+              <button
+                type="button"
+                onClick={() => setShowPaywall(true)}
+                className="cart-cta inline-flex flex-1 items-center justify-center gap-2 rounded-sm px-4 py-2.5 text-sm font-semibold"
+              >
+                <KeyRound size={14} />
+                Mentor · R$ 5
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowPaywall(true)}
+                className="inline-flex flex-1 items-center justify-center gap-2 border border-[color:var(--cart-copper)]/40 px-4 py-2.5 text-xs uppercase tracking-[0.16em] text-[color:var(--cart-copper-bright)] transition hover:bg-[rgba(155,44,44,0.12)]"
+              >
+                Combo · R$ 6
+              </button>
+            </div>
+          </div>
+        ) : null}
+
         <div className="flex flex-wrap gap-2">
           {CHIPS.map((chip) => (
             <button
               key={chip}
               type="button"
-              disabled={sending}
+              disabled={sending || !passActive}
               onClick={() => void sendMessage(chip)}
               className="border border-[color:var(--cart-border-soft)] bg-black/25 px-3 py-1.5 text-left text-[11px] leading-snug text-[color:var(--cart-muted)] transition hover:border-[color:var(--cart-copper)] hover:text-[color:var(--cart-copper-bright)] disabled:opacity-50"
             >
@@ -287,8 +336,13 @@ export function ArchetypeMentor({ result }: Props) {
         >
           {history.length === 0 ? (
             <p className="flex items-start gap-2 px-1 py-6 text-center text-sm text-[color:var(--cart-dim)] sm:justify-center">
-              <ScrollText size={16} className="mt-0.5 shrink-0 text-[color:var(--cart-copper)]" />
-              Escolha um chip ou escreva sua pergunta ao Mentor.
+              <ScrollText
+                size={16}
+                className="mt-0.5 shrink-0 text-[color:var(--cart-copper)]"
+              />
+              {passActive
+                ? "Escolha um chip ou escreva sua pergunta ao Mentor."
+                : "Desbloqueie o Mentor para iniciar o conselho."}
             </p>
           ) : (
             history.map((m, i) => (
@@ -310,16 +364,34 @@ export function ArchetypeMentor({ result }: Props) {
           )}
           {sending ? (
             <div className="flex items-center gap-2 text-xs text-[color:var(--cart-dim)]">
-              <Loader2 size={14} className="animate-spin text-[color:var(--cart-copper)]" />
-              O Mentor consulta o dossiê…
+              <Loader2
+                size={14}
+                className="animate-spin text-[color:var(--cart-copper)]"
+              />
+              Mentor analisando seu perfil...
             </div>
           ) : null}
         </div>
 
         {error ? (
-          <p className="mt-3 text-sm text-red-300/90" role="alert">
-            {error}
-          </p>
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-red-300/90" role="alert">
+              {error}
+            </p>
+            {lastFailedText ? (
+              <button
+                type="button"
+                disabled={sending || !passActive}
+                onClick={() =>
+                  void sendMessage(lastFailedText, { retry: true })
+                }
+                className="inline-flex items-center justify-center gap-1.5 border border-[color:var(--cart-border-soft)] px-3 py-1.5 text-[11px] uppercase tracking-[0.14em] text-[color:var(--cart-copper-bright)] transition hover:border-[color:var(--cart-copper)] disabled:opacity-50"
+              >
+                <RefreshCw size={12} />
+                Tentar de novo
+              </button>
+            ) : null}
+          </div>
         ) : null}
 
         <form
@@ -333,23 +405,23 @@ export function ArchetypeMentor({ result }: Props) {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder={
-              freeUsed && !passActive
-                ? "Desbloqueie o Passe para continuar…"
-                : "Pergunte ao Mentor Estratégico…"
+              passActive
+                ? "Pergunte ao Mentor Estratégico…"
+                : "Desbloqueie o Passe para continuar…"
             }
             className="min-w-0 flex-1 border border-[color:var(--cart-border-soft)] bg-black/40 px-3 py-3 text-sm text-[color:var(--cart-ink)] outline-none placeholder:text-[color:var(--cart-dim)] focus:border-[color:var(--cart-copper)]"
-            disabled={sending}
+            disabled={sending || !passActive}
             maxLength={1200}
           />
           <button
             type="submit"
-            disabled={sending || !input.trim()}
+            disabled={sending || !input.trim() || !passActive}
             className="cart-cta inline-flex items-center justify-center gap-2 rounded-sm px-4 py-3 text-sm font-semibold disabled:opacity-50"
             aria-label="Enviar"
           >
             {sending ? (
               <Loader2 size={16} className="animate-spin" />
-            ) : freeUsed && !passActive ? (
+            ) : !passActive ? (
               <Lock size={16} />
             ) : (
               <Send size={16} />
@@ -365,7 +437,7 @@ export function ArchetypeMentor({ result }: Props) {
               className="inline-flex flex-1 items-center justify-center gap-2 border border-[color:var(--cart-copper)]/40 px-4 py-2.5 text-xs uppercase tracking-[0.16em] text-[color:var(--cart-copper-bright)] transition hover:bg-[rgba(155,44,44,0.12)]"
             >
               <KeyRound size={14} />
-              Upgrade Mentor · R$ 5,90
+              Upgrade Mentor · R$ 5
             </button>
           ) : null}
           <button
@@ -379,7 +451,10 @@ export function ArchetypeMentor({ result }: Props) {
         </div>
         {savedCode && passActive ? (
           <p className="mt-2 text-center text-[11px] text-[color:var(--cart-dim)]">
-            Código local: <span className="tabular text-[color:var(--cart-copper)]">{savedCode}</span>
+            Código local:{" "}
+            <span className="tabular text-[color:var(--cart-copper)]">
+              {savedCode}
+            </span>
           </p>
         ) : null}
       </div>
@@ -455,12 +530,14 @@ function MentorPassModal({
   onClose: () => void;
   onUnlocked: () => void;
 }) {
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState<"mentor_upgrade" | "combo" | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
 
-  async function startCheckout() {
+  async function startCheckout(tier: "mentor_upgrade" | "combo") {
     if (loading) return;
-    setLoading(true);
+    setLoading(tier);
     setError(null);
     try {
       let sessionId = "mentor";
@@ -475,7 +552,7 @@ function MentorPassModal({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          tier: "mentor_upgrade",
+          tier,
           sessionId,
         }),
       });
@@ -507,7 +584,7 @@ function MentorPassModal({
         window.sessionStorage.setItem(
           "infinitepay_pending",
           JSON.stringify({
-            tier: "mentor_upgrade",
+            tier,
             order_nsu: nsu,
           }),
         );
@@ -517,7 +594,7 @@ function MentorPassModal({
       redirectToCheckout(url.trim());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao iniciar pagamento");
-      setLoading(false);
+      setLoading(null);
     }
   }
 
@@ -534,11 +611,11 @@ function MentorPassModal({
             Consultoria IA
           </p>
           <h4 className="cart-display mt-2 text-center text-xl text-[color:var(--cart-ink)]">
-            {MENTOR_PASS_DAYS} dias ilimitados · R$ 5,00
+            Mentor · R$ 5 · ou combo R$ 6
           </h4>
           <p className="mt-2 text-center text-xs leading-relaxed text-[color:var(--cart-muted)]">
-            Sem cadastro. Pague R$ 5,00 no InfinitePay e o Mentor fica ilimitado
-            por {MENTOR_PASS_DAYS} dias neste aparelho.
+            Sem cadastro. R$&nbsp;5 libera o Mentor por {MENTOR_PASS_DAYS} dias;
+            R$&nbsp;6 é o combo (diagnóstico + Mentor).
           </p>
 
           {error ? (
@@ -549,17 +626,33 @@ function MentorPassModal({
 
           <button
             type="button"
-            disabled={loading}
-            onClick={() => void startCheckout()}
+            disabled={loading !== null}
+            onClick={() => void startCheckout("mentor_upgrade")}
             className="cart-cta mt-6 inline-flex w-full items-center justify-center gap-2 rounded-sm px-5 py-3 text-sm font-semibold disabled:opacity-50"
           >
-            {loading ? (
+            {loading === "mentor_upgrade" ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
                 Abrindo checkout…
               </>
             ) : (
-              "Pagar R$ 5,00"
+              "Pagar R$ 5 — só Mentor"
+            )}
+          </button>
+
+          <button
+            type="button"
+            disabled={loading !== null}
+            onClick={() => void startCheckout("combo")}
+            className="mt-3 inline-flex w-full items-center justify-center gap-2 border border-[color:var(--cart-copper)]/40 px-5 py-3 text-sm text-[color:var(--cart-copper-bright)] transition hover:bg-[rgba(155,44,44,0.12)] disabled:opacity-50"
+          >
+            {loading === "combo" ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Abrindo checkout…
+              </>
+            ) : (
+              "Combo R$ 6 — diagnóstico + Mentor"
             )}
           </button>
 

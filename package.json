@@ -24,6 +24,7 @@
     "token:mint-fresh-supply": "tsx scripts/mint-fresh-supply.ts"
   },
   "dependencies": {
+    "@google/genai": "^3.6.1",
     "@metaplex-foundation/js": "^0.20.1",
     "@metaplex-foundation/mpl-token-metadata": "^2.13.0",
     "@neondatabase/serverless": "^1.0.2",
