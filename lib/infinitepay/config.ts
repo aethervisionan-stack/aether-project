@@ -16,14 +16,14 @@ export const INFINITEPAY_TIERS: Record<
     amountLabel: "R$ 1,00",
   },
   mentor_upgrade: {
-    priceCentavos: 500,
+    priceCentavos: 100,
     description: "Consultoria IA Mentor Estratégico — 30 dias",
-    amountLabel: "R$ 5,00",
+    amountLabel: "R$ 1,00",
   },
   combo: {
-    priceCentavos: 600,
+    priceCentavos: 200,
     description: "Combo Diagnóstico Completo + Consultoria IA 30 dias",
-    amountLabel: "R$ 6,00",
+    amountLabel: "R$ 2,00",
   },
 };
 

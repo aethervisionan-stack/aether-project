@@ -54,8 +54,8 @@ const BOXES: {
   {
     id: "mentor_upgrade",
     title: "Consultoria IA · 30 dias",
-    priceLabel: "R$ 5,00",
-    priceCentavos: 500,
+    priceLabel: "R$ 1,00",
+    priceCentavos: 100,
     badge: "Mentor",
     accent: true,
     persuasive:
@@ -117,7 +117,7 @@ export function PaywallScreen({
   const [error, setError] = useState<string | null>(null);
 
   const totalCentavos =
-    (selResult && !alreadyResult ? 100 : 0) + (selMentor ? 500 : 0);
+    (selResult && !alreadyResult ? 100 : 0) + (selMentor ? 100 : 0);
 
   const tier: InfinitePayTier | null = (() => {
     const wantResult = selResult && !alreadyResult;
@@ -315,8 +315,8 @@ export function PaywallScreen({
 
           <p className="mt-4 text-center text-sm leading-relaxed text-[color:var(--cart-ink)]">
             {alreadyResult
-              ? "Diagnóstico já liberado. Com R$ 5,00 você ativa 30 dias de Mentor — ou some o combo quando quiser renovar a jornada."
-              : "Um único pagamento destrava o nome e o diagnóstico completo: R$ 1,00 o dossiê · R$ 5,00 o Mentor 30 dias · R$ 6,00 o combo."}
+              ? "Diagnóstico já liberado. Com R$ 1,00 você ativa 30 dias de Mentor — ou some o combo quando quiser renovar a jornada."
+              : "Um único pagamento destrava o nome e o diagnóstico completo: R$ 1,00 o dossiê · R$ 1,00 o Mentor 30 dias · R$ 2,00 o combo."}
           </p>
 
           <div className="mt-4 flex max-w-md items-start gap-2 rounded-sm border border-[color:var(--cart-border-soft)] bg-black/20 px-3 py-3 text-xs leading-relaxed text-[color:var(--cart-dim)]">
@@ -339,7 +339,7 @@ export function PaywallScreen({
         >
           {alreadyResult
             ? "Diagnóstico já liberado. Ative a Consultoria IA 30 dias."
-            : "Monte sua oferta: só o diagnóstico, só o mentor, ou ambos (R$ 6,00)."}
+            : "Monte sua oferta: só o diagnóstico, só o mentor, ou ambos (R$ 2,00)."}
         </motion.p>
 
         <motion.div
@@ -423,7 +423,7 @@ export function PaywallScreen({
 
         {!alreadyResult && selResult && selMentor ? (
           <p className="mt-4 text-center text-xs text-[color:var(--cart-copper)]">
-            Combo · ambos por R$ 6,00
+            Combo · ambos por R$ 2,00
           </p>
         ) : null}
 

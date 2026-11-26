@@ -177,7 +177,7 @@ export function ArchetypeMentor({ result }: Props) {
             : data.code === "QUOTA"
               ? "Cota do Gemini esgotada. Tente novamente em instantes."
               : data.code === "MENTOR_LOCKED"
-                ? "Seu passe do Mentor expirou. Renove com R$ 5 ou o combo R$ 6."
+                ? "Seu passe do Mentor expirou. Renove com R$ 1 ou o combo R$ 2."
                 : data.error || "Não foi possível obter resposta do Mentor.";
         setError(msg);
         setLastFailedText(trimmed);
@@ -260,7 +260,7 @@ export function ArchetypeMentor({ result }: Props) {
 
   const statusLabel = passActive
     ? `Passe ativo · até ${formatExpiry(expiresAt ?? 0)}`
-    : "Mentor bloqueado · R$ 5 passe ou R$ 6 combo";
+    : "Mentor bloqueado · R$ 1 passe ou R$ 2 combo";
 
   return (
     <motion.section
@@ -280,7 +280,7 @@ export function ArchetypeMentor({ result }: Props) {
         <p className="mt-2 max-w-xl text-sm leading-relaxed text-[color:var(--cart-muted)]">
           Orientações personalizadas com seu dominante, sub, tags, respostas
           livres e sombra. Desbloqueie o Passe {MENTOR_PASS_DAYS} dias por
-          R$&nbsp;5 ou o combo completo por R$&nbsp;6.
+          R$&nbsp;1 ou o combo completo por R$&nbsp;2.
         </p>
         <p className="mt-3 inline-flex items-center gap-1.5 text-[11px] uppercase tracking-[0.14em] text-[color:var(--cart-dim)]">
           <Sparkles size={12} className="text-[color:var(--cart-copper)]" />
@@ -293,7 +293,7 @@ export function ArchetypeMentor({ result }: Props) {
           <div className="mb-4 rounded-sm border border-[color:var(--cart-copper)]/35 bg-[rgba(155,44,44,0.1)] px-4 py-4">
             <p className="text-sm leading-relaxed text-[color:var(--cart-muted)]">
               O chat do Mentor só abre com passe ativo e dentro da validade.
-              Escolha R$&nbsp;5 (só Mentor) ou R$&nbsp;6 (combo diagnóstico +
+              Escolha R$&nbsp;1 (só Mentor) ou R$&nbsp;2 (combo diagnóstico +
               Mentor).
             </p>
             <div className="mt-3 flex flex-col gap-2 sm:flex-row">
@@ -303,14 +303,14 @@ export function ArchetypeMentor({ result }: Props) {
                 className="cart-cta inline-flex flex-1 items-center justify-center gap-2 rounded-sm px-4 py-2.5 text-sm font-semibold"
               >
                 <KeyRound size={14} />
-                Mentor · R$ 5
+                Mentor · R$ 1
               </button>
               <button
                 type="button"
                 onClick={() => setShowPaywall(true)}
                 className="inline-flex flex-1 items-center justify-center gap-2 border border-[color:var(--cart-copper)]/40 px-4 py-2.5 text-xs uppercase tracking-[0.16em] text-[color:var(--cart-copper-bright)] transition hover:bg-[rgba(155,44,44,0.12)]"
               >
-                Combo · R$ 6
+                Combo · R$ 2
               </button>
             </div>
           </div>
@@ -437,7 +437,7 @@ export function ArchetypeMentor({ result }: Props) {
               className="inline-flex flex-1 items-center justify-center gap-2 border border-[color:var(--cart-copper)]/40 px-4 py-2.5 text-xs uppercase tracking-[0.16em] text-[color:var(--cart-copper-bright)] transition hover:bg-[rgba(155,44,44,0.12)]"
             >
               <KeyRound size={14} />
-              Upgrade Mentor · R$ 5
+              Upgrade Mentor · R$ 1
             </button>
           ) : null}
           <button
@@ -611,11 +611,11 @@ function MentorPassModal({
             Consultoria IA
           </p>
           <h4 className="cart-display mt-2 text-center text-xl text-[color:var(--cart-ink)]">
-            Mentor · R$ 5 · ou combo R$ 6
+            Mentor · R$ 1 · ou combo R$ 2
           </h4>
           <p className="mt-2 text-center text-xs leading-relaxed text-[color:var(--cart-muted)]">
-            Sem cadastro. R$&nbsp;5 libera o Mentor por {MENTOR_PASS_DAYS} dias;
-            R$&nbsp;6 é o combo (diagnóstico + Mentor).
+            Sem cadastro. R$&nbsp;1 libera o Mentor por {MENTOR_PASS_DAYS} dias;
+            R$&nbsp;2 é o combo (diagnóstico + Mentor).
           </p>
 
           {error ? (
@@ -636,7 +636,7 @@ function MentorPassModal({
                 Abrindo checkout…
               </>
             ) : (
-              "Pagar R$ 5 — só Mentor"
+              "Pagar R$ 1 — só Mentor"
             )}
           </button>
 
@@ -652,7 +652,7 @@ function MentorPassModal({
                 Abrindo checkout…
               </>
             ) : (
-              "Combo R$ 6 — diagnóstico + Mentor"
+              "Combo R$ 2 — diagnóstico + Mentor"
             )}
           </button>
 
