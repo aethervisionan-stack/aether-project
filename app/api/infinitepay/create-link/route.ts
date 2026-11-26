@@ -10,7 +10,14 @@ import {
   parseInfinitePayTier,
   type InfinitePayTier,
 } from "@/lib/infinitepay/config";
+import { resolveInfinitePayPixEmv } from "@/lib/infinitepay/fetchPixEmv";
+import { isValidPixEmv } from "@/lib/infinitepay/pixEmv";
 import { putInfinitePayOrderAsync } from "@/lib/infinitepay/store";
+import {
+  createPagbankPixOrderCustom,
+} from "@/lib/pagbank/client";
+import { pagbankMockMode, pagbankToken } from "@/lib/pagbank/config";
+import { putPagbankOrder } from "@/lib/pagbank/store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -60,6 +67,69 @@ function extractCheckoutUrl(data: Record<string, unknown>): string | null {
   return null;
 }
 
+async function tryPagbankEmvFallback(input: {
+  order_nsu: string;
+  tier: InfinitePayTier;
+  amountCentavos: number;
+  amountLabel: string;
+  description: string;
+}): Promise<{
+  emv: string;
+  pagbankOrderId: string;
+  fieldsUsed: string[];
+} | null> {
+  if (pagbankMockMode() || !pagbankToken()) return null;
+  try {
+    const created = await createPagbankPixOrderCustom({
+      amountCentavos: input.amountCentavos,
+      amountLabel: input.amountLabel,
+      itemReference: `ip-${input.tier}`.slice(0, 64),
+      itemName: input.description.slice(0, 100),
+      chargeDescription: input.description.slice(0, 64),
+      referenceId: `ip-${input.order_nsu}`.slice(0, 64),
+    });
+    if (!isValidPixEmv(created.pixCopyPaste)) return null;
+    putPagbankOrder({
+      orderId: created.orderId,
+      amountCentavos: input.amountCentavos,
+      status: "waiting",
+      pixCopyPaste: created.pixCopyPaste,
+      qrCodeImageUrl: created.qrCodeImageUrl,
+      mock: false,
+      createdAt: Date.now(),
+    });
+    return {
+      emv: created.pixCopyPaste.trim(),
+      pagbankOrderId: created.orderId,
+      fieldsUsed: ["pagbank.qr_codes.text|charges.qr_code.text"],
+    };
+  } catch (err) {
+    console.error("[infinitepay/create-link] PagBank Pix EMV fallback failed", {
+      message: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
+}
+
+function pixPayload(emv: string | null, fieldsUsed: string[]) {
+  if (!emv) {
+    return {
+      pixCopyPaste: null as string | null,
+      pix_emv: null as string | null,
+      brcode: null as string | null,
+      pix_code: null as string | null,
+      emv_fields_used: fieldsUsed,
+    };
+  }
+  return {
+    pixCopyPaste: emv,
+    pix_emv: emv,
+    brcode: emv,
+    pix_code: emv,
+    emv_fields_used: fieldsUsed,
+  };
+}
+
 export async function POST(req: Request) {
   try {
     let body: Body = {};
@@ -91,6 +161,7 @@ export async function POST(req: Request) {
 
     if (infinitepaySimulateLocal(handle)) {
       const url = `${appUrl}/arquetipos?payment_return=1&order_nsu=${encodeURIComponent(order_nsu)}&transaction_nsu=SIM_${Date.now()}&slug=sim-local&capture_method=pix&simulated=1`;
+      // Never forge Pix EMV in simulate mode — banks reject fake payloads.
       await putInfinitePayOrderAsync({
         order_nsu,
         tier,
@@ -108,6 +179,7 @@ export async function POST(req: Request) {
         amountLabel: meta.amountLabel,
         amountCentavos: meta.priceCentavos,
         tier,
+        ...pixPayload(null, []),
       });
     }
 
@@ -145,6 +217,10 @@ export async function POST(req: Request) {
         url: webhookUrl,
         events: ["paid", "settled"],
       };
+      payload.options = {
+        single_payment: true,
+        payment_methods_enabled: ["credit_card", "pix"],
+      };
     }
 
     const res = await fetch("https://api.checkout.infinitepay.io/links", {
@@ -175,6 +251,38 @@ export async function POST(req: Request) {
       );
     }
 
+    // Official Checkout Integrado docs only guarantee `url`. Still scan the
+    // response + invoice public APIs for brcode/emv/pix.code before falling back.
+    const resolved = await resolveInfinitePayPixEmv(data, url);
+    let emv = resolved.emv;
+    let fieldsUsed = [...resolved.fieldsUsed];
+    let pagbankOrderId: string | undefined;
+
+    if (!emv) {
+      const fallback = await tryPagbankEmvFallback({
+        order_nsu,
+        tier: tier as InfinitePayTier,
+        amountCentavos: meta.priceCentavos,
+        amountLabel: meta.amountLabel,
+        description: meta.description,
+      });
+      if (fallback) {
+        emv = fallback.emv;
+        fieldsUsed = fallback.fieldsUsed;
+        pagbankOrderId = fallback.pagbankOrderId;
+      }
+    }
+
+    // Never treat checkout URL as Pix EMV.
+    if (emv && /^https?:\/\//i.test(emv)) {
+      emv = null;
+      fieldsUsed = [];
+    }
+    if (emv && !isValidPixEmv(emv)) {
+      emv = null;
+      fieldsUsed = [];
+    }
+
     await putInfinitePayOrderAsync({
       order_nsu,
       tier,
@@ -182,6 +290,9 @@ export async function POST(req: Request) {
       amountCentavos: meta.priceCentavos,
       status: "created",
       url,
+      pixCopyPaste: emv ?? undefined,
+      emvFieldsUsed: fieldsUsed,
+      pagbankOrderId,
       createdAt: Date.now(),
     });
 
@@ -191,6 +302,8 @@ export async function POST(req: Request) {
       amountLabel: meta.amountLabel,
       amountCentavos: meta.priceCentavos,
       tier,
+      pagbankOrderId: pagbankOrderId ?? null,
+      ...pixPayload(emv, fieldsUsed),
     });
   } catch (err) {
     return NextResponse.json(

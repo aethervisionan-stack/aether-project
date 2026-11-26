@@ -15,8 +15,9 @@ import {
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { NarrativeResult } from "@/src/data/archetypes";
+import { isValidPixEmv, pickClientPixEmv } from "@/lib/infinitepay/pixEmv";
 import { buildMentorProfile } from "@/lib/mentor/profile";
+import type { NarrativeResult } from "@/src/data/archetypes";
 import {
   applyMentorRestore,
   encodeMentorRestoreBundle,
@@ -463,8 +464,10 @@ function MentorPassModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
+  const [pixCopyPaste, setPixCopyPaste] = useState<string | null>(null);
   const [orderNsu, setOrderNsu] = useState<string | null>(null);
   const [pollTimedOut, setPollTimedOut] = useState(false);
+  const [copied, setCopied] = useState(false);
   const pollAbortRef = useRef(false);
   const onUnlockedRef = useRef(onUnlocked);
   onUnlockedRef.current = onUnlocked;
@@ -559,12 +562,28 @@ function MentorPassModal({
             "Não foi possível abrir o checkout",
         );
       }
+      const pixRaw = pickClientPixEmv(data);
+      const emv =
+        pixRaw && isValidPixEmv(pixRaw) && pixRaw !== url.trim()
+          ? pixRaw.trim()
+          : null;
       setCheckoutUrl(url.trim());
+      setPixCopyPaste(emv);
       setOrderNsu(nsu);
       setLoading(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao iniciar pagamento");
       setLoading(false);
+    }
+  }
+
+  async function copyPixCode(emv: string) {
+    try {
+      await navigator.clipboard.writeText(emv);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
     }
   }
 
@@ -599,23 +618,50 @@ function MentorPassModal({
 
           {checkoutUrl ? (
             <>
-              <div className="mx-auto mt-5 flex w-fit items-center justify-center rounded-sm bg-white p-3">
-                <QRCodeSVG
-                  value={checkoutUrl}
-                  size={160}
-                  level="M"
-                  includeMargin
-                />
-              </div>
-              <a
-                href={checkoutUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="cart-cta mt-4 inline-flex w-full items-center justify-center gap-2 rounded-sm px-5 py-3 text-sm font-semibold"
-              >
-                <ExternalLink size={16} />
-                Abrir checkout InfinitePay
-              </a>
+              {pixCopyPaste ? (
+                <>
+                  <div className="mx-auto mt-5 flex w-fit items-center justify-center rounded-sm bg-white p-3">
+                    <QRCodeSVG
+                      value={pixCopyPaste}
+                      size={160}
+                      level="M"
+                      includeMargin
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void copyPixCode(pixCopyPaste)}
+                    className="cart-cta mt-4 inline-flex w-full items-center justify-center gap-2 rounded-sm px-5 py-3 text-sm font-semibold"
+                  >
+                    <Copy size={16} />
+                    {copied ? "Código Pix copiado" : "Copiar código Pix"}
+                  </button>
+                  <a
+                    href={checkoutUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-sm border border-[color:var(--cart-border-soft)] px-5 py-3 text-sm text-[color:var(--cart-muted)] hover:border-[color:var(--cart-copper)]"
+                  >
+                    <ExternalLink size={16} />
+                    Abrir checkout InfinitePay
+                  </a>
+                </>
+              ) : (
+                <>
+                  <p className="mt-4 text-center text-xs leading-relaxed text-[color:var(--cart-muted)]">
+                    O QR Pix oficial abre no checkout da InfinitePay.
+                  </p>
+                  <a
+                    href={checkoutUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="cart-cta mt-4 inline-flex w-full items-center justify-center gap-2 rounded-sm px-5 py-3 text-sm font-semibold"
+                  >
+                    <ExternalLink size={16} />
+                    Abrir checkout InfinitePay
+                  </a>
+                </>
+              )}
               <div className="mt-3 flex items-center justify-center gap-2 text-sm text-[color:var(--cart-muted)]">
                 {!pollTimedOut ? (
                   <>

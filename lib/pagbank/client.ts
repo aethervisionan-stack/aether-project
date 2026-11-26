@@ -1,3 +1,4 @@
+import { isValidPixEmv } from "@/lib/infinitepay/pixEmv";
 import {
   PAGBANK_UNLOCK_AMOUNT_CENTAVOS,
   pagbankApiBase,
@@ -74,7 +75,9 @@ function extractPixFromOrder(body: Json): {
         png = pickString(link.href);
       }
     }
-    if (text) return { pixCopyPaste: text, qrCodeImageUrl: png };
+    if (text && isValidPixEmv(text)) {
+      return { pixCopyPaste: text, qrCodeImageUrl: png };
+    }
   }
 
   for (const raw of asArray(body.qr_codes)) {
@@ -89,7 +92,9 @@ function extractPixFromOrder(body: Json): {
         png = pickString(link.href);
       }
     }
-    if (text) return { pixCopyPaste: text, qrCodeImageUrl: png };
+    if (text && isValidPixEmv(text)) {
+      return { pixCopyPaste: text, qrCodeImageUrl: png };
+    }
   }
 
   throw new Error("PagBank order missing PIX QR payload");
@@ -107,8 +112,32 @@ export async function createPagbankPixOrder(
   product: PagbankProduct = "basic_3",
 ): Promise<PagbankCreateResult> {
   const meta = pagbankProductMeta(product);
-  const amount = meta.amountCentavos;
-  const reference = `arq-${product}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  return createPagbankPixOrderCustom({
+    amountCentavos: meta.amountCentavos,
+    amountLabel: meta.amountLabel,
+    itemReference: meta.itemReference,
+    itemName: meta.itemName,
+    chargeDescription: meta.chargeDescription,
+    product,
+  });
+}
+
+/** Create a Pix order with an explicit amount (e.g. InfinitePay tier prices). */
+export async function createPagbankPixOrderCustom(input: {
+  amountCentavos: number;
+  amountLabel: string;
+  itemReference: string;
+  itemName: string;
+  chargeDescription: string;
+  product?: PagbankProduct;
+  referenceId?: string;
+}): Promise<PagbankCreateResult> {
+  const amount = Math.round(input.amountCentavos);
+  if (!(amount > 0)) throw new Error("PagBank amount must be > 0");
+  const product = input.product ?? "basic_3";
+  const reference =
+    input.referenceId?.slice(0, 64) ||
+    `arq-${product}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const taxId = generateValidCPF();
 
   const payload = {
@@ -128,16 +157,16 @@ export async function createPagbankPixOrder(
     },
     items: [
       {
-        reference_id: meta.itemReference,
-        name: meta.itemName,
+        reference_id: input.itemReference.slice(0, 64),
+        name: input.itemName.slice(0, 100),
         quantity: 1,
         unit_amount: amount,
       },
     ],
     charges: [
       {
-        reference_id: `charge-${reference}`,
-        description: meta.chargeDescription,
+        reference_id: `charge-${reference}`.slice(0, 64),
+        description: input.chargeDescription.slice(0, 64),
         amount: { value: amount, currency: "BRL" },
         payment_method: {
           type: "PIX",
@@ -170,7 +199,7 @@ export async function createPagbankPixOrder(
     pixCopyPaste: pix.pixCopyPaste,
     qrCodeImageUrl: pix.qrCodeImageUrl,
     amountCentavos: amount,
-    amountLabel: meta.amountLabel,
+    amountLabel: input.amountLabel,
     product,
     status: "waiting",
   };

@@ -1,10 +1,19 @@
 "use client";
 
 import { motion, useReducedMotion } from "framer-motion";
-import { Check, ExternalLink, Loader2, Lock, Sparkles, X } from "lucide-react";
+import {
+  Check,
+  Copy,
+  ExternalLink,
+  Loader2,
+  Lock,
+  Sparkles,
+  X,
+} from "lucide-react";
 import Image from "next/image";
 import { QRCodeSVG } from "qrcode.react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { isValidPixEmv, pickClientPixEmv } from "@/lib/infinitepay/pixEmv";
 import type { NarrativeResult } from "@/src/data/archetypes";
 import { paywallTeaseFor } from "@/src/data/paywallTeases";
 import {
@@ -75,6 +84,8 @@ type CheckoutModal = {
   order_nsu: string;
   tier: InfinitePayTier;
   amountLabel: string;
+  /** Valid Pix EMV only — never a checkout URL. */
+  pixCopyPaste: string | null;
   simulated?: boolean;
 };
 
@@ -129,6 +140,7 @@ export function PaywallScreen({
   const [simNotice, setSimNotice] = useState<string | null>(null);
   const [modal, setModal] = useState<CheckoutModal | null>(null);
   const [pollTimedOut, setPollTimedOut] = useState(false);
+  const [copied, setCopied] = useState(false);
   const pollAbortRef = useRef(false);
   const onUnlockedRef = useRef(onUnlocked);
   onUnlockedRef.current = onUnlocked;
@@ -165,7 +177,18 @@ export function PaywallScreen({
     pollAbortRef.current = true;
     setModal(null);
     setPollTimedOut(false);
+    setCopied(false);
     setLoading(false);
+  }
+
+  async function copyPixCode(emv: string) {
+    try {
+      await navigator.clipboard.writeText(emv);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
   }
 
   useEffect(() => {
@@ -258,9 +281,15 @@ export function PaywallScreen({
           ? data.amountLabel
           : totalLabel || "—";
       const simulated = data.simulated === true;
+      const pixRaw = pickClientPixEmv(data);
+      // Never encode checkout URL as Pix QR — banks reject it.
+      const pixCopyPaste =
+        pixRaw && isValidPixEmv(pixRaw) && pixRaw !== url.trim()
+          ? pixRaw.trim()
+          : null;
       if (simulated) {
         setSimNotice(
-          "Modo simulado: abra o checkout para confirmar. Em produção o QR aponta para InfinitePay.",
+          "Modo simulado: abra o checkout para confirmar. Em produção o QR usa o código Pix (EMV).",
         );
       }
 
@@ -281,6 +310,7 @@ export function PaywallScreen({
         order_nsu,
         tier,
         amountLabel,
+        pixCopyPaste,
         simulated,
       });
       setLoading(false);
@@ -584,22 +614,56 @@ export function PaywallScreen({
               {modal.amountLabel}
             </h2>
             <p className="mt-1 text-center text-xs text-[color:var(--cart-muted)]">
-              Valor exato do checkout InfinitePay
+              {modal.pixCopyPaste
+                ? "QR Pix · copia e cola · valor exato"
+                : "Pix ou cartão no checkout InfinitePay"}
             </p>
 
-            <div className="mx-auto mt-5 flex w-fit items-center justify-center rounded-sm bg-white p-3">
-              <QRCodeSVG value={modal.url} size={180} level="M" includeMargin />
-            </div>
-
-            <a
-              href={modal.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="cart-cta mt-5 inline-flex w-full items-center justify-center gap-2 rounded-sm px-5 py-3 text-sm font-semibold"
-            >
-              <ExternalLink size={16} />
-              Abrir checkout InfinitePay
-            </a>
+            {modal.pixCopyPaste ? (
+              <>
+                <div className="mx-auto mt-5 flex w-fit items-center justify-center rounded-sm bg-white p-3">
+                  <QRCodeSVG
+                    value={modal.pixCopyPaste}
+                    size={180}
+                    level="M"
+                    includeMargin
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void copyPixCode(modal.pixCopyPaste!)}
+                  className="cart-cta mt-5 inline-flex w-full items-center justify-center gap-2 rounded-sm px-5 py-3 text-sm font-semibold"
+                >
+                  <Copy size={16} />
+                  {copied ? "Código Pix copiado" : "Copiar código Pix"}
+                </button>
+                <a
+                  href={modal.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-sm border border-[color:var(--cart-border-soft)] px-5 py-3 text-sm text-[color:var(--cart-muted)] hover:border-[color:var(--cart-copper)] hover:text-[color:var(--cart-copper)]"
+                >
+                  <ExternalLink size={16} />
+                  Abrir checkout InfinitePay
+                </a>
+              </>
+            ) : (
+              <>
+                <p className="mt-4 text-center text-xs leading-relaxed text-[color:var(--cart-muted)]">
+                  O QR Pix oficial abre no checkout da InfinitePay — não
+                  exibimos link de pagamento como QR Pix.
+                </p>
+                <a
+                  href={modal.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="cart-cta mt-5 inline-flex w-full items-center justify-center gap-2 rounded-sm px-5 py-3 text-sm font-semibold"
+                >
+                  <ExternalLink size={16} />
+                  Abrir checkout InfinitePay
+                </a>
+              </>
+            )}
 
             <div className="mt-4 flex items-center justify-center gap-2 text-sm text-[color:var(--cart-muted)]">
               {!pollTimedOut ? (
