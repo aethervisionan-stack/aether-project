@@ -44,11 +44,13 @@ async function nextFree(start) {
 }
 
 function spawnLogged(command, args, cwd, env, label) {
+  const useShell = process.platform === "win32";
   const child = spawn(command, args, {
     cwd,
     env,
     stdio: ["ignore", "pipe", "pipe"],
     windowsHide: true,
+    shell: useShell,
   });
   const prefix = `[${label}]`;
   child.stdout.on("data", (buf) => {
