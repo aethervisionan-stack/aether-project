@@ -677,16 +677,16 @@ function PsychometricTransparencyBlock({
 }) {
   const cards = [
     {
-      t: "O que é medido",
-      d: "Raciocínio abstrato-lógico, reconhecimento de padrões e dedução. Não mede conhecimento geral, vocabulário escolar nem desempenho acadêmico.",
+      t: "Base teórica",
+      d: "Inspirado em modelos clássicos de inteligência fluida e raciocínio abstrato-lógico — em especial Matrizes Progressivas de Raven e provas de raciocínio dedutivo/analítico. O foco é padrão, regra e inferência, não conhecimento escolar.",
     },
     {
-      t: "Como a pontuação funciona",
-      d: "A escala usa média 100 e desvio padrão 15 (como nas escalas Wechsler). O percentil diz, em linguagem simples, quantas pessoas na população de referência ficariam abaixo do seu resultado.",
+      t: "Arquitetura das questões",
+      d: "Itens estruturados com apoio de IA para definir regras lógicas objetivas, dificuldade progressiva e distratores coerentes. A alternativa correta exige raciocínio real; chutar sem método tende a falhar.",
     },
     {
-      t: "Aviso profissional",
-      d: "Esta é uma avaliação cognitiva digital. Não substitui avaliação neuropsicológica presencial nem laudo emitido por profissional habilitado.",
+      t: "Limite deste resultado",
+      d: "Este teste oferece uma estimativa digital de desempenho lógico. Não é avaliação neuropsicológica clínica presencial nem laudo emitido por profissional habilitado.",
     },
   ];
 
@@ -704,12 +704,16 @@ function PsychometricTransparencyBlock({
         >
           Transparência da avaliação
         </h2>
-        {!compact ? (
-          <p className="text-sm text-zinc-500">
-            Antes de começar, entenda o que este teste cobre — e o que ele não
-            cobre.
-          </p>
-        ) : null}
+        <p
+          className={
+            compact
+              ? "text-xs text-zinc-500 sm:text-sm"
+              : "text-sm text-zinc-500"
+          }
+        >
+          Base teórica, construção dos itens e limite do resultado — com
+          transparência.
+        </p>
       </div>
       <div
         className={`grid gap-3 ${compact ? "sm:grid-cols-3" : "sm:grid-cols-3"}`}
@@ -913,12 +917,9 @@ function ResultsDashboard({
             </li>
           ))}
         </ul>
-
-        <p className="border-t border-zinc-800 pt-3 text-xs leading-relaxed text-zinc-600">
-          Avaliação cognitiva digital — não substitui avaliação
-          neuropsicológica presencial nem laudo profissional.
-        </p>
       </section>
+
+      <PsychometricTransparencyBlock compact />
 
       <div className="flex flex-wrap justify-center gap-3">
         <button
