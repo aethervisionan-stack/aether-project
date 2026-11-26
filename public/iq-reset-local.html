@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <title>Reset local IQ · Aether</title>
+    <meta name="robots" content="noindex" />
+  </head>
+  <body style="font-family: system-ui; background: #0b0d12; color: #e8eaef; padding: 2rem">
+    <p>Limpando dados locais do Teste de QI…</p>
+    <script>
+      (function () {
+        var explicit = [
+          "professional-iq-test-v4-figures",
+          "professional-iq-test-v4-questions",
+          "professional-iq-test-v4-hybrid",
+          "professional-iq-test-v3",
+          "professional-iq-test-v3-figures",
+          "professional-iq-test-v3-questions",
+          "professional-iq-test-v3-hybrid",
+          "professional-iq-test-v2",
+          "professional-iq-test-v1",
+          "professional-iq-leaderboard-v1",
+          "professional-iq-leaderboard-current-v1",
+          "isUnlocked",
+          "archetypeQuizSession_v3",
+          "archetypeQuizSession_v2",
+        ];
+        var removed = [];
+        try {
+          var keys = [];
+          for (var i = 0; i < localStorage.length; i++) {
+            var k = localStorage.key(i);
+            if (k) keys.push(k);
+          }
+          keys.forEach(function (k) {
+            if (
+              k.indexOf("professional-iq") === 0 ||
+              k === "isUnlocked" ||
+              k.indexOf("archetypeQuizSession") === 0 ||
+              k.toLowerCase().indexOf("unlock") !== -1 ||
+              k.indexOf("iq-test") !== -1 ||
+              k.indexOf("iq_") !== -1
+            ) {
+              localStorage.removeItem(k);
+              removed.push(k);
+            }
+          });
+          explicit.forEach(function (k) {
+            if (localStorage.getItem(k) != null) {
+              localStorage.removeItem(k);
+              if (removed.indexOf(k) === -1) removed.push(k);
+            }
+          });
+          sessionStorage.removeItem("iq_infinitepay_pending");
+          var ss = [];
+          for (var j = 0; j < sessionStorage.length; j++) {
+            var sk = sessionStorage.key(j);
+            if (sk) ss.push(sk);
+          }
+          ss.forEach(function (k) {
+            if (
+              k.indexOf("iq") !== -1 ||
+              k.indexOf("unlock") !== -1 ||
+              k.indexOf("infinitepay") !== -1
+            ) {
+              sessionStorage.removeItem(k);
+            }
+          });
+        } catch (e) {
+          document.body.innerHTML =
+            "<p>Falha ao limpar: " + String(e) + "</p>";
+          return;
+        }
+        document.body.innerHTML =
+          "<p>OK — removidas " +
+          removed.length +
+          " chaves.</p><p>Redirecionando para landing limpa…</p>";
+        setTimeout(function () {
+          location.replace("/teste-qi?reset=1");
+        }, 400);
+      })();
+    </script>
+  </body>
+</html>
