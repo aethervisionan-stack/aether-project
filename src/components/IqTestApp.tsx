@@ -16,6 +16,7 @@ import {
   percentilePlainLanguage,
   sessionConsistencyLabel,
 } from "@/src/lib/iqCalculator";
+import { competenceHelp } from "@/src/lib/skillHelp";
 import {
   buildLeaderboardEntry,
   durationSecondsFromSession,
@@ -48,6 +49,7 @@ import {
   ChallengeInviteBanner,
   ChallengeSharePanel,
 } from "@/src/components/ChallengeSharePanel";
+import { SkillHelpTip } from "@/src/components/SkillHelpTip";
 import {
   LeaderboardPanel,
   UserRankBanner,
@@ -1085,9 +1087,17 @@ function ResultsDashboard({
                 key={key}
                 className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4"
               >
-                <div className="mb-2 flex items-center justify-between text-sm">
-                  <span className="text-zinc-300">{competenceLabel(key)}</span>
-                  <span className="tabular-nums text-zinc-400">{value}%</span>
+                <div className="mb-2 flex items-center justify-between gap-2 text-sm">
+                  <span className="inline-flex min-w-0 items-center gap-1.5 text-zinc-300">
+                    <span className="truncate">{competenceLabel(key)}</span>
+                    <SkillHelpTip
+                      label={competenceLabel(key)}
+                      help={competenceHelp(key)}
+                    />
+                  </span>
+                  <span className="shrink-0 tabular-nums text-zinc-400">
+                    {value}%
+                  </span>
                 </div>
                 <div className="h-1.5 overflow-hidden rounded-full bg-zinc-800">
                   <motion.div
