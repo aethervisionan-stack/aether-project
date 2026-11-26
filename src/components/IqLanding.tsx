@@ -11,14 +11,16 @@ import {
 import { ChallengeInviteBanner } from "@/src/components/ChallengeSharePanel";
 import { LeaderboardPanel } from "@/src/components/LeaderboardPanel";
 import { AvatarPicker } from "@/src/components/ParticipantAvatar";
+import { SkillHelpTip } from "@/src/components/SkillHelpTip";
 import type { ChallengeInvite } from "@/src/lib/challengeInvite";
+import { ESCALA_HELP } from "@/src/lib/skillHelp";
 
 const RIGOR_CHIPS = [
-  "30 itens",
-  "5 bandas",
-  "μ 100 · σ 15",
-  "IRT ponderado",
-  "localStorage isolado",
+  { label: "30 itens" },
+  { label: "5 bandas" },
+  { label: "Escala 100/15", help: true },
+  { label: "IRT ponderado" },
+  { label: "localStorage isolado" },
 ] as const;
 
 const TRANSPARENCY = [
@@ -163,25 +165,33 @@ export function IqLanding({
           <ul className="flex flex-wrap gap-2">
             {RIGOR_CHIPS.map((chip) => (
               <li
-                key={chip}
-                className="rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1 text-[11px] font-medium tabular-nums tracking-tight text-zinc-300"
+                key={chip.label}
+                className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1 text-[11px] font-medium tabular-nums tracking-tight text-zinc-300"
               >
-                {chip}
+                {chip.label}
+                {"help" in chip && chip.help ? (
+                  <SkillHelpTip label={chip.label} help={ESCALA_HELP} />
+                ) : null}
               </li>
             ))}
           </ul>
           <dl className="grid max-w-md grid-cols-3 gap-3 pt-2">
-            {[
-              ["30", "questões"],
-              ["±15", "escala σ"],
-              ["3", "modos"],
-            ].map(([n, l]) => (
+            {(
+              [
+                { n: "30", l: "questões" },
+                { n: "±15", l: "escala σ", help: true },
+                { n: "3", l: "modos" },
+              ] as const
+            ).map(({ n, l, ...rest }) => (
               <div
                 key={l}
                 className="rounded-xl border border-white/[0.06] bg-[#0C0E16]/60 px-3 py-3 backdrop-blur-sm"
               >
-                <dt className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">
+                <dt className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.16em] text-zinc-500">
                   {l}
+                  {"help" in rest && rest.help ? (
+                    <SkillHelpTip label="Escala 100/15" help={ESCALA_HELP} />
+                  ) : null}
                 </dt>
                 <dd className="mt-1 font-iq-display text-xl tabular-nums tracking-tight text-zinc-100">
                   {n}
@@ -346,6 +356,10 @@ export function IqLanding({
             Base teórica, construção dos itens e limite do resultado — com
             transparência.
           </p>
+          <p className="inline-flex items-center gap-1.5 text-xs font-medium text-zinc-400">
+            Escala 100/15
+            <SkillHelpTip label="Escala 100/15" help={ESCALA_HELP} />
+          </p>
         </div>
         <div className="grid gap-3 md:grid-cols-3">
           {TRANSPARENCY.map((c, i) => (
@@ -409,6 +423,10 @@ export function PsychometricTransparencyBlock({
         >
           Base teórica, construção dos itens e limite do resultado — com
           transparência.
+        </p>
+        <p className="inline-flex items-center gap-1.5 pt-1 text-xs font-medium text-zinc-400">
+          Escala 100/15
+          <SkillHelpTip label="Escala 100/15" help={ESCALA_HELP} />
         </p>
       </div>
       <div className="grid gap-3 sm:grid-cols-3">

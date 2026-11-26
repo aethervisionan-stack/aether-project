@@ -1,5 +1,12 @@
 import type { CompetenceScores } from "@/src/types/quiz";
 
+/**
+ * Short PT-BR gloss for the standardized IQ scale (mean 100, SD 15).
+ * Shown next to Escala / μ 100 · σ 15 chips via SkillHelpTip.
+ */
+export const ESCALA_HELP =
+  "Escala padronizada de QI: média 100 e desvio padrão 15. O percentil indica a % de pessoas com pontuação igual ou inferior à sua.";
+
 /** Short PT-BR glosses for each sub-skill shown on results. */
 export const COMPETENCE_HELP: Record<keyof CompetenceScores, string> = {
   spatial:

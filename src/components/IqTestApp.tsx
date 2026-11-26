@@ -16,7 +16,7 @@ import {
   percentilePlainLanguage,
   sessionConsistencyLabel,
 } from "@/src/lib/iqCalculator";
-import { competenceHelp } from "@/src/lib/skillHelp";
+import { competenceHelp, ESCALA_HELP } from "@/src/lib/skillHelp";
 import {
   buildLeaderboardEntry,
   durationSecondsFromSession,
@@ -736,9 +736,14 @@ function OnboardingTransition({
         <p className="mx-auto max-w-xl text-base text-zinc-400 sm:text-lg">
           {MODE_META[mode].blurb}{" "}
           <span className="tabular-nums text-zinc-300">30</span> itens ·{" "}
-          <span className="tabular-nums text-zinc-300">5</span> níveis · escala
-          com média <span className="tabular-nums text-zinc-300">100</span> e
-          desvio padrão <span className="tabular-nums text-zinc-300">15</span>.
+          <span className="tabular-nums text-zinc-300">5</span> níveis ·{" "}
+          <span className="inline-flex items-center gap-1.5 align-middle">
+            Escala 100/15
+            <SkillHelpTip label="Escala 100/15" help={ESCALA_HELP} />
+          </span>
+          {" "}
+          (média <span className="tabular-nums text-zinc-300">100</span>,
+          desvio <span className="tabular-nums text-zinc-300">15</span>).
         </p>
       </header>
 
@@ -983,6 +988,10 @@ function ResultsDashboard({
             (± {result.marginOfError} pts)
           </span>
         </motion.h1>
+        <p className="inline-flex items-center justify-center gap-1.5 text-xs font-medium text-zinc-500">
+          Escala 100/15
+          <SkillHelpTip label="Escala 100/15" help={ESCALA_HELP} />
+        </p>
         <p className="text-emerald-400/90">{result.band}</p>
         <p className="mx-auto max-w-lg text-sm text-zinc-500">
           Intervalo aproximado {result.iqLow}–{result.iqHigh}. Acertos
