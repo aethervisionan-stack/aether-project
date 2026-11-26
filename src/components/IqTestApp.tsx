@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   createSessionSeed,
@@ -84,10 +84,18 @@ import {
 } from "@/src/components/ParticipantAvatar";
 import { MatrixRenderer, OptionGrid } from "@/src/components/MatrixRenderer";
 import { ShareResultCard } from "@/src/components/ShareResultCard";
+import { IqUnlockCard } from "@/src/components/IqUnlockCard";
 import {
   parseChallengeInvite,
   type ChallengeInvite,
 } from "@/src/lib/challengeInvite";
+import {
+  cleanIqPaymentReturnUrl,
+  createIqSessionId,
+  fetchIqUnlockStatus,
+  readIqPaymentReturnParams,
+  verifyIqPayment,
+} from "@/src/lib/iqUnlockClient";
 
 function formatTime(ms: number): string {
   const s = Math.max(0, Math.ceil(ms / 1000));
@@ -123,6 +131,17 @@ export function IqTestApp() {
   const [challengeInvite, setChallengeInvite] =
     useState<ChallengeInvite | null>(null);
   const [finishWarning, setFinishWarning] = useState<string | null>(null);
+  const [serverUnlocked, setServerUnlocked] = useState(false);
+  const [unlockAmountLabel, setUnlockAmountLabel] = useState("R$ 1,00");
+  const [unlockChecking, setUnlockChecking] = useState(false);
+  const [unlockVerifying, setUnlockVerifying] = useState(false);
+  const [unlockVerifyError, setUnlockVerifyError] = useState<string | null>(
+    null,
+  );
+  const unlockVerifyStartedRef = useRef(false);
+  const pendingReturnRef = useRef<ReturnType<
+    typeof readIqPaymentReturnParams
+  > | null>(null);
 
   const mode: AssessmentMode | null =
     state.phase === "modeSelect" ? null : state.mode;
@@ -146,12 +165,81 @@ export function IqTestApp() {
     setHydrated(true);
     if (typeof window === "undefined") return;
     setChallengeInvite(parseChallengeInvite(window.location.search));
+    pendingReturnRef.current = readIqPaymentReturnParams(
+      window.location.search,
+    );
   }, []);
 
   useEffect(() => {
     if (!hydrated) return;
     saveQuizState(state);
   }, [state, hydrated]);
+
+  // Mint sessionId for legacy finished sessions that predate the paywall.
+  useEffect(() => {
+    if (!hydrated) return;
+    if (state.phase !== "results" && state.phase !== "review") return;
+    if (state.sessionId) return;
+    setState((prev) =>
+      prev.sessionId
+        ? prev
+        : {
+            ...prev,
+            sessionId: createIqSessionId(),
+            resultsUnlocked: false,
+          },
+    );
+  }, [hydrated, state.phase, state.sessionId]);
+
+  // Reconcile unlock with server — localStorage flag alone never unlocks.
+  useEffect(() => {
+    if (!hydrated) return;
+    if (state.phase !== "results" && state.phase !== "review") return;
+    const sessionId = state.sessionId;
+    if (!sessionId) {
+      setServerUnlocked(false);
+      return;
+    }
+
+    const returnParams = pendingReturnRef.current;
+    if (returnParams && !unlockVerifyStartedRef.current) {
+      unlockVerifyStartedRef.current = true;
+      void runUnlockVerify(returnParams);
+      return;
+    }
+
+    let cancelled = false;
+    setUnlockChecking(true);
+    void (async () => {
+      try {
+        const status = await fetchIqUnlockStatus(sessionId);
+        if (cancelled) return;
+        setUnlockAmountLabel(status.amountLabel);
+        if (status.unlocked) {
+          applyServerUnlock(status.order_nsu);
+        } else {
+          setServerUnlocked(false);
+          // Drop stale client-only unlock claims.
+          if (state.resultsUnlocked) {
+            setState((prev) => ({ ...prev, resultsUnlocked: false }));
+          }
+        }
+      } catch {
+        if (!cancelled) {
+          setServerUnlocked(false);
+          setUnlockVerifyError(
+            "Não foi possível verificar o desbloqueio no servidor. Tente de novo — sua sessão permanece salva.",
+          );
+        }
+      } finally {
+        if (!cancelled) setUnlockChecking(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: gate on phase/sessionId
+  }, [hydrated, state.phase, state.sessionId]);
 
   const finishTest = useCallback(
     (
@@ -184,22 +272,8 @@ export function IqTestApp() {
       const finishedAt = Date.now();
       const displayName = normalizeParticipantName(prev.participantName ?? "");
       const avatarUrl = prev.participantAvatarUrl || null;
-      let leaderboardEntryId = prev.leaderboardEntryId;
-      if (!leaderboardEntryId) {
-        const entry = buildLeaderboardEntry({
-          name: displayName,
-          result,
-          durationSeconds: durationSecondsFromSession(
-            prev.startedAt,
-            finishedAt,
-            timeSpent,
-          ),
-          createdAt: finishedAt,
-          avatarUrl,
-        });
-        submitLeaderboardEntry(entry);
-        leaderboardEntryId = entry.id;
-      }
+      const sessionId = prev.sessionId || createIqSessionId();
+      // Leaderboard / Hall of Fame only after server unlock confirm.
       return {
         ...prev,
         participantName: displayName,
@@ -209,10 +283,103 @@ export function IqTestApp() {
         questionStartedAt: null,
         finishedAt,
         result,
-        leaderboardEntryId,
+        sessionId,
+        resultsUnlocked: false,
+        leaderboardEntryId: prev.leaderboardEntryId,
       };
     },
     [],
+  );
+
+  const applyServerUnlock = useCallback(
+    (orderNsu?: string | null) => {
+      setServerUnlocked(true);
+      setUnlockVerifyError(null);
+      setUnlockVerifying(false);
+      setState((prev) => {
+        if (!prev.result) {
+          return {
+            ...prev,
+            resultsUnlocked: true,
+            unlockOrderNsu: orderNsu ?? prev.unlockOrderNsu,
+          };
+        }
+        let leaderboardEntryId = prev.leaderboardEntryId;
+        if (!leaderboardEntryId) {
+          const finishedAt = prev.finishedAt ?? Date.now();
+          const entry = buildLeaderboardEntry({
+            name: normalizeParticipantName(prev.participantName ?? ""),
+            result: prev.result,
+            durationSeconds: durationSecondsFromSession(
+              prev.startedAt,
+              finishedAt,
+              prev.timeSpentMs,
+            ),
+            createdAt: finishedAt,
+            avatarUrl: prev.participantAvatarUrl || null,
+          });
+          submitLeaderboardEntry(entry);
+          leaderboardEntryId = entry.id;
+        }
+        return {
+          ...prev,
+          resultsUnlocked: true,
+          unlockOrderNsu: orderNsu ?? prev.unlockOrderNsu,
+          leaderboardEntryId,
+        };
+      });
+      cleanIqPaymentReturnUrl();
+    },
+    [],
+  );
+
+  const runUnlockVerify = useCallback(
+    async (params: NonNullable<ReturnType<typeof readIqPaymentReturnParams>>) => {
+      const sessionId =
+        params.session_id ||
+        state.sessionId ||
+        (() => {
+          try {
+            const raw = window.sessionStorage.getItem("iq_infinitepay_pending");
+            if (!raw) return null;
+            const parsed = JSON.parse(raw) as { sessionId?: string };
+            return parsed.sessionId ?? null;
+          } catch {
+            return null;
+          }
+        })();
+      if (!sessionId) {
+        setUnlockVerifyError(
+          "Sessão não encontrada para confirmar o pagamento. Abra o checkout de novo — o teste permanece salvo.",
+        );
+        setUnlockVerifying(true);
+        return;
+      }
+      setUnlockVerifying(true);
+      setUnlockVerifyError(null);
+      setState((prev) =>
+        prev.sessionId
+          ? prev
+          : { ...prev, sessionId, unlockOrderNsu: params.order_nsu },
+      );
+      const result = await verifyIqPayment({
+        sessionId,
+        order_nsu: params.order_nsu,
+        transaction_nsu: params.transaction_nsu,
+        slug: params.slug,
+        simulated: params.simulated,
+      });
+      if (result.unlocked) {
+        applyServerUnlock(params.order_nsu);
+        return;
+      }
+      setUnlockVerifyError(
+        result.error ||
+          "Pagamento ainda não confirmado. Tente de novo — sua sessão permanece salva.",
+      );
+      setUnlockVerifying(true);
+    },
+    [applyServerUnlock, state.sessionId],
   );
 
   useEffect(() => {
@@ -708,7 +875,82 @@ export function IqTestApp() {
         )}
 
         {(state.phase === "results" || state.phase === "review") &&
-          state.result && (
+          state.result &&
+          state.sessionId &&
+          !serverUnlocked && (
+            <motion.div
+              key="iq-unlock-gate"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="space-y-6 pt-6"
+            >
+              <header className="space-y-2 text-center">
+                <p className="text-[11px] font-medium uppercase tracking-[0.28em] text-zinc-500">
+                  Avaliação concluída · {MODE_META[state.mode].short}
+                </p>
+                <h1 className="font-iq-display text-3xl text-zinc-50 sm:text-4xl">
+                  Resultados prontos
+                </h1>
+                <p className="mx-auto max-w-md text-sm text-zinc-500">
+                  {unlockChecking
+                    ? "Verificando liberação no servidor…"
+                    : "Tudo fica bloqueado até a confirmação InfinitePay desta sessão."}
+                </p>
+              </header>
+              <IqUnlockCard
+                sessionId={state.sessionId}
+                amountLabel={unlockAmountLabel}
+                verifying={unlockVerifying}
+                verifyError={unlockVerifyError}
+                onRetryVerify={() => {
+                  const params =
+                    pendingReturnRef.current ||
+                    readIqPaymentReturnParams(window.location.search);
+                  if (params) {
+                    unlockVerifyStartedRef.current = false;
+                    void runUnlockVerify(params);
+                    return;
+                  }
+                  // Re-check server status without losing session
+                  if (state.sessionId) {
+                    setUnlockVerifying(true);
+                    setUnlockVerifyError(null);
+                    void fetchIqUnlockStatus(state.sessionId).then((status) => {
+                      setUnlockAmountLabel(status.amountLabel);
+                      if (status.unlocked) {
+                        applyServerUnlock(status.order_nsu);
+                      } else {
+                        setUnlockVerifying(false);
+                        setUnlockVerifyError(
+                          "Ainda não há confirmação de pagamento para esta sessão. Conclua o checkout ou tente de novo.",
+                        );
+                      }
+                    });
+                  }
+                }}
+              />
+              <div className="flex flex-wrap justify-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => resetAll(true)}
+                  className="text-xs text-zinc-500 underline-offset-2 hover:text-zinc-300 hover:underline"
+                >
+                  Nova tentativa (mesmo nome)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => resetAll(false)}
+                  className="text-xs text-zinc-500 underline-offset-2 hover:text-zinc-300 hover:underline"
+                >
+                  Começar com outro nome
+                </button>
+              </div>
+            </motion.div>
+          )}
+
+        {(state.phase === "results" || state.phase === "review") &&
+          state.result &&
+          serverUnlocked && (
             <ResultsDashboard
               result={state.result}
               questions={questions}
@@ -722,6 +964,7 @@ export function IqTestApp() {
               participantAvatarUrl={state.participantAvatarUrl ?? null}
               leaderboardEntryId={state.leaderboardEntryId}
               leaderboardTick={leaderboardTick}
+              sessionId={state.sessionId}
               onOpenReview={() => {
                 setReviewIndex(0);
                 setState((p) => ({ ...p, phase: "review" }));
@@ -984,6 +1227,7 @@ function ResultsDashboard({
   participantAvatarUrl,
   leaderboardEntryId,
   leaderboardTick,
+  sessionId,
   onOpenReview,
   onBackFromReview,
   onResetSameName,
@@ -999,6 +1243,7 @@ function ResultsDashboard({
   participantAvatarUrl: string | null;
   leaderboardEntryId: string | null;
   leaderboardTick: number;
+  sessionId: string | null;
   onOpenReview: () => void;
   onBackFromReview: () => void;
   onResetSameName: () => void;
@@ -1360,6 +1605,7 @@ function ResultsDashboard({
         participantName={participantName}
         rank={userRank}
         rankTotal={allRanked.length}
+        sessionId={sessionId}
       />
 
       {result.activeCompetences.length > 0 ? (

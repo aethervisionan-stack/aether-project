@@ -35,6 +35,9 @@ function main() {
     const state = createInitialState(mode, items.length, "QA Tester", null);
     assert(state.answers.length === items.length, `${mode} state answers`);
     assert(state.participantName === "QA Tester", `${mode} name`);
+    assert(state.resultsUnlocked === false, `${mode} locked by default`);
+    assert(state.sessionId === null, `${mode} sessionId starts null`);
+    assert(state.unlockOrderNsu === null, `${mode} unlockOrderNsu null`);
 
     const entry = buildLeaderboardEntry({
       name: state.participantName,

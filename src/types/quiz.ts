@@ -361,6 +361,18 @@ export interface QuizPersistedState {
    * Decoupled from ranking storage — future DB can key forms by this.
    */
   sessionSeed: number | null;
+  /**
+   * Stable client session id (iq_…) bound to server unlock registry.
+   * Unlock is authoritative on the server — this id alone does not unlock.
+   */
+  sessionId: string | null;
+  /**
+   * Client cache after server confirm. Never grant UI access from this flag
+   * without a successful /api/payment/infinitepay/status|verify response.
+   */
+  resultsUnlocked: boolean;
+  /** Last InfinitePay order_nsu tied to this IQ unlock attempt */
+  unlockOrderNsu: string | null;
 }
 
 /** Persisted ranking mode (figures → geometric for public copy) */

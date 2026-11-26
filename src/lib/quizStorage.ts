@@ -58,6 +58,15 @@ function readLocal(mode: AssessmentMode): QuizPersistedState | null {
     ) {
       parsed.sessionSeed = null;
     }
+    if (typeof parsed.sessionId !== "string") {
+      parsed.sessionId = null;
+    }
+    if (typeof parsed.resultsUnlocked !== "boolean") {
+      parsed.resultsUnlocked = false;
+    }
+    if (typeof parsed.unlockOrderNsu !== "string") {
+      parsed.unlockOrderNsu = null;
+    }
     return parsed;
   } catch {
     return null;
@@ -146,6 +155,9 @@ export function createInitialState(
     participantAvatarUrl,
     leaderboardEntryId: null,
     sessionSeed,
+    sessionId: null,
+    resultsUnlocked: false,
+    unlockOrderNsu: null,
   };
 }
 
@@ -168,5 +180,8 @@ export function createModeSelectState(): QuizPersistedState {
     participantAvatarUrl: null,
     leaderboardEntryId: null,
     sessionSeed: null,
+    sessionId: null,
+    resultsUnlocked: false,
+    unlockOrderNsu: null,
   };
 }

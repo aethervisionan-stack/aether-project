@@ -15,6 +15,8 @@ type Props = {
   participantName: string;
   rank: number | null;
   rankTotal: number;
+  /** Server unlock session — required for Gemini; localStorage alone is not enough. */
+  sessionId?: string | null;
 };
 
 type UiMessage = ProfileChatMessage & { at: number; source?: string };
@@ -27,6 +29,7 @@ export function ProfileDoubtAssistant({
   participantName,
   rank,
   rankTotal,
+  sessionId = null,
 }: Props) {
   const ctx = useMemo<ProfileAssistantContext | null>(
     () =>
@@ -83,6 +86,7 @@ export function ProfileDoubtAssistant({
         body: JSON.stringify({
           messages: apiMessages,
           context: ctx,
+          sessionId,
         }),
       });
       const data = (await res.json().catch(() => ({}))) as {
@@ -91,6 +95,15 @@ export function ProfileDoubtAssistant({
         error?: string;
         code?: string;
       };
+
+      if (res.status === 402 || data.code === "LOCKED") {
+        setError(
+          data.error ||
+            "Resultados ainda bloqueados. Confirme o pagamento InfinitePay para usar o assistente.",
+        );
+        setSending(false);
+        return;
+      }
 
       if (res.ok && data.reply) {
         setMessages((prev) => [

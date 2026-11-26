@@ -6,6 +6,7 @@ import {
   type ProfileAssistantContext,
   type ProfileChatMessage,
 } from "@/src/lib/iqProfileAssistant";
+import { isIqSessionUnlocked } from "@/lib/iq-payment/sessionUnlock";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,6 +14,7 @@ export const dynamic = "force-dynamic";
 type Body = {
   messages?: ProfileChatMessage[];
   context?: ProfileAssistantContext;
+  sessionId?: unknown;
 };
 
 /** Keep enough turns for fluent follow-ups while staying grounded. */
@@ -216,6 +218,20 @@ async function callOpenAI(
 export async function POST(req: Request) {
   try {
     const body = (await req.json()) as Body;
+
+    const sessionId =
+      typeof body.sessionId === "string" ? body.sessionId.trim() : "";
+    if (!sessionId || !(await isIqSessionUnlocked(sessionId))) {
+      return NextResponse.json(
+        {
+          error:
+            "Sessão bloqueada. Confirme o pagamento InfinitePay (R$1) para usar o assistente Gemini com o IqResult.",
+          code: "LOCKED",
+        },
+        { status: 402 },
+      );
+    }
+
     if (!isContext(body.context)) {
       return NextResponse.json(
         {
