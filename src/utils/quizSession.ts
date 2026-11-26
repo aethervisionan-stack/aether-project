@@ -5,9 +5,11 @@ const LEGACY_SESSION_KEY = "archetypeQuizSession_v2";
 export const MENTOR_PASS_DAYS = 30;
 export const MENTOR_PASS_MS = MENTOR_PASS_DAYS * 24 * 60 * 60 * 1000;
 
-/** Paywall Pix plans (session v3). */
-export type PaywallPlan = "basic_3" | "combo_890";
-export type PaidPlan = PaywallPlan | "mentor_upgrade";
+/** InfinitePay offer tiers (session v3). Legacy PagBank ids still parse. */
+export type InfinitePayTier = "result" | "mentor_upgrade" | "combo";
+/** @deprecated use InfinitePayTier — kept for migration */
+export type PaywallPlan = InfinitePayTier | "basic_3" | "combo_890";
+export type PaidPlan = InfinitePayTier | "basic_3" | "combo_890";
 
 export type MentorProfileSnapshot = {
   dominantId: string;
@@ -40,11 +42,11 @@ export type QuizSessionPayload = {
   customAnswers: Record<string, string>;
   completed: boolean;
   updatedAt: number;
-  /** Diagnóstico completo liberado (Pix basic_3 ou combo_890) */
+  /** Diagnóstico completo liberado (tier result ou combo) */
   resultUnlocked?: boolean;
-  /** Mentor Passe ativo (combo_890 ou mentor_upgrade) */
+  /** Mentor Passe ativo (combo ou mentor_upgrade) */
   mentorUnlocked?: boolean;
-  /** Last paid plan id */
+  /** Last paid plan / InfinitePay tier id */
   paidPlan?: PaidPlan | null;
   /** Mentor Estratégico — Passe 30 dias */
   mentorUnlockedAt?: number | null;
@@ -54,6 +56,8 @@ export type QuizSessionPayload = {
   mentorHistory?: MentorChatMessage[];
   /** Opaque restore code for "Salvar / Reabrir meu acesso" */
   restoreCode?: string | null;
+  /** Last InfinitePay order_nsu stored after verify */
+  orderNsu?: string | null;
 };
 
 export type MentorRestoreBundle = {
@@ -84,9 +88,11 @@ function parsePayload(raw: string): QuizSessionPayload | null {
       mentorExpiresAt != null &&
       mentorExpiresAt > Date.now();
     const paidPlan =
+      parsed.paidPlan === "result" ||
+      parsed.paidPlan === "mentor_upgrade" ||
+      parsed.paidPlan === "combo" ||
       parsed.paidPlan === "basic_3" ||
-      parsed.paidPlan === "combo_890" ||
-      parsed.paidPlan === "mentor_upgrade"
+      parsed.paidPlan === "combo_890"
         ? parsed.paidPlan
         : null;
 
@@ -115,6 +121,7 @@ function parsePayload(raw: string): QuizSessionPayload | null {
         : [],
       restoreCode:
         typeof parsed.restoreCode === "string" ? parsed.restoreCode : null,
+      orderNsu: typeof parsed.orderNsu === "string" ? parsed.orderNsu : null,
     };
   } catch {
     return null;
@@ -136,6 +143,7 @@ function toStored(payload: QuizSessionPayload): QuizSessionPayload {
     mentorFreeUsed: Boolean(payload.mentorFreeUsed),
     mentorHistory: payload.mentorHistory ?? [],
     restoreCode: payload.restoreCode ?? null,
+    orderNsu: payload.orderNsu ?? null,
   };
 }
 
@@ -221,6 +229,7 @@ export function clearQuizAnswersKeepMentor(): void {
     mentorFreeUsed: current.mentorFreeUsed,
     mentorHistory: current.mentorHistory,
     restoreCode: current.restoreCode,
+    orderNsu: current.orderNsu,
   });
 }
 
@@ -238,8 +247,9 @@ export function isResultUnlocked(
   return Boolean(session?.resultUnlocked);
 }
 
-/** basic_3: diagnóstico only — mentorUnlocked false, 1 free mentor msg. */
-export function unlockBasicPlan(
+/** result (R$1): diagnóstico only — mentorUnlocked false, 1 free mentor msg. */
+export function unlockResultTier(
+  orderNsu?: string | null,
   now = Date.now(),
 ): QuizSessionPayload {
   const current = readQuizSession() ?? {
@@ -254,12 +264,11 @@ export function unlockBasicPlan(
     updatedAt: now,
     resultUnlocked: true,
     mentorUnlocked: false,
-    paidPlan: "basic_3",
-    // do not grant mentor pass timestamps
+    paidPlan: "result",
     mentorUnlockedAt: current.mentorUnlockedAt ?? null,
     mentorExpiresAt: current.mentorExpiresAt ?? null,
+    orderNsu: orderNsu ?? current.orderNsu ?? null,
   };
-  // If a previous pass was still active, keep it; otherwise ensure locked.
   if (!isMentorPassActive(next, now)) {
     next.mentorUnlocked = false;
     next.mentorUnlockedAt = null;
@@ -269,9 +278,15 @@ export function unlockBasicPlan(
   return next;
 }
 
-/** combo_890: diagnóstico + Mentor 30d + restore code. */
-export function unlockComboPlan(
+/** @deprecated use unlockResultTier */
+export function unlockBasicPlan(now = Date.now()): QuizSessionPayload {
+  return unlockResultTier(null, now);
+}
+
+/** combo (R$6): diagnóstico + Mentor 30d + restore code. */
+export function unlockComboTier(
   profile: MentorProfileSnapshot,
+  orderNsu?: string | null,
   now = Date.now(),
 ): QuizSessionPayload {
   const current = readQuizSession() ?? {
@@ -287,15 +302,40 @@ export function unlockComboPlan(
     updatedAt: now,
     resultUnlocked: true,
     mentorUnlocked: true,
-    paidPlan: "combo_890",
+    paidPlan: "combo",
     mentorUnlockedAt: now,
     mentorExpiresAt: now + MENTOR_PASS_MS,
     mentorProfile: profile,
     mentorFreeUsed: true,
     restoreCode: code,
+    orderNsu: orderNsu ?? current.orderNsu ?? null,
   };
   writeQuizSession(next);
   return next;
+}
+
+/** @deprecated use unlockComboTier */
+export function unlockComboPlan(
+  profile: MentorProfileSnapshot,
+  now = Date.now(),
+): QuizSessionPayload {
+  return unlockComboTier(profile, null, now);
+}
+
+/** Apply unlock by InfinitePay tier after verify. */
+export function unlockByTier(
+  tier: InfinitePayTier | string,
+  profile: MentorProfileSnapshot,
+  orderNsu?: string | null,
+  now = Date.now(),
+): QuizSessionPayload {
+  if (tier === "combo" || tier === "combo_890") {
+    return unlockComboTier(profile, orderNsu, now);
+  }
+  if (tier === "mentor_upgrade") {
+    return unlockMentorPass(profile, orderNsu, now);
+  }
+  return unlockResultTier(orderNsu, now);
 }
 
 export function generateRestoreCode(): string {
@@ -401,21 +441,23 @@ export function applyMentorRestore(
     updatedAt: Date.now(),
     resultUnlocked: true,
     mentorUnlocked: true,
-    paidPlan: current?.paidPlan ?? "combo_890",
+    paidPlan: current?.paidPlan ?? "combo",
     mentorUnlockedAt: bundle.mentorUnlockedAt,
     mentorExpiresAt: bundle.mentorExpiresAt,
     mentorProfile: bundle.mentorProfile,
     mentorFreeUsed: true,
     mentorHistory: current?.mentorHistory ?? [],
     restoreCode: bundle.restoreCode,
+    orderNsu: current?.orderNsu ?? null,
   };
   writeQuizSession(next);
   return { ok: true, session: next };
 }
 
-/** Upgrade after basic_3 (R$ 5,90) or legacy mentor unlock — 30d + restore. */
+/** Upgrade after result (R$5) or legacy mentor unlock — 30d + restore. */
 export function unlockMentorPass(
   profile: MentorProfileSnapshot,
+  orderNsu?: string | null,
   now = Date.now(),
 ): QuizSessionPayload {
   const current = readQuizSession() ?? {
@@ -437,6 +479,7 @@ export function unlockMentorPass(
     mentorProfile: profile,
     mentorFreeUsed: true,
     restoreCode: code,
+    orderNsu: orderNsu ?? current.orderNsu ?? null,
   };
   writeQuizSession(next);
   return next;

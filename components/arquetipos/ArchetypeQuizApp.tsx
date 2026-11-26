@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CUSTOM_OPTION_ID } from "@/lib/custom-answer-analyzer";
 import { buildNarrativeResult, QUESTIONS } from "@/src/data/scoring";
 import {
@@ -12,12 +12,12 @@ import { buildMentorProfile } from "@/lib/mentor/profile";
 import {
   applyMentorRestore,
   clearQuizAnswersKeepMentor,
+  isMentorPassActive,
   isResultUnlocked,
   readQuizSession,
-  unlockBasicPlan,
-  unlockComboPlan,
+  unlockByTier,
   writeQuizSession,
-  type PaywallPlan,
+  type InfinitePayTier,
 } from "@/src/utils/quizSession";
 import { playRevealChord, playStageChime } from "@/src/utils/soundEffects";
 import { LandingFooter } from "./LandingFooter";
@@ -36,6 +36,54 @@ type Stage = "welcome" | "quiz" | "processing" | "paywall" | "result";
 const PROCESSING_MS = 1200;
 const ADVANCE_MS = 300;
 
+type ReturnParams = {
+  order_nsu: string | null;
+  transaction_nsu: string | null;
+  slug: string | null;
+  simulated: boolean;
+};
+
+function readReturnParams(): ReturnParams | null {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const paymentReturn =
+      params.get("payment_return") === "1" ||
+      params.has("order_nsu") ||
+      params.has("transaction_nsu");
+    if (!paymentReturn) return null;
+    return {
+      order_nsu: params.get("order_nsu"),
+      transaction_nsu: params.get("transaction_nsu"),
+      slug: params.get("slug"),
+      simulated:
+        params.get("simulated") === "1" ||
+        Boolean(params.get("transaction_nsu")?.startsWith("SIM_")),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function cleanReturnUrl() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    [
+      "payment_return",
+      "order_nsu",
+      "transaction_nsu",
+      "slug",
+      "capture_method",
+      "receipt_url",
+      "simulated",
+    ].forEach((k) => params.delete(k));
+    const next = params.toString();
+    const url = `${window.location.pathname}${next ? `?${next}` : ""}${window.location.hash}`;
+    window.history.replaceState({}, "", url);
+  } catch {
+    // ignore
+  }
+}
+
 export function ArchetypeQuizApp() {
   const reduce = useReducedMotion();
   const [mounted, setMounted] = useState(false);
@@ -46,52 +94,10 @@ export function ArchetypeQuizApp() {
   const [customAnswers, setCustomAnswers] = useState<Record<string, string>>(
     {},
   );
-
-  useEffect(() => {
-    setMounted(true);
-
-    // ?restore=<token> — reabre Passe do Mentor neste aparelho
-    try {
-      const params = new URLSearchParams(window.location.search);
-      const restoreToken = params.get("restore");
-      if (restoreToken) {
-        applyMentorRestore(restoreToken);
-        params.delete("restore");
-        const next = params.toString();
-        const url = `${window.location.pathname}${next ? `?${next}` : ""}${window.location.hash}`;
-        window.history.replaceState({}, "", url);
-      }
-    } catch {
-      // ignore
-    }
-
-    const session = readQuizSession();
-    const isUnlocked =
-      isResultUnlocked(session) || readIsUnlocked();
-    if (isUnlocked && !session?.resultUnlocked) {
-      // migrate legacy isUnlocked → session v3
-      writeQuizSession({
-        ...(session ?? {
-          answers: {},
-          customAnswers: {},
-          completed: false,
-          updatedAt: Date.now(),
-        }),
-        resultUnlocked: true,
-        updatedAt: Date.now(),
-      });
-    }
-    setUnlocked(isUnlocked);
-    if (isUnlocked) writeIsUnlocked(true);
-
-    if (session?.answers && Object.keys(session.answers).length > 0) {
-      setAnswers(session.answers);
-      setCustomAnswers(session.customAnswers ?? {});
-      if (session.completed) {
-        setStage(isUnlocked ? "result" : "paywall");
-      }
-    }
-  }, []);
+  const [verifying, setVerifying] = useState(false);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
+  const returnParamsRef = useRef<ReturnParams | null>(null);
+  const verifyStartedRef = useRef(false);
 
   const result = useMemo(
     () => buildNarrativeResult(answers, customAnswers),
@@ -119,10 +125,138 @@ export function ArchetypeQuizApp() {
         mentorFreeUsed: prev?.mentorFreeUsed,
         mentorHistory: prev?.mentorHistory ?? [],
         restoreCode: prev?.restoreCode ?? null,
+        orderNsu: prev?.orderNsu ?? null,
       });
     },
     [],
   );
+
+  const applyUnlock = useCallback(
+    (tier: InfinitePayTier | string, orderNsu?: string | null) => {
+      persistAnswers(answers, customAnswers, true);
+      unlockByTier(tier, buildMentorProfile(result), orderNsu ?? null);
+      writeIsUnlocked(true);
+      setUnlocked(true);
+      setVerifying(false);
+      setVerifyError(null);
+      setStage("result");
+      cleanReturnUrl();
+      playRevealChord();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    },
+    [answers, customAnswers, persistAnswers, result],
+  );
+
+  const runVerify = useCallback(
+    async (params: ReturnParams) => {
+      setVerifying(true);
+      setVerifyError(null);
+      setStage("paywall");
+      try {
+        const res = await fetch("/api/infinitepay/verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            order_nsu: params.order_nsu,
+            transaction_nsu: params.transaction_nsu,
+            slug: params.slug,
+            simulated: params.simulated,
+          }),
+        });
+        const data = (await res.json()) as {
+          paid?: boolean;
+          tier?: string;
+          order_nsu?: string;
+          error?: string;
+        };
+        if (!res.ok || !data.paid || !data.tier) {
+          throw new Error(
+            data.error || "Pagamento ainda não confirmado. Tente de novo.",
+          );
+        }
+        applyUnlock(data.tier, data.order_nsu ?? params.order_nsu);
+      } catch (err) {
+        setVerifyError(
+          err instanceof Error ? err.message : "Falha ao verificar pagamento",
+        );
+        setVerifying(true);
+      }
+    },
+    [applyUnlock],
+  );
+
+  useEffect(() => {
+    setMounted(true);
+
+    // ?restore=<token> — reabre Passe do Mentor neste aparelho
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const restoreToken = params.get("restore");
+      if (restoreToken) {
+        applyMentorRestore(restoreToken);
+        params.delete("restore");
+        const next = params.toString();
+        const url = `${window.location.pathname}${next ? `?${next}` : ""}${window.location.hash}`;
+        window.history.replaceState({}, "", url);
+      }
+    } catch {
+      // ignore
+    }
+
+    // Expire mentor pass if mentorExpiresAt elapsed
+    try {
+      const sessionCheck = readQuizSession();
+      if (
+        sessionCheck?.mentorUnlocked &&
+        sessionCheck.mentorExpiresAt &&
+        !isMentorPassActive(sessionCheck)
+      ) {
+        writeQuizSession({
+          ...sessionCheck,
+          mentorUnlocked: false,
+          updatedAt: Date.now(),
+        });
+      }
+    } catch {
+      // ignore
+    }
+
+    const returnParams = readReturnParams();
+    returnParamsRef.current = returnParams;
+
+    const session = readQuizSession();
+    const isUnlocked =
+      isResultUnlocked(session) || readIsUnlocked();
+    if (isUnlocked && !session?.resultUnlocked) {
+      writeQuizSession({
+        ...(session ?? {
+          answers: {},
+          customAnswers: {},
+          completed: false,
+          updatedAt: Date.now(),
+        }),
+        resultUnlocked: true,
+        updatedAt: Date.now(),
+      });
+    }
+    setUnlocked(isUnlocked);
+    if (isUnlocked) writeIsUnlocked(true);
+
+    if (session?.answers && Object.keys(session.answers).length > 0) {
+      setAnswers(session.answers);
+      setCustomAnswers(session.customAnswers ?? {});
+      if (session.completed) {
+        setStage(isUnlocked && !returnParams ? "result" : "paywall");
+      }
+    }
+
+    if (returnParams && !verifyStartedRef.current) {
+      verifyStartedRef.current = true;
+      setStage("paywall");
+      void runVerify(returnParams);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const startQuiz = useCallback(() => {
     setIndex(0);
@@ -154,7 +288,6 @@ export function ArchetypeQuizApp() {
         finishQuiz();
       } else {
         const next = index + 1;
-        // Axis boundaries: 4, 8, 12
         if (next === 4 || next === 8 || next === 12) {
           playStageChime();
         }
@@ -201,18 +334,8 @@ export function ArchetypeQuizApp() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  function handleUnlocked(plan: PaywallPlan) {
-    // Persist answers first so unlock helpers merge onto current quiz data
-    persistAnswers(answers, customAnswers, true);
-    if (plan === "combo_890") {
-      unlockComboPlan(buildMentorProfile(result));
-    } else {
-      unlockBasicPlan();
-    }
-    writeIsUnlocked(true);
-    setUnlocked(true);
-    setStage("result");
-    window.scrollTo({ top: 0, behavior: "smooth" });
+  function handleUnlocked(tier: InfinitePayTier) {
+    applyUnlock(tier, null);
   }
 
   const fade = !mounted || reduce;
@@ -283,7 +406,22 @@ export function ArchetypeQuizApp() {
             transition={{ duration: 0.35 }}
             className="pt-14 sm:pt-16"
           >
-            <PaywallScreen result={result} onUnlocked={handleUnlocked} />
+            <PaywallScreen
+              result={result}
+              onUnlocked={handleUnlocked}
+              verifying={verifying}
+              verifyError={verifyError}
+              onRetryVerify={() => {
+                const p = returnParamsRef.current;
+                if (p) void runVerify(p);
+              }}
+              onBackFromVerify={() => {
+                setVerifying(false);
+                setVerifyError(null);
+                cleanReturnUrl();
+                verifyStartedRef.current = false;
+              }}
+            />
           </motion.div>
         )}
 

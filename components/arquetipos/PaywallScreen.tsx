@@ -1,218 +1,214 @@
 "use client";
 
 import { motion, useReducedMotion } from "framer-motion";
-import { Check, Copy, Loader2, Lock, Shield, Sparkles } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Check, Loader2, Lock, Sparkles } from "lucide-react";
+import { useMemo, useState } from "react";
 import { buildDiagnosis } from "@/src/data/diagnosis";
 import type { NarrativeResult } from "@/src/data/archetypes";
-import type { PaywallPlan } from "@/src/utils/quizSession";
-import { playRevealChord } from "@/src/utils/soundEffects";
-import { EmberCard } from "./EmberCard";
+import {
+  isResultUnlocked,
+  readQuizSession,
+  type InfinitePayTier,
+} from "@/src/utils/quizSession";
 import { SanctuaryBackdrop } from "./CinematicChrome";
 
 type Props = {
   result: NarrativeResult;
-  onUnlocked: (plan: PaywallPlan) => void;
-};
-
-type CreateResponse = {
-  orderId: string;
-  amountLabel?: string;
-  pixCopyPaste: string;
-  qrCodeImageUrl: string | null;
-  simulateAllowed?: boolean;
-  mock?: boolean;
-  error?: string;
-};
-
-type StatusResponse = {
-  status?: "waiting" | "paid" | "declined" | "canceled";
-  error?: string;
+  onUnlocked: (tier: InfinitePayTier) => void;
+  /** When verifying return from InfinitePay */
+  verifying?: boolean;
+  verifyError?: string | null;
+  onRetryVerify?: () => void;
+  onBackFromVerify?: () => void;
 };
 
 const EASE = [0.22, 1, 0.36, 1] as const;
-const POLL_MS = 3000;
 
-const PLANS: {
-  id: PaywallPlan;
+type BoxId = "result" | "mentor_upgrade";
+
+const BOXES: {
+  id: BoxId;
   title: string;
   priceLabel: string;
-  struckPrice?: string;
+  priceCentavos: number;
   badge?: string;
-  bullets: string[];
   accent?: boolean;
+  persuasive: string;
+  bullets: string[];
 }[] = [
   {
-    id: "basic_3",
-    title: "Diagnóstico",
-    priceLabel: "R$ 3,00",
+    id: "result",
+    title: "Diagnóstico Completo",
+    priceLabel: "R$ 1,00",
+    priceCentavos: 100,
+    persuasive:
+      "Você já respondeu. Agora veja o espelho completo: luz, sombra, gatilhos e os 3 passos de integração — sem deixar o dossiê pela metade.",
     bullets: [
       "Dossiê completo (luz, sombra, integração)",
+      "Confluência dominante × subarquétipo",
       "1 mensagem grátis no Mentor",
-      "Sem Passe 30 dias",
     ],
   },
   {
-    id: "combo_890",
-    title: "Combo + Mentor",
-    priceLabel: "R$ 8,90",
-    struckPrice: "R$ 50,00",
-    badge: "Mais Escolhido",
+    id: "mentor_upgrade",
+    title: "Consultoria IA · 30 dias",
+    priceLabel: "R$ 5,00",
+    priceCentavos: 500,
+    badge: "Mentor",
     accent: true,
+    persuasive:
+      "Conversa ilimitada com o Mentor Estratégico por 30 dias — perguntas práticas, plano de ação e código para reabrir o acesso neste aparelho.",
     bullets: [
-      "Diagnóstico completo",
-      "Mentor Estratégico 30 dias",
-      "Código para reabrir o acesso",
+      "Mentor Estratégico ilimitado 30 dias",
+      "Código Salvar / Reabrir meu acesso",
+      "Perfil do diagnóstico embutido nas respostas",
     ],
   },
 ];
 
-function qrImageSrc(pixCopyPaste: string, qrCodeImageUrl: string | null) {
-  if (qrCodeImageUrl) return qrCodeImageUrl;
-  return `https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=8&data=${encodeURIComponent(pixCopyPaste)}`;
+function sessionClientId(): string {
+  try {
+    const existing = window.localStorage.getItem("arq_client_sid");
+    if (existing) return existing;
+    const id = `s_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`;
+    window.localStorage.setItem("arq_client_sid", id);
+    return id;
+  } catch {
+    return `s_${Date.now().toString(36)}`;
+  }
 }
 
-export function PaywallScreen({ result, onUnlocked }: Props) {
+export function PaywallScreen({
+  result,
+  onUnlocked: _onUnlocked,
+  verifying = false,
+  verifyError = null,
+  onRetryVerify,
+  onBackFromVerify,
+}: Props) {
+  void _onUnlocked;
   const reduce = useReducedMotion();
   const diagnosis = useMemo(() => buildDiagnosis(result), [result]);
-  const [selectedPlan, setSelectedPlan] = useState<PaywallPlan | null>(null);
+  const alreadyResult = isResultUnlocked(readQuizSession());
+
+  const [selResult, setSelResult] = useState(!alreadyResult);
+  const [selMentor, setSelMentor] = useState(alreadyResult);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [orderId, setOrderId] = useState<string | null>(null);
-  const [pixCopyPaste, setPixCopyPaste] = useState("");
-  const [qrUrl, setQrUrl] = useState<string | null>(null);
-  const [amountLabel, setAmountLabel] = useState("R$ 3,00");
-  const [simulateAllowed, setSimulateAllowed] = useState(false);
-  const [mock, setMock] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [polling, setPolling] = useState(false);
-  const [simulating, setSimulating] = useState(false);
-  const unlockedRef = useRef(false);
-  const planRef = useRef<PaywallPlan | null>(null);
 
-  function finishUnlock() {
-    if (unlockedRef.current) return;
-    const plan = planRef.current;
-    if (!plan) return;
-    unlockedRef.current = true;
-    playRevealChord();
-    onUnlocked(plan);
+  const totalCentavos =
+    (selResult && !alreadyResult ? 100 : 0) + (selMentor ? 500 : 0);
+
+  const tier: InfinitePayTier | null = (() => {
+    const wantResult = selResult && !alreadyResult;
+    if (wantResult && selMentor) return "combo";
+    if (wantResult) return "result";
+    if (selMentor) return "mentor_upgrade";
+    return null;
+  })();
+
+  const totalLabel =
+    totalCentavos > 0
+      ? (totalCentavos / 100).toLocaleString("pt-BR", {
+          style: "currency",
+          currency: "BRL",
+        })
+      : null;
+
+  function toggleBox(id: BoxId) {
+    if (id === "result") {
+      if (alreadyResult) return;
+      setSelResult((v) => !v);
+      return;
+    }
+    setSelMentor((v) => !v);
   }
 
-  useEffect(() => {
-    if (!selectedPlan) return;
-    let cancelled = false;
-    planRef.current = selectedPlan;
-    unlockedRef.current = false;
-
-    async function createOrder() {
-      setLoading(true);
-      setError(null);
-      setOrderId(null);
-      setPixCopyPaste("");
-      setQrUrl(null);
-      setPolling(false);
-      try {
-        const res = await fetch("/api/pagbank/create", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            product: selectedPlan,
-            plan: selectedPlan,
-          }),
-        });
-        const data = (await res.json()) as CreateResponse;
-        if (!res.ok || !data.orderId || !data.pixCopyPaste) {
-          throw new Error(data.error || "Não foi possível gerar o Pix");
-        }
-        if (cancelled) return;
-        setOrderId(data.orderId);
-        setPixCopyPaste(data.pixCopyPaste);
-        setQrUrl(data.qrCodeImageUrl);
-        setAmountLabel(
-          data.amountLabel ||
-            (selectedPlan === "combo_890" ? "R$ 8,90" : "R$ 3,00"),
-        );
-        setSimulateAllowed(Boolean(data.simulateAllowed));
-        setMock(Boolean(data.mock));
-        setPolling(true);
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Erro ao criar Pix");
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-
-    void createOrder();
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedPlan]);
-
-  useEffect(() => {
-    if (!polling || !orderId || unlockedRef.current) return;
-
-    let cancelled = false;
-
-    async function tick() {
-      try {
-        const res = await fetch(
-          `/api/pagbank/status/${encodeURIComponent(orderId!)}`,
-          { cache: "no-store" },
-        );
-        const data = (await res.json()) as StatusResponse;
-        if (cancelled) return;
-        if (data.status === "paid") {
-          setPolling(false);
-          finishUnlock();
-        }
-      } catch {
-        // keep polling — transient network blips
-      }
-    }
-
-    void tick();
-    const id = window.setInterval(() => void tick(), POLL_MS);
-    return () => {
-      cancelled = true;
-      window.clearInterval(id);
-    };
-    // finishUnlock is stable enough via ref; omit from deps on purpose
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [polling, orderId]);
-
-  async function copyPix() {
+  async function checkout() {
+    if (!tier || loading) return;
+    setLoading(true);
+    setError(null);
     try {
-      await navigator.clipboard.writeText(pixCopyPaste);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1800);
-    } catch {
-      setCopied(false);
-    }
-  }
-
-  async function simulatePay() {
-    if (!orderId || simulating) return;
-    setSimulating(true);
-    try {
-      const res = await fetch("/api/pagbank/simulate", {
+      const res = await fetch("/api/infinitepay/create-link", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderId }),
+        body: JSON.stringify({
+          tier,
+          sessionId: sessionClientId(),
+        }),
       });
-      const data = (await res.json()) as StatusResponse & { error?: string };
-      if (!res.ok) throw new Error(data.error || "Simulate failed");
-      if (data.status === "paid") {
-        setPolling(false);
-        finishUnlock();
+      const data = (await res.json()) as {
+        url?: string;
+        order_nsu?: string;
+        error?: string;
+      };
+      if (!res.ok || !data.url) {
+        throw new Error(data.error || "Não foi possível abrir o checkout");
       }
+      try {
+        window.sessionStorage.setItem(
+          "infinitepay_pending",
+          JSON.stringify({ tier, order_nsu: data.order_nsu ?? null }),
+        );
+      } catch {
+        // ignore
+      }
+      window.location.href = data.url;
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Falha ao simular");
-    } finally {
-      setSimulating(false);
+      setError(err instanceof Error ? err.message : "Erro ao iniciar pagamento");
+      setLoading(false);
     }
+  }
+
+  if (verifying) {
+    return (
+      <section className="cine-sanctuary-band relative mx-auto min-h-[100dvh] w-full max-w-2xl px-5 pb-16 pt-12">
+        <SanctuaryBackdrop opacity={0.28} />
+        <div className="relative z-10 flex flex-col items-center py-20 text-center">
+          {verifyError ? (
+            <>
+              <p className="cart-display text-[11px] uppercase tracking-[0.32em] text-[color:var(--cart-copper)]">
+                Pagamento
+              </p>
+              <h1 className="cart-display mt-4 text-2xl text-[color:var(--cine-ink)]">
+                Não confirmamos ainda
+              </h1>
+              <p className="mt-3 max-w-sm text-sm text-red-300/90">{verifyError}</p>
+              <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+                {onRetryVerify ? (
+                  <button
+                    type="button"
+                    className="cart-cta rounded-sm px-5 py-3 text-sm font-semibold"
+                    onClick={onRetryVerify}
+                  >
+                    Tentar de novo
+                  </button>
+                ) : null}
+                {onBackFromVerify ? (
+                  <button
+                    type="button"
+                    className="rounded-sm border border-[color:var(--cart-border-soft)] px-5 py-3 text-sm text-[color:var(--cart-muted)] hover:border-[color:var(--cart-copper)]"
+                    onClick={onBackFromVerify}
+                  >
+                    Voltar
+                  </button>
+                ) : null}
+              </div>
+            </>
+          ) : (
+            <>
+              <Loader2 className="h-8 w-8 animate-spin text-[color:var(--cart-copper)]" />
+              <p className="cart-display mt-6 text-[11px] uppercase tracking-[0.32em] text-[color:var(--cart-copper)]">
+                Confirmando pagamento
+              </p>
+              <p className="mt-3 text-sm text-[color:var(--cart-muted)]">
+                Estamos verificando com a InfinitePay…
+              </p>
+            </>
+          )}
+        </div>
+      </section>
+    );
   }
 
   return (
@@ -280,9 +276,8 @@ export function PaywallScreen({ result, onUnlocked }: Props) {
               className="mt-0.5 shrink-0 text-[color:var(--cart-copper)]"
             />
             <span>
-              Espelho das escolhas, luz, gatilhos, sombra e 3 passos de
-              integração — escolha um plano Pix abaixo. Suas 16 respostas ficam
-              neste aparelho.
+              Escolha uma caixinha, as duas, ou o combo — checkout InfinitePay
+              (Pix ou cartão). Suas 16 respostas ficam neste aparelho.
             </span>
           </div>
         </motion.div>
@@ -293,8 +288,9 @@ export function PaywallScreen({ result, onUnlocked }: Props) {
           transition={{ duration: 0.55, ease: EASE, delay: 0.1 }}
           className="mx-auto mt-8 max-w-md text-center text-sm leading-relaxed text-[color:var(--cart-muted)]"
         >
-          Escolha o plano e pague via Pix — sem cadastro. A liberação é
-          automática.
+          {alreadyResult
+            ? "Diagnóstico já liberado. Ative a Consultoria IA 30 dias."
+            : "Monte sua oferta: só o diagnóstico, só o mentor, ou ambos (R$ 6,00)."}
         </motion.p>
 
         <motion.div
@@ -303,42 +299,50 @@ export function PaywallScreen({ result, onUnlocked }: Props) {
           transition={{ duration: 0.6, ease: EASE, delay: 0.12 }}
           className="mt-6 grid gap-3 sm:grid-cols-2"
         >
-          {PLANS.map((plan) => {
-            const selected = selectedPlan === plan.id;
+          {BOXES.map((box) => {
+            const disabled = box.id === "result" && alreadyResult;
+            const selected =
+              box.id === "result"
+                ? alreadyResult
+                  ? false
+                  : selResult
+                : selMentor;
             return (
               <button
-                key={plan.id}
+                key={box.id}
                 type="button"
-                onClick={() => setSelectedPlan(plan.id)}
+                disabled={disabled}
+                aria-pressed={selected}
+                onClick={() => toggleBox(box.id)}
                 className={`relative flex flex-col rounded-sm border px-4 py-5 text-left transition ${
-                  selected
-                    ? "border-[color:var(--cart-copper)] bg-[rgba(155,44,44,0.14)] shadow-[0_0_0_1px_rgba(201,137,74,0.35)]"
-                    : plan.accent
-                      ? "border-[color:var(--cart-copper)]/45 bg-black/30 hover:border-[color:var(--cart-copper)]"
-                      : "border-[color:var(--cart-border-soft)] bg-black/25 hover:border-[color:var(--cart-copper)]/60"
+                  disabled
+                    ? "cursor-not-allowed border-[color:var(--cart-border-soft)] bg-black/15 opacity-55"
+                    : selected
+                      ? "border-[color:var(--cart-copper)] bg-[rgba(155,44,44,0.14)] shadow-[0_0_0_1px_rgba(201,137,74,0.35)]"
+                      : box.accent
+                        ? "border-[color:var(--cart-copper)]/45 bg-black/30 hover:border-[color:var(--cart-copper)]"
+                        : "border-[color:var(--cart-border-soft)] bg-black/25 hover:border-[color:var(--cart-copper)]/60"
                 }`}
               >
-                {plan.badge ? (
+                {box.badge ? (
                   <span className="absolute -top-2 right-3 inline-flex items-center gap-1 bg-[color:var(--cart-copper)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#1a120c]">
                     <Sparkles size={10} />
-                    {plan.badge}
+                    {box.badge}
                   </span>
                 ) : null}
                 <p className="cart-display text-[10px] uppercase tracking-[0.22em] text-[color:var(--cart-copper)]">
-                  {plan.title}
+                  {box.title}
                 </p>
-                <p className="mt-3 flex flex-wrap items-baseline gap-2">
-                  {plan.struckPrice ? (
-                    <span className="text-sm text-[color:var(--cart-dim)] line-through">
-                      {plan.struckPrice}
-                    </span>
-                  ) : null}
-                  <span className="cart-display text-2xl tracking-wide text-[color:var(--cart-ink)]">
-                    {plan.priceLabel}
-                  </span>
+                <p className="mt-3 cart-display text-2xl tracking-wide text-[color:var(--cart-ink)]">
+                  {box.priceLabel}
+                </p>
+                <p className="mt-2 text-xs leading-relaxed text-[color:var(--cart-muted)]">
+                  {disabled
+                    ? "Já liberado neste aparelho — escolha o Mentor."
+                    : box.persuasive}
                 </p>
                 <ul className="mt-3 space-y-1.5 text-xs leading-relaxed text-[color:var(--cart-muted)]">
-                  {plan.bullets.map((b) => (
+                  {box.bullets.map((b) => (
                     <li key={b} className="flex gap-2">
                       <Check
                         size={12}
@@ -350,100 +354,55 @@ export function PaywallScreen({ result, onUnlocked }: Props) {
                 </ul>
                 <span
                   className={`mt-4 text-center text-[11px] uppercase tracking-[0.16em] ${
-                    selected
-                      ? "text-[color:var(--cart-copper-bright)]"
-                      : "text-[color:var(--cart-dim)]"
+                    disabled
+                      ? "text-[color:var(--cart-dim)]"
+                      : selected
+                        ? "text-[color:var(--cart-copper-bright)]"
+                        : "text-[color:var(--cart-dim)]"
                   }`}
                 >
-                  {selected ? "Selecionado · Pix abaixo" : "Selecionar"}
+                  {disabled
+                    ? "Já incluso"
+                    : selected
+                      ? "Selecionado"
+                      : "Selecionar"}
                 </span>
               </button>
             );
           })}
         </motion.div>
 
-        {selectedPlan ? (
-          <motion.div
-            initial={reduce ? false : { opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.45, ease: EASE }}
-            className="mt-6"
-          >
-            <EmberCard className="p-6 sm:p-8">
-              {loading ? (
-                <div className="flex flex-col items-center gap-3 py-10 text-[color:var(--cart-muted)]">
-                  <Loader2 className="h-7 w-7 animate-spin text-[color:var(--cart-copper)]" />
-                  <p className="text-sm">Gerando Pix…</p>
-                </div>
-              ) : error ? (
-                <div className="space-y-4 py-6 text-center">
-                  <p className="text-sm text-red-300/90">{error}</p>
-                  <button
-                    type="button"
-                    className="cart-cta rounded-sm px-5 py-3 text-sm font-semibold"
-                    onClick={() => {
-                      const plan = selectedPlan;
-                      setSelectedPlan(null);
-                      window.setTimeout(() => setSelectedPlan(plan), 0);
-                    }}
-                  >
-                    Tentar de novo
-                  </button>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center">
-                  <p className="cart-display text-[10px] uppercase tracking-[0.28em] text-[color:var(--cart-copper)]">
-                    Escaneie o QR Code · {amountLabel}
-                  </p>
-                  <div className="mt-4 rounded-sm border border-[color:var(--cine-border)] bg-white p-3 shadow-[0_12px_32px_rgba(0,0,0,0.35)]">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={qrImageSrc(pixCopyPaste, qrUrl)}
-                      alt={`QR Code Pix ${amountLabel}`}
-                      width={240}
-                      height={240}
-                      className="h-[220px] w-[220px] sm:h-[240px] sm:w-[240px]"
-                    />
-                  </div>
-
-                  <p className="mt-5 text-center text-xs text-[color:var(--cart-dim)]">
-                    Ou use Pix Copia e Cola
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => void copyPix()}
-                    className="mt-2 inline-flex w-full max-w-sm items-center justify-center gap-2 border border-[color:var(--cart-border-soft)] px-4 py-3 text-sm text-[color:var(--cart-ink)] transition hover:border-[color:var(--cart-copper)] hover:text-[color:var(--cart-copper-bright)]"
-                  >
-                    {copied ? <Check size={16} /> : <Copy size={16} />}
-                    {copied ? "Código copiado" : "Copiar código Pix"}
-                  </button>
-
-                  <div className="mt-6 flex items-center gap-2 text-xs text-[color:var(--cart-muted)]">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin text-[color:var(--cart-copper)]" />
-                    Aguardando pagamento…
-                  </div>
-
-                  <p className="mt-3 inline-flex items-center gap-1.5 text-[11px] text-[color:var(--cart-dim)]">
-                    <Shield size={12} />
-                    Confirmação automática a cada 3s
-                    {mock ? " · modo mock" : null}
-                  </p>
-
-                  {simulateAllowed ? (
-                    <button
-                      type="button"
-                      disabled={simulating}
-                      onClick={() => void simulatePay()}
-                      className="mt-6 text-xs uppercase tracking-[0.18em] text-[color:var(--cart-dim)] underline-offset-4 hover:text-[color:var(--cart-copper)] hover:underline disabled:opacity-50"
-                    >
-                      {simulating ? "Simulando…" : "Simular pagamento (dev)"}
-                    </button>
-                  ) : null}
-                </div>
-              )}
-            </EmberCard>
-          </motion.div>
+        {!alreadyResult && selResult && selMentor ? (
+          <p className="mt-4 text-center text-xs text-[color:var(--cart-copper)]">
+            Combo · ambos por R$ 6,00
+          </p>
         ) : null}
+
+        <div className="mt-8 flex flex-col items-center gap-3">
+          <button
+            type="button"
+            disabled={!tier || loading}
+            onClick={() => void checkout()}
+            className="cart-cta inline-flex min-w-[240px] items-center justify-center gap-2 rounded-sm px-6 py-3.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {loading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Abrindo checkout…
+              </>
+            ) : totalLabel ? (
+              `Pagar ${totalLabel}`
+            ) : (
+              "Selecione ao menos uma opção"
+            )}
+          </button>
+          {error ? (
+            <p className="text-center text-sm text-red-300/90">{error}</p>
+          ) : null}
+          <p className="text-center text-[11px] text-[color:var(--cart-dim)]">
+            Checkout InfinitePay · redirecionamento seguro
+          </p>
+        </div>
       </div>
     </section>
   );

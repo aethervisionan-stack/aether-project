@@ -31,23 +31,7 @@ type Props = {
   result: NarrativeResult;
 };
 
-type CreateResponse = {
-  orderId: string;
-  amountLabel?: string;
-  pixCopyPaste: string;
-  qrCodeImageUrl: string | null;
-  simulateAllowed?: boolean;
-  mock?: boolean;
-  error?: string;
-};
-
-type StatusResponse = {
-  status?: "waiting" | "paid" | "declined" | "canceled";
-  error?: string;
-};
-
 const EASE = [0.22, 1, 0.36, 1] as const;
-const POLL_MS = 3000;
 
 const CHIPS = [
   "Como usar meu arquétipo no trabalho?",
@@ -55,11 +39,6 @@ const CHIPS = [
   "Como equilibrar dominante e sub?",
   "Monte um plano de 7 dias para mim",
 ] as const;
-
-function qrImageSrc(pixCopyPaste: string, qrCodeImageUrl: string | null) {
-  if (qrCodeImageUrl) return qrCodeImageUrl;
-  return `https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=8&data=${encodeURIComponent(pixCopyPaste)}`;
-}
 
 function formatExpiry(ts: number) {
   try {
@@ -471,131 +450,46 @@ export function ArchetypeMentor({ result }: Props) {
 
 function MentorPassModal({
   onClose,
-  onUnlocked,
 }: {
   onClose: () => void;
   onUnlocked: () => void;
 }) {
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [orderId, setOrderId] = useState<string | null>(null);
-  const [pixCopyPaste, setPixCopyPaste] = useState("");
-  const [qrUrl, setQrUrl] = useState<string | null>(null);
-  const [amountLabel, setAmountLabel] = useState("R$ 5,90");
-  const [simulateAllowed, setSimulateAllowed] = useState(false);
-  const [mock, setMock] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [polling, setPolling] = useState(false);
-  const [simulating, setSimulating] = useState(false);
-  const unlockedRef = useRef(false);
 
-  function finishUnlock() {
-    if (unlockedRef.current) return;
-    unlockedRef.current = true;
-    onUnlocked();
-  }
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function createOrder() {
-      setLoading(true);
-      setError(null);
+  async function startCheckout() {
+    if (loading) return;
+    setLoading(true);
+    setError(null);
+    try {
+      let sessionId = "mentor";
       try {
-        const res = await fetch("/api/pagbank/create", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            product: "mentor_upgrade",
-            plan: "mentor_upgrade",
-          }),
-        });
-        const data = (await res.json()) as CreateResponse;
-        if (!res.ok || !data.orderId || !data.pixCopyPaste) {
-          throw new Error(data.error || "Não foi possível gerar o Pix");
-        }
-        if (cancelled) return;
-        setOrderId(data.orderId);
-        setPixCopyPaste(data.pixCopyPaste);
-        setQrUrl(data.qrCodeImageUrl);
-        setAmountLabel(data.amountLabel || "R$ 5,90");
-        setSimulateAllowed(Boolean(data.simulateAllowed));
-        setMock(Boolean(data.mock));
-        setPolling(true);
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Erro ao criar Pix");
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-
-    void createOrder();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!polling || !orderId || unlockedRef.current) return;
-    let cancelled = false;
-
-    async function tick() {
-      try {
-        const res = await fetch(
-          `/api/pagbank/status/${encodeURIComponent(orderId!)}`,
-          { cache: "no-store" },
-        );
-        const data = (await res.json()) as StatusResponse;
-        if (cancelled) return;
-        if (data.status === "paid") {
-          setPolling(false);
-          finishUnlock();
-        }
+        sessionId =
+          window.localStorage.getItem("arq_client_sid") ||
+          `s_${Date.now().toString(36)}`;
       } catch {
-        // keep polling
+        // ignore
       }
-    }
-
-    void tick();
-    const id = window.setInterval(() => void tick(), POLL_MS);
-    return () => {
-      cancelled = true;
-      window.clearInterval(id);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [polling, orderId]);
-
-  async function copyPix() {
-    try {
-      await navigator.clipboard.writeText(pixCopyPaste);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1800);
-    } catch {
-      setCopied(false);
-    }
-  }
-
-  async function simulatePay() {
-    if (!orderId || simulating) return;
-    setSimulating(true);
-    try {
-      const res = await fetch("/api/pagbank/simulate", {
+      const res = await fetch("/api/infinitepay/create-link", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderId }),
+        body: JSON.stringify({
+          tier: "mentor_upgrade",
+          sessionId,
+        }),
       });
-      const data = (await res.json()) as StatusResponse & { error?: string };
-      if (!res.ok) throw new Error(data.error || "Simulate failed");
-      if (data.status === "paid") {
-        setPolling(false);
-        finishUnlock();
+      const data = (await res.json()) as {
+        url?: string;
+        order_nsu?: string;
+        error?: string;
+      };
+      if (!res.ok || !data.url) {
+        throw new Error(data.error || "Não foi possível abrir o checkout");
       }
+      window.location.href = data.url;
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Falha ao simular");
-    } finally {
-      setSimulating(false);
+      setError(err instanceof Error ? err.message : "Erro ao iniciar pagamento");
+      setLoading(false);
     }
   }
 
@@ -609,75 +503,40 @@ function MentorPassModal({
       >
         <EmberCard className="p-5 sm:p-6">
           <p className="cart-display text-center text-[10px] uppercase tracking-[0.28em] text-[color:var(--cart-copper)]">
-            Upgrade do Mentor
+            Consultoria IA
           </p>
           <h4 className="cart-display mt-2 text-center text-xl text-[color:var(--cart-ink)]">
-            {MENTOR_PASS_DAYS} dias ilimitados · {amountLabel}
+            {MENTOR_PASS_DAYS} dias ilimitados · R$ 5,00
           </h4>
           <p className="mt-2 text-center text-xs leading-relaxed text-[color:var(--cart-muted)]">
-            Diferença do combo (R$&nbsp;8,90 − R$&nbsp;3,00). Após o Pix, o
-            Mentor responde sem limite por {MENTOR_PASS_DAYS} dias — com código
-            de restauração neste aparelho.
+            Após o checkout InfinitePay, o Mentor responde sem limite por{" "}
+            {MENTOR_PASS_DAYS} dias — com código de restauração neste aparelho.
           </p>
 
-          {loading ? (
-            <div className="flex flex-col items-center gap-3 py-10 text-[color:var(--cart-muted)]">
-              <Loader2 className="h-7 w-7 animate-spin text-[color:var(--cart-copper)]" />
-              <p className="text-sm">Gerando Pix…</p>
-            </div>
-          ) : error ? (
-            <div className="space-y-4 py-6 text-center">
-              <p className="text-sm text-red-300/90">{error}</p>
-              <button
-                type="button"
-                className="cart-cta rounded-sm px-5 py-3 text-sm font-semibold"
-                onClick={() => window.location.reload()}
-              >
-                Tentar de novo
-              </button>
-            </div>
-          ) : (
-            <div className="mt-5 flex flex-col items-center">
-              <div className="rounded-sm border border-[color:var(--cine-border)] bg-white p-3">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={qrImageSrc(pixCopyPaste, qrUrl)}
-                  alt={`QR Code Pix ${amountLabel}`}
-                  width={220}
-                  height={220}
-                  className="h-[200px] w-[200px] sm:h-[220px] sm:w-[220px]"
-                />
-              </div>
-              <button
-                type="button"
-                onClick={() => void copyPix()}
-                className="mt-4 inline-flex w-full items-center justify-center gap-2 border border-[color:var(--cart-border-soft)] px-4 py-3 text-sm text-[color:var(--cart-ink)]"
-              >
-                {copied ? <Check size={16} /> : <Copy size={16} />}
-                {copied ? "Código copiado" : "Copiar Pix Copia e Cola"}
-              </button>
-              <div className="mt-4 flex items-center gap-2 text-xs text-[color:var(--cart-muted)]">
-                <Loader2 className="h-3.5 w-3.5 animate-spin text-[color:var(--cart-copper)]" />
-                Aguardando pagamento…
-                {mock ? " · mock" : null}
-              </div>
-              {simulateAllowed ? (
-                <button
-                  type="button"
-                  disabled={simulating}
-                  onClick={() => void simulatePay()}
-                  className="mt-4 text-xs uppercase tracking-[0.18em] text-[color:var(--cart-dim)] underline-offset-4 hover:text-[color:var(--cart-copper)] hover:underline disabled:opacity-50"
-                >
-                  {simulating ? "Simulando…" : "Simular pagamento (dev)"}
-                </button>
-              ) : null}
-            </div>
-          )}
+          {error ? (
+            <p className="mt-4 text-center text-sm text-red-300/90">{error}</p>
+          ) : null}
+
+          <button
+            type="button"
+            disabled={loading}
+            onClick={() => void startCheckout()}
+            className="cart-cta mt-6 inline-flex w-full items-center justify-center gap-2 rounded-sm px-5 py-3 text-sm font-semibold disabled:opacity-50"
+          >
+            {loading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Abrindo checkout…
+              </>
+            ) : (
+              "Pagar R$ 5,00"
+            )}
+          </button>
 
           <button
             type="button"
             onClick={onClose}
-            className="mt-5 w-full py-2 text-xs uppercase tracking-[0.16em] text-[color:var(--cart-dim)] hover:text-[color:var(--cart-copper)]"
+            className="mt-4 w-full py-2 text-xs uppercase tracking-[0.16em] text-[color:var(--cart-dim)] hover:text-[color:var(--cart-copper)]"
           >
             Fechar
           </button>
