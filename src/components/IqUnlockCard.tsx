@@ -244,7 +244,7 @@ export function IqUnlockCard({
             )}
           </button>
           <p className="mt-3 text-center text-xs text-zinc-600">
-            Pagamento Pix via Mercado Pago. A liberação só acontece depois da
+            Pagamento Pix via InfinitePay. A liberação só acontece depois da
             confirmação do pagamento.
           </p>
         </>

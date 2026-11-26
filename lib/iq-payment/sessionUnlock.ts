@@ -6,7 +6,7 @@
 export type IqUnlockRecord = {
   sessionId: string;
   unlocked: boolean;
-  /** Mercado Pago payment id (or sim_… locally). Also mirrored as order_nsu for legacy. */
+  /** InfinitePay order_nsu / payment id (or sim_… locally). */
   paymentId?: string;
   order_nsu?: string;
   amountCentavos: number;

@@ -5,15 +5,13 @@ import {
   iqUnlockAmountLabel,
   isLocalRequest,
 } from "@/lib/iq-payment/config";
-import {
-  fetchMercadoPagoPayment,
-  isMercadoPagoPaidStatus,
-} from "@/lib/iq-payment/mercadopago";
+import { isInfinitePayPaidStatus } from "@/lib/iq-payment/infinitepay-pix";
 import {
   getIqUnlockSession,
   isIqSessionUnlocked,
   markIqSessionPaid,
 } from "@/lib/iq-payment/sessionUnlock";
+import { getInfinitePayOrderAsync } from "@/lib/infinitepay/store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -43,34 +41,35 @@ async function resolveStatus(
   const rec = await getIqUnlockSession(sessionId);
   let unlocked = await isIqSessionUnlocked(sessionId);
 
-  // Poll Mercado Pago for real payments still pending.
-  if (
-    !unlocked &&
-    rec?.paymentId &&
-    !rec.simulated &&
-    !String(rec.paymentId).startsWith("sim_")
-  ) {
-    const mp = await fetchMercadoPagoPayment(rec.paymentId);
-    if (mp?.paid || isMercadoPagoPaidStatus(mp?.status)) {
+  // Poll InfinitePay order store (webhook / verify may have marked paid).
+  if (!unlocked && rec?.order_nsu) {
+    const order = await getInfinitePayOrderAsync(rec.order_nsu);
+    if (
+      order &&
+      (order.status === "paid" || isInfinitePayPaidStatus(order.status))
+    ) {
       await markIqSessionPaid(sessionId, {
-        paymentId: mp?.id ?? rec.paymentId,
+        paymentId: rec.paymentId ?? rec.order_nsu,
+        order_nsu: rec.order_nsu,
+        transaction_nsu: order.transaction_nsu,
+        slug: order.slug,
         amountCentavos: rec.amountCentavos,
-        simulated: false,
+        simulated: Boolean(order.simulated || rec.simulated),
       });
       unlocked = true;
     }
   }
 
-  // Localhost sim approve — only on loopback / explicit simulate gate.
-  if (
-    !unlocked &&
-    opts.simApprove &&
-    iqPaymentSimulateLocal(req.url) &&
-    isLocalRequest(req.url)
-  ) {
+  // Localhost sim approve — loopback + (simulate gate OR pending simulated session).
+  const local = isLocalRequest(req.url);
+  const simGate =
+    local &&
+    (iqPaymentSimulateLocal(req.url) || Boolean(rec?.simulated));
+  if (!unlocked && opts.simApprove && simGate) {
     const amountCentavos = rec?.amountCentavos ?? iqUnlockAmountCentavos();
     await markIqSessionPaid(sessionId, {
       paymentId: rec?.paymentId ?? `sim_approve_${sessionId}`,
+      order_nsu: rec?.order_nsu,
       amountCentavos,
       simulated: true,
     });
@@ -95,8 +94,8 @@ async function resolveStatus(
     simulated: Boolean(fresh?.simulated),
     canSimApprove:
       !unlocked &&
-      iqPaymentSimulateLocal(req.url) &&
-      isLocalRequest(req.url),
+      local &&
+      (iqPaymentSimulateLocal(req.url) || Boolean(fresh?.simulated ?? rec?.simulated)),
   };
 }
 

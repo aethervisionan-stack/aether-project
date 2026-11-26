@@ -1,5 +1,5 @@
 /**
- * Headless smoke for IQ Mercado Pago Pix unlock helpers (no network).
+ * Headless smoke for IQ InfinitePay Pix unlock helpers (no network).
  * Run: npx tsx scripts/smoke-iq-unlock.ts
  */
 import {
@@ -36,7 +36,7 @@ async function main() {
     sessionId: sid,
     unlocked: false,
     paymentId,
-    order_nsu: paymentId,
+    order_nsu: order,
     amountCentavos: amount,
     status: "pending",
     simulated: true,
@@ -47,6 +47,7 @@ async function main() {
 
   await markIqSessionPaid(sid, {
     paymentId,
+    order_nsu: order,
     amountCentavos: amount,
     simulated: true,
   });
@@ -56,13 +57,14 @@ async function main() {
   assert(
     iqPaymentSimulateLocal("http://localhost:3010/api/payment/pix/create") ===
       true ||
-      process.env.MERCADOPAGO_SIMULATE === "0" ||
-      Boolean(process.env.MERCADOPAGO_ACCESS_TOKEN?.trim()),
+      process.env.INFINITEPAY_SIMULATE === "0" ||
+      Boolean(process.env.INFINITEPAY_API_KEY?.trim()) ||
+      Boolean(process.env.INFINITEPAY_HANDLE?.trim()),
     "simulate local heuristic runs",
   );
   assert(
     iqPaymentSimulateLocal("https://example.com/api/x") === false ||
-      process.env.MERCADOPAGO_SIMULATE === "1",
+      process.env.INFINITEPAY_SIMULATE === "1",
     "non-local not simulated unless forced",
   );
 
@@ -78,6 +80,7 @@ async function main() {
         amountLabel: iqUnlockAmountLabel(amount),
         sessionId: sid,
         paymentId,
+        order_nsu: order,
       },
       null,
       2,

@@ -1,26 +1,42 @@
 import { NextResponse } from "next/server";
 import { iqUnlockAmountCentavos } from "@/lib/iq-payment/config";
+import { isInfinitePayPaidStatus } from "@/lib/iq-payment/infinitepay-pix";
 import {
-  fetchMercadoPagoPayment,
-  isMercadoPagoPaidStatus,
-} from "@/lib/iq-payment/mercadopago";
-import {
+  extractSessionIdFromOrderNsu,
+  getIqUnlockByOrderNsu,
   getIqUnlockByPaymentId,
   getIqUnlockSession,
   markIqSessionPaid,
 } from "@/lib/iq-payment/sessionUnlock";
+import {
+  claimWebhookIdempotency,
+  getInfinitePayOrderAsync,
+  markInfinitePayPaidAsync,
+  putInfinitePayOrderAsync,
+} from "@/lib/infinitepay/store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+function pickString(v: unknown): string | null {
+  return typeof v === "string" && v.trim() ? v.trim() : null;
+}
+
+function looksPaid(body: Record<string, unknown>): boolean {
+  if (body.paid === true) return true;
+  const event = String(
+    body.event ?? body.type ?? body.status ?? body.action ?? "",
+  ).toLowerCase();
+  return isInfinitePayPaidStatus(event) || event === "payment.paid";
+}
+
 /**
- * Mercado Pago Pix webhook.
- * Accepts classic topic/id query params and JSON body { type, data: { id } }.
- * Always acknowledges 200 so MP does not retry forever on unknown events.
+ * InfinitePay Pix webhook for IQ unlock.
+ * Accepts InfinitePay { order_nsu, paid/settled, … } payloads.
+ * Always acknowledges 200 so InfinitePay does not retry forever on unknown events.
  */
 export async function POST(req: Request) {
   try {
-    const url = new URL(req.url);
     let body: Record<string, unknown> = {};
     try {
       body = (await req.json()) as Record<string, unknown>;
@@ -28,99 +44,101 @@ export async function POST(req: Request) {
       body = {};
     }
 
-    const data = (body.data && typeof body.data === "object"
-      ? (body.data as Record<string, unknown>)
-      : {}) as Record<string, unknown>;
+    const order_nsu =
+      pickString(body.order_nsu) ||
+      pickString(body.orderNsu) ||
+      pickString(body.paymentId) ||
+      pickString(body.id);
+    const transaction_nsu =
+      pickString(body.transaction_nsu) || pickString(body.transactionNsu);
+    const slug =
+      pickString(body.invoice_slug) ||
+      pickString(body.slug) ||
+      pickString(body.invoiceSlug);
 
-    const paymentIdRaw =
-      url.searchParams.get("data.id") ||
-      url.searchParams.get("id") ||
-      (typeof data.id === "string" || typeof data.id === "number"
-        ? String(data.id)
-        : null) ||
-      (typeof body.id === "string" || typeof body.id === "number"
-        ? String(body.id)
-        : null);
-
-    const topic = (
-      url.searchParams.get("topic") ||
-      url.searchParams.get("type") ||
-      (typeof body.type === "string" ? body.type : "") ||
-      (typeof body.action === "string" ? body.action : "") ||
-      ""
-    ).toLowerCase();
-
-    // Ignore non-payment noise quickly.
-    if (
-      topic &&
-      !topic.includes("payment") &&
-      topic !== "merchant_order" &&
-      !paymentIdRaw
-    ) {
-      return NextResponse.json({ ok: true, ignored: true });
-    }
-
-    if (!paymentIdRaw) {
+    if (!order_nsu) {
       return NextResponse.json({ ok: true, ignored: true, reason: "no_id" });
     }
 
-    // Prefer live MP status over trusting webhook body alone.
-    const mp = await fetchMercadoPagoPayment(paymentIdRaw);
-    const paid =
-      Boolean(mp?.paid) ||
-      isMercadoPagoPaidStatus(mp?.status) ||
-      isMercadoPagoPaidStatus(
-        typeof body.status === "string" ? body.status : null,
-      );
+    const idemKey = `iq-pix:${transaction_nsu || (slug ? `${order_nsu}:${slug}` : order_nsu)}`;
+    if (claimWebhookIdempotency(idemKey)) {
+      return NextResponse.json({ ok: true, received: true, duplicate: true });
+    }
 
-    if (!paid) {
+    if (!looksPaid(body)) {
       return NextResponse.json({
         ok: true,
-        paymentId: paymentIdRaw,
+        order_nsu,
         unlocked: false,
-        status: mp?.status ?? "pending",
+        status: "pending",
+      });
+    }
+
+    const existing = await getInfinitePayOrderAsync(order_nsu);
+    if (existing) {
+      await markInfinitePayPaidAsync(order_nsu, {
+        transaction_nsu: transaction_nsu ?? undefined,
+        slug: slug ?? undefined,
+      });
+    } else {
+      const sessionGuess =
+        extractSessionIdFromOrderNsu(order_nsu) ??
+        order_nsu.split("__")[1] ??
+        "webhook";
+      await putInfinitePayOrderAsync({
+        order_nsu,
+        tier: "iq_unlock",
+        sessionId: sessionGuess,
+        amountCentavos:
+          typeof body.amount === "number"
+            ? body.amount
+            : iqUnlockAmountCentavos(),
+        status: "paid",
+        paidAt: Date.now(),
+        transaction_nsu: transaction_nsu ?? undefined,
+        slug: slug ?? undefined,
+        createdAt: Date.now(),
       });
     }
 
     let sessionId =
-      mp?.externalReference ||
-      (await getIqUnlockByPaymentId(paymentIdRaw))?.sessionId ||
+      (await getIqUnlockByOrderNsu(order_nsu))?.sessionId ||
+      (await getIqUnlockByPaymentId(order_nsu))?.sessionId ||
+      extractSessionIdFromOrderNsu(order_nsu) ||
+      existing?.sessionId ||
       null;
-
-    // metadata.sessionId fallback from raw
-    if (!sessionId && mp?.raw) {
-      const meta = mp.raw.metadata;
-      if (meta && typeof meta === "object") {
-        const sid = (meta as Record<string, unknown>).sessionId;
-        if (typeof sid === "string" && sid.startsWith("iq_")) sessionId = sid;
-      }
-    }
 
     if (!sessionId || !/^iq_[a-zA-Z0-9_-]+$/.test(sessionId)) {
       return NextResponse.json({
         ok: true,
-        paymentId: paymentIdRaw,
+        order_nsu,
         unlocked: false,
         reason: "session_not_found",
       });
     }
 
-    const existing = await getIqUnlockSession(sessionId);
+    const unlockRow = await getIqUnlockSession(sessionId);
     await markIqSessionPaid(sessionId, {
-      paymentId: paymentIdRaw,
-      amountCentavos: existing?.amountCentavos ?? iqUnlockAmountCentavos(),
+      paymentId: order_nsu,
+      order_nsu,
+      transaction_nsu: transaction_nsu ?? undefined,
+      slug: slug ?? undefined,
+      amountCentavos:
+        typeof body.amount === "number"
+          ? body.amount
+          : unlockRow?.amountCentavos ?? iqUnlockAmountCentavos(),
       simulated: false,
     });
 
     return NextResponse.json({
       ok: true,
-      paymentId: paymentIdRaw,
+      order_nsu,
       sessionId,
       unlocked: true,
     });
   } catch (err) {
     console.error("[iq-pix-webhook]", err);
-    // Still 200 — avoid infinite MP retries; status polling will reconcile.
+    // Still 200 — avoid infinite retries; status polling will reconcile.
     return NextResponse.json({
       ok: true,
       error: err instanceof Error ? err.message : "webhook_error",
@@ -129,6 +147,5 @@ export async function POST(req: Request) {
 }
 
 export async function GET(req: Request) {
-  // MP sometimes probes with GET.
   return POST(req);
 }

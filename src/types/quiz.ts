@@ -371,7 +371,7 @@ export interface QuizPersistedState {
    * without a successful /api/payment/pix/status response.
    */
   resultsUnlocked: boolean;
-  /** Last Mercado Pago payment id (or legacy order_nsu) for this IQ unlock */
+  /** Last InfinitePay payment id / order_nsu for this IQ unlock */
   unlockOrderNsu: string | null;
 }
 

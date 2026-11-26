@@ -1,15 +1,14 @@
 import { NextResponse } from "next/server";
 import {
   canCreateRealPix,
-  iqPixWebhookUrl,
   iqPaymentSimulateLocal,
   iqUnlockAmountCentavos,
   iqUnlockAmountLabel,
 } from "@/lib/iq-payment/config";
 import {
-  createMercadoPagoPixPayment,
-  createSimulatedPixPayment,
-} from "@/lib/iq-payment/mercadopago";
+  createInfinitePayPixPayment,
+  createSimulatedInfinitePayPix,
+} from "@/lib/iq-payment/infinitepay-pix";
 import { putIqUnlockSession } from "@/lib/iq-payment/sessionUnlock";
 
 export const runtime = "nodejs";
@@ -58,7 +57,7 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           error:
-            "Mercado Pago não configurado. Defina MERCADOPAGO_ACCESS_TOKEN no .env.local. Em produção a simulação local não está disponível.",
+            "InfinitePay não configurada. Defina INFINITEPAY_HANDLE e/ou INFINITEPAY_API_KEY no .env.local. Em produção a simulação local não está disponível.",
           code: "MISSING_CREDENTIALS",
         },
         { status: 503 },
@@ -66,18 +65,17 @@ export async function POST(req: Request) {
     }
 
     const pix = useSim
-      ? await createSimulatedPixPayment({ sessionId, amountCentavos })
-      : await createMercadoPagoPixPayment({
+      ? await createSimulatedInfinitePayPix({ sessionId, amountCentavos })
+      : await createInfinitePayPixPayment({
           sessionId,
           amountCentavos,
-          notificationUrl: iqPixWebhookUrl(),
         });
 
     await putIqUnlockSession({
       sessionId,
       unlocked: false,
       paymentId: pix.paymentId,
-      order_nsu: pix.paymentId,
+      order_nsu: pix.order_nsu,
       amountCentavos,
       status: "pending",
       simulated: useSim,
@@ -90,6 +88,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       paymentId: pix.paymentId,
+      order_nsu: pix.order_nsu,
       qrCode: pix.qrCode,
       qrCodeBase64: pix.qrCodeBase64,
       expiresAt: pix.expiresAt,
@@ -98,12 +97,14 @@ export async function POST(req: Request) {
       amountLabel,
       simulated: useSim,
       status: pix.status,
+      emvResolved: pix.emvResolved ?? false,
+      checkoutUrl: pix.checkoutUrl ?? null,
     });
   } catch (err) {
     const message =
       err instanceof Error
         ? err.message
-        : "Erro ao criar pagamento Pix Mercado Pago";
+        : "Erro ao criar pagamento Pix InfinitePay";
     const status =
       err && typeof err === "object" && "status" in err
         ? Number((err as { status?: number }).status) || 500

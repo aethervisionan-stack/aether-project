@@ -1,4 +1,4 @@
-/** Client helpers for IQ Mercado Pago Pix unlock — never treat localStorage as authority. */
+/** Client helpers for IQ InfinitePay Pix unlock — never treat localStorage as authority. */
 
 export function createIqSessionId(): string {
   const rand =
