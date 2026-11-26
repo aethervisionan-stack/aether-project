@@ -11,7 +11,9 @@ export type ToolName =
   | "email_calendar_tool"
   | "telephony_tool"
   | "system_control_tool"
-  | "system_help_tool"\n  | "google_drive_tool"\n  | "google_maps_tool";
+  | "system_help_tool"
+  | "google_drive_tool"
+  | "google_maps_tool";
 
 export type TestRoutine = "health" | "memory_snapshot" | "latency_targets";
 
@@ -94,6 +96,37 @@ export interface SystemHelpToolArgs {
   category?: string;
 }
 
+export type GoogleDriveAction = "search" | "find" | "get" | "metadata";
+
+export interface GoogleDriveToolArgs {
+  action: GoogleDriveAction;
+  query?: string;
+  q?: string;
+  file_id?: string;
+  limit?: number;
+}
+
+export type GoogleMapsAction =
+  | "route"
+  | "directions"
+  | "geocode"
+  | "reverse_geocode"
+  | "geolocate"
+  | "locate"
+  | "user_location";
+
+export interface GoogleMapsToolArgs {
+  action: GoogleMapsAction;
+  origin?: string;
+  destination?: string;
+  dest?: string;
+  mode?: "driving" | "walking" | "bicycling" | "transit";
+  address?: string;
+  lat?: number;
+  lon?: number;
+  lng?: number;
+}
+
 export type ToolArgumentsByName = {
   solana_treasury_query: SolanaTreasuryArgs;
   onchain_lookup: OnchainLookupArgs;
@@ -104,6 +137,8 @@ export type ToolArgumentsByName = {
   telephony_tool: TelephonyToolArgs;
   system_control_tool: SystemControlToolArgs;
   system_help_tool: SystemHelpToolArgs;
+  google_drive_tool: GoogleDriveToolArgs;
+  google_maps_tool: GoogleMapsToolArgs;
 };
 
 export interface ToolParamProperty {
@@ -111,6 +146,7 @@ export interface ToolParamProperty {
   description?: string;
   enum?: string[];
   default?: unknown;
+  items?: { type: string };
 }
 
 export interface ToolSchema {
@@ -330,6 +366,59 @@ export const TOOL_SCHEMAS: readonly ToolSchema[] = [
       additionalProperties: false,
     },
   },
+  {
+    name: "google_drive_tool",
+    description: "Search Google Drive (readonly OAuth). Actions: search/get.",
+    parameters: {
+      type: "object",
+      properties: {
+        action: {
+          type: "string",
+          enum: ["search", "find", "get", "metadata"],
+        },
+        query: { type: "string" },
+        q: { type: "string" },
+        file_id: { type: "string" },
+        limit: { type: "integer" },
+      },
+      required: ["action"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "google_maps_tool",
+    description: "Maps routes/geocode/geolocate via GOOGLE_MAPS_API_KEY.",
+    parameters: {
+      type: "object",
+      properties: {
+        action: {
+          type: "string",
+          enum: [
+            "route",
+            "directions",
+            "geocode",
+            "reverse_geocode",
+            "geolocate",
+            "locate",
+            "user_location",
+          ],
+        },
+        origin: { type: "string" },
+        destination: { type: "string" },
+        dest: { type: "string" },
+        mode: {
+          type: "string",
+          enum: ["driving", "walking", "bicycling", "transit"],
+        },
+        address: { type: "string" },
+        lat: { type: "number" },
+        lon: { type: "number" },
+        lng: { type: "number" },
+      },
+      required: ["action"],
+      additionalProperties: false,
+    },
+  },
 ] as const;
 
 export interface ToolResultEvent {
@@ -349,7 +438,10 @@ export const OS_TOOL_NAMES: readonly ToolName[] = [
   "messaging_tool",
   "email_calendar_tool",
   "telephony_tool",
-  "system_control_tool",\n  "google_drive_tool",\n  "google_maps_tool",\n];
+  "system_control_tool",
+  "google_drive_tool",
+  "google_maps_tool",
+];
 
-/** Read-only help tools â€” never enter the two-step confirm loop. */
+/** Read-only help tools — never enter the two-step confirm loop. */
 export const HELP_TOOL_NAMES: readonly ToolName[] = ["system_help_tool"];
