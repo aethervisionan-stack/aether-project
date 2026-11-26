@@ -885,16 +885,16 @@ export function IqTestApp() {
               className="space-y-6 pt-6"
             >
               <header className="space-y-2 text-center">
-                <p className="text-[11px] font-medium uppercase tracking-[0.28em] text-zinc-500">
-                  Avaliação concluída · {MODE_META[state.mode].short}
+                <p className="text-[11px] font-medium uppercase tracking-[0.28em] text-emerald-300/80">
+                  Selo de conclusão · {MODE_META[state.mode].short}
                 </p>
                 <h1 className="font-iq-display text-3xl text-zinc-50 sm:text-4xl">
-                  Resultados prontos
+                  Parabéns — você concluiu
                 </h1>
                 <p className="mx-auto max-w-md text-sm text-zinc-500">
                   {unlockChecking
-                    ? "Verificando liberação no servidor…"
-                    : "Tudo fica bloqueado até a confirmação InfinitePay desta sessão."}
+                    ? "Só um instante — confirmando se seu resultado já foi liberado…"
+                    : "Seu diagnóstico já foi calculado. Falta só o passo abaixo para abrir tudo com carinho."}
                 </p>
               </header>
               <IqUnlockCard

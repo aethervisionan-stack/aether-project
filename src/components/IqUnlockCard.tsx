@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
-import { Loader2, Lock } from "lucide-react";
+import { Check, Loader2, Lock } from "lucide-react";
 import { createIqCheckout } from "@/src/lib/iqUnlockClient";
 import { redirectToCheckout } from "@/src/utils/checkoutRedirect";
 
@@ -13,6 +13,14 @@ type Props = {
   verifyError?: string | null;
   onRetryVerify?: () => void;
 };
+
+const UNLOCK_BENEFITS = [
+  "Seu QI estimado, explicado com clareza",
+  "Entrada no Hall of Fame",
+  "Perfil cognitivo completo, em linguagem simples",
+  "Revisão das perguntas + cartão para compartilhar",
+  "Convite dedicado à IA para tirar dúvidas do seu resultado",
+] as const;
 
 export function IqUnlockCard({
   sessionId,
@@ -91,7 +99,8 @@ export function IqUnlockCard({
               Confirmando pagamento…
             </h1>
             <p className="mt-2 text-sm text-zinc-400">
-              Aguarde enquanto validamos a confirmação InfinitePay no servidor.
+              Aguarde um instante — estamos confirmando seu pagamento
+              InfinitePay.
             </p>
           </>
         )}
@@ -107,34 +116,31 @@ export function IqUnlockCard({
       aria-labelledby="iq-unlock-heading"
     >
       <div className="flex flex-col items-center text-center">
-        <span className="inline-flex h-12 w-12 items-center justify-center rounded-full border border-cyan-400/30 bg-cyan-400/10">
-          <Lock className="h-5 w-5 text-cyan-300" aria-hidden />
+        <span
+          className="inline-flex h-14 w-14 items-center justify-center rounded-full border border-emerald-400/40 bg-emerald-400/10 shadow-[0_0_24px_-8px_rgba(52,211,153,0.55)]"
+          aria-hidden
+        >
+          <Check className="h-6 w-6 text-emerald-300" strokeWidth={2.5} />
         </span>
-        <p className="mt-4 text-[11px] font-medium uppercase tracking-[0.28em] text-cyan-300/80">
-          Resultados bloqueados
+        <p className="mt-4 text-[11px] font-medium uppercase tracking-[0.28em] text-emerald-300/85">
+          Selo de conclusão
         </p>
         <h1
           id="iq-unlock-heading"
           className="mt-2 font-iq-display text-3xl tracking-tight text-zinc-50"
         >
-          Desbloqueie tudo por {amountLabel}
+          Seu resultado está pronto
         </h1>
         <p className="mt-3 max-w-md text-sm leading-relaxed text-zinc-400">
-          Seu teste foi concluído. QI estimado, ranking (Hall of Fame), índices
-          CHC, perfil cognitivo, revisão das questões, cartão para compartilhar
-          e o assistente Gemini ficam liberados após a confirmação InfinitePay
-          de {amountLabel} no servidor.
+          Você terminou o teste — obrigado pela dedicação. Com {amountLabel}{" "}
+          você apoia os servidores e a inteligência artificial deste projeto e
+          libera o Hall of Fame, um convite dedicado para conversar com a IA
+          sobre o seu perfil, e o restante do seu diagnóstico.
         </p>
       </div>
 
       <ul className="mt-6 space-y-2 text-left text-sm text-zinc-300">
-        {[
-          "QI, percentil e intervalo de confiança",
-          "Índices CHC, perfil e consistência da sessão",
-          "Hall of Fame / ranking local",
-          "Revisão item a item + cartão de compartilhar",
-          "Assistente Gemini grounded no seu IqResult",
-        ].map((item) => (
+        {UNLOCK_BENEFITS.map((item) => (
           <li
             key={item}
             className="flex gap-2 rounded-xl border border-zinc-800/80 bg-zinc-900/50 px-3 py-2"
@@ -168,12 +174,12 @@ export function IqUnlockCard({
             Abrindo checkout…
           </>
         ) : (
-          `Pagar ${amountLabel} e desbloquear`
+          `Desbloquear meu resultado por ${amountLabel}`
         )}
       </button>
       <p className="mt-3 text-center text-xs text-zinc-600">
-        Pagamento protegido via InfinitePay. A liberação exige confirmação no
-        servidor desta sessão — localStorage sozinho não desbloqueia.
+        Pagamento seguro com InfinitePay. A liberação só acontece depois da
+        confirmação do pagamento.
       </p>
     </motion.section>
   );
