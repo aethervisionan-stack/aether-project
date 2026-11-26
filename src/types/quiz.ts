@@ -1,4 +1,4 @@
-/** Professional IQ Test — psychometric & SVG matrix types */
+/** Professional IQ Test — psychometric & SVG matrix types (v2) */
 
 export type ShapeKind =
   | "circle"
@@ -19,6 +19,9 @@ export type RuleCategory =
   | "pattern"
   | "numerical";
 
+/** 1 Basic → 5 Extreme (high ceiling QI 135–155+) */
+export type DifficultyBand = 1 | 2 | 3 | 4 | 5;
+
 export type Arrangement =
   | "center"
   | "grid"
@@ -27,6 +30,23 @@ export type Arrangement =
   | "diagonal"
   | "corners"
   | "ring";
+
+/** Logical error encoded by each wrong option (diagnostic distractors) */
+export type DistractorError =
+  | "incomplete_rotation"
+  | "horizontal_only"
+  | "vertical_only"
+  | "polarity_flip"
+  | "wrong_count"
+  | "shape_swap"
+  | "fill_only"
+  | "or_instead_of_xor"
+  | "and_instead_of_xor"
+  | "missing_rule"
+  | "extra_element"
+  | "mirror_instead_of_rotate"
+  | "wrong_scale"
+  | "partial_union";
 
 export interface Glyph {
   shape: ShapeKind;
@@ -48,19 +68,28 @@ export interface CellContent {
   count?: number;
 }
 
+export interface DistractorSpec {
+  cell: CellContent;
+  error: DistractorError;
+}
+
 export interface MatrixQuestion {
   id: number;
-  /** 1 (very easy) → 10 (genius / Mensa) */
-  difficulty: number;
-  /** Scoring weight; harder items contribute more */
+  /** Band 1–5 */
+  difficulty: DifficultyBand;
+  /** IRT-ish discrimination / scoring weight */
   weight: number;
+  /** Rough latent difficulty (b-parameter), ~ −2 … +2.5 */
+  irtB: number;
   categories: RuleCategory[];
   /** 9 cells; index 8 is always the empty "?" target */
   cells: (CellContent | null)[];
-  /** Exactly 6 options A–F */
+  /** 6 options (bands 1–2) or 8 (bands 3–5) */
   options: CellContent[];
-  /** Index of the uniquely correct option (0–5) */
+  /** Index of the uniquely correct option */
   correctIndex: number;
+  /** Parallel to options; null at correctIndex */
+  distractorErrors: (DistractorError | null)[];
   explanation: {
     /** Portuguese visual-rule explanation for review mode */
     pt: string;
@@ -75,6 +104,8 @@ export interface AnswerRecord {
   selectedIndex: number | null;
   correct: boolean;
   timeMs: number;
+  optionSwitches: number;
+  distractorError: DistractorError | null;
 }
 
 export interface CompetenceScores {
@@ -84,21 +115,50 @@ export interface CompetenceScores {
   numerical: number;
 }
 
+export interface BandTelemetry {
+  band: DifficultyBand;
+  label: string;
+  avgTimeMs: number;
+  accuracy: number;
+  answered: number;
+  total: number;
+}
+
+export interface PrecisionDiagnosis {
+  /** 0–100 composite reliability / precision score */
+  precisionScore: number;
+  reliabilityIndex: number;
+  consistencyIndex: number;
+  guessingFlag: boolean;
+  incompleteFlag: boolean;
+  inconsistentFlag: boolean;
+  warnings: string[];
+  bandTelemetry: BandTelemetry[];
+  hardAccuracy: number;
+  avgOptionSwitches: number;
+}
+
 export interface IqResult {
   rawScore: number;
   maxScore: number;
   accuracy: number;
-  /** Wechsler-like estimated IQ (mean 100, SD 15) */
+  /** Point estimate (Wechsler-like, mean 100, SD 15) */
   iq: number;
+  /** Half-width of ~68% CI, e.g. 5 → "128 (±5)" */
+  marginOfError: number;
+  iqLow: number;
+  iqHigh: number;
   percentile: number;
   band: string;
   competences: CompetenceScores;
   avgTimeMs: number;
   answers: AnswerRecord[];
+  diagnosis: PrecisionDiagnosis;
 }
 
 export interface QuizPersistedState {
-  version: 1;
+  /** Storage schema version — bump when incompatible */
+  version: 2;
   phase: QuizPhase;
   currentIndex: number;
   answers: (number | null)[];
@@ -106,10 +166,30 @@ export interface QuizPersistedState {
   endsAt: number | null;
   questionStartedAt: number | null;
   timeSpentMs: number[];
+  /** Hesitation: how many times the selection changed per item */
+  optionSwitches: number[];
   finishedAt: number | null;
   result: IqResult | null;
 }
 
-export const QUIZ_TOTAL_QUESTIONS = 25;
-export const QUIZ_DURATION_MS = 25 * 60 * 1000;
-export const QUIZ_STORAGE_KEY = "professional-iq-test-v1";
+export const QUIZ_TOTAL_QUESTIONS = 30;
+export const QUIZ_DURATION_MS = 30 * 60 * 1000;
+/** Current key; v1 key is ignored (clean restart) */
+export const QUIZ_STORAGE_KEY = "professional-iq-test-v2";
+export const QUIZ_STORAGE_KEY_LEGACY = "professional-iq-test-v1";
+
+export const BAND_META: Record<
+  DifficultyBand,
+  { label: string; short: string }
+> = {
+  1: { label: "Básico", short: "Básico" },
+  2: { label: "Elementar", short: "Elementar" },
+  3: { label: "Intermediário", short: "Intermediário" },
+  4: { label: "Alta Complexidade", short: "Alta Complexidade" },
+  5: { label: "Extremo", short: "Extremo" },
+};
+
+export function bandProgressLabel(band: DifficultyBand): string {
+  const meta = BAND_META[band];
+  return `Nível ${band}/5 • ${meta.label}`;
+}

@@ -1,10 +1,15 @@
 import type {
   AnswerRecord,
+  BandTelemetry,
   CompetenceScores,
+  DifficultyBand,
+  DistractorError,
   IqResult,
   MatrixQuestion,
+  PrecisionDiagnosis,
   RuleCategory,
 } from "@/src/types/quiz";
+import { BAND_META } from "@/src/types/quiz";
 
 /** Standard normal CDF via Abramowitz & Stegun approximation */
 export function normalCdf(z: number): number {
@@ -96,31 +101,250 @@ function emptyCompetences(): CompetenceScores {
   return { spatial: 0, boolean: 0, pattern: 0, numerical: 0 };
 }
 
+/** 2PL-ish P(correct | θ) */
+function pCorrect(theta: number, a: number, b: number): number {
+  const z = a * (theta - b);
+  if (z > 20) return 1;
+  if (z < -20) return 0;
+  return 1 / (1 + Math.exp(-z));
+}
+
 /**
- * Map weighted accuracy to Wechsler-like IQ (mean 100, SD 15).
- * Progressive items are harder; missing late items hurts less than missing early ones
- * via the weight table, while a logistic transform avoids cliff effects at the tails.
+ * MAP estimate of latent ability θ (mean 0, prior N(0,1)).
+ * Discrimination a derived from item weight; difficulty from irtB.
  */
-export function estimateIq(accuracy: number, difficultyBonus: number): number {
-  // Expected accuracy for IQ 100 ~ 0.55 on this battery; genius ~ 0.92+
-  const centered = accuracy - 0.55 + difficultyBonus * 0.04;
-  const z = centered / 0.18;
-  const iq = 100 + 15 * z;
-  return Math.round(Math.min(160, Math.max(70, iq)));
+export function estimateTheta(
+  questions: MatrixQuestion[],
+  correct: boolean[],
+): { theta: number; se: number; information: number } {
+  let theta = 0;
+  for (let iter = 0; iter < 40; iter++) {
+    let num = 0;
+    let den = 0;
+    for (let i = 0; i < questions.length; i++) {
+      if (correct[i] === undefined) continue;
+      const q = questions[i];
+      const a = 0.55 + q.weight * 0.22;
+      const b = q.irtB;
+      const p = pCorrect(theta, a, b);
+      const w = a * a * p * (1 - p);
+      den += w;
+      num += a * ((correct[i] ? 1 : 0) - p);
+    }
+    // Prior N(0,1)
+    num -= theta;
+    den += 1;
+    if (den < 1e-6) break;
+    const delta = num / den;
+    theta += delta;
+    if (Math.abs(delta) < 1e-4) break;
+  }
+  theta = Math.max(-3.2, Math.min(3.5, theta));
+
+  let information = 1; // prior
+  for (let i = 0; i < questions.length; i++) {
+    const q = questions[i];
+    const a = 0.55 + q.weight * 0.22;
+    const p = pCorrect(theta, a, q.irtB);
+    information += a * a * p * (1 - p);
+  }
+  const se = 1 / Math.sqrt(Math.max(information, 0.25));
+  return { theta, se, information };
+}
+
+/** Map θ → IQ; exceptional L5 performance unlocks ceiling toward 155+ */
+export function thetaToIq(
+  theta: number,
+  hardHits: number,
+  hardTotal: number,
+): number {
+  let iq = 100 + 15 * theta;
+  // Soft ceiling: only exceptional high-band accuracy pushes past ~145–155
+  if (hardTotal > 0) {
+    const hardRate = hardHits / hardTotal;
+    if (hardRate >= 0.75 && theta > 1.8) {
+      iq += (hardRate - 0.75) * 20;
+    } else if (hardRate < 0.25 && iq > 130) {
+      iq = 130 + (iq - 130) * 0.4;
+    }
+  }
+  return Math.round(Math.min(160, Math.max(68, iq)));
+}
+
+function expectedTimeMs(band: DifficultyBand): number {
+  switch (band) {
+    case 1:
+      return 18_000;
+    case 2:
+      return 28_000;
+    case 3:
+      return 40_000;
+    case 4:
+      return 55_000;
+    case 5:
+      return 70_000;
+  }
+}
+
+function buildDiagnosis(
+  questions: MatrixQuestion[],
+  answers: AnswerRecord[],
+  optionSwitches: number[],
+): PrecisionDiagnosis {
+  const bands: DifficultyBand[] = [1, 2, 3, 4, 5];
+  const bandTelemetry: BandTelemetry[] = bands.map((band) => {
+    const idxs = questions
+      .map((q, i) => ({ q, i }))
+      .filter((x) => x.q.difficulty === band);
+    const answered = idxs.filter((x) => answers[x.i].selectedIndex !== null);
+    const correct = answered.filter((x) => answers[x.i].correct);
+    const times = answered.map((x) => answers[x.i].timeMs).filter((t) => t > 0);
+    const avgTimeMs =
+      times.length > 0
+        ? Math.round(times.reduce((a, b) => a + b, 0) / times.length)
+        : 0;
+    return {
+      band,
+      label: BAND_META[band].label,
+      avgTimeMs,
+      accuracy: answered.length ? correct.length / answered.length : 0,
+      answered: answered.length,
+      total: idxs.length,
+    };
+  });
+
+  const hardIdx = questions
+    .map((q, i) => ({ q, i }))
+    .filter((x) => x.q.difficulty >= 4);
+  const hardAnswered = hardIdx.filter(
+    (x) => answers[x.i].selectedIndex !== null,
+  );
+  const hardCorrect = hardAnswered.filter((x) => answers[x.i].correct);
+  const hardAccuracy = hardAnswered.length
+    ? hardCorrect.length / hardAnswered.length
+    : 0;
+
+  // Guessing: ultra-fast on complex items
+  let guessCount = 0;
+  for (const { q, i } of hardIdx) {
+    const t = answers[i].timeMs;
+    const selected = answers[i].selectedIndex !== null;
+    if (selected && t > 0 && t < expectedTimeMs(q.difficulty) * 0.28) {
+      guessCount += 1;
+    }
+  }
+  const guessingFlag = guessCount >= 2;
+
+  // Incomplete / early abort
+  const unanswered = answers.filter((a) => a.selectedIndex === null).length;
+  const incompleteFlag = unanswered >= 5;
+
+  // Consistency within bands: variance of correctness mid-band
+  let inconsistencyHits = 0;
+  for (const band of [2, 3, 4] as DifficultyBand[]) {
+    const bt = bandTelemetry.find((b) => b.band === band)!;
+    if (bt.answered < 4) continue;
+    const idxs = questions
+      .map((q, i) => i)
+      .filter((i) => questions[i].difficulty === band);
+    const outcomes = idxs
+      .filter((i) => answers[i].selectedIndex !== null)
+      .map((i) => (answers[i].correct ? 1 : 0));
+    const mean =
+      outcomes.reduce<number>((a, b) => a + b, 0) /
+      Math.max(outcomes.length, 1);
+    const var_ =
+      outcomes.reduce<number>((a, b) => a + (b - mean) ** 2, 0) /
+      Math.max(outcomes.length, 1);
+    // High variance with medium accuracy → zigzag / inconsistent
+    if (var_ > 0.22 && mean > 0.25 && mean < 0.75) inconsistencyHits += 1;
+  }
+  const inconsistentFlag = inconsistencyHits >= 2;
+
+  const switchSum = optionSwitches.reduce((a, b) => a + b, 0);
+  const answeredCount = answers.filter((a) => a.selectedIndex !== null).length;
+  const avgOptionSwitches =
+    answeredCount > 0 ? switchSum / answeredCount : 0;
+
+  // Reliability / consistency composites (0–100)
+  let reliabilityIndex = 100;
+  if (guessingFlag) reliabilityIndex -= 18 + guessCount * 4;
+  if (incompleteFlag) reliabilityIndex -= 10 + unanswered * 2;
+  if (inconsistentFlag) reliabilityIndex -= 14;
+  if (avgOptionSwitches > 2.5) reliabilityIndex -= 8;
+  reliabilityIndex = Math.max(20, Math.min(100, Math.round(reliabilityIndex)));
+
+  let consistencyIndex = 100 - inconsistencyHits * 18;
+  if (guessingFlag) consistencyIndex -= 12;
+  consistencyIndex = Math.max(25, Math.min(100, Math.round(consistencyIndex)));
+
+  const precisionScore = Math.round(
+    reliabilityIndex * 0.55 + consistencyIndex * 0.45,
+  );
+
+  const warnings: string[] = [];
+  if (guessingFlag) {
+    warnings.push(
+      `Possível chute: ${guessCount} itens de alta complexidade respondidos muito rápido.`,
+    );
+  }
+  if (incompleteFlag) {
+    warnings.push(
+      `Sessão incompleta: ${unanswered} itens sem resposta (abort precoce reduz precisão).`,
+    );
+  }
+  if (inconsistentFlag) {
+    warnings.push(
+      "Desempenho inconsistente dentro do mesmo nível de dificuldade.",
+    );
+  }
+  if (avgOptionSwitches > 2.8) {
+    warnings.push(
+      "Alta hesitação (muitas trocas de opção) — índice de confiança reduzido.",
+    );
+  }
+  if (warnings.length === 0) {
+    warnings.push("Padrão de resposta coerente com esforço deliberado.");
+  }
+
+  return {
+    precisionScore,
+    reliabilityIndex,
+    consistencyIndex,
+    guessingFlag,
+    incompleteFlag,
+    inconsistentFlag,
+    warnings,
+    bandTelemetry,
+    hardAccuracy,
+    avgOptionSwitches: Math.round(avgOptionSwitches * 100) / 100,
+  };
 }
 
 export function calculateIqResult(
   questions: MatrixQuestion[],
   selected: (number | null)[],
   timeSpentMs: number[],
+  optionSwitches: number[] = [],
 ): IqResult {
   const answers: AnswerRecord[] = questions.map((q, i) => {
     const selectedIndex = selected[i] ?? null;
+    const correct = selectedIndex === q.correctIndex;
+    let distractorError: DistractorError | null = null;
+    if (
+      selectedIndex !== null &&
+      !correct &&
+      q.distractorErrors?.[selectedIndex]
+    ) {
+      distractorError = q.distractorErrors[selectedIndex];
+    }
     return {
       questionId: q.id,
       selectedIndex,
-      correct: selectedIndex === q.correctIndex,
+      correct,
       timeMs: timeSpentMs[i] ?? 0,
+      optionSwitches: optionSwitches[i] ?? 0,
+      distractorError,
     };
   });
 
@@ -128,12 +352,12 @@ export function calculateIqResult(
   let maxScore = 0;
   const catCorrect = emptyCompetences();
   const catTotal = emptyCompetences();
+  const correctFlags = answers.map((a) => a.correct);
 
   for (let i = 0; i < questions.length; i++) {
     const q = questions[i];
     maxScore += q.weight;
     if (answers[i].correct) rawScore += q.weight;
-
     for (const cat of q.categories) {
       catTotal[cat] += q.weight;
       if (answers[i].correct) catCorrect[cat] += q.weight;
@@ -141,11 +365,37 @@ export function calculateIqResult(
   }
 
   const accuracy = maxScore > 0 ? rawScore / maxScore : 0;
-  const hardHits = questions.filter(
-    (q, i) => q.difficulty >= 8 && answers[i].correct,
+  const { theta, se } = estimateTheta(questions, correctFlags);
+
+  const hardQs = questions.filter((q) => q.difficulty >= 4);
+  const hardHits = hardQs.filter(
+    (q) => answers[questions.indexOf(q)]?.correct,
   ).length;
-  const difficultyBonus = hardHits / 8;
-  const iq = estimateIq(accuracy, difficultyBonus);
+  // Prefer index-based hard hits
+  let hardHits2 = 0;
+  let hardTotal = 0;
+  for (let i = 0; i < questions.length; i++) {
+    if (questions[i].difficulty >= 4) {
+      hardTotal += 1;
+      if (answers[i].correct) hardHits2 += 1;
+    }
+  }
+
+  const iq = thetaToIq(theta, hardHits2, hardTotal);
+  // SE on IQ scale; inflate when reliability low
+  const diagnosis = buildDiagnosis(
+    questions,
+    answers,
+    optionSwitches.length ? optionSwitches : answers.map((a) => a.optionSwitches),
+  );
+  const reliabilityFactor =
+    0.65 + (diagnosis.reliabilityIndex / 100) * 0.55;
+  const marginOfError = Math.max(
+    3,
+    Math.min(12, Math.round(15 * se * (2 - reliabilityFactor))),
+  );
+  const iqLow = Math.max(68, iq - marginOfError);
+  const iqHigh = Math.min(160, iq + marginOfError);
   const percentile = Math.round(normalCdf((iq - 100) / 15) * 1000) / 10;
 
   const competences = emptyCompetences();
@@ -164,16 +414,22 @@ export function calculateIqResult(
         )
       : 0;
 
+  void hardHits; // kept for clarity; hardHits2 is authoritative
+
   return {
     rawScore,
     maxScore,
     accuracy,
     iq,
+    marginOfError,
+    iqLow,
+    iqHigh,
     percentile,
     band: iqBand(iq),
     competences,
     avgTimeMs,
     answers,
+    diagnosis,
   };
 }
 
@@ -187,5 +443,38 @@ export function competenceLabel(key: keyof CompetenceScores): string {
       return "Reconhecimento de Padrões";
     case "numerical":
       return "Progressão Numérica";
+  }
+}
+
+export function distractorErrorLabel(err: DistractorError): string {
+  switch (err) {
+    case "incomplete_rotation":
+      return "Rotação incompleta";
+    case "horizontal_only":
+      return "Só regra horizontal";
+    case "vertical_only":
+      return "Só regra vertical";
+    case "polarity_flip":
+      return "Inversão de polaridade";
+    case "wrong_count":
+      return "Contagem incorreta";
+    case "shape_swap":
+      return "Troca de forma";
+    case "fill_only":
+      return "Só preenchimento";
+    case "or_instead_of_xor":
+      return "OR no lugar de XOR";
+    case "and_instead_of_xor":
+      return "AND no lugar de XOR";
+    case "missing_rule":
+      return "Regra omitida";
+    case "extra_element":
+      return "Elemento extra";
+    case "mirror_instead_of_rotate":
+      return "Espelho em vez de rotação";
+    case "wrong_scale":
+      return "Escala incorreta";
+    case "partial_union":
+      return "União parcial";
   }
 }

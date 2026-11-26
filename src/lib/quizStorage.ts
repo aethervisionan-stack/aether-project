@@ -1,13 +1,29 @@
 import type { QuizPersistedState } from "@/src/types/quiz";
-import { QUIZ_STORAGE_KEY } from "@/src/types/quiz";
+import {
+  QUIZ_STORAGE_KEY,
+  QUIZ_STORAGE_KEY_LEGACY,
+  QUIZ_TOTAL_QUESTIONS,
+} from "@/src/types/quiz";
 
 export function loadQuizState(): QuizPersistedState | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = localStorage.getItem(QUIZ_STORAGE_KEY);
-    if (!raw) return null;
+    if (!raw) {
+      // Ignore legacy v1 sessions — clean restart without breaking key presence
+      return null;
+    }
     const parsed = JSON.parse(raw) as QuizPersistedState;
-    if (parsed?.version !== 1) return null;
+    if (parsed?.version !== 2) return null;
+    if (
+      !Array.isArray(parsed.answers) ||
+      parsed.answers.length !== QUIZ_TOTAL_QUESTIONS
+    ) {
+      return null;
+    }
+    if (!Array.isArray(parsed.optionSwitches)) {
+      parsed.optionSwitches = Array(QUIZ_TOTAL_QUESTIONS).fill(0);
+    }
     return parsed;
   } catch {
     return null;
@@ -27,6 +43,7 @@ export function clearQuizState(): void {
   if (typeof window === "undefined") return;
   try {
     localStorage.removeItem(QUIZ_STORAGE_KEY);
+    localStorage.removeItem(QUIZ_STORAGE_KEY_LEGACY);
   } catch {
     // ignore
   }
@@ -34,14 +51,15 @@ export function clearQuizState(): void {
 
 export function createInitialState(): QuizPersistedState {
   return {
-    version: 1,
+    version: 2,
     phase: "onboarding",
     currentIndex: 0,
-    answers: Array(25).fill(null),
+    answers: Array(QUIZ_TOTAL_QUESTIONS).fill(null),
     startedAt: null,
     endsAt: null,
     questionStartedAt: null,
-    timeSpentMs: Array(25).fill(0),
+    timeSpentMs: Array(QUIZ_TOTAL_QUESTIONS).fill(0),
+    optionSwitches: Array(QUIZ_TOTAL_QUESTIONS).fill(0),
     finishedAt: null,
     result: null,
   };

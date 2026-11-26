@@ -6,7 +6,11 @@ import {
   getMatrixQuestions,
   getTutorialExample,
 } from "@/src/lib/matrixGenerator";
-import { calculateIqResult, competenceLabel } from "@/src/lib/iqCalculator";
+import {
+  calculateIqResult,
+  competenceLabel,
+  distractorErrorLabel,
+} from "@/src/lib/iqCalculator";
 import {
   clearQuizState,
   createInitialState,
@@ -16,6 +20,7 @@ import {
 import {
   QUIZ_DURATION_MS,
   QUIZ_TOTAL_QUESTIONS,
+  bandProgressLabel,
   type CompetenceScores,
   type QuizPersistedState,
 } from "@/src/types/quiz";
@@ -73,7 +78,13 @@ export function IqTestApp() {
       ) {
         timeSpent[prev.currentIndex] += Date.now() - prev.questionStartedAt;
       }
-      const result = calculateIqResult(questions, prev.answers, timeSpent);
+      const switches = prev.optionSwitches ?? Array(QUIZ_TOTAL_QUESTIONS).fill(0);
+      const result = calculateIqResult(
+        questions,
+        prev.answers,
+        timeSpent,
+        switches,
+      );
       return {
         ...prev,
         phase: "results",
@@ -116,8 +127,15 @@ export function IqTestApp() {
     setState((prev) => {
       if (prev.phase !== "test") return prev;
       const answers = [...prev.answers];
+      const switches = [...(prev.optionSwitches ?? Array(QUIZ_TOTAL_QUESTIONS).fill(0))];
+      const prevSel = answers[prev.currentIndex];
+      if (prevSel !== null && prevSel !== optionIndex) {
+        switches[prev.currentIndex] += 1;
+      } else if (prevSel === null) {
+        // first pick — not a switch
+      }
       answers[prev.currentIndex] = optionIndex;
-      return { ...prev, answers };
+      return { ...prev, answers, optionSwitches: switches };
     });
   };
 
@@ -172,7 +190,6 @@ export function IqTestApp() {
     });
   };
 
-  // Keyboard shortcuts during test
   useEffect(() => {
     if (state.phase !== "test") return;
     const onKey = (e: KeyboardEvent) => {
@@ -184,20 +201,28 @@ export function IqTestApp() {
         "4": 3,
         "5": 4,
         "6": 5,
+        "7": 6,
+        "8": 7,
         a: 0,
         b: 1,
         c: 2,
         d: 3,
         e: 4,
         f: 5,
+        g: 6,
+        h: 7,
         A: 0,
         B: 1,
         C: 2,
         D: 3,
         E: 4,
         F: 5,
+        G: 6,
+        H: 7,
       };
       if (e.key in map) {
+        const q = questions[state.currentIndex];
+        if (map[e.key] >= (q?.options.length ?? 0)) return;
         e.preventDefault();
         selectAnswer(map[e.key]);
         return;
@@ -232,6 +257,7 @@ export function IqTestApp() {
   }
 
   const q = questions[state.currentIndex];
+  const bandLabel = q ? bandProgressLabel(q.difficulty) : "";
 
   return (
     <div className="iq-shell relative mx-auto min-h-screen max-w-5xl px-4 pb-16 pt-6 sm:px-6">
@@ -269,8 +295,9 @@ export function IqTestApp() {
                 Teste de QI Profissional
               </h1>
               <p className="mx-auto max-w-xl text-base text-zinc-400 sm:text-lg">
-                Matrizes progressivas no estilo Raven / Mensa — 25 itens que
-                medem inteligência fluida (Gf) e raciocínio lógico-espacial.
+                Matrizes progressivas — 30 itens em 5 níveis de complexidade,
+                teto alto (QI ~155+), distratores diagnósticos e índice de
+                confiabilidade da sessão.
               </p>
             </header>
 
@@ -278,15 +305,15 @@ export function IqTestApp() {
               {[
                 {
                   t: "Visual",
-                  d: "Sem texto nas questões. Só padrões SVG gerados proceduralmente.",
+                  d: "Sem texto nas questões. Padrões SVG com regras combinadas nos níveis altos.",
                 },
                 {
-                  t: "25 minutos",
-                  d: "Cronômetro global. Você pode revisar respostas antes de finalizar.",
+                  t: "30 minutos",
+                  d: "Cronômetro global. Telemetria de tempo e hesitação por item.",
                 },
                 {
                   t: "Teclado",
-                  d: "1–6 ou A–F para escolher; Enter / → avançar; ← voltar.",
+                  d: "A–H / 1–8 para escolher; Enter / → avançar; ← voltar.",
                 },
               ].map((item) => (
                 <div key={item.t} className="space-y-1.5">
@@ -350,7 +377,8 @@ export function IqTestApp() {
                 Iniciar Avaliação Oficial
               </motion.button>
               <p className="text-xs text-zinc-600">
-                O progresso é salvo automaticamente neste navegador.
+                Progresso versionado (v2) neste navegador — sessões antigas não
+                interferem.
               </p>
             </div>
           </motion.section>
@@ -366,14 +394,14 @@ export function IqTestApp() {
           >
             <header className="sticky top-0 z-20 -mx-4 border-b border-zinc-800/80 bg-zinc-950/90 px-4 py-3 backdrop-blur-md sm:-mx-6 sm:px-6">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
+                <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-3">
                   <span className="font-iq-display text-lg text-zinc-100 tabular-nums">
                     {state.currentIndex + 1}
-                    <span className="text-zinc-600">/{QUIZ_TOTAL_QUESTIONS}</span>
+                    <span className="text-zinc-600">
+                      /{QUIZ_TOTAL_QUESTIONS}
+                    </span>
                   </span>
-                  <span className="hidden text-xs text-zinc-500 sm:inline">
-                    dificuldade {q.difficulty}/10
-                  </span>
+                  <span className="text-xs text-zinc-400">{bandLabel}</span>
                 </div>
                 <div
                   className={`font-mono text-lg tabular-nums ${
@@ -433,14 +461,18 @@ export function IqTestApp() {
                 className="flex flex-col items-center gap-6"
               >
                 <div className="w-full max-w-[360px]">
-                  <MatrixRenderer cells={q.cells} size={320} className="!w-full !h-auto max-w-full" />
+                  <MatrixRenderer
+                    cells={q.cells}
+                    size={320}
+                    className="!h-auto !w-full max-w-full"
+                  />
                 </div>
-                <div className="w-full max-w-3xl">
+                <div className="w-full max-w-4xl">
                   <OptionGrid
                     options={q.options}
                     selectedIndex={state.answers[state.currentIndex]}
                     onSelect={selectAnswer}
-                    cellSize={88}
+                    cellSize={q.options.length >= 8 ? 78 : 88}
                   />
                 </div>
               </motion.div>
@@ -487,11 +519,15 @@ export function IqTestApp() {
                   transition={{ type: "spring", stiffness: 160, damping: 14 }}
                 >
                   {state.result.iq}
+                  <span className="ml-2 text-2xl font-normal text-zinc-500 sm:text-3xl">
+                    (±{state.result.marginOfError})
+                  </span>
                 </motion.h1>
                 <p className="text-emerald-400">{state.result.band}</p>
                 <p className="text-sm text-zinc-500">
-                  Escala Wechsler/Mensa (média 100, DP 15) · acertos ponderados{" "}
-                  {state.result.rawScore.toFixed(1)}/
+                  Percentil {state.result.percentile} · IC≈{" "}
+                  {state.result.iqLow}–{state.result.iqHigh} · acertos
+                  ponderados {state.result.rawScore.toFixed(1)}/
                   {state.result.maxScore.toFixed(1)}
                 </p>
               </header>
@@ -505,7 +541,9 @@ export function IqTestApp() {
 
               <div className="grid gap-3 sm:grid-cols-2">
                 {(
-                  Object.keys(state.result.competences) as (keyof CompetenceScores)[]
+                  Object.keys(
+                    state.result.competences,
+                  ) as (keyof CompetenceScores)[]
                 ).map((key) => {
                   const value = state.result!.competences[key];
                   return (
@@ -534,12 +572,81 @@ export function IqTestApp() {
                 })}
               </div>
 
-              <p className="text-center text-sm text-zinc-500">
-                Tempo médio por questão:{" "}
-                <span className="tabular-nums text-zinc-300">
-                  {(state.result.avgTimeMs / 1000).toFixed(1)}s
-                </span>
-              </p>
+              {/* Precision Diagnosis */}
+              <div className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-950/70 p-5 sm:p-6">
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <h2 className="text-lg font-semibold text-zinc-100">
+                    Diagnóstico de Precisão
+                  </h2>
+                  <p className="text-sm tabular-nums text-zinc-400">
+                    Precisão {state.result.diagnosis.precisionScore}/100 ·
+                    Confiabilidade{" "}
+                    {state.result.diagnosis.reliabilityIndex}/100
+                  </p>
+                </div>
+
+                <div className="grid gap-2 sm:grid-cols-5">
+                  {state.result.diagnosis.bandTelemetry.map((bt) => (
+                    <div
+                      key={bt.band}
+                      className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-3 text-center"
+                    >
+                      <p className="text-[10px] uppercase tracking-wider text-zinc-500">
+                        N{bt.band}
+                      </p>
+                      <p className="text-xs text-zinc-300">{bt.label}</p>
+                      <p className="mt-1 text-sm tabular-nums text-zinc-200">
+                        {bt.answered
+                          ? `${Math.round(bt.accuracy * 100)}%`
+                          : "—"}
+                      </p>
+                      <p className="text-[11px] tabular-nums text-zinc-500">
+                        {bt.avgTimeMs
+                          ? `${(bt.avgTimeMs / 1000).toFixed(1)}s méd.`
+                          : "sem tempo"}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex flex-wrap gap-4 text-sm text-zinc-400">
+                  <span>
+                    Acurácia N4–5:{" "}
+                    <span className="tabular-nums text-zinc-200">
+                      {Math.round(state.result.diagnosis.hardAccuracy * 100)}%
+                    </span>
+                  </span>
+                  <span>
+                    Tempo médio:{" "}
+                    <span className="tabular-nums text-zinc-200">
+                      {(state.result.avgTimeMs / 1000).toFixed(1)}s
+                    </span>
+                  </span>
+                  <span>
+                    Hesitação (trocas):{" "}
+                    <span className="tabular-nums text-zinc-200">
+                      {state.result.diagnosis.avgOptionSwitches}
+                    </span>
+                  </span>
+                </div>
+
+                <ul className="space-y-1.5">
+                  {state.result.diagnosis.warnings.map((w) => (
+                    <li
+                      key={w}
+                      className={`text-sm leading-relaxed ${
+                        state.result!.diagnosis.guessingFlag ||
+                        state.result!.diagnosis.incompleteFlag ||
+                        state.result!.diagnosis.inconsistentFlag
+                          ? "text-amber-300/90"
+                          : "text-emerald-400/80"
+                      }`}
+                    >
+                      {w}
+                    </li>
+                  ))}
+                </ul>
+              </div>
 
               <div className="flex flex-wrap justify-center gap-3">
                 <button
@@ -613,12 +720,17 @@ function ReviewPanel({
 
   const safe = ((index % wrong.length) + wrong.length) % wrong.length;
   const item = wrong[safe];
+  const err =
+    item.selected != null
+      ? item.q.distractorErrors[item.selected]
+      : null;
 
   return (
     <div className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-950/70 p-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-base font-semibold text-zinc-100">
-          Revisão {safe + 1}/{wrong.length} — Questão {item.q.id}
+          Revisão {safe + 1}/{wrong.length} — Questão {item.q.id} ·{" "}
+          {bandProgressLabel(item.q.difficulty)}
         </h3>
         <button
           type="button"
@@ -630,15 +742,22 @@ function ReviewPanel({
       </div>
       <div className="flex flex-col items-center gap-5 lg:flex-row lg:items-start lg:justify-center">
         <MatrixRenderer cells={item.q.cells} size={260} />
-        <div className="w-full max-w-md space-y-3">
+        <div className="w-full max-w-lg space-y-3">
           <OptionGrid
             options={item.q.options}
             selectedIndex={item.selected}
             revealedCorrect={item.q.correctIndex}
             onSelect={() => {}}
             disabled
-            cellSize={70}
+            cellSize={64}
           />
+          {err ? (
+            <p className="text-xs text-amber-400/90">
+              Erro diagnóstico: {distractorErrorLabel(err)}
+            </p>
+          ) : item.selected == null ? (
+            <p className="text-xs text-zinc-500">Sem resposta</p>
+          ) : null}
           <p className="rounded-lg border border-zinc-800 bg-zinc-900/80 p-3 text-sm leading-relaxed text-zinc-300">
             {item.q.explanation.pt}
           </p>

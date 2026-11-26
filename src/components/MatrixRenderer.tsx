@@ -330,9 +330,13 @@ export function OptionGrid({
   disabled?: boolean;
   cellSize?: number;
 }) {
-  const labels = ["A", "B", "C", "D", "E", "F"];
+  const labels = ["A", "B", "C", "D", "E", "F", "G", "H"];
+  const cols =
+    options.length >= 8
+      ? "grid-cols-4 sm:grid-cols-8"
+      : "grid-cols-3 sm:grid-cols-6";
   return (
-    <div className="grid grid-cols-3 gap-2 sm:grid-cols-6 sm:gap-3">
+    <div className={`grid gap-2 sm:gap-3 ${cols}`}>
       {options.map((opt, i) => {
         const isSelected = selectedIndex === i;
         const isCorrect = revealedCorrect === i;
