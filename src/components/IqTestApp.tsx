@@ -75,6 +75,7 @@ import {
   LeaderboardPanel,
   UserRankBanner,
 } from "@/src/components/LeaderboardPanel";
+import { ProfileDoubtAssistant } from "@/src/components/ProfileDoubtAssistant";
 import {
   AvatarPicker,
   ParticipantAvatar,
@@ -1335,6 +1336,13 @@ function ResultsDashboard({
           </ul>
         </section>
       ) : null}
+
+      <ProfileDoubtAssistant
+        result={result}
+        participantName={participantName}
+        rank={userRank}
+        rankTotal={allRanked.length}
+      />
 
       {result.activeCompetences.length > 0 ? (
         <details className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
