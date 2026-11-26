@@ -177,7 +177,8 @@ export function buildLeaderboardEntry(input: {
     name: normalizeParticipantName(input.name),
     ...(avatarUrl ? { avatarUrl } : {}),
     iqScore: input.result.iq,
-    confidenceMargin: input.result.marginOfError,
+    confidenceMargin:
+      input.result.confidenceMargin ?? input.result.marginOfError,
     percentile: input.result.percentile,
     mode: assessmentModeToLeaderboardMode(input.result.mode),
     accuracyLevel: input.result.diagnosis.precisionScore,

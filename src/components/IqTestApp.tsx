@@ -13,6 +13,7 @@ import {
   calculateIqResult,
   competenceLabel,
   distractorErrorLabel,
+  findNextUnanswered,
   percentilePlainLanguage,
   sessionConsistencyLabel,
 } from "@/src/lib/iqCalculator";
@@ -98,6 +99,7 @@ export function IqTestApp() {
   const [leaderboardTick, setLeaderboardTick] = useState(0);
   const [challengeInvite, setChallengeInvite] =
     useState<ChallengeInvite | null>(null);
+  const [finishWarning, setFinishWarning] = useState<string | null>(null);
 
   const mode: AssessmentMode | null =
     state.phase === "modeSelect" ? null : state.mode;
@@ -125,7 +127,10 @@ export function IqTestApp() {
   }, [state, hydrated]);
 
   const finishTest = useCallback(
-    (prev: QuizPersistedState): QuizPersistedState => {
+    (
+      prev: QuizPersistedState,
+      opts: { timedOut?: boolean } = {},
+    ): QuizPersistedState => {
       if (prev.phase === "results" || prev.phase === "review") return prev;
       const items = getAssessmentItems(prev.mode);
       const n = items.length;
@@ -144,6 +149,7 @@ export function IqTestApp() {
         timeSpent,
         switches,
         prev.mode,
+        { timedOut: Boolean(opts.timedOut) },
       );
       const finishedAt = Date.now();
       const displayName = normalizeParticipantName(prev.participantName ?? "");
@@ -186,9 +192,10 @@ export function IqTestApp() {
   }, [state.phase, state.leaderboardEntryId]);
 
   const onExpire = useCallback(() => {
+    setFinishWarning(null);
     setState((prev) => {
       if (prev.phase !== "test") return prev;
-      return finishTest(prev);
+      return finishTest(prev, { timedOut: true });
     });
   }, [finishTest]);
 
@@ -261,6 +268,7 @@ export function IqTestApp() {
   };
 
   const selectAnswer = (optionIndex: number) => {
+    setFinishWarning(null);
     setState((prev) => {
       if (prev.phase !== "test") return prev;
       const n = prev.totalQuestions || QUIZ_TOTAL_QUESTIONS;
@@ -296,12 +304,33 @@ export function IqTestApp() {
       if (prev.phase !== "test") return prev;
       const n = prev.totalQuestions || questions.length;
       if (prev.currentIndex >= n - 1) {
+        const blankIdx = findNextUnanswered(prev.answers, 0);
+        if (blankIdx >= 0) {
+          const blankCount = prev.answers.filter((a) => a === null).length;
+          queueMicrotask(() => {
+            setFinishWarning(
+              `Ainda há ${blankCount} questão(ões) sem resposta. Responda todas para ver o resultado.`,
+            );
+          });
+          const timeSpent = [...prev.timeSpentMs];
+          if (prev.questionStartedAt) {
+            timeSpent[prev.currentIndex] += Date.now() - prev.questionStartedAt;
+          }
+          return {
+            ...prev,
+            currentIndex: blankIdx,
+            timeSpentMs: timeSpent,
+            questionStartedAt: Date.now(),
+          };
+        }
+        queueMicrotask(() => setFinishWarning(null));
         return finishTest(prev);
       }
       const timeSpent = [...prev.timeSpentMs];
       if (prev.questionStartedAt) {
         timeSpent[prev.currentIndex] += Date.now() - prev.questionStartedAt;
       }
+      queueMicrotask(() => setFinishWarning(null));
       return {
         ...prev,
         currentIndex: prev.currentIndex + 1,
@@ -390,6 +419,7 @@ export function IqTestApp() {
     setTutorialOk(false);
     setNameError(null);
     setAvatarError(null);
+    setFinishWarning(null);
     setReviewIndex(0);
     setState({
       ...createModeSelectState(),
@@ -527,13 +557,6 @@ export function IqTestApp() {
                 >
                   {formatTime(remaining)}
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setState((p) => finishTest(p))}
-                  className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:border-zinc-500 hover:text-zinc-100"
-                >
-                  Finalizar agora
-                </button>
               </div>
               <div className="mt-2 h-1 overflow-hidden rounded-full bg-zinc-800">
                 <motion.div
@@ -543,6 +566,15 @@ export function IqTestApp() {
                   transition={{ type: "spring", stiffness: 120, damping: 20 }}
                 />
               </div>
+              {finishWarning ? (
+                <p
+                  className="mt-2 text-xs text-amber-300"
+                  role="alert"
+                  aria-live="assertive"
+                >
+                  {finishWarning}
+                </p>
+              ) : null}
             </header>
 
             <div className="flex flex-wrap justify-center gap-1.5 py-1">
@@ -1062,8 +1094,9 @@ function ResultsDashboard({
             {consistency.detail}
           </p>
           <p className="mt-3 text-xs tabular-nums opacity-70">
-            Índice de precisão {result.diagnosis.precisionScore}/100 ·
-            confiabilidade {result.diagnosis.reliabilityIndex}/100
+            Consistência {result.consistencyScore}/100 · precisão{" "}
+            {result.diagnosis.precisionScore}/100 · confiabilidade{" "}
+            {result.diagnosis.reliabilityIndex}/100
           </p>
         </article>
       </div>
@@ -1125,7 +1158,9 @@ function ResultsDashboard({
             Detalhe por nível de dificuldade
           </h2>
           <p className="text-sm tabular-nums text-zinc-500">
-            Tempo médio {(result.avgTimeMs / 1000).toFixed(1)}s · trocas{" "}
+            Tempo médio {(result.avgTimeMs / 1000).toFixed(1)}s · mediana{" "}
+            {(result.timeMetrics.medianMs / 1000).toFixed(1)}s · respondidas{" "}
+            {result.timeMetrics.answeredCount}/{questions.length} · trocas{" "}
             {result.diagnosis.avgOptionSwitches}
           </p>
         </div>

@@ -183,7 +183,10 @@ export interface PrecisionDiagnosis {
   /** 0–100 composite reliability / precision score */
   precisionScore: number;
   reliabilityIndex: number;
+  /** @deprecated alias of consistencyScore — kept for persisted UI */
   consistencyIndex: number;
+  /** 0–100 response-pattern consistency (easy-miss/hard-hit + rush penalties) */
+  consistencyScore: number;
   guessingFlag: boolean;
   incompleteFlag: boolean;
   inconsistentFlag: boolean;
@@ -191,6 +194,18 @@ export interface PrecisionDiagnosis {
   bandTelemetry: BandTelemetry[];
   hardAccuracy: number;
   avgOptionSwitches: number;
+  /** How many items had a selection when the session ended */
+  answeredInTime: number;
+  /** True when the countdown hit zero */
+  timedOut: boolean;
+}
+
+export interface TimeMetrics {
+  totalMs: number;
+  avgMs: number;
+  medianMs: number;
+  answeredCount: number;
+  unansweredCount: number;
 }
 
 export interface IqResult {
@@ -200,8 +215,14 @@ export interface IqResult {
   accuracy: number;
   /** Point estimate (Wechsler-like, mean 100, SD 15) */
   iq: number;
-  /** Half-width of ~68% CI, e.g. 5 → "128 (±5)" */
+  /** Latent ability θ from 3PL MAP (mean 0, SD≈1) */
+  theta: number;
+  /** Half-width of ~68% CI, e.g. 5 → "128 (±5)" — alias of confidenceMargin */
   marginOfError: number;
+  /** IRT SE-based confidence half-width (same value as marginOfError) */
+  confidenceMargin: number;
+  /** Session consistency 0–100 (mirrors diagnosis.consistencyScore) */
+  consistencyScore: number;
   iqLow: number;
   iqHigh: number;
   percentile: number;
@@ -210,6 +231,7 @@ export interface IqResult {
   /** Which competence keys had items in this session */
   activeCompetences: (keyof CompetenceScores)[];
   avgTimeMs: number;
+  timeMetrics: TimeMetrics;
   answers: AnswerRecord[];
   diagnosis: PrecisionDiagnosis;
 }

@@ -13,6 +13,8 @@
     "typecheck": "tsc --noEmit",
     "audit:iq": "tsx scripts/audit-iq-banks.ts",
     "smoke:iq": "tsx scripts/smoke-iq-flow.ts",
+    "test:iq": "tsx scripts/simulate-iq-scoring.ts",
+    "simulate:iq": "tsx scripts/simulate-iq-scoring.ts",
     "token:metadata": "tsx scripts/register-vision-metadata.ts",
     "token:audit": "tsx scripts/audit-vision-mint.ts",
     "token:restore": "tsx scripts/restore-phantom-ata.ts",

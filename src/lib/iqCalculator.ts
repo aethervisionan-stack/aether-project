@@ -12,6 +12,7 @@ import type {
   QuizItem,
   RuleCategory,
   TextDistractorError,
+  TimeMetrics,
 } from "@/src/types/quiz";
 import {
   BAND_META,
@@ -21,6 +22,7 @@ import {
 
 /** Standard normal CDF via Abramowitz & Stegun approximation */
 export function normalCdf(z: number): number {
+  if (!Number.isFinite(z)) return 0.5;
   if (z < -8) return 0;
   if (z > 8) return 1;
   const sign = z < 0 ? -1 : 1;
@@ -84,6 +86,7 @@ export function normalInv(p: number): number {
 }
 
 export function pdfNormal(x: number, mean = 100, sd = 15): number {
+  if (!Number.isFinite(x) || sd <= 0) return 0;
   const z = (x - mean) / sd;
   return Math.exp(-0.5 * z * z) / (sd * Math.sqrt(2 * Math.PI));
 }
@@ -167,6 +170,7 @@ export function sessionConsistencyLabel(diagnosis: PrecisionDiagnosis): {
     };
   }
   if (
+    diagnosis.consistencyScore < 75 ||
     diagnosis.reliabilityIndex < 75 ||
     diagnosis.avgOptionSwitches > 2.5
   ) {
@@ -203,73 +207,140 @@ function itemSkillKeys(item: QuizItem): (keyof CompetenceScores)[] {
   return item.skills;
 }
 
-/** 2PL-ish P(correct | θ) */
-function pCorrect(theta: number, a: number, b: number): number {
-  const z = a * (theta - b);
-  if (z > 20) return 1;
-  if (z < -20) return 0;
-  return 1 / (1 + Math.exp(-z));
+function finiteOr(value: number, fallback: number): number {
+  return Number.isFinite(value) ? value : fallback;
+}
+
+function clamp(n: number, lo: number, hi: number): number {
+  return Math.min(hi, Math.max(lo, n));
+}
+
+/** IRT item params: discrimination a, difficulty b, guessing c = 1/numOptions */
+export interface IrtItemParams {
+  a: number;
+  b: number;
+  c: number;
+  numOptions: number;
+}
+
+export function itemIrtParams(q: QuizItem): IrtItemParams {
+  const numOptions = Math.max(2, q.options?.length ?? 4);
+  const c = 1 / numOptions;
+  // Weight ~1–5 → discrimination ~0.7–2.4 (3PL-friendly)
+  const a = clamp(0.45 + q.weight * 0.38, 0.55, 2.6);
+  const b = finiteOr(q.irtB, 0);
+  return { a, b, c, numOptions };
 }
 
 /**
- * MAP estimate of latent ability θ (mean 0, prior N(0,1)).
- * Discrimination a derived from item weight; difficulty from irtB.
+ * 3PL P(correct | θ) = c + (1−c) · σ(a(θ−b))
+ * Chance floor = 1/numOptions.
+ */
+export function pCorrect3pl(
+  theta: number,
+  a: number,
+  b: number,
+  c: number,
+): number {
+  const z = a * (theta - b);
+  let logistic: number;
+  if (z > 20) logistic = 1;
+  else if (z < -20) logistic = 0;
+  else logistic = 1 / (1 + Math.exp(-z));
+  const p = c + (1 - c) * logistic;
+  return clamp(finiteOr(p, c), 0, 1);
+}
+
+/** @deprecated prefer pCorrect3pl — kept for audit compatibility */
+export function pCorrect(theta: number, a: number, b: number): number {
+  return pCorrect3pl(theta, a, b, 0);
+}
+
+/**
+ * MAP estimate of latent ability θ (prior N(0,1)) under 3PL.
+ * Unanswered (null/undefined in correct[]) are treated as incorrect
+ * for timed forms; pass only answered when omitting is desired.
  */
 export function estimateTheta(
   questions: QuizItem[],
-  correct: boolean[],
+  correct: (boolean | null | undefined)[],
 ): { theta: number; se: number; information: number } {
   let theta = 0;
-  for (let iter = 0; iter < 40; iter++) {
-    let num = 0;
-    let den = 0;
+
+  for (let iter = 0; iter < 50; iter++) {
+    let score = 0; // first derivative of log-posterior
+    let info = 1; // prior precision + Fisher information
+
     for (let i = 0; i < questions.length; i++) {
-      if (correct[i] === undefined) continue;
-      const q = questions[i];
-      const a = 0.55 + q.weight * 0.22;
-      const b = q.irtB;
-      const p = pCorrect(theta, a, b);
-      const w = a * a * p * (1 - p);
-      den += w;
-      num += a * ((correct[i] ? 1 : 0) - p);
+      const flag = correct[i];
+      if (flag === undefined) continue;
+      const u = flag === null ? 0 : flag ? 1 : 0;
+      const { a, b, c } = itemIrtParams(questions[i]);
+      const p = pCorrect3pl(theta, a, b, c);
+      const q = 1 - p;
+      if (p <= 1e-9 || q <= 1e-9) continue;
+
+      // 3PL derivative w.r.t. θ: ∂P/∂θ = a(P−c)/(1−c) * (wait) = a * (p-c) * (1 - (p-c)/(1-c))?
+      // P = c + (1-c)L → ∂P/∂θ = (1-c) * a * L * (1-L) = a(P-c)(1-P)/(1-c)
+      const dPdTheta = (a * (p - c) * q) / Math.max(1 - c, 1e-9);
+      score += ((u - p) / Math.max(p * q, 1e-12)) * dPdTheta;
+      // Approximate information (Birnbaum / 3PL)
+      const w =
+        (dPdTheta * dPdTheta) / Math.max(p * q, 1e-12);
+      info += w;
     }
-    // Prior N(0,1)
-    num -= theta;
-    den += 1;
-    if (den < 1e-6) break;
-    const delta = num / den;
+
+    // Prior N(0,1): score -= θ, info += 1 (already in info init)
+    score -= theta;
+
+    if (!Number.isFinite(score) || !Number.isFinite(info) || info < 1e-6) break;
+    const delta = score / info;
     theta += delta;
     if (Math.abs(delta) < 1e-4) break;
   }
-  theta = Math.max(-3.2, Math.min(3.5, theta));
 
-  let information = 1; // prior
+  theta = clamp(finiteOr(theta, 0), -3.2, 3.5);
+
+  let information = 1;
   for (let i = 0; i < questions.length; i++) {
-    const q = questions[i];
-    const a = 0.55 + q.weight * 0.22;
-    const p = pCorrect(theta, a, q.irtB);
-    information += a * a * p * (1 - p);
+    const flag = correct[i];
+    if (flag === undefined) continue;
+    const { a, b, c } = itemIrtParams(questions[i]);
+    const p = pCorrect3pl(theta, a, b, c);
+    const q = 1 - p;
+    const dPdTheta = (a * (p - c) * q) / Math.max(1 - c, 1e-9);
+    information += (dPdTheta * dPdTheta) / Math.max(p * q, 1e-12);
   }
-  const se = 1 / Math.sqrt(Math.max(information, 0.25));
-  return { theta, se, information };
+  information = Math.max(finiteOr(information, 1), 0.25);
+  const se = 1 / Math.sqrt(information);
+  return {
+    theta: finiteOr(theta, 0),
+    se: finiteOr(se, 1),
+    information,
+  };
 }
 
-/** Map θ → IQ; exceptional L5 performance unlocks ceiling toward 155+ */
+/**
+ * Map θ → IQ (mean 100, SD 15) with calibrated high-ceiling for strong L4–L5.
+ * Soft ceiling toward 160; floor 68.
+ */
 export function thetaToIq(
   theta: number,
   hardHits: number,
   hardTotal: number,
 ): number {
-  let iq = 100 + 15 * theta;
+  const t = clamp(finiteOr(theta, 0), -3.2, 3.5);
+  let iq = 100 + 15 * t;
   if (hardTotal > 0) {
     const hardRate = hardHits / hardTotal;
-    if (hardRate >= 0.75 && theta > 1.8) {
-      iq += (hardRate - 0.75) * 20;
+    if (hardRate >= 0.75 && t > 1.8) {
+      // Unlock upper tail toward ~155–160 for exceptional hard performance
+      iq += (hardRate - 0.75) * 22;
     } else if (hardRate < 0.25 && iq > 130) {
       iq = 130 + (iq - 130) * 0.4;
     }
   }
-  return Math.round(Math.min(160, Math.max(68, iq)));
+  return Math.round(clamp(finiteOr(iq, 100), 68, 160));
 }
 
 function expectedTimeMs(band: DifficultyBand, kind: QuizItem["kind"]): number {
@@ -287,14 +358,26 @@ function expectedTimeMs(band: DifficultyBand, kind: QuizItem["kind"]): number {
         return 70_000;
     }
   })();
-  // Text items typically need a bit more reading time
   return kind === "text" ? Math.round(base * 1.15) : base;
+}
+
+function median(values: number[]): number {
+  if (values.length === 0) return 0;
+  const s = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(s.length / 2);
+  return s.length % 2 === 0 ? Math.round((s[mid - 1] + s[mid]) / 2) : s[mid];
+}
+
+export interface CalculateIqOptions {
+  /** Timer hit zero before all items answered */
+  timedOut?: boolean;
 }
 
 function buildDiagnosis(
   questions: QuizItem[],
   answers: AnswerRecord[],
   optionSwitches: number[],
+  options: CalculateIqOptions = {},
 ): PrecisionDiagnosis {
   const bands: DifficultyBand[] = [1, 2, 3, 4, 5];
   const bandTelemetry: BandTelemetry[] = bands.map((band) => {
@@ -340,7 +423,9 @@ function buildDiagnosis(
   const guessingFlag = guessCount >= 2;
 
   const unanswered = answers.filter((a) => a.selectedIndex === null).length;
-  const incompleteFlag = unanswered >= 5;
+  const answeredInTime = answers.length - unanswered;
+  const timedOut = Boolean(options.timedOut);
+  const incompleteFlag = unanswered >= 5 || (timedOut && unanswered > 0);
 
   let inconsistencyHits = 0;
   for (const band of [2, 3, 4] as DifficultyBand[]) {
@@ -360,7 +445,23 @@ function buildDiagnosis(
       Math.max(outcomes.length, 1);
     if (var_ > 0.22 && mean > 0.25 && mean < 0.75) inconsistencyHits += 1;
   }
-  const inconsistentFlag = inconsistencyHits >= 2;
+
+  // Erratic pattern: miss easy while hitting hard
+  const easyIdx = questions
+    .map((q, i) => ({ q, i }))
+    .filter((x) => x.q.difficulty <= 2);
+  const easyAnswered = easyIdx.filter(
+    (x) => answers[x.i].selectedIndex !== null,
+  );
+  const easyMisses = easyAnswered.filter((x) => !answers[x.i].correct).length;
+  const hardHits = hardCorrect.length;
+  const erraticEasyHard =
+    easyAnswered.length >= 4 &&
+    hardAnswered.length >= 3 &&
+    easyMisses / easyAnswered.length >= 0.4 &&
+    hardHits / hardAnswered.length >= 0.5;
+
+  const inconsistentFlag = inconsistencyHits >= 2 || erraticEasyHard;
 
   const switchSum = optionSwitches.reduce((a, b) => a + b, 0);
   const answeredCount = answers.filter((a) => a.selectedIndex !== null).length;
@@ -372,28 +473,53 @@ function buildDiagnosis(
   if (incompleteFlag) reliabilityIndex -= 10 + unanswered * 2;
   if (inconsistentFlag) reliabilityIndex -= 14;
   if (avgOptionSwitches > 2.5) reliabilityIndex -= 8;
-  reliabilityIndex = Math.max(20, Math.min(100, Math.round(reliabilityIndex)));
+  reliabilityIndex = clamp(Math.round(reliabilityIndex), 20, 100);
 
-  let consistencyIndex = 100 - inconsistencyHits * 18;
-  if (guessingFlag) consistencyIndex -= 12;
-  consistencyIndex = Math.max(25, Math.min(100, Math.round(consistencyIndex)));
+  /**
+   * consistencyScore 0–100:
+   * penalize erratic easy-miss/hard-hit, within-band variance, ultra-fast hard guesses
+   */
+  let consistencyScore = 100;
+  consistencyScore -= inconsistencyHits * 16;
+  if (erraticEasyHard) consistencyScore -= 22;
+  if (guessingFlag) consistencyScore -= 10 + guessCount * 5;
+  // Extra penalty for ultra-fast complex guesses even if below guessingFlag threshold
+  consistencyScore -= Math.min(15, guessCount * 3);
+  if (avgOptionSwitches > 2.8) consistencyScore -= 8;
+  if (incompleteFlag) consistencyScore -= Math.min(20, unanswered * 2);
+  consistencyScore = clamp(Math.round(finiteOr(consistencyScore, 50)), 0, 100);
+
+  const consistencyIndex = consistencyScore;
 
   const precisionScore = Math.round(
-    reliabilityIndex * 0.55 + consistencyIndex * 0.45,
+    reliabilityIndex * 0.55 + consistencyScore * 0.45,
   );
 
   const warnings: string[] = [];
+  if (timedOut) {
+    warnings.push(
+      `Tempo esgotado: você respondeu ${answeredInTime} de ${answers.length} questões a tempo.`,
+    );
+  }
   if (guessingFlag) {
     warnings.push(
       `Possível chute: ${guessCount} itens de alta complexidade respondidos muito rápido.`,
     );
   }
-  if (incompleteFlag) {
+  if (incompleteFlag && !timedOut) {
     warnings.push(
       `Sessão incompleta: ${unanswered} itens sem resposta (abort precoce reduz precisão).`,
     );
+  } else if (incompleteFlag && timedOut && unanswered > 0) {
+    warnings.push(
+      `${unanswered} item(ns) sem resposta após o cronômetro — tratados como incorretos na estimativa.`,
+    );
   }
-  if (inconsistentFlag) {
+  if (erraticEasyHard) {
+    warnings.push(
+      "Padrão errático: erros em itens fáceis com acertos em itens difíceis.",
+    );
+  } else if (inconsistentFlag) {
     warnings.push(
       "Desempenho inconsistente dentro do mesmo nível de dificuldade.",
     );
@@ -408,16 +534,19 @@ function buildDiagnosis(
   }
 
   return {
-    precisionScore,
+    precisionScore: clamp(Math.round(finiteOr(precisionScore, 50)), 0, 100),
     reliabilityIndex,
     consistencyIndex,
+    consistencyScore,
     guessingFlag,
     incompleteFlag,
     inconsistentFlag,
     warnings,
     bandTelemetry,
-    hardAccuracy,
+    hardAccuracy: finiteOr(hardAccuracy, 0),
     avgOptionSwitches: Math.round(avgOptionSwitches * 100) / 100,
+    answeredInTime,
+    timedOut,
   };
 }
 
@@ -427,10 +556,13 @@ export function calculateIqResult(
   timeSpentMs: number[],
   optionSwitches: number[] = [],
   mode: AssessmentMode = "figures",
+  calcOptions: CalculateIqOptions = {},
 ): IqResult {
+  const n = questions.length;
   const answers: AnswerRecord[] = questions.map((q, i) => {
     const selectedIndex = selected[i] ?? null;
-    const correct = selectedIndex === q.correctIndex;
+    const correct =
+      selectedIndex !== null && selectedIndex === q.correctIndex;
     let distractorError: AnyDistractorError | null = null;
     if (
       selectedIndex !== null &&
@@ -443,8 +575,8 @@ export function calculateIqResult(
       questionId: q.id,
       selectedIndex,
       correct,
-      timeMs: timeSpentMs[i] ?? 0,
-      optionSwitches: optionSwitches[i] ?? 0,
+      timeMs: Math.max(0, finiteOr(timeSpentMs[i] ?? 0, 0)),
+      optionSwitches: Math.max(0, optionSwitches[i] ?? 0),
       distractorError,
     };
   });
@@ -453,10 +585,15 @@ export function calculateIqResult(
   let maxScore = 0;
   const catCorrect = emptyCompetences();
   const catTotal = emptyCompetences();
-  const correctFlags = answers.map((a) => a.correct);
   const seenSkills = new Set<keyof CompetenceScores>();
 
-  for (let i = 0; i < questions.length; i++) {
+  // null = unanswered omitted from likelihood; false = wrong; true = right
+  // Timed forms: treat unanswered as incorrect (conservative)
+  const correctFlags: (boolean | null)[] = answers.map((a) =>
+    a.selectedIndex === null ? false : a.correct,
+  );
+
+  for (let i = 0; i < n; i++) {
     const q = questions[i];
     maxScore += q.weight;
     if (answers[i].correct) rawScore += q.weight;
@@ -472,7 +609,7 @@ export function calculateIqResult(
 
   let hardHits2 = 0;
   let hardTotal = 0;
-  for (let i = 0; i < questions.length; i++) {
+  for (let i = 0; i < n; i++) {
     if (questions[i].difficulty >= 4) {
       hardTotal += 1;
       if (answers[i].correct) hardHits2 += 1;
@@ -484,16 +621,24 @@ export function calculateIqResult(
     questions,
     answers,
     optionSwitches.length ? optionSwitches : answers.map((a) => a.optionSwitches),
+    calcOptions,
   );
+
   const reliabilityFactor =
     0.65 + (diagnosis.reliabilityIndex / 100) * 0.55;
-  const marginOfError = Math.max(
+  const consistencyFactor =
+    0.75 + (diagnosis.consistencyScore / 100) * 0.35;
+  // Wider margin when SE high or consistency low
+  const confidenceMargin = clamp(
+    Math.round(15 * se * (2 - reliabilityFactor) * (1.35 - consistencyFactor * 0.35)),
     3,
-    Math.min(12, Math.round(15 * se * (2 - reliabilityFactor))),
+    14,
   );
-  const iqLow = Math.max(68, iq - marginOfError);
-  const iqHigh = Math.min(160, iq + marginOfError);
-  const percentile = Math.round(normalCdf((iq - 100) / 15) * 1000) / 10;
+  const marginOfError = confidenceMargin;
+  const iqLow = clamp(iq - marginOfError, 68, 160);
+  const iqHigh = clamp(iq + marginOfError, 68, 160);
+  const percentile =
+    Math.round(normalCdf((iq - 100) / 15) * 1000) / 10;
 
   const competences = emptyCompetences();
   for (const key of Object.keys(competences) as (keyof CompetenceScores)[]) {
@@ -506,28 +651,44 @@ export function calculateIqResult(
   const modeKeys = competenceKeysForMode(mode);
   const activeCompetences = modeKeys.filter((k) => seenSkills.has(k));
 
-  const answeredTimes = timeSpentMs.filter((t) => t > 0);
+  const answeredTimes = timeSpentMs.filter((t) => t > 0 && Number.isFinite(t));
+  const answeredCount = answers.filter((a) => a.selectedIndex !== null).length;
+  const unansweredCount = n - answeredCount;
+  const totalMs = Math.round(
+    timeSpentMs.reduce((a, b) => a + (Number.isFinite(b) ? Math.max(0, b) : 0), 0),
+  );
   const avgTimeMs =
     answeredTimes.length > 0
       ? Math.round(
           answeredTimes.reduce((a, b) => a + b, 0) / answeredTimes.length,
         )
       : 0;
+  const timeMetrics: TimeMetrics = {
+    totalMs,
+    avgMs: avgTimeMs,
+    medianMs: median(answeredTimes),
+    answeredCount,
+    unansweredCount,
+  };
 
   return {
     mode,
-    rawScore,
-    maxScore,
-    accuracy,
+    rawScore: finiteOr(rawScore, 0),
+    maxScore: finiteOr(maxScore, 0),
+    accuracy: clamp(finiteOr(accuracy, 0), 0, 1),
     iq,
+    theta: Math.round(theta * 1000) / 1000,
     marginOfError,
+    confidenceMargin,
+    consistencyScore: diagnosis.consistencyScore,
     iqLow,
     iqHigh,
-    percentile,
+    percentile: clamp(finiteOr(percentile, 50), 0, 100),
     band: iqBand(iq),
     competences,
     activeCompetences,
     avgTimeMs,
+    timeMetrics,
     answers,
     diagnosis,
   };
@@ -586,6 +747,20 @@ export function distractorErrorLabel(err: AnyDistractorError): string {
   if (err in figure) return figure[err as DistractorError];
   if (err in text) return text[err as TextDistractorError];
   return err;
+}
+
+/** Find next unanswered index at or after `from`, wrapping once. */
+export function findNextUnanswered(
+  answers: (number | null)[],
+  from = 0,
+): number {
+  if (answers.length === 0) return -1;
+  const start = clamp(from, 0, answers.length - 1);
+  for (let i = 0; i < answers.length; i++) {
+    const idx = (start + i) % answers.length;
+    if (answers[idx] === null) return idx;
+  }
+  return -1;
 }
 
 export type { RuleCategory, QuestionSkill };
