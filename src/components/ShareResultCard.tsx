@@ -20,31 +20,31 @@ export type ShareResultCardData = {
   percentile: number;
   rank: number | null;
   mode: AssessmentMode;
-  /** 0–100 reliability / precision for credibility seal */
-  credibilityScore: number;
+  /** 0–100 IRT session consistency (seal / share metric) */
+  consistencyScore: number;
 };
 
-function credibilitySeal(score: number): {
+function consistencySeal(score: number): {
   label: string;
   sub: string;
   tone: string;
 } {
   if (score >= 80) {
     return {
-      label: "Selo de credibilidade",
-      sub: "Alta confiabilidade da sessão",
+      label: "Consistência da sessão",
+      sub: "Padrão de resposta estável",
       tone: "#34d399",
     };
   }
   if (score >= 55) {
     return {
-      label: "Selo de credibilidade",
-      sub: "Confiabilidade moderada",
+      label: "Consistência da sessão",
+      sub: "Consistência moderada",
       tone: "#fbbf24",
     };
   }
   return {
-    label: "Selo de credibilidade",
+    label: "Consistência da sessão",
     sub: "Interprete com cautela",
     tone: "#fb923c",
   };
@@ -60,7 +60,7 @@ export function ShareResultCardSurface({
   data: ShareResultCardData;
   cardRef: Ref<HTMLDivElement>;
 }) {
-  const seal = credibilitySeal(data.credibilityScore);
+  const seal = consistencySeal(data.consistencyScore);
   const topLabel = formatTopPercentLabel(data.percentile);
   const initials = participantInitials(data.name);
   const rankLabel =
@@ -363,7 +363,7 @@ export function ShareResultCardSurface({
                   color: "#a1a1aa",
                 }}
               >
-                {seal.sub} · índice {Math.round(data.credibilityScore)}/100
+                {seal.sub} · {Math.round(data.consistencyScore)}/100
               </p>
             </div>
           </div>
@@ -390,7 +390,7 @@ export function ShareResultCard({ data }: { data: ShareResultCardData }) {
   const cardRef = useRef<HTMLDivElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const seal = credibilitySeal(data.credibilityScore);
+  const seal = consistencySeal(data.consistencyScore);
   const topLabel = formatTopPercentLabel(data.percentile);
 
   async function downloadPng() {
@@ -441,8 +441,7 @@ export function ShareResultCard({ data }: { data: ShareResultCardData }) {
             Cartão para compartilhar
           </h2>
           <p className="text-sm text-zinc-500">
-            Avatar, QI, percentil, ranking e selo de credibilidade — baixe em
-            PNG.
+            Avatar, QI, percentil, ranking e consistência — baixe em PNG.
           </p>
         </div>
         <button
@@ -509,13 +508,13 @@ export function ShareResultCard({ data }: { data: ShareResultCardData }) {
             </div>
             <div className="rounded-xl border border-zinc-800/80 bg-zinc-950/50 px-2 py-3">
               <p className="text-[10px] uppercase tracking-wider text-zinc-500">
-                Selo
+                Consist.
               </p>
               <p
-                className="mt-1 text-sm font-semibold"
+                className="mt-1 text-sm font-semibold tabular-nums"
                 style={{ color: seal.tone }}
               >
-                {Math.round(data.credibilityScore)}
+                {Math.round(data.consistencyScore)}
               </p>
             </div>
           </div>

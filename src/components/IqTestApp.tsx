@@ -978,6 +978,10 @@ function ResultsDashboard({
       : consistency.tone === "caution"
         ? "border-amber-500/35 bg-amber-500/5 text-amber-200"
         : "border-orange-500/40 bg-orange-500/8 text-orange-200";
+  const ciHalf =
+    result.confidenceMargin ?? result.marginOfError;
+  const answeredInTime = result.diagnosis.answeredInTime;
+  const timedOut = result.diagnosis.timedOut;
 
   const allRanked = useMemo(() => {
     void leaderboardTick;
@@ -995,6 +999,7 @@ function ResultsDashboard({
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       className="space-y-6 pt-4"
+      aria-label="Resultados da avaliação de QI"
     >
       <header className="space-y-3 text-center">
         <div className="flex flex-col items-center gap-2">
@@ -1009,6 +1014,9 @@ function ResultsDashboard({
             {participantName ? ` · ${participantName}` : ""}
           </p>
         </div>
+        <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-500">
+          QI estimado
+        </p>
         <motion.h1
           className="font-iq-display text-5xl text-zinc-50 tabular-nums sm:text-6xl"
           initial={{ scale: 0.92, opacity: 0 }}
@@ -1017,19 +1025,76 @@ function ResultsDashboard({
         >
           {result.iq}
           <span className="ml-2 text-xl font-normal text-zinc-400 sm:text-2xl">
-            (± {result.marginOfError} pts)
+            (±{ciHalf})
           </span>
         </motion.h1>
         <p className="inline-flex items-center justify-center gap-1.5 text-xs font-medium text-zinc-500">
           Escala 100/15
           <SkillHelpTip label="Escala 100/15" help={ESCALA_HELP} />
         </p>
+        <p className="text-sm tabular-nums text-zinc-400">
+          Intervalo de confiança aproximado{" "}
+          <span className="text-zinc-200">
+            {result.iqLow}–{result.iqHigh}
+          </span>
+        </p>
+        <p className="font-iq-display text-2xl tabular-nums text-zinc-50 sm:text-3xl">
+          {result.percentile.toFixed(1)}
+          <span className="ml-1 text-sm font-normal text-zinc-500">
+            º percentil
+          </span>
+        </p>
         <p className="text-emerald-400/90">{result.band}</p>
-        <p className="mx-auto max-w-lg text-sm text-zinc-500">
-          Intervalo aproximado {result.iqLow}–{result.iqHigh}. Acertos
-          ponderados {result.rawScore.toFixed(1)}/{result.maxScore.toFixed(1)}.
+        <p className="mx-auto max-w-lg text-sm leading-relaxed text-zinc-500">
+          {pctCopy.summary} {pctCopy.rarity}
         </p>
       </header>
+
+      {timedOut ? (
+        <div
+          role="status"
+          className="rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-center text-sm text-amber-100"
+        >
+          <p className="font-medium">Tempo esgotado</p>
+          <p className="mt-1 tabular-nums text-amber-100/90">
+            Você respondeu {answeredInTime} de {questions.length} questões a
+            tempo.
+          </p>
+        </div>
+      ) : null}
+
+      <article
+        className={`rounded-2xl border p-4 sm:p-5 ${consistencyToneClass}`}
+        aria-labelledby="consistency-heading"
+      >
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2
+            id="consistency-heading"
+            className="text-sm font-semibold text-zinc-100"
+          >
+            Consistência da sessão
+          </h2>
+          <p className="font-iq-display text-2xl tabular-nums text-zinc-50">
+            {result.consistencyScore}
+            <span className="ml-1 text-sm font-normal opacity-70">/100</span>
+          </p>
+        </div>
+        <p className="mt-2 text-sm font-medium">{consistency.title}</p>
+        <p className="mt-1 text-sm leading-relaxed opacity-90">
+          {consistency.meaning}
+        </p>
+        <p className="mt-1.5 text-sm leading-relaxed opacity-80">
+          {consistency.detail}
+        </p>
+        {consistency.impulseWarning ? (
+          <p
+            role="alert"
+            className="mt-3 rounded-xl border border-orange-400/35 bg-orange-500/10 px-3 py-2 text-sm text-orange-100"
+          >
+            {consistency.impulseWarning}
+          </p>
+        ) : null}
+      </article>
 
       <UserRankBanner
         rank={userRank}
@@ -1049,57 +1114,22 @@ function ResultsDashboard({
           name: participantName,
           avatarUrl: participantAvatarUrl,
           iq: result.iq,
-          marginOfError: result.marginOfError,
+          marginOfError: ciHalf,
           percentile: result.percentile,
           rank: userRank,
           mode: result.mode,
-          credibilityScore: result.diagnosis.reliabilityIndex,
+          consistencyScore: result.consistencyScore,
         }}
       />
 
       <ChallengeSharePanel
         name={participantName}
         iq={result.iq}
-        marginOfError={result.marginOfError}
+        marginOfError={ciHalf}
         percentile={result.percentile}
         rank={userRank}
         mode={result.mode}
       />
-
-      <div className="grid gap-3 sm:grid-cols-2">
-        <article className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4 sm:p-5">
-          <h2 className="text-sm font-semibold text-zinc-100">
-            Percentil e raridade
-          </h2>
-          <p className="mt-1 text-2xl font-iq-display tabular-nums text-zinc-50">
-            {result.percentile.toFixed(1)}
-            <span className="ml-1 text-sm font-normal text-zinc-500">
-              º percentil
-            </span>
-          </p>
-          <p className="mt-2 text-sm leading-relaxed text-zinc-400">
-            {pctCopy.summary}
-          </p>
-          <p className="mt-1.5 text-sm text-zinc-500">{pctCopy.rarity}</p>
-        </article>
-
-        <article
-          className={`rounded-2xl border p-4 sm:p-5 ${consistencyToneClass}`}
-        >
-          <h2 className="text-sm font-semibold text-zinc-100">
-            Consistência da sessão
-          </h2>
-          <p className="mt-1 text-lg font-medium">{consistency.title}</p>
-          <p className="mt-2 text-sm leading-relaxed opacity-90">
-            {consistency.detail}
-          </p>
-          <p className="mt-3 text-xs tabular-nums opacity-70">
-            Consistência {result.consistencyScore}/100 · precisão{" "}
-            {result.diagnosis.precisionScore}/100 · confiabilidade{" "}
-            {result.diagnosis.reliabilityIndex}/100
-          </p>
-        </article>
-      </div>
 
       <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4 sm:p-6">
         <BellCurveChart iq={result.iq} percentile={result.percentile} />
@@ -1149,61 +1179,103 @@ function ResultsDashboard({
         </div>
       </section>
 
-      <section
-        aria-labelledby="precision-heading"
-        className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-950/70 p-5 sm:p-6"
-      >
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 id="precision-heading" className="text-lg font-semibold text-zinc-100">
-            Detalhe por nível de dificuldade
-          </h2>
-          <p className="text-sm tabular-nums text-zinc-500">
-            Tempo médio {(result.avgTimeMs / 1000).toFixed(1)}s · mediana{" "}
-            {(result.timeMetrics.medianMs / 1000).toFixed(1)}s · respondidas{" "}
-            {result.timeMetrics.answeredCount}/{questions.length} · trocas{" "}
-            {result.diagnosis.avgOptionSwitches}
-          </p>
-        </div>
-
-        <div className="grid gap-2 sm:grid-cols-5">
-          {result.diagnosis.bandTelemetry.map((bt) => (
-            <div
-              key={bt.band}
-              className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-3 text-center"
-            >
-              <p className="text-[10px] uppercase tracking-wider text-zinc-500">
-                N{bt.band}
-              </p>
-              <p className="text-xs text-zinc-300">{bt.label}</p>
-              <p className="mt-1 text-sm tabular-nums text-zinc-200">
-                {bt.answered ? `${Math.round(bt.accuracy * 100)}%` : "—"}
-              </p>
-              <p className="text-[11px] tabular-nums text-zinc-500">
-                {bt.avgTimeMs
-                  ? `${(bt.avgTimeMs / 1000).toFixed(1)}s méd.`
-                  : "sem tempo"}
+      <details className="group rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4 sm:p-5">
+        <summary className="cursor-pointer list-none text-sm font-medium text-zinc-300 marker:content-none [&::-webkit-details-marker]:hidden">
+          <span className="inline-flex items-center gap-2">
+            Detalhes técnicos (IRT)
+            <span className="text-xs font-normal text-zinc-600 group-open:hidden">
+              — expandir
+            </span>
+            <span className="hidden text-xs font-normal text-zinc-600 group-open:inline">
+              — recolher
+            </span>
+          </span>
+        </summary>
+        <div className="mt-4 space-y-4 border-t border-zinc-800 pt-4">
+          <dl className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-3">
+              <dt className="text-[11px] uppercase tracking-wider text-zinc-500">
+                Habilidade latente θ
+              </dt>
+              <dd className="mt-1 font-iq-display text-xl tabular-nums text-zinc-100">
+                {result.theta.toFixed(3)}
+              </dd>
+              <p className="mt-1 text-xs text-zinc-500">
+                Escala latente (média 0, DP≈1) do modelo 3PL.
               </p>
             </div>
-          ))}
-        </div>
+            <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-3">
+              <dt className="text-[11px] uppercase tracking-wider text-zinc-500">
+                Acertos ponderados
+              </dt>
+              <dd className="mt-1 font-iq-display text-xl tabular-nums text-zinc-100">
+                {result.rawScore.toFixed(1)}
+                <span className="text-sm font-normal text-zinc-500">
+                  /{result.maxScore.toFixed(1)}
+                </span>
+              </dd>
+            </div>
+            <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-3">
+              <dt className="text-[11px] uppercase tracking-wider text-zinc-500">
+                Tempo · trocas
+              </dt>
+              <dd className="mt-1 text-sm tabular-nums text-zinc-200">
+                méd. {(result.avgTimeMs / 1000).toFixed(1)}s · med.{" "}
+                {(result.timeMetrics.medianMs / 1000).toFixed(1)}s
+              </dd>
+              <p className="mt-1 text-xs tabular-nums text-zinc-500">
+                {result.timeMetrics.answeredCount}/{questions.length}{" "}
+                respondidas · trocas méd. {result.diagnosis.avgOptionSwitches}
+              </p>
+            </div>
+          </dl>
 
-        <ul className="space-y-1.5">
-          {result.diagnosis.warnings.map((w) => (
-            <li
-              key={w}
-              className={`text-sm leading-relaxed ${
-                result.diagnosis.guessingFlag ||
-                result.diagnosis.incompleteFlag ||
-                result.diagnosis.inconsistentFlag
-                  ? "text-amber-300/90"
-                  : "text-emerald-400/80"
-              }`}
-            >
-              {w}
-            </li>
-          ))}
-        </ul>
-      </section>
+          <div>
+            <h3 className="mb-2 text-xs font-medium uppercase tracking-wider text-zinc-500">
+              Por nível de dificuldade
+            </h3>
+            <div className="grid gap-2 sm:grid-cols-5">
+              {result.diagnosis.bandTelemetry.map((bt) => (
+                <div
+                  key={bt.band}
+                  className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-3 text-center"
+                >
+                  <p className="text-[10px] uppercase tracking-wider text-zinc-500">
+                    N{bt.band}
+                  </p>
+                  <p className="text-xs text-zinc-300">{bt.label}</p>
+                  <p className="mt-1 text-sm tabular-nums text-zinc-200">
+                    {bt.answered ? `${Math.round(bt.accuracy * 100)}%` : "—"}
+                  </p>
+                  <p className="text-[11px] tabular-nums text-zinc-500">
+                    {bt.avgTimeMs
+                      ? `${(bt.avgTimeMs / 1000).toFixed(1)}s méd.`
+                      : "sem tempo"}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <ul className="space-y-1.5">
+            {result.diagnosis.warnings.map((w) => (
+              <li
+                key={w}
+                className={`text-sm leading-relaxed ${
+                  result.diagnosis.guessingFlag ||
+                  result.diagnosis.incompleteFlag ||
+                  result.diagnosis.inconsistentFlag ||
+                  timedOut
+                    ? "text-amber-300/90"
+                    : "text-emerald-400/80"
+                }`}
+              >
+                {w}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </details>
 
       <PsychometricTransparencyBlock compact />
 

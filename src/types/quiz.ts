@@ -274,7 +274,7 @@ export interface LeaderboardEntry {
   confidenceMargin: number;
   percentile: number;
   mode: LeaderboardMode;
-  /** 0–100 precision/consistency composite used for tie-break */
+  /** 0–100 IRT session consistency (tie-break); mirrors consistencyScore */
   accuracyLevel: number;
   durationSeconds: number;
   createdAt: number;

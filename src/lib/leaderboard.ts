@@ -181,7 +181,9 @@ export function buildLeaderboardEntry(input: {
       input.result.confidenceMargin ?? input.result.marginOfError,
     percentile: input.result.percentile,
     mode: assessmentModeToLeaderboardMode(input.result.mode),
-    accuracyLevel: input.result.diagnosis.precisionScore,
+    accuracyLevel:
+      input.result.consistencyScore ??
+      input.result.diagnosis.consistencyScore,
     durationSeconds: Math.max(0, Math.round(input.durationSeconds)),
     createdAt: input.createdAt ?? Date.now(),
   };

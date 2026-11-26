@@ -236,8 +236,11 @@ function LeaderboardRow({
       <span className="hidden w-20 text-xs text-zinc-500 sm:inline">
         {LEADERBOARD_MODE_LABEL[entry.mode]}
       </span>
-      <span className="w-[7.5rem] text-right text-xs tabular-nums text-zinc-500">
-        P{entry.percentile.toFixed(0)} · C{entry.accuracyLevel}
+      <span
+        className="w-[8.5rem] text-right text-xs tabular-nums text-zinc-500"
+        title="Percentil · Consistência 0–100"
+      >
+        P{entry.percentile.toFixed(0)} · Consist. {entry.accuracyLevel}
       </span>
     </li>
   );

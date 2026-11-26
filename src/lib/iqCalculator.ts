@@ -152,21 +152,32 @@ export function sessionConsistencyLabel(diagnosis: PrecisionDiagnosis): {
   tone: ConsistencyTone;
   title: string;
   detail: string;
+  /** Short PT-BR meaning of the 0–100 score */
+  meaning: string;
+  /** Impulse / guessing caution when pattern looks rushed */
+  impulseWarning: string | null;
 } {
+  const impulseWarning = diagnosis.guessingFlag
+    ? "Atenção: respostas muito rápidas em itens difíceis sugerem chute ou impulso — interprete o QI com cautela."
+    : null;
+
   if (
     diagnosis.guessingFlag ||
     diagnosis.inconsistentFlag ||
     diagnosis.incompleteFlag
   ) {
     const parts: string[] = [];
-    if (diagnosis.guessingFlag) parts.push("respostas muito rápidas em itens difíceis");
+    if (diagnosis.guessingFlag)
+      parts.push("respostas muito rápidas em itens difíceis (chute/impulso)");
     if (diagnosis.inconsistentFlag)
       parts.push("desempenho irregular no mesmo nível");
     if (diagnosis.incompleteFlag) parts.push("vários itens sem resposta");
     return {
       tone: "inconsistent",
       title: "Sessão apressada ou inconsistente",
-      detail: `O padrão de resposta sugere ${parts.join("; ")}. O QI estimado tem margem maior de incerteza.`,
+      meaning: "Baixa consistência — o padrão de resposta é instável.",
+      detail: `O padrão sugere ${parts.join("; ")}. O QI estimado tem margem maior de incerteza.`,
+      impulseWarning,
     };
   }
   if (
@@ -177,15 +188,18 @@ export function sessionConsistencyLabel(diagnosis: PrecisionDiagnosis): {
     return {
       tone: "caution",
       title: "Sessão com algumas ressalvas",
+      meaning: "Consistência moderada — há sinais leves de hesitação ou variação.",
       detail:
-        "Houve sinais leves de hesitação ou variação. O resultado é útil, mas interprete com a margem de erro indicada.",
+        "O resultado é útil, mas interprete com a margem de erro indicada.",
+      impulseWarning,
     };
   }
   return {
     tone: "coherent",
     title: "Sessão coerente",
-    detail:
-      "O ritmo e a consistência das respostas são compatíveis com esforço deliberado. A estimativa é mais estável.",
+    meaning: "Alta consistência — ritmo e padrão compatíveis com esforço deliberado.",
+    detail: "A estimativa de QI é mais estável nesta sessão.",
+    impulseWarning,
   };
 }
 
