@@ -356,6 +356,11 @@ export interface QuizPersistedState {
   participantAvatarUrl: string | null;
   /** Leaderboard entry id written after this session finished */
   leaderboardEntryId: string | null;
+  /**
+   * Seed for within-band + option shuffle (resume-safe).
+   * Decoupled from ranking storage — future DB can key forms by this.
+   */
+  sessionSeed: number | null;
 }
 
 /** Persisted ranking mode (figures → geometric for public copy) */

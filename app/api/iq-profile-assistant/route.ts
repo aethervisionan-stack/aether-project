@@ -17,6 +17,8 @@ type Body = {
 
 /** Keep enough turns for fluent follow-ups while staying grounded. */
 const MAX_HISTORY = 16;
+/** Hard ceiling so hung providers never block the UI forever. */
+const PROVIDER_TIMEOUT_MS = 12_000;
 
 function isContext(v: unknown): v is ProfileAssistantContext {
   if (!v || typeof v !== "object") return false;
@@ -41,6 +43,61 @@ function trimHistory(messages: ProfileChatMessage[]): ProfileChatMessage[] {
   return filtered.slice(-MAX_HISTORY);
 }
 
+class ProviderHttpError extends Error {
+  status: number;
+  code: string;
+  constructor(message: string, status: number, code: string) {
+    super(message);
+    this.status = status;
+    this.code = code;
+  }
+}
+
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  timeoutMs: number,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new ProviderHttpError(
+        "Tempo esgotado ao consultar o modelo.",
+        504,
+        "PROVIDER_TIMEOUT",
+      );
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function classifyHttpFailure(status: number, message: string): ProviderHttpError {
+  if (status === 429) {
+    return new ProviderHttpError(
+      message || "Limite de requisições atingido. Tente em instantes.",
+      429,
+      "RATE_LIMIT",
+    );
+  }
+  if (status === 401 || status === 403) {
+    return new ProviderHttpError(
+      message || "Chave de API rejeitada pelo provedor.",
+      status,
+      "AUTH_ERROR",
+    );
+  }
+  return new ProviderHttpError(
+    message || `Provider failed (${status})`,
+    status,
+    "PROVIDER_HTTP",
+  );
+}
+
 async function callGemini(
   system: string,
   history: ProfileChatMessage[],
@@ -61,39 +118,62 @@ async function callGemini(
     parts: [{ text: m.content }],
   }));
 
-  let lastError = "Gemini unavailable";
+  let lastError: Error = new Error("Gemini unavailable");
   for (const model of models) {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        system_instruction: { parts: [{ text: system }] },
-        contents,
-        generationConfig: {
-          temperature: 0.65,
-          maxOutputTokens: 900,
+    try {
+      const res = await fetchWithTimeout(
+        url,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            system_instruction: { parts: [{ text: system }] },
+            contents,
+            generationConfig: {
+              temperature: 0.65,
+              maxOutputTokens: 900,
+            },
+          }),
         },
-      }),
-    });
-    const data = (await res.json().catch(() => ({}))) as {
-      error?: { message?: string };
-      candidates?: Array<{
-        content?: { parts?: Array<{ text?: string }> };
-      }>;
-    };
-    if (!res.ok) {
-      lastError = data.error?.message || `Gemini ${model} failed (${res.status})`;
-      continue;
+        PROVIDER_TIMEOUT_MS,
+      );
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: { message?: string };
+        candidates?: Array<{
+          content?: { parts?: Array<{ text?: string }> };
+        }>;
+      };
+      if (!res.ok) {
+        const classified = classifyHttpFailure(
+          res.status,
+          data.error?.message || `Gemini ${model} failed (${res.status})`,
+        );
+        // Rate-limit / auth: don't burn remaining models on the same key
+        if (classified.code === "RATE_LIMIT" || classified.code === "AUTH_ERROR") {
+          throw classified;
+        }
+        lastError = classified;
+        continue;
+      }
+      const text = data.candidates?.[0]?.content?.parts
+        ?.map((p) => p.text || "")
+        .join("")
+        .trim();
+      if (text) return text;
+      lastError = new Error(`Gemini ${model} returned empty content`);
+    } catch (err) {
+      if (err instanceof ProviderHttpError) {
+        if (err.code === "RATE_LIMIT" || err.code === "AUTH_ERROR" || err.code === "PROVIDER_TIMEOUT") {
+          throw err;
+        }
+        lastError = err;
+        continue;
+      }
+      lastError = err instanceof Error ? err : new Error(String(err));
     }
-    const text = data.candidates?.[0]?.content?.parts
-      ?.map((p) => p.text || "")
-      .join("")
-      .trim();
-    if (text) return text;
-    lastError = `Gemini ${model} returned empty content`;
   }
-  throw new Error(lastError);
+  throw lastError;
 }
 
 async function callOpenAI(
@@ -101,25 +181,32 @@ async function callOpenAI(
   history: ProfileChatMessage[],
   apiKey: string,
 ): Promise<string> {
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
+  const res = await fetchWithTimeout(
+    "https://api.openai.com/v1/chat/completions",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        temperature: 0.65,
+        max_tokens: 900,
+        messages: [{ role: "system", content: system }, ...history],
+      }),
     },
-    body: JSON.stringify({
-      model: "gpt-4o-mini",
-      temperature: 0.65,
-      max_tokens: 900,
-      messages: [{ role: "system", content: system }, ...history],
-    }),
-  });
+    PROVIDER_TIMEOUT_MS,
+  );
   const data = (await res.json().catch(() => ({}))) as {
     error?: { message?: string };
     choices?: Array<{ message?: { content?: string } }>;
   };
   if (!res.ok) {
-    throw new Error(data.error?.message || `OpenAI failed (${res.status})`);
+    throw classifyHttpFailure(
+      res.status,
+      data.error?.message || `OpenAI failed (${res.status})`,
+    );
   }
   const text = data.choices?.[0]?.message?.content?.trim();
   if (!text) throw new Error("OpenAI returned empty content");
@@ -167,7 +254,7 @@ export async function POST(req: Request) {
     const geminiKey = process.env.GEMINI_API_KEY?.trim();
     const openaiKey = process.env.OPENAI_API_KEY?.trim();
 
-    // Safe fallback only when keys are missing — no keyword template engine.
+    // Keys stay server-side only. Short fallback when missing.
     if (!geminiKey && !openaiKey) {
       return NextResponse.json({
         reply: localFallback,
@@ -196,11 +283,14 @@ export async function POST(req: Request) {
       }
 
       return NextResponse.json({ reply, provider });
-    } catch {
+    } catch (err) {
+      const code =
+        err instanceof ProviderHttpError ? err.code : "PROVIDER_FALLBACK";
+      // Short contingency only on real API failure — never dump anomaly lists.
       return NextResponse.json({
         reply: localFallback,
         provider: "local" as const,
-        code: "PROVIDER_FALLBACK",
+        code,
       });
     }
   } catch (err) {

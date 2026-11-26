@@ -103,7 +103,13 @@ export function ProfileDoubtAssistant({
           },
         ]);
         if (data.provider === "local") {
-          setError("Resposta de contingência — a IA conversacional não respondeu.");
+          const soft =
+            data.code === "RATE_LIMIT"
+              ? "Limite temporário da IA — resposta curta de contingência."
+              : data.code === "PROVIDER_TIMEOUT"
+                ? "A IA demorou demais — resposta curta de contingência."
+                : "Resposta de contingência — a IA conversacional não respondeu.";
+          setError(soft);
         }
         return;
       }
@@ -119,7 +125,11 @@ export function ProfileDoubtAssistant({
         },
       ]);
       if (data.error) {
-        setError("Assistente temporariamente indisponível.");
+        setError(
+          data.code === "RATE_LIMIT"
+            ? "Limite de requisições — tente em alguns segundos."
+            : "Assistente temporariamente indisponível.",
+        );
       }
     } catch {
       setMessages((prev) => [

@@ -6,13 +6,17 @@
  * timeout mid-test, figures + questions modes. Asserts finite in-range
  * IQ / percentile / consistency and navigation helpers.
  */
-import { getAssessmentItems } from "../src/lib/assessmentBank";
+import {
+  getAssessmentItems,
+  getSessionAssessmentItems,
+} from "../src/lib/assessmentBank";
 import {
   calculateIqResult,
   estimateTheta,
   findNextUnanswered,
   itemIrtParams,
   pCorrect3pl,
+  sessionConsistencyLabel,
   thetaToIq,
 } from "../src/lib/iqCalculator";
 import type {
@@ -253,7 +257,7 @@ function runGuessingInconsistent(mode: AssessmentMode): ScenarioResult {
       times.push(22_000);
     } else if (q.difficulty >= 4) {
       selected.push(q.correctIndex);
-      times.push(4_000); // ultra-fast complex
+      times.push(2_500); // ultra-fast complex (below 0.22× expected)
     } else {
       // Mid: random-ish flips
       selected.push(
@@ -263,7 +267,7 @@ function runGuessingInconsistent(mode: AssessmentMode): ScenarioResult {
       );
       times.push(18_000);
     }
-    switches.push(3);
+    switches.push(4);
   }
 
   const result = calculateIqResult(items, selected, times, switches, mode);
@@ -455,6 +459,61 @@ function testIrtSanity(): void {
   assert(hi.iq > lo.iq, "monotonic hi>lo");
 }
 
+/** Session shuffle variety + resume determinism. */
+function testSessionShuffleVariety(): void {
+  const a = getSessionAssessmentItems("hybrid", 424242);
+  const b = getSessionAssessmentItems("hybrid", 424242);
+  const c = getSessionAssessmentItems("hybrid", 999001);
+  assert(a.length === QUIZ_TOTAL_QUESTIONS, "session size");
+  assert(
+    a.every((q, i) => q.correctIndex === b[i].correctIndex && q.id === b[i].id),
+    "same seed → identical form",
+  );
+  const aOptSig = a.map((q) => `${q.kind}:${q.options.length}:${q.correctIndex}`).join("|");
+  const cOptSig = c.map((q) => `${q.kind}:${q.options.length}:${q.correctIndex}`).join("|");
+  softAssert(
+    aOptSig !== cOptSig,
+    "different seeds should vary option order or within-band order",
+  );
+  for (const q of a) {
+    assert(
+      q.distractorErrors.filter((e) => e === null).length === 1,
+      `unique correct after shuffle id=${q.id}`,
+    );
+    assert(
+      q.distractorErrors[q.correctIndex] === null,
+      `correctIndex maps to null error id=${q.id}`,
+    );
+  }
+  // Deliberate average session should stay coherent (fewer false positives)
+  const selected = a.map((q) => q.correctIndex);
+  const times = a.map((q) =>
+    q.difficulty <= 2 ? 28_000 : q.difficulty === 3 ? 42_000 : 60_000,
+  );
+  const deliberate = calculateIqResult(
+    a,
+    selected,
+    times,
+    Array(a.length).fill(0),
+    "hybrid",
+  );
+  assertValidResult(deliberate, "deliberate_coherent");
+  softAssert(
+    deliberate.consistencyScore >= 85,
+    `deliberate consistency ${deliberate.consistencyScore} < 85`,
+  );
+  softAssert(
+    deliberate.anomalies.count === deliberate.anomalies.hits.length,
+    "anomaly count coherence",
+  );
+  softAssert(
+    deliberate.anomalies.count === 0,
+    `unexpected anomalies on all-correct deliberate: ${deliberate.anomalies.hits.map((h) => h.kind).join(",")}`,
+  );
+  const tone = sessionConsistencyLabel(deliberate.diagnosis).tone;
+  softAssert(tone === "coherent", `expected coherent tone, got ${tone}`);
+}
+
 /** Simulate mandatory-finish state machine (no early abort). */
 function testFinishFlowState(): void {
   const items = getAssessmentItems("hybrid");
@@ -500,25 +559,26 @@ function main(): void {
     testChcCoverage();
     testIrtSanity();
     testNavHelpers();
+    testSessionShuffleVariety();
     testFinishFlowState();
 
     scenarios.push(
       runAbilityScenario("low", "figures", -1.4, 42, {
         iqMax: 95,
-        consistencyMin: 55,
+        consistencyMin: 70,
       }),
     );
     scenarios.push(
       runAbilityScenario("average", "hybrid", 0.05, 7, {
         iqMin: 90,
         iqMax: 115,
-        consistencyMin: 60,
+        consistencyMin: 75,
       }),
     );
     scenarios.push(
       runAbilityScenario("high_consistent", "questions", 2.0, 99, {
         iqMin: 120,
-        consistencyMin: 70,
+        consistencyMin: 85,
       }),
     );
     scenarios.push(runGuessingInconsistent("figures"));

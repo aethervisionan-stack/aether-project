@@ -1,5 +1,6 @@
 "use client";
 
+import { useId } from "react";
 import type { CellContent, FillKind, Glyph, ShapeKind } from "@/src/types/quiz";
 
 const STROKE = "#E4E4E7";
@@ -258,20 +259,23 @@ export function MatrixRenderer({
   muted = false,
   label,
 }: MatrixRendererProps) {
+  // Unique SVG pattern ids per instance — shared "opt-x" collided across the option grid
+  const reactId = useId().replace(/:/g, "");
   if (option) {
     const s = size;
+    const uid = `opt-${label ?? "x"}-${reactId}`;
     return (
       <div
-        className={`relative flex items-center justify-center rounded-lg border bg-zinc-950 ${
+        className={`relative flex max-w-full items-center justify-center overflow-hidden rounded-lg border bg-zinc-950 ${
           highlight
             ? "border-emerald-400/70 ring-1 ring-emerald-400/40"
             : muted
               ? "border-zinc-800 opacity-60"
               : "border-zinc-700"
         } ${className}`}
-        style={{ width: s, height: s }}
+        style={{ width: s, height: s, maxWidth: "100%" }}
       >
-        <CellSvg content={option} size={s * 0.92} uid={`opt-${label ?? "x"}`} />
+        <CellSvg content={option} size={s * 0.92} uid={uid} />
         {label ? (
           <span className="absolute left-1.5 top-1 text-[10px] font-medium uppercase tracking-wider text-zinc-500">
             {label}
@@ -287,7 +291,7 @@ export function MatrixRenderer({
 
   return (
     <div
-      className={`inline-grid aspect-square w-full max-w-full grid-cols-3 rounded-xl border border-zinc-800 bg-zinc-950/80 p-1.5 ${className}`}
+      className={`inline-grid aspect-square w-full max-w-full grid-cols-3 overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950/80 p-1.5 ${className}`}
       style={{
         width: size,
         maxWidth: "100%",
@@ -298,15 +302,15 @@ export function MatrixRenderer({
     >
       {grid.map((c, i) => (
         <div
-          key={i}
-          className="relative flex aspect-square items-center justify-center rounded-md border border-zinc-800 bg-zinc-900/60"
+          key={`${reactId}-cell-${i}`}
+          className="relative flex aspect-square min-w-0 items-center justify-center overflow-hidden rounded-md border border-zinc-800 bg-zinc-900/60"
         >
           <div className="absolute inset-[4%]">
             <CellSvg
               content={c}
               size={cellSize * 0.92}
               showQuestion={i === 8 || c === null}
-              uid={`m-${i}`}
+              uid={`${reactId}-m-${i}`}
             />
           </div>
         </div>
@@ -336,18 +340,18 @@ export function OptionGrid({
       ? "grid-cols-4 sm:grid-cols-8"
       : "grid-cols-3 sm:grid-cols-6";
   return (
-    <div className={`grid gap-2 sm:gap-3 ${cols}`}>
+    <div className={`grid w-full gap-2 sm:gap-3 ${cols}`}>
       {options.map((opt, i) => {
         const isSelected = selectedIndex === i;
         const isCorrect = revealedCorrect === i;
         const isWrong = revealedCorrect != null && isSelected && !isCorrect;
         return (
           <button
-            key={i}
+            key={`opt-${i}`}
             type="button"
             disabled={disabled}
             onClick={() => onSelect(i)}
-            className={`group relative flex flex-col items-center gap-1 rounded-xl border p-1.5 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60 ${
+            className={`group relative flex min-w-0 flex-col items-center gap-1 overflow-hidden rounded-xl border p-1.5 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60 ${
               isCorrect
                 ? "border-emerald-400 bg-emerald-400/10"
                 : isWrong
@@ -359,7 +363,7 @@ export function OptionGrid({
             aria-label={`Opção ${labels[i]}`}
             aria-pressed={isSelected}
           >
-            <span className="text-[11px] font-medium text-zinc-500 group-hover:text-zinc-300">
+            <span className="text-[11px] font-medium tabular-nums text-zinc-500 group-hover:text-zinc-300">
               {labels[i]}
               <span className="ml-1 hidden text-zinc-600 sm:inline">
                 ({i + 1})
@@ -369,8 +373,8 @@ export function OptionGrid({
               cells={[]}
               option={opt}
               size={cellSize}
-              label={undefined}
               highlight={isSelected || isCorrect}
+              className="!max-w-full"
             />
           </button>
         );

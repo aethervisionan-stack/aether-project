@@ -173,6 +173,7 @@ export function sessionConsistencyLabel(diagnosis: PrecisionDiagnosis): {
     ? "Atenção: respostas muito rápidas em itens difíceis sugerem chute ou impulso — interprete o QI com cautela."
     : null;
 
+  // Hard flags only — avoid labeling normal mid-ability variance as inconsistent.
   if (
     diagnosis.guessingFlag ||
     diagnosis.inconsistentFlag ||
@@ -193,9 +194,9 @@ export function sessionConsistencyLabel(diagnosis: PrecisionDiagnosis): {
     };
   }
   if (
-    diagnosis.consistencyScore < 75 ||
-    diagnosis.reliabilityIndex < 75 ||
-    diagnosis.avgOptionSwitches > 2.5
+    diagnosis.consistencyScore < 68 ||
+    diagnosis.reliabilityIndex < 68 ||
+    diagnosis.avgOptionSwitches > 3.2
   ) {
     return {
       tone: "caution",
@@ -442,21 +443,27 @@ function buildDiagnosis(
   for (const { q, i } of hardIdx) {
     const t = answers[i].timeMs;
     const selected = answers[i].selectedIndex !== null;
-    if (selected && t > 0 && t < expectedTimeMs(q.difficulty, q.kind) * 0.28) {
+    // Stricter than before (0.22× vs 0.28×) to cut false “chute” on fast but deliberate solvers
+    if (selected && t > 0 && t < expectedTimeMs(q.difficulty, q.kind) * 0.22) {
       guessCount += 1;
     }
   }
-  const guessingFlag = guessCount >= 2;
+  const guessingFlag = guessCount >= 3;
 
   const unanswered = answers.filter((a) => a.selectedIndex === null).length;
   const answeredInTime = answers.length - unanswered;
   const timedOut = Boolean(options.timedOut);
   const incompleteFlag = unanswered >= 5 || (timedOut && unanswered > 0);
 
+  /**
+   * Within-band Bernoulli variance peaks at ~0.25 when accuracy≈50%.
+   * Old threshold 0.22 flagged almost every mid-ability session (false positives).
+   * Require larger samples + extreme mix before counting a hit.
+   */
   let inconsistencyHits = 0;
   for (const band of [2, 3, 4] as DifficultyBand[]) {
     const bt = bandTelemetry.find((b) => b.band === band)!;
-    if (bt.answered < 4) continue;
+    if (bt.answered < 5) continue;
     const idxs = questions
       .map((q, i) => i)
       .filter((i) => questions[i].difficulty === band);
@@ -469,10 +476,10 @@ function buildDiagnosis(
     const var_ =
       outcomes.reduce<number>((a, b) => a + (b - mean) ** 2, 0) /
       Math.max(outcomes.length, 1);
-    if (var_ > 0.22 && mean > 0.25 && mean < 0.75) inconsistencyHits += 1;
+    if (var_ > 0.3 && mean > 0.2 && mean < 0.8) inconsistencyHits += 1;
   }
 
-  // Erratic pattern: miss easy while hitting hard
+  // Erratic pattern: miss easy while hitting hard — need clearer contrast
   const easyIdx = questions
     .map((q, i) => ({ q, i }))
     .filter((x) => x.q.difficulty <= 2);
@@ -482,12 +489,13 @@ function buildDiagnosis(
   const easyMisses = easyAnswered.filter((x) => !answers[x.i].correct).length;
   const hardHits = hardCorrect.length;
   const erraticEasyHard =
-    easyAnswered.length >= 4 &&
-    hardAnswered.length >= 3 &&
-    easyMisses / easyAnswered.length >= 0.4 &&
-    hardHits / hardAnswered.length >= 0.5;
+    easyAnswered.length >= 5 &&
+    hardAnswered.length >= 4 &&
+    easyMisses / easyAnswered.length >= 0.5 &&
+    hardHits / hardAnswered.length >= 0.55;
 
-  const inconsistentFlag = inconsistencyHits >= 2 || erraticEasyHard;
+  // Need stronger evidence: 3 noisy bands OR clear easy/hard inversion
+  const inconsistentFlag = inconsistencyHits >= 3 || erraticEasyHard;
 
   const switchSum = optionSwitches.reduce((a, b) => a + b, 0);
   const answeredCount = answers.filter((a) => a.selectedIndex !== null).length;
@@ -495,24 +503,24 @@ function buildDiagnosis(
     answeredCount > 0 ? switchSum / answeredCount : 0;
 
   let reliabilityIndex = 100;
-  if (guessingFlag) reliabilityIndex -= 18 + guessCount * 4;
+  if (guessingFlag) reliabilityIndex -= 16 + guessCount * 3;
   if (incompleteFlag) reliabilityIndex -= 10 + unanswered * 2;
-  if (inconsistentFlag) reliabilityIndex -= 14;
-  if (avgOptionSwitches > 2.5) reliabilityIndex -= 8;
+  if (inconsistentFlag) reliabilityIndex -= 12;
+  if (avgOptionSwitches > 3.2) reliabilityIndex -= 6;
   reliabilityIndex = clamp(Math.round(reliabilityIndex), 20, 100);
 
   /**
    * consistencyScore 0–100:
-   * penalize erratic easy-miss/hard-hit, within-band variance, ultra-fast hard guesses
+   * penalize clear erratic easy-miss/hard-hit, extreme within-band variance,
+   * and ultra-fast hard guesses — milder than before to avoid FP on average sessions.
    */
   let consistencyScore = 100;
-  consistencyScore -= inconsistencyHits * 16;
-  if (erraticEasyHard) consistencyScore -= 22;
-  if (guessingFlag) consistencyScore -= 10 + guessCount * 5;
-  // Extra penalty for ultra-fast complex guesses even if below guessingFlag threshold
-  consistencyScore -= Math.min(15, guessCount * 3);
-  if (avgOptionSwitches > 2.8) consistencyScore -= 8;
-  if (incompleteFlag) consistencyScore -= Math.min(20, unanswered * 2);
+  consistencyScore -= inconsistencyHits * 8;
+  if (erraticEasyHard) consistencyScore -= 18;
+  if (guessingFlag) consistencyScore -= 12 + Math.min(18, (guessCount - 2) * 4);
+  else if (guessCount > 0) consistencyScore -= Math.min(8, guessCount * 2);
+  if (avgOptionSwitches > 3.5) consistencyScore -= 6;
+  if (incompleteFlag) consistencyScore -= Math.min(18, unanswered * 2);
   consistencyScore = clamp(Math.round(finiteOr(consistencyScore, 50)), 0, 100);
 
   const consistencyIndex = consistencyScore;
@@ -550,7 +558,7 @@ function buildDiagnosis(
       "Desempenho inconsistente dentro do mesmo nível de dificuldade.",
     );
   }
-  if (avgOptionSwitches > 2.8) {
+  if (avgOptionSwitches > 3.5) {
     warnings.push(
       "Alta hesitação (muitas trocas de opção) — índice de confiança reduzido.",
     );
@@ -713,7 +721,7 @@ function buildAnomalies(
       marginImpact: 2,
     });
   }
-  if (diagnosis.avgOptionSwitches > 2.8) {
+  if (diagnosis.avgOptionSwitches > 3.5) {
     hits.push({
       kind: "hesitacao_alta",
       label: "Hesitação elevada",
@@ -722,7 +730,7 @@ function buildAnomalies(
     });
   }
 
-  // Systematic distractor cluster
+  // Systematic distractor cluster — raise bar to cut noise on short sessions
   const errCounts = new Map<string, number>();
   for (const a of answers) {
     if (a.distractorError) {
@@ -740,7 +748,7 @@ function buildAnomalies(
       topErr = k;
     }
   }
-  if (topErr && topN >= 4) {
+  if (topErr && topN >= 5) {
     hits.push({
       kind: "distrator_sistematico",
       label: "Distrator sistemático",
@@ -762,10 +770,10 @@ function buildAnomalies(
       continue;
     }
     const exp = expectedTimeMs(q.difficulty, q.kind);
-    if (a.correct && a.timeMs > exp * 2.2) latencyHits += 1;
-    if (!a.correct && a.timeMs < exp * 0.22) latencyHits += 1;
+    if (a.correct && a.timeMs > exp * 2.4) latencyHits += 1;
+    if (!a.correct && a.timeMs < exp * 0.2) latencyHits += 1;
   }
-  if (latencyHits >= 3) {
+  if (latencyHits >= 4) {
     hits.push({
       kind: "latencia_anomala",
       label: "Latência anômala",
@@ -775,6 +783,7 @@ function buildAnomalies(
     });
   }
 
+  // Exact coherence: count === hits.length; each hit carries detail for UI + Gemini
   const totalImpact = hits.reduce((s, h) => s + h.marginImpact, 0);
   return {
     count: hits.length,

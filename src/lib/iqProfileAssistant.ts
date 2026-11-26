@@ -301,16 +301,25 @@ export function buildGroundedSnapshot(ctx: ProfileAssistantContext) {
       descriptor: ix.descriptor,
       respondidos: `${ix.answered}/${ix.total}`,
     })),
-    anomalias: {
-      count: anomalies.count,
-      impactoMargem: anomalies.totalImpact,
-      hits: (anomalies.hits ?? []).map((h) => ({
+    anomalias: (() => {
+      const hits = (anomalies.hits ?? []).map((h) => ({
         kind: h.kind,
         label: h.label,
         detail: h.detail,
         marginImpact: h.marginImpact,
-      })),
-    },
+      }));
+      // Exact coherence: N in count === hits.length === UI list (never invent extras)
+      const count = hits.length;
+      return {
+        count,
+        impactoMargem: anomalies.totalImpact,
+        resumo:
+          count === 0
+            ? "Nenhuma anomalia relevante nesta sessão."
+            : `${count} anomalia(s) com detalhe próprio — cite só estes hits, sem inventar outras.`,
+        hits,
+      };
+    })(),
     rankingLocal:
       rank != null
         ? { lugar: rank, total: rankTotal }

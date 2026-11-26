@@ -1,3 +1,7 @@
+/**
+ * Quiz session persistence — local adapter today, swap for remote DB later.
+ * Ranking lives in leaderboard.ts; this module never writes ranking keys.
+ */
 import type { AssessmentMode, QuizPersistedState } from "@/src/types/quiz";
 import {
   QUIZ_STORAGE_KEY_LEGACY_V1,
@@ -8,7 +12,14 @@ import {
   quizStorageKey,
 } from "@/src/types/quiz";
 
-export function loadQuizState(mode: AssessmentMode): QuizPersistedState | null {
+/** Pluggable store surface for future HTTP/DB backends. */
+export type QuizSessionStore = {
+  load(mode: AssessmentMode): QuizPersistedState | null;
+  save(state: QuizPersistedState): void;
+  clear(mode?: AssessmentMode): void;
+};
+
+function readLocal(mode: AssessmentMode): QuizPersistedState | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = localStorage.getItem(quizStorageKey(mode));
@@ -41,13 +52,19 @@ export function loadQuizState(mode: AssessmentMode): QuizPersistedState | null {
     if (parsed.leaderboardEntryId === undefined) {
       parsed.leaderboardEntryId = null;
     }
+    if (
+      parsed.sessionSeed === undefined ||
+      (parsed.sessionSeed !== null && typeof parsed.sessionSeed !== "number")
+    ) {
+      parsed.sessionSeed = null;
+    }
     return parsed;
   } catch {
     return null;
   }
 }
 
-export function saveQuizState(state: QuizPersistedState): void {
+function writeLocal(state: QuizPersistedState): void {
   if (typeof window === "undefined") return;
   if (state.phase === "modeSelect") return;
   try {
@@ -57,7 +74,7 @@ export function saveQuizState(state: QuizPersistedState): void {
   }
 }
 
-export function clearQuizState(mode?: AssessmentMode): void {
+function clearLocal(mode?: AssessmentMode): void {
   if (typeof window === "undefined") return;
   try {
     if (mode) {
@@ -78,11 +95,38 @@ export function clearQuizState(mode?: AssessmentMode): void {
   }
 }
 
+/** Default localStorage adapter — replace in one place when moving to DB. */
+export const localQuizSessionStore: QuizSessionStore = {
+  load: readLocal,
+  save: writeLocal,
+  clear: clearLocal,
+};
+
+let activeStore: QuizSessionStore = localQuizSessionStore;
+
+/** Inject a remote/DB-backed store without rewriting UI callers. */
+export function setQuizSessionStore(store: QuizSessionStore): void {
+  activeStore = store;
+}
+
+export function loadQuizState(mode: AssessmentMode): QuizPersistedState | null {
+  return activeStore.load(mode);
+}
+
+export function saveQuizState(state: QuizPersistedState): void {
+  activeStore.save(state);
+}
+
+export function clearQuizState(mode?: AssessmentMode): void {
+  activeStore.clear(mode);
+}
+
 export function createInitialState(
   mode: AssessmentMode,
   totalQuestions = QUIZ_TOTAL_QUESTIONS,
   participantName = "",
   participantAvatarUrl: string | null = null,
+  sessionSeed: number | null = null,
 ): QuizPersistedState {
   return {
     version: QUIZ_STORAGE_VERSION,
@@ -101,6 +145,7 @@ export function createInitialState(
     participantName,
     participantAvatarUrl,
     leaderboardEntryId: null,
+    sessionSeed,
   };
 }
 
@@ -122,5 +167,6 @@ export function createModeSelectState(): QuizPersistedState {
     participantName: "",
     participantAvatarUrl: null,
     leaderboardEntryId: null,
+    sessionSeed: null,
   };
 }

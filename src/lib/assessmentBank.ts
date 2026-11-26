@@ -34,6 +34,7 @@ function buildHybridItems(): QuizItem[] {
 
 const cache: Partial<Record<AssessmentMode, QuizItem[]>> = {};
 
+/** Canonical bank (fixed option order). Prefer getSessionAssessmentItems for live sessions. */
 export function getAssessmentItems(mode: AssessmentMode): QuizItem[] {
   if (!cache[mode]) {
     if (mode === "figures") {
@@ -45,6 +46,87 @@ export function getAssessmentItems(mode: AssessmentMode): QuizItem[] {
     }
   }
   return cache[mode]!;
+}
+
+function mulberry32(seed: number): () => number {
+  let t = seed >>> 0;
+  return () => {
+    t += 0x6d2b79f5;
+    let r = Math.imul(t ^ (t >>> 15), 1 | t);
+    r ^= r + Math.imul(r ^ (r >>> 7), 61 | r);
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function shuffleInPlace<T>(arr: T[], rand: () => number): void {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+}
+
+/** Reshuffle options while remapping correctIndex + distractorErrors. */
+function reshuffleItemOptions(item: QuizItem, rand: () => number): QuizItem {
+  const n = item.options.length;
+  if (n < 2) return item;
+  const order = Array.from({ length: n }, (_, i) => i);
+  shuffleInPlace(order, rand);
+  const options = order.map((i) => item.options[i]) as QuizItem["options"];
+  const distractorErrors = order.map((i) => item.distractorErrors[i] ?? null);
+  const correctIndex = order.indexOf(item.correctIndex);
+  if (item.kind === "matrix") {
+    return {
+      ...item,
+      options: options as MatrixQuestion["options"],
+      distractorErrors: distractorErrors as MatrixQuestion["distractorErrors"],
+      correctIndex: correctIndex < 0 ? 0 : correctIndex,
+    };
+  }
+  return {
+    ...item,
+    options: options as TextQuestion["options"],
+    distractorErrors: distractorErrors as TextQuestion["distractorErrors"],
+    correctIndex: correctIndex < 0 ? 0 : correctIndex,
+  };
+}
+
+/**
+ * Session-scoped variety: shuffle item order within each difficulty band
+ * and reshuffle options. Psychometric structure (band counts / indices) stays intact.
+ * Same seed → same form (resume-safe).
+ */
+export function getSessionAssessmentItems(
+  mode: AssessmentMode,
+  sessionSeed: number,
+): QuizItem[] {
+  const base = getAssessmentItems(mode).map((q) => ({ ...q }));
+  const rand = mulberry32(sessionSeed >>> 0);
+  const byBand = new Map<number, QuizItem[]>();
+  for (const q of base) {
+    const list = byBand.get(q.difficulty) ?? [];
+    list.push(q);
+    byBand.set(q.difficulty, list);
+  }
+  const out: QuizItem[] = [];
+  for (let band = 1; band <= 5; band++) {
+    const group = byBand.get(band) ?? [];
+    shuffleInPlace(group, rand);
+    for (const item of group) {
+      out.push(reshuffleItemOptions(item, rand));
+    }
+  }
+  // Stable display positions 1..n for UI; keep bank id on questionId via scoring
+  return out.map((q, i) => ({ ...q, id: i + 1 }));
+}
+
+/** Cryptographically-ish seed for a new official attempt. */
+export function createSessionSeed(): number {
+  if (typeof crypto !== "undefined" && "getRandomValues" in crypto) {
+    const buf = new Uint32Array(1);
+    crypto.getRandomValues(buf);
+    return (buf[0] >>> 0) || (Date.now() >>> 0);
+  }
+  return ((Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0) || 1;
 }
 
 export type TutorialExample =

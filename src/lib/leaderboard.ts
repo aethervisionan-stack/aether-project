@@ -1,6 +1,7 @@
 /**
- * Local IQ leaderboard — isolated storage ready for a future Supabase/API backend.
- * Swap the private load/save helpers for HTTP without changing ranking UI.
+ * Local IQ leaderboard — isolated from quiz session storage (quizStorage.ts).
+ * Ready for a future Supabase/API backend: swap readRawEntries/writeRawEntries
+ * without changing ranking UI or session resume.
  */
 
 import type {

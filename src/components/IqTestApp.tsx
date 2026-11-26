@@ -3,9 +3,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
+  createSessionSeed,
   getAssessmentItems,
   getModeRules,
   getModeTutorial,
+  getSessionAssessmentItems,
   isMatrixQuestion,
   isTextQuestion,
 } from "@/src/lib/assessmentBank";
@@ -125,10 +127,14 @@ export function IqTestApp() {
   const mode: AssessmentMode | null =
     state.phase === "modeSelect" ? null : state.mode;
 
-  const questions = useMemo(
-    () => (mode ? getAssessmentItems(mode) : []),
-    [mode],
-  );
+  const questions = useMemo(() => {
+    if (!mode) return [];
+    // Live / resumed sessions use seeded shuffle; onboarding preview stays canonical
+    if (state.sessionSeed != null && state.phase !== "onboarding") {
+      return getSessionAssessmentItems(mode, state.sessionSeed);
+    }
+    return getAssessmentItems(mode);
+  }, [mode, state.sessionSeed, state.phase]);
   const totalQ = questions.length || QUIZ_TOTAL_QUESTIONS;
   const tutorial = useMemo(
     () => (mode ? getModeTutorial(mode) : null),
@@ -153,7 +159,10 @@ export function IqTestApp() {
       opts: { timedOut?: boolean } = {},
     ): QuizPersistedState => {
       if (prev.phase === "results" || prev.phase === "review") return prev;
-      const items = getAssessmentItems(prev.mode);
+      const items =
+        prev.sessionSeed != null
+          ? getSessionAssessmentItems(prev.mode, prev.sessionSeed)
+          : getAssessmentItems(prev.mode);
       const n = items.length;
       const timeSpent = [...prev.timeSpentMs];
       if (
@@ -276,15 +285,17 @@ export function IqTestApp() {
     const name = raw.trim();
     const avatarUrl = state.participantAvatarUrl ?? null;
     const now = Date.now();
-    const n = getAssessmentItems(mode).length;
+    const sessionSeed = createSessionSeed();
+    const n = getSessionAssessmentItems(mode, sessionSeed).length;
     setState({
-      ...createInitialState(mode, n, name, avatarUrl),
+      ...createInitialState(mode, n, name, avatarUrl, sessionSeed),
       phase: "test",
       startedAt: now,
       endsAt: now + QUIZ_DURATION_MS,
       questionStartedAt: now,
       participantName: name,
       participantAvatarUrl: avatarUrl,
+      sessionSeed,
     });
   };
 
@@ -656,10 +667,10 @@ export function IqTestApp() {
                     </p>
                     {q.premises && q.premises.length > 0 ? (
                       <ul className="space-y-1.5 rounded-xl border border-zinc-800 bg-zinc-950/70 p-4 text-sm text-zinc-300">
-                        {q.premises.map((p) => (
-                          <li key={p} className="flex gap-2">
-                            <span className="text-zinc-600">•</span>
-                            <span>{p}</span>
+                        {q.premises.map((p, pi) => (
+                          <li key={`premise-${pi}`} className="flex gap-2">
+                            <span className="shrink-0 text-zinc-600">•</span>
+                            <span className="min-w-0 break-words">{p}</span>
                           </li>
                         ))}
                       </ul>
@@ -914,8 +925,10 @@ function OnboardingTransition({
             <p className="text-base text-zinc-200">{tutorial.stem}</p>
             {tutorial.premises.length > 0 ? (
               <ul className="list-disc space-y-1 pl-5 text-sm text-zinc-400">
-                {tutorial.premises.map((p) => (
-                  <li key={p}>{p}</li>
+                {tutorial.premises.map((p, pi) => (
+                  <li key={`tut-premise-${pi}`} className="break-words">
+                    {p}
+                  </li>
                 ))}
               </ul>
             ) : null}
@@ -1263,7 +1276,7 @@ function ResultsDashboard({
                   transition={{ duration: 0.7, delay: 0.1 }}
                 />
               </div>
-              <p className="mt-2 text-[11px] text-zinc-500">
+              <p className="mt-2 text-[11px] tabular-nums text-zinc-500">
                 {ix.descriptor} · QI≈{ix.iqApprox} · {ix.answered}/{ix.total}{" "}
                 itens
                 {ix.avgTimeMs
@@ -1324,12 +1337,17 @@ function ResultsDashboard({
             </p>
           </div>
           <ul className="mt-3 space-y-2">
-            {result.anomalies.hits.map((h) => (
-              <li key={h.kind} className="text-sm leading-relaxed text-orange-100/90">
+            {result.anomalies.hits.map((h, hi) => (
+              <li
+                key={`${h.kind}-${hi}`}
+                className="text-sm leading-relaxed text-orange-100/90"
+              >
                 <span className="font-medium">{h.label}</span>
                 <span className="text-orange-200/70">
                   {" "}
-                  (+{h.marginImpact}) — {h.detail}
+                  <span className="tabular-nums">(+{h.marginImpact})</span>
+                  {" — "}
+                  {h.detail}
                 </span>
               </li>
             ))}
@@ -1541,11 +1559,11 @@ function TextOptionList({
           revealedCorrect !== null && selected && revealedCorrect !== i;
         return (
           <button
-            key={`${i}-${opt.slice(0, 24)}`}
+            key={`text-opt-${i}`}
             type="button"
             disabled={disabled}
             onClick={() => onSelect(i)}
-            className={`flex w-full items-start gap-3 rounded-xl border px-4 py-3 text-left text-sm transition ${
+            className={`flex w-full min-w-0 items-start gap-3 rounded-xl border px-4 py-3 text-left text-sm transition ${
               isCorrect
                 ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-100"
                 : isWrong
@@ -1555,10 +1573,10 @@ function TextOptionList({
                     : "border-zinc-800 bg-zinc-950/50 text-zinc-300 hover:border-zinc-600"
             }`}
           >
-            <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-zinc-700 text-xs font-medium text-zinc-400">
+            <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-zinc-700 text-xs font-medium tabular-nums text-zinc-400">
               {LETTERS[i]}
             </span>
-            <span className="leading-relaxed">{opt}</span>
+            <span className="min-w-0 break-words leading-relaxed">{opt}</span>
           </button>
         );
       })}
@@ -1593,20 +1611,26 @@ function ReviewPanel({
   const chosenLetter =
     item.selected != null ? LETTERS[item.selected] : null;
   const correctLetter = LETTERS[item.q.correctIndex];
+  const rulePreview =
+    item.q.explanation.rules[0] ?? item.q.explanation.pt;
   const shortRule =
-    item.q.explanation.rules[0] ??
-    item.q.explanation.pt.slice(0, 120) +
-      (item.q.explanation.pt.length > 120 ? "…" : "");
+    rulePreview.length > 140
+      ? `${rulePreview.slice(0, 140)}…`
+      : rulePreview;
   const err =
     item.selected != null && !item.correct
       ? item.q.distractorErrors[item.selected]
       : null;
 
   return (
-    <div className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-950/70 p-5">
+    <div className="space-y-4 overflow-x-hidden rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4 sm:p-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-base font-semibold text-zinc-100">
-          Revisão comentada {safe + 1}/{total} — Item {item.q.id} ·{" "}
+        <h3 className="min-w-0 text-base font-semibold text-zinc-100">
+          Revisão comentada{" "}
+          <span className="tabular-nums">
+            {safe + 1}/{total}
+          </span>{" "}
+          — Item {item.q.id} ·{" "}
           {isTextQuestion(item.q) ? "Pergunta" : "Figura"} ·{" "}
           {bandProgressLabel(item.q.difficulty)}
         </h3>
@@ -1640,9 +1664,11 @@ function ReviewPanel({
             Opção {correctLetter}
           </span>
         </p>
-        <p>
+        <p className="min-w-0 sm:col-span-1">
           <span className="text-zinc-500">Regra: </span>
-          <span className="text-zinc-300">{shortRule}</span>
+          <span className="break-words text-zinc-300" title={rulePreview}>
+            {shortRule}
+          </span>
         </p>
       </div>
 
@@ -1668,10 +1694,11 @@ function ReviewPanel({
                 {item.q.explanation.pt}
               </p>
               <ul className="flex flex-wrap gap-2">
-                {item.q.explanation.rules.map((r) => (
+                {item.q.explanation.rules.map((r, ri) => (
                   <li
-                    key={r}
-                    className="rounded-md border border-zinc-700 px-2 py-0.5 text-[11px] text-zinc-400"
+                    key={`rule-m-${ri}`}
+                    className="max-w-full break-words rounded-md border border-zinc-700 px-2 py-0.5 text-[11px] text-zinc-400"
+                    title={r}
                   >
                     {r}
                   </li>
@@ -1681,11 +1708,13 @@ function ReviewPanel({
           </>
         ) : (
           <div className="w-full max-w-2xl space-y-3">
-            <p className="text-base text-zinc-100">{item.q.stem}</p>
+            <p className="break-words text-base text-zinc-100">{item.q.stem}</p>
             {item.q.premises?.length ? (
               <ul className="list-disc space-y-1 pl-5 text-sm text-zinc-400">
-                {item.q.premises.map((p) => (
-                  <li key={p}>{p}</li>
+                {item.q.premises.map((p, pi) => (
+                  <li key={`rev-premise-${pi}`} className="break-words">
+                    {p}
+                  </li>
                 ))}
               </ul>
             ) : null}
@@ -1705,10 +1734,11 @@ function ReviewPanel({
               {item.q.explanation.pt}
             </p>
             <ul className="flex flex-wrap gap-2">
-              {item.q.explanation.rules.map((r) => (
+              {item.q.explanation.rules.map((r, ri) => (
                 <li
-                  key={r}
-                  className="rounded-md border border-zinc-700 px-2 py-0.5 text-[11px] text-zinc-400"
+                  key={`rule-t-${ri}`}
+                  className="max-w-full break-words rounded-md border border-zinc-700 px-2 py-0.5 text-[11px] text-zinc-400"
+                  title={r}
                 >
                   {r}
                 </li>
