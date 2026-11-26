@@ -85,36 +85,6 @@ export async function POST(req: Request) {
       });
     }
 
-    // Pix EMV fallback: PagBank charge paid → unlock the InfinitePay order_nsu.
-    if (local?.pagbankOrderId) {
-      try {
-        const { fetchPagbankOrderStatus } = await import(
-          "@/lib/pagbank/client"
-        );
-        const remote = await fetchPagbankOrderStatus(local.pagbankOrderId);
-        if (remote.status === "paid") {
-          const tier =
-            tierFromNsu ??
-            (parseInfinitePayTier(local.tier) as InfinitePayTier | null);
-          await markInfinitePayPaidAsync(order_nsu, {
-            transaction_nsu: `PAGBANK_${local.pagbankOrderId}`,
-            slug: local.slug,
-          });
-          return NextResponse.json({
-            paid: true,
-            tier,
-            order_nsu,
-            amount:
-              local.amountCentavos ||
-              (tier ? expectedAmountForTier(tier) : remote.amountCentavos),
-            from: "pagbank",
-          });
-        }
-      } catch {
-        // keep polling InfinitePay / wait for webhook
-      }
-    }
-
     const wantsSimComplete =
       Boolean(transaction_nsu) &&
       (infinitepaySimulateLocal() ||
@@ -148,7 +118,7 @@ export async function POST(req: Request) {
       });
     }
 
-    // Modal poll: only order_nsu — wait for webhook / payment_return / PagBank.
+    // Poll with only order_nsu — wait for webhook / payment_return.
     if (!transaction_nsu || !slug) {
       return NextResponse.json({
         paid: false,

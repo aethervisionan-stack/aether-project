@@ -1,21 +1,12 @@
 "use client";
 
 import { motion, useReducedMotion } from "framer-motion";
-import {
-  Check,
-  Copy,
-  ExternalLink,
-  Loader2,
-  Lock,
-  Sparkles,
-  X,
-} from "lucide-react";
+import { Check, Loader2, Lock, Sparkles } from "lucide-react";
 import Image from "next/image";
-import { QRCodeSVG } from "qrcode.react";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { isValidPixEmv, pickClientPixEmv } from "@/lib/infinitepay/pixEmv";
+import { useMemo, useState } from "react";
 import type { NarrativeResult } from "@/src/data/archetypes";
 import { paywallTeaseFor } from "@/src/data/paywallTeases";
+import { redirectToCheckout } from "@/src/utils/checkoutRedirect";
 import {
   isResultUnlocked,
   readQuizSession,
@@ -34,8 +25,6 @@ type Props = {
 };
 
 const EASE = [0.22, 1, 0.36, 1] as const;
-const POLL_MS = 3500;
-const POLL_MAX_MS = 120_000;
 
 type BoxId = "result" | "mentor_upgrade";
 
@@ -79,16 +68,6 @@ const BOXES: {
   },
 ];
 
-type CheckoutModal = {
-  url: string;
-  order_nsu: string;
-  tier: InfinitePayTier;
-  amountLabel: string;
-  /** Valid Pix EMV only — never a checkout URL. */
-  pixCopyPaste: string | null;
-  simulated?: boolean;
-};
-
 function sessionClientId(): string {
   try {
     const existing = window.localStorage.getItem("arq_client_sid");
@@ -119,7 +98,6 @@ function pickCheckoutUrl(data: Record<string, unknown>): string | null {
 
 export function PaywallScreen({
   result,
-  onUnlocked,
   verifying = false,
   verifyError = null,
   onRetryVerify,
@@ -137,13 +115,6 @@ export function PaywallScreen({
   const [selMentor, setSelMentor] = useState(alreadyResult);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [simNotice, setSimNotice] = useState<string | null>(null);
-  const [modal, setModal] = useState<CheckoutModal | null>(null);
-  const [pollTimedOut, setPollTimedOut] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const pollAbortRef = useRef(false);
-  const onUnlockedRef = useRef(onUnlocked);
-  onUnlockedRef.current = onUnlocked;
 
   const totalCentavos =
     (selResult && !alreadyResult ? 100 : 0) + (selMentor ? 500 : 0);
@@ -173,85 +144,10 @@ export function PaywallScreen({
     setSelMentor((v) => !v);
   }
 
-  function closeModal() {
-    pollAbortRef.current = true;
-    setModal(null);
-    setPollTimedOut(false);
-    setCopied(false);
-    setLoading(false);
-  }
-
-  async function copyPixCode(emv: string) {
-    try {
-      await navigator.clipboard.writeText(emv);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
-    } catch {
-      setCopied(false);
-    }
-  }
-
-  useEffect(() => {
-    if (!modal) return;
-    pollAbortRef.current = false;
-    setPollTimedOut(false);
-    const started = Date.now();
-    let timer: number | undefined;
-
-    async function pollOnce() {
-      if (pollAbortRef.current || !modal) return;
-      try {
-        const res = await fetch("/api/infinitepay/verify", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ order_nsu: modal.order_nsu }),
-        });
-        const data = (await res.json()) as {
-          paid?: boolean;
-          tier?: string;
-          order_nsu?: string;
-        };
-        if (pollAbortRef.current) return;
-        if (data.paid && data.tier) {
-          pollAbortRef.current = true;
-          setModal(null);
-          setLoading(false);
-          onUnlockedRef.current(
-            data.tier as InfinitePayTier,
-            data.order_nsu ?? modal.order_nsu,
-          );
-          return;
-        }
-      } catch {
-        // keep polling
-      }
-
-      if (pollAbortRef.current) return;
-      if (Date.now() - started >= POLL_MAX_MS) {
-        setPollTimedOut(true);
-        return;
-      }
-      timer = window.setTimeout(() => {
-        void pollOnce();
-      }, POLL_MS);
-    }
-
-    timer = window.setTimeout(() => {
-      void pollOnce();
-    }, POLL_MS);
-
-    return () => {
-      pollAbortRef.current = true;
-      if (timer) window.clearTimeout(timer);
-    };
-  }, [modal]);
-
   async function checkout() {
     if (!tier || loading) return;
     setLoading(true);
     setError(null);
-    setSimNotice(null);
-    setPollTimedOut(false);
     try {
       const res = await fetch("/api/infinitepay/create-link", {
         method: "POST",
@@ -268,29 +164,11 @@ export function PaywallScreen({
         throw new Error("Resposta inválida do servidor de pagamento");
       }
       const url = pickCheckoutUrl(data);
-      const errMsg =
-        typeof data.error === "string" ? data.error : null;
+      const errMsg = typeof data.error === "string" ? data.error : null;
       const order_nsu =
         typeof data.order_nsu === "string" ? data.order_nsu : null;
       if (!res.ok || !url || !order_nsu) {
         throw new Error(errMsg || "Não foi possível abrir o checkout");
-      }
-
-      const amountLabel =
-        typeof data.amountLabel === "string" && data.amountLabel
-          ? data.amountLabel
-          : totalLabel || "—";
-      const simulated = data.simulated === true;
-      const pixRaw = pickClientPixEmv(data);
-      // Never encode checkout URL as Pix QR — banks reject it.
-      const pixCopyPaste =
-        pixRaw && isValidPixEmv(pixRaw) && pixRaw !== url.trim()
-          ? pixRaw.trim()
-          : null;
-      if (simulated) {
-        setSimNotice(
-          "Modo simulado: abra o checkout para confirmar. Em produção o QR usa o código Pix (EMV).",
-        );
       }
 
       try {
@@ -305,15 +183,8 @@ export function PaywallScreen({
         // ignore
       }
 
-      setModal({
-        url,
-        order_nsu,
-        tier,
-        amountLabel,
-        pixCopyPaste,
-        simulated,
-      });
-      setLoading(false);
+      // Same-tab InfinitePay Checkout Integrado (no on-site Pix QR).
+      redirectToCheckout(url);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao iniciar pagamento");
       setLoading(false);
@@ -566,7 +437,7 @@ export function PaywallScreen({
             {loading ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Gerando pagamento…
+                Abrindo checkout…
               </>
             ) : totalLabel ? (
               `Pagar ${totalLabel}`
@@ -579,114 +450,11 @@ export function PaywallScreen({
               {error}
             </p>
           ) : null}
-          {simNotice && !modal ? (
-            <p className="max-w-md text-center text-xs text-amber-200/90">
-              {simNotice}
-            </p>
-          ) : null}
           <p className="text-center text-[11px] text-[color:var(--cart-dim)]">
-            InfinitePay · QR ou checkout · sem nome, e-mail ou CPF
+            Checkout InfinitePay · redirecionamento seguro
           </p>
         </div>
       </div>
-
-      {modal ? (
-        <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/80 p-4 sm:items-center">
-          <div
-            className="relative w-full max-w-md rounded-sm border border-[color:var(--cart-border-soft)] bg-[#0c0d10] p-5 shadow-2xl sm:p-6"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Pagamento InfinitePay"
-          >
-            <button
-              type="button"
-              onClick={closeModal}
-              className="absolute right-3 top-3 rounded p-1 text-[color:var(--cart-dim)] hover:text-[color:var(--cart-copper)]"
-              aria-label="Fechar"
-            >
-              <X size={18} />
-            </button>
-
-            <p className="cart-display text-center text-[10px] uppercase tracking-[0.28em] text-[color:var(--cart-copper)]">
-              Pagamento
-            </p>
-            <h2 className="cart-display mt-2 text-center text-2xl text-[color:var(--cine-ink)]">
-              {modal.amountLabel}
-            </h2>
-            <p className="mt-1 text-center text-xs text-[color:var(--cart-muted)]">
-              {modal.pixCopyPaste
-                ? "QR Pix · copia e cola · valor exato"
-                : "Pix ou cartão no checkout InfinitePay"}
-            </p>
-
-            {modal.pixCopyPaste ? (
-              <>
-                <div className="mx-auto mt-5 flex w-fit items-center justify-center rounded-sm bg-white p-3">
-                  <QRCodeSVG
-                    value={modal.pixCopyPaste}
-                    size={180}
-                    level="M"
-                    includeMargin
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={() => void copyPixCode(modal.pixCopyPaste!)}
-                  className="cart-cta mt-5 inline-flex w-full items-center justify-center gap-2 rounded-sm px-5 py-3 text-sm font-semibold"
-                >
-                  <Copy size={16} />
-                  {copied ? "Código Pix copiado" : "Copiar código Pix"}
-                </button>
-                <a
-                  href={modal.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-sm border border-[color:var(--cart-border-soft)] px-5 py-3 text-sm text-[color:var(--cart-muted)] hover:border-[color:var(--cart-copper)] hover:text-[color:var(--cart-copper)]"
-                >
-                  <ExternalLink size={16} />
-                  Abrir checkout InfinitePay
-                </a>
-              </>
-            ) : (
-              <>
-                <p className="mt-4 text-center text-xs leading-relaxed text-[color:var(--cart-muted)]">
-                  O QR Pix oficial abre no checkout da InfinitePay — não
-                  exibimos link de pagamento como QR Pix.
-                </p>
-                <a
-                  href={modal.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="cart-cta mt-5 inline-flex w-full items-center justify-center gap-2 rounded-sm px-5 py-3 text-sm font-semibold"
-                >
-                  <ExternalLink size={16} />
-                  Abrir checkout InfinitePay
-                </a>
-              </>
-            )}
-
-            <div className="mt-4 flex items-center justify-center gap-2 text-sm text-[color:var(--cart-muted)]">
-              {!pollTimedOut ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin text-[color:var(--cart-copper)]" />
-                  <span>Aguardando confirmação…</span>
-                </>
-              ) : (
-                <span className="text-center text-xs text-amber-200/90">
-                  Ainda não confirmamos. Continue no checkout ou feche e tente de
-                  novo — o retorno e o webhook também liberam.
-                </span>
-              )}
-            </div>
-
-            {modal.simulated ? (
-              <p className="mt-3 text-center text-[11px] text-amber-200/80">
-                Simulado: abra o checkout nesta janela para confirmar.
-              </p>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
     </section>
   );
 }

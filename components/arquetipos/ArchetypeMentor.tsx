@@ -4,7 +4,6 @@ import { motion, useReducedMotion } from "framer-motion";
 import {
   Check,
   Copy,
-  ExternalLink,
   KeyRound,
   Loader2,
   Lock,
@@ -13,11 +12,10 @@ import {
   Shield,
   Sparkles,
 } from "lucide-react";
-import { QRCodeSVG } from "qrcode.react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { isValidPixEmv, pickClientPixEmv } from "@/lib/infinitepay/pixEmv";
 import { buildMentorProfile } from "@/lib/mentor/profile";
 import type { NarrativeResult } from "@/src/data/archetypes";
+import { redirectToCheckout } from "@/src/utils/checkoutRedirect";
 import {
   applyMentorRestore,
   encodeMentorRestoreBundle,
@@ -451,71 +449,14 @@ export function ArchetypeMentor({ result }: Props) {
   );
 }
 
-const MENTOR_POLL_MS = 3500;
-const MENTOR_POLL_MAX_MS = 120_000;
-
 function MentorPassModal({
   onClose,
-  onUnlocked,
 }: {
   onClose: () => void;
   onUnlocked: () => void;
 }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
-  const [pixCopyPaste, setPixCopyPaste] = useState<string | null>(null);
-  const [orderNsu, setOrderNsu] = useState<string | null>(null);
-  const [pollTimedOut, setPollTimedOut] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const pollAbortRef = useRef(false);
-  const onUnlockedRef = useRef(onUnlocked);
-  onUnlockedRef.current = onUnlocked;
-
-  useEffect(() => {
-    if (!orderNsu || !checkoutUrl) return;
-    pollAbortRef.current = false;
-    setPollTimedOut(false);
-    const started = Date.now();
-    let timer: number | undefined;
-
-    async function pollOnce() {
-      if (pollAbortRef.current || !orderNsu) return;
-      try {
-        const res = await fetch("/api/infinitepay/verify", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ order_nsu: orderNsu }),
-        });
-        const data = (await res.json()) as { paid?: boolean; tier?: string };
-        if (pollAbortRef.current) return;
-        if (data.paid) {
-          pollAbortRef.current = true;
-          onUnlockedRef.current();
-          return;
-        }
-      } catch {
-        // keep polling
-      }
-      if (pollAbortRef.current) return;
-      if (Date.now() - started >= MENTOR_POLL_MAX_MS) {
-        setPollTimedOut(true);
-        return;
-      }
-      timer = window.setTimeout(() => {
-        void pollOnce();
-      }, MENTOR_POLL_MS);
-    }
-
-    timer = window.setTimeout(() => {
-      void pollOnce();
-    }, MENTOR_POLL_MS);
-
-    return () => {
-      pollAbortRef.current = true;
-      if (timer) window.clearTimeout(timer);
-    };
-  }, [orderNsu, checkoutUrl]);
 
   async function startCheckout() {
     if (loading) return;
@@ -562,34 +503,22 @@ function MentorPassModal({
             "Não foi possível abrir o checkout",
         );
       }
-      const pixRaw = pickClientPixEmv(data);
-      const emv =
-        pixRaw && isValidPixEmv(pixRaw) && pixRaw !== url.trim()
-          ? pixRaw.trim()
-          : null;
-      setCheckoutUrl(url.trim());
-      setPixCopyPaste(emv);
-      setOrderNsu(nsu);
-      setLoading(false);
+      try {
+        window.sessionStorage.setItem(
+          "infinitepay_pending",
+          JSON.stringify({
+            tier: "mentor_upgrade",
+            order_nsu: nsu,
+          }),
+        );
+      } catch {
+        // ignore
+      }
+      redirectToCheckout(url.trim());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao iniciar pagamento");
       setLoading(false);
     }
-  }
-
-  async function copyPixCode(emv: string) {
-    try {
-      await navigator.clipboard.writeText(emv);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
-    } catch {
-      setCopied(false);
-    }
-  }
-
-  function handleClose() {
-    pollAbortRef.current = true;
-    onClose();
   }
 
   return (
@@ -613,90 +542,30 @@ function MentorPassModal({
           </p>
 
           {error ? (
-            <p className="mt-4 text-center text-sm text-red-300/90">{error}</p>
+            <p className="mt-4 text-center text-sm text-red-300/90" role="alert">
+              {error}
+            </p>
           ) : null}
-
-          {checkoutUrl ? (
-            <>
-              {pixCopyPaste ? (
-                <>
-                  <div className="mx-auto mt-5 flex w-fit items-center justify-center rounded-sm bg-white p-3">
-                    <QRCodeSVG
-                      value={pixCopyPaste}
-                      size={160}
-                      level="M"
-                      includeMargin
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => void copyPixCode(pixCopyPaste)}
-                    className="cart-cta mt-4 inline-flex w-full items-center justify-center gap-2 rounded-sm px-5 py-3 text-sm font-semibold"
-                  >
-                    <Copy size={16} />
-                    {copied ? "Código Pix copiado" : "Copiar código Pix"}
-                  </button>
-                  <a
-                    href={checkoutUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-sm border border-[color:var(--cart-border-soft)] px-5 py-3 text-sm text-[color:var(--cart-muted)] hover:border-[color:var(--cart-copper)]"
-                  >
-                    <ExternalLink size={16} />
-                    Abrir checkout InfinitePay
-                  </a>
-                </>
-              ) : (
-                <>
-                  <p className="mt-4 text-center text-xs leading-relaxed text-[color:var(--cart-muted)]">
-                    O QR Pix oficial abre no checkout da InfinitePay.
-                  </p>
-                  <a
-                    href={checkoutUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="cart-cta mt-4 inline-flex w-full items-center justify-center gap-2 rounded-sm px-5 py-3 text-sm font-semibold"
-                  >
-                    <ExternalLink size={16} />
-                    Abrir checkout InfinitePay
-                  </a>
-                </>
-              )}
-              <div className="mt-3 flex items-center justify-center gap-2 text-sm text-[color:var(--cart-muted)]">
-                {!pollTimedOut ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin text-[color:var(--cart-copper)]" />
-                    <span>Aguardando confirmação…</span>
-                  </>
-                ) : (
-                  <span className="text-center text-xs text-amber-200/90">
-                    Ainda não confirmamos. Continue no checkout ou feche e tente
-                    de novo.
-                  </span>
-                )}
-              </div>
-            </>
-          ) : (
-            <button
-              type="button"
-              disabled={loading}
-              onClick={() => void startCheckout()}
-              className="cart-cta mt-6 inline-flex w-full items-center justify-center gap-2 rounded-sm px-5 py-3 text-sm font-semibold disabled:opacity-50"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Gerando pagamento…
-                </>
-              ) : (
-                "Pagar R$ 5,00"
-              )}
-            </button>
-          )}
 
           <button
             type="button"
-            onClick={handleClose}
+            disabled={loading}
+            onClick={() => void startCheckout()}
+            className="cart-cta mt-6 inline-flex w-full items-center justify-center gap-2 rounded-sm px-5 py-3 text-sm font-semibold disabled:opacity-50"
+          >
+            {loading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Abrindo checkout…
+              </>
+            ) : (
+              "Pagar R$ 5,00"
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={onClose}
             className="mt-4 w-full py-2 text-xs uppercase tracking-[0.16em] text-[color:var(--cart-dim)] hover:text-[color:var(--cart-copper)]"
           >
             Fechar
