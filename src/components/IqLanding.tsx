@@ -21,7 +21,23 @@ const RIGOR_CHIPS = [
   { label: "L1–L5" },
   { label: "Escala 100/15", help: true },
   { label: "IRT 3PL" },
-  { label: "localStorage isolado" },
+  { label: "Ranking local" },
+] as const;
+
+/** Promessas do hero alinhadas ao painel de resultados. */
+const HERO_PROMISE_PILLS = [
+  {
+    t: "Perfil Cognitivo",
+    d: "Equilibrado ou assimétrico — o mapa da sessão",
+  },
+  {
+    t: "Fortes vs Fracos",
+    d: "O que puxa o desempenho e o que limita",
+  },
+  {
+    t: "Atividade de Maior Destaque",
+    d: "Onde você tenderia a brilhar",
+  },
 ] as const;
 
 const TRANSPARENCY = [
@@ -156,12 +172,14 @@ export function IqLanding({
           <p className="text-[11px] font-medium uppercase tracking-[0.28em] text-cyan-300/80">
             Precision Lab · Avaliação psicométrica
           </p>
-          <h1 className="font-iq-display max-w-[14ch] text-4xl leading-[1.05] tracking-tight text-zinc-50 sm:text-5xl lg:text-[3.35rem]">
-            Teste de QI Profissional
+          <h1 className="font-iq-display max-w-[16ch] text-4xl leading-[1.05] tracking-tight text-zinc-50 sm:text-5xl lg:text-[3.35rem]">
+            Descubra seu perfil cognitivo
           </h1>
           <p className="max-w-lg text-base leading-relaxed text-zinc-400 sm:text-lg">
-            Perfil cognitivo em seis índices, pontuação IRT 3PL (escala 100/15)
-            e painel diagnóstico — com modos isolados e ranking local.
+            Forças, fraquezas e onde você tenderia a brilhar — análise
+            estratégica, resolução complexa, memória multitask, espacial-visual
+            ou decisões ágeis. Quiz com ranking local: estimativa clara, sem
+            milagre.
           </p>
           <ul className="flex flex-wrap gap-2">
             {RIGOR_CHIPS.map((chip) => (
@@ -176,30 +194,21 @@ export function IqLanding({
               </li>
             ))}
           </ul>
-          <dl className="grid max-w-md grid-cols-3 gap-3 pt-2">
-            {(
-              [
-                { n: "30", l: "questões" },
-                { n: "±15", l: "escala σ", help: true },
-                { n: "3", l: "modos" },
-              ] as const
-            ).map(({ n, l, ...rest }) => (
-              <div
-                key={l}
-                className="rounded-xl border border-white/[0.06] bg-[#0C0E16]/60 px-3 py-3 backdrop-blur-sm"
+          <ul className="grid max-w-xl grid-cols-1 gap-2 pt-1 sm:grid-cols-3">
+            {HERO_PROMISE_PILLS.map((pill) => (
+              <li
+                key={pill.t}
+                className="rounded-xl border border-white/[0.07] bg-[#0C0E16]/60 px-3 py-3 backdrop-blur-sm"
               >
-                <dt className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.16em] text-zinc-500">
-                  {l}
-                  {"help" in rest && rest.help ? (
-                    <SkillHelpTip label="Escala 100/15" help={ESCALA_HELP} />
-                  ) : null}
-                </dt>
-                <dd className="mt-1 font-iq-display text-xl tabular-nums tracking-tight text-zinc-100">
-                  {n}
-                </dd>
-              </div>
+                <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-cyan-300/75">
+                  {pill.t}
+                </p>
+                <p className="mt-1.5 text-xs leading-snug text-zinc-400">
+                  {pill.d}
+                </p>
+              </li>
             ))}
-          </dl>
+          </ul>
         </motion.div>
 
         <motion.div

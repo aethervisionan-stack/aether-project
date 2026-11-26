@@ -22,6 +22,16 @@ import {
   indexLabel,
   subtestLabel,
 } from "@/src/lib/chcCatalog";
+
+/** Onde o índice tenderia a “brilhar” — alinhado ao hook do hero. */
+const SHINE_ACTIVITY: Record<CognitiveIndexId, string> = {
+  verbal: "Análise estratégica e leitura de premissas",
+  fluido: "Resolução de problemas complexos e novos",
+  espacial: "Raciocínio visual-espacial",
+  memoria_trabalho: "Memória multitask sob carga",
+  velocidade_processamento: "Processamento ágil com poucos erros",
+  tempo_reacao: "Decisões ágeis sob pressão",
+};
 import {
   competenceHelp,
   ESCALA_HELP,
@@ -50,6 +60,7 @@ import {
   QUIZ_TOTAL_QUESTIONS,
   bandProgressLabel,
   type AssessmentMode,
+  type CognitiveIndexId,
   type QuizItem,
   type QuizPersistedState,
 } from "@/src/types/quiz";
@@ -1160,6 +1171,20 @@ function ResultsDashboard({
         <p className="mt-1.5 text-sm leading-relaxed text-zinc-400">
           {result.cognitiveProfile.detail}
         </p>
+        {result.cognitiveProfile.strengths[0] ? (
+          <div className="mt-3 rounded-xl border border-cyan-400/20 bg-cyan-400/[0.06] px-3.5 py-3">
+            <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-cyan-300/90">
+              Atividade de Maior Destaque
+            </p>
+            <p className="mt-1 text-sm font-medium text-zinc-100">
+              {SHINE_ACTIVITY[result.cognitiveProfile.strengths[0].id]}
+            </p>
+            <p className="mt-0.5 text-xs tabular-nums text-zinc-500">
+              Índice líder: {result.cognitiveProfile.strengths[0].label} (
+              {result.cognitiveProfile.strengths[0].score}%)
+            </p>
+          </div>
+        ) : null}
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <div>
             <p className="text-[11px] uppercase tracking-wider text-emerald-400/90">
