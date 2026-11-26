@@ -1017,8 +1017,8 @@ function buildQuestions(): MatrixQuestion[] {
       ],
       seed: 217,
       explanation: {
-        pt: "Formas ciclam; preenchimentos diferentes → sólido (XOR de textura).",
-        rules: ["Ciclo de formas", "XOR de preenchimento"],
+        pt: "Formas ciclam por linha (início deslocado). Preenchimento avança vazio → hachurado → sólido.",
+        rules: ["Ciclo de formas", "Progressão de preenchimento"],
       },
     });
   }
@@ -1076,9 +1076,9 @@ function buildQuestions(): MatrixQuestion[] {
 
   /* ═══════════════ BAND 4 — Alta Complexidade (multi-rule) ═══════════════ */
 
-  // Q19 — OR of corner dots
+  // Q19 — OR of corner dots (row3: 0b1001 ∨ 0b0010 = 0b1011)
   {
-    const correct = corners(0b0111);
+    const correct = corners(0b1011);
     pushQ(qs, {
       id: 19,
       difficulty: 4,
@@ -1100,61 +1100,18 @@ function buildQuestions(): MatrixQuestion[] {
       distractors: [
         distractor(corners(0b0011), "missing_rule"),
         distractor(corners(0b0101), "missing_rule"),
-        distractor(corners(0b1111), "or_instead_of_xor"),
-        distractor(corners(0b0110), "and_instead_of_xor"),
-        distractor(corners(0b0001), "partial_union"),
-        distractor(corners(0b1011), "extra_element"),
-        distractor(corners(0b0010), "horizontal_only"),
-      ],
-      seed: 219,
-      explanation: {
-        pt: "Terceira célula = OR das posições das duas primeiras (0b1001|0b0010=0b1011… → nesta linha 0b1001|0b0010=0b1011). Aqui: 0b1001 ∨ 0b0010 = 0b1011 — wait fix: row3 is 0b1001 | 0b0010 = 0b1011.",
-        rules: ["OR espacial", "Máscara de cantos"],
-      },
-    });
-  }
-
-  // Fix Q19 explanation and correct answer: 0b1001 | 0b0010 = 0b1011
-  qs[qs.length - 1].explanation = {
-    pt: "Terceira célula = união (OR) das posições dos pontos. Linha 3: 1001 ∨ 0010 = 1011.",
-    rules: ["OR espacial", "Máscara de cantos"],
-  };
-  // Actually I set correct = corners(0b0111) but row3 should be 0b1011. Fix the question properly.
-  {
-    const last = qs[qs.length - 1];
-    const correct = corners(0b1011);
-    const packed = packOptions(
-      correct,
-      [
-        distractor(corners(0b0011), "missing_rule"),
-        distractor(corners(0b0101), "missing_rule"),
         distractor(corners(0b1111), "extra_element"),
         distractor(corners(0b0110), "and_instead_of_xor"),
         distractor(corners(0b0001), "partial_union"),
         distractor(corners(0b1001), "horizontal_only"),
         distractor(corners(0b0010), "vertical_only"),
       ],
-      219,
-      8,
-    );
-    last.cells = matrix9([
-      corners(0b0011),
-      corners(0b0101),
-      corners(0b0111),
-      corners(0b1100),
-      corners(0b1010),
-      corners(0b1110),
-      corners(0b1001),
-      corners(0b0010),
-      null,
-    ]);
-    last.options = packed.options;
-    last.correctIndex = packed.correctIndex;
-    last.distractorErrors = packed.distractorErrors;
-    last.explanation = {
-      pt: "Terceira célula = OR das posições. Linha 3: 1001 ∨ 0010 = 1011.",
-      rules: ["OR espacial", "Máscara de cantos"],
-    };
+      seed: 219,
+      explanation: {
+        pt: "Terceira célula = união (OR) das posições dos pontos. Linha 3: 1001 ∨ 0010 = 1011.",
+        rules: ["OR espacial", "Máscara de cantos"],
+      },
+    });
   }
 
   // Q20 — shape by row, rot by col, fill by diagonal
@@ -1218,9 +1175,8 @@ function buildQuestions(): MatrixQuestion[] {
     });
   }
 
-  // Q21 — XOR corners
+  // Q21 — XOR corners (row3: 1110 ⊕ 1001 = 0111)
   {
-    const correct = corners(0b0110); // 1100 XOR 1010
     pushQ(qs, {
       id: 21,
       difficulty: 4,
@@ -1238,7 +1194,7 @@ function buildQuestions(): MatrixQuestion[] {
         corners(0b1001),
         null,
       ]),
-      correct: corners(0b0111), // 1110 XOR 1001 = 0111
+      correct: corners(0b0111),
       distractors: [
         distractor(corners(0b1110), "or_instead_of_xor"),
         distractor(corners(0b1000), "and_instead_of_xor"),
@@ -1576,6 +1532,7 @@ function buildQuestions(): MatrixQuestion[] {
   }
 
   // Q28 — fill/border inversion + rotation + count
+  // at(2,2): n=3, rot=180, fill=solid (c even), border=true ((r+c) even)
   {
     const mk = (
       n: number,
@@ -1585,12 +1542,13 @@ function buildQuestions(): MatrixQuestion[] {
     ): CellContent => {
       const glyphs: Glyph[] = [];
       if (border) {
-        glyphs.push(g("square", { scale: 0.85, fill: "empty", strokeWidth: 2.2 }));
+        glyphs.push(
+          g("square", { scale: 0.85, fill: "empty", strokeWidth: 2.2 }),
+        );
       }
       const inner = counted("circle", n, fill, rot);
       return { glyphs: [...glyphs, ...inner.glyphs] };
     };
-    // Row: n = r+1; col: rot = c*90; fill flips each col; border on when (r+c)%2===0
     const at = (r: number, c: number) => {
       const fill: FillKind = c % 2 === 0 ? "solid" : "empty";
       return mk(r + 1, c * 90, fill, (r + c) % 2 === 0);
@@ -1615,47 +1573,6 @@ function buildQuestions(): MatrixQuestion[] {
       ]),
       correct,
       distractors: [
-        distractor(mk(3, 180, "empty", false), "polarity_flip"), // wrong border
-        distractor(mk(3, 90, "empty", true), "incomplete_rotation"),
-        distractor(mk(2, 180, "empty", true), "wrong_count"),
-        distractor(mk(3, 180, "solid", true), "fill_only"),
-        distractor(mk(3, 180, "empty", true), "missing_rule"), // wait this might match - use different
-        distractor(mk(3, 0, "empty", true), "vertical_only"),
-        distractor(mk(3, 180, "hatched", true), "polarity_flip"),
-      ],
-      seed: 228,
-      explanation: {
-        pt: "Contagem = linha+1; rotação 0/90/180; fill alterna sólido/vazio; borda presente quando (r+c) par.",
-        rules: ["Contagem", "Rotação", "Inversão de fill", "Borda xadrez"],
-      },
-    });
-  }
-
-  // Fix Q28 distractor that might equal correct: at(2,2) = mk(3, 180, "empty", true) because (2+2)%2===0 → border true, c%2===0 → wait c=2 even → fill solid!
-  // at(2,2): n=3, rot=180, fill=solid (c even), border=true
-  // So distractor mk(3, 180, "empty", true) is polarity_flip - good
-  // distractor labeled missing_rule with mk(3, 180, "empty", true) duplicates - fix that one
-  {
-    const last = qs[qs.length - 1];
-    const mk = (
-      n: number,
-      rot: number,
-      fill: FillKind,
-      border: boolean,
-    ): CellContent => {
-      const glyphs: Glyph[] = [];
-      if (border) {
-        glyphs.push(
-          g("square", { scale: 0.85, fill: "empty", strokeWidth: 2.2 }),
-        );
-      }
-      const inner = counted("circle", n, fill, rot);
-      return { glyphs: [...glyphs, ...inner.glyphs] };
-    };
-    const correct = mk(3, 180, "solid", true);
-    const packed = packOptions(
-      correct,
-      [
         distractor(mk(3, 180, "empty", true), "polarity_flip"),
         distractor(mk(3, 90, "solid", true), "incomplete_rotation"),
         distractor(mk(2, 180, "solid", true), "wrong_count"),
@@ -1664,12 +1581,12 @@ function buildQuestions(): MatrixQuestion[] {
         distractor(mk(3, 180, "hatched", true), "fill_only"),
         distractor(mk(4, 180, "solid", true), "wrong_count"),
       ],
-      228,
-      8,
-    );
-    last.options = packed.options;
-    last.correctIndex = packed.correctIndex;
-    last.distractorErrors = packed.distractorErrors;
+      seed: 228,
+      explanation: {
+        pt: "Contagem = linha+1; rotação 0/90/180; fill alterna sólido/vazio; borda presente quando (r+c) par.",
+        rules: ["Contagem", "Rotação", "Inversão de fill", "Borda xadrez"],
+      },
+    });
   }
 
   // Q29 — dual axis: row transform XOR of fills, col = rotate+count
@@ -1711,11 +1628,12 @@ function buildQuestions(): MatrixQuestion[] {
       correct,
       distractors: [
         distractor(at(2, 1), "incomplete_rotation"),
-        distractor(at(1, 2), "wrong_count"),
-        distractor(mk("hexagon", 120, "solid", 3), "fill_only"),
+        // wrong_count: same shape/rot/fill as correct, count 4 (not at(1,2) which is empty/2)
+        distractor(mk("hexagon", 120, "solid", 4), "wrong_count"),
+        distractor(mk("hexagon", 120, "hatched", 3), "fill_only"),
         distractor(mk("hexagon", 120, "empty", 2), "wrong_count"),
-        distractor(mk("triangle", 120, "empty", 3), "shape_swap"),
-        distractor(mk("hexagon", 60, "empty", 3), "incomplete_rotation"),
+        distractor(mk("triangle", 120, "solid", 3), "shape_swap"),
+        distractor(mk("hexagon", 60, "solid", 3), "incomplete_rotation"),
         distractor(mk("hexagon", 120, "dotted", 3), "polarity_flip"),
       ],
       seed: 229,
@@ -1778,7 +1696,8 @@ function buildQuestions(): MatrixQuestion[] {
         distractor(at(1, 2), "horizontal_only"),
         distractor(cellFrom(0b1110, false), "missing_rule"),
         distractor(cellFrom(0b0111, true), "polarity_flip"),
-        distractor(cellFrom(rotateMaskCW(rotateMaskCW(0b1110)), false), "polarity_flip"),
+        // correct is rotate²(0b1110)=0b0111 without invert — avoid duplicating it
+        distractor(cellFrom(rotateMaskCW(0b1110), false), "incomplete_rotation"),
         distractor(cellFrom(0b1010, true), "and_instead_of_xor"),
         distractor(at(0, 2), "vertical_only"),
       ],

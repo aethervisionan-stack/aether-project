@@ -64,7 +64,8 @@ function matchesFilter(
 ): boolean {
   if (filter === "all") return true;
   if (filter === "figures") return entry.mode === "geometric";
-  return entry.mode === "questions";
+  if (filter === "questions") return entry.mode === "questions";
+  return entry.mode === "hybrid";
 }
 
 function readRawEntries(): LeaderboardEntry[] {

@@ -14,6 +14,7 @@ const FILTERS: { id: LeaderboardFilter; label: string }[] = [
   { id: "all", label: "Todos" },
   { id: "figures", label: "Figuras" },
   { id: "questions", label: "Perguntas" },
+  { id: "hybrid", label: "Híbrido" },
 ];
 
 function rankTone(position: number): string {

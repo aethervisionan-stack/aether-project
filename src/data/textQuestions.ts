@@ -157,7 +157,7 @@ function buildTextQuestions(): TextQuestion[] {
     ],
     seed: 104,
     explanation: {
-      pt: "Como todos os rótulos mentem, ‘Maçãs e Peras’ não é mista — e sabemos que tem só maçãs. Logo a mista não pode ser ‘Maçãs’ (rótulo mentiria se fosse só maçãs, mas já usamos as maçãs). ‘Maçãs’ não pode ter maçãs → tem só peras; ‘Peras’ fica mista.",
+      pt: "Todos os rótulos mentem. ‘Maçãs e Peras’ tem só maçãs. Sobram só peras e a mista: ‘Maçãs’ não pode ter maçãs → só peras; ‘Peras’ fica mista.",
       rules: ["rótulos falsos", "eliminação"],
     },
   });
@@ -401,13 +401,13 @@ function buildTextQuestions(): TextQuestion[] {
     distractors: [
       { text: "lacônico", error: "semantic_swap" },
       { text: "conciso", error: "near_miss" },
-      { text: "succinto", error: "near_miss" },
+      { text: "sucinto", error: "near_miss" },
       { text: "breviloquente", error: "near_miss" },
       { text: "telegráfico", error: "false_analogy" },
     ],
     seed: 303,
     explanation: {
-      pt: "Lacônico/conciso/succinto/breviloquente/telegráfico apontam economia verbal; eloquente aponta expressividade abundante — antônimo relativo.",
+      pt: "Lacônico/conciso/sucinto/breviloquente/telegráfico apontam economia verbal; eloquente aponta expressividade abundante — antônimo relativo.",
       rules: ["campo semântico", "intruso"],
     },
   });
@@ -419,7 +419,7 @@ function buildTextQuestions(): TextQuestion[] {
     irtB: 0.55,
     skills: ["analytical"],
     stem: "Um relógio atrasa 2 minutos por hora verdadeira. Foi acertado às 12:00 verdadeiras. Que horas verdadeiras serão quando esse relógio marcar 15:00?",
-    correct: "≈15:06 (5400/29 min após 12:00)",
+    correct: "≈15:06",
     distractors: [
       { text: "15:04", error: "arithmetic_slip" },
       { text: "14:54", error: "wrong_operation" },
@@ -473,7 +473,7 @@ function buildTextQuestions(): TextQuestion[] {
     ],
     seed: 306,
     explanation: {
-      pt: "aₙ₊₁ = aₙ² − aₙ + 1? Verifique: 1→2=1·1+1; melhor: aₙ₊₁=aₙ(aₙ−1)+2? 2=1·2; 6=2·3; 42=6·7; 1806=42·43; próximo=1806·1807=3263442. Padrão aₙ₊₁=aₙ(aₙ+1).",
+      pt: "Padrão aₙ₊₁ = aₙ(aₙ+1): 1·2=2, 2·3=6, 6·7=42, 42·43=1806, 1806·1807=3263442.",
       rules: ["a(a+1)", "crescimento super-exponencial"],
     },
   });
@@ -509,7 +509,7 @@ function buildTextQuestions(): TextQuestion[] {
     irtB: 1.3,
     skills: ["numeric"],
     stem: "Em base 7, o número 345₆ (escrito em base 6) equivale a qual valor em base 7?",
-    correct: "251₇",
+    correct: "254₇",
     distractors: [
       { text: "345₇", error: "premise_ignore" },
       { text: "240₇", error: "near_miss" },
@@ -519,8 +519,8 @@ function buildTextQuestions(): TextQuestion[] {
     ],
     seed: 402,
     explanation: {
-      pt: "345₆ = 3·36+4·6+5=108+24+5=137₁₀. 137÷49=2 resto 39; 39÷7=5 resto 4 → 254? Recalcule: 2·49=98, 137−98=39, 39=5·7+4 → 254₇. Wait — options say 251. Let me fix.",
-      rules: ["conversão de bases"],
+      pt: "345₆ = 3·36+4·6+5=137₁₀. Em base 7: 2·49+5·7+4 → 254₇.",
+      rules: ["conversão de bases", "polinômio posicional"],
     },
   });
 
@@ -708,35 +708,35 @@ function buildTextQuestions(): TextQuestion[] {
     weight: 2.3,
     irtB: 2.3,
     skills: ["logical"],
-    stem: "Um deus responde só verdades, outro só mentiras, um terceiro responde aleatoriamente. Você pode fazer duas perguntas sim/não a um deus por vez (pode repetir o mesmo). Qual estratégia identifica o aleatório com certeza em no máximo duas perguntas bem escolhidas a deuses possivelmente diferentes?",
+    stem: "Qual é a relação correta entre ∀x∃y P(x,y) e ∃y∀x P(x,y)?",
     correct:
-      "Perguntar a A: ‘Se eu perguntasse a B “B é aleatório?”, ele diria sim?’ e usar a árvore de casos para isolar o random; a segunda pergunta confirma.",
+      "∃y∀x P implica ∀x∃y P, mas o contrário não vale em geral",
     distractors: [
       {
-        text: "Perguntar a qualquer um ‘você é aleatório?’ duas vezes",
+        text: "As duas fórmulas são logicamente equivalentes",
+        error: "quantifier_error",
+      },
+      {
+        text: "∀x∃y P implica ∃y∀x P, mas o contrário não vale",
+        error: "order_error",
+      },
+      {
+        text: "Nenhuma implica a outra",
         error: "incomplete_chain",
       },
       {
-        text: "É impossível com duas perguntas",
-        error: "premise_ignore",
-      },
-      {
-        text: "Perguntar só ‘2+2=4?’ a dois deuses",
+        text: "São contraditórias: no máximo uma pode ser verdadeira",
         error: "scope_error",
       },
       {
-        text: "Perguntar a A se B diria que C é aleatório, uma única vez basta",
-        error: "near_miss",
-      },
-      {
-        text: "Assumir que o primeiro que contradiz a si mesmo é aleatório sem meta-pergunta",
-        error: "wrong_operation",
+        text: "∀x∃y P é sempre falsa se o domínio for infinito",
+        error: "premise_ignore",
       },
     ],
     seed: 505,
     explanation: {
-      pt: "Perguntas embutidas sobre o que outro diria cancelam mentira/verdade e expõem inconsistência típica do aleatório; o protocolo clássico dos três deuses isola o random antes de identificar verdade/mentira.",
-      rules: ["meta-pergunta", "três deuses", "dupla negação"],
+      pt: "Se existe um único y que serve para todo x (∃y∀x), então para cada x existe algum y (∀x∃y). O inverso falha: y pode depender de x.",
+      rules: ["ordem de quantificadores", "dependência funcional"],
     },
   });
 
@@ -765,34 +765,10 @@ function buildTextQuestions(): TextQuestion[] {
   return qs;
 }
 
-/** Fix Q20 correct answer to 254₇ after decimal conversion check */
-function finalizeBank(qs: TextQuestion[]): TextQuestion[] {
-  return qs.map((q) => {
-    if (q.id !== 20) return q;
-    const correct = "254₇";
-    const distractors: { text: string; error: TextDistractorError }[] = [
-      { text: "345₇", error: "premise_ignore" },
-      { text: "240₇", error: "near_miss" },
-      { text: "305₇", error: "arithmetic_slip" },
-      { text: "125₇", error: "wrong_operation" },
-      { text: "260₇", error: "arithmetic_slip" },
-    ];
-    const packed = packTextOptions(correct, distractors, 402);
-    return {
-      ...q,
-      ...packed,
-      explanation: {
-        pt: "345₆ = 3·36+4·6+5=137₁₀. Em base 7: 2·49+5·7+4 → 254₇.",
-        rules: ["conversão de bases", "polinômio posicional"],
-      },
-    };
-  });
-}
-
 let _cache: TextQuestion[] | null = null;
 
 export function getTextQuestions(): TextQuestion[] {
-  if (!_cache) _cache = finalizeBank(buildTextQuestions());
+  if (!_cache) _cache = buildTextQuestions();
   return _cache;
 }
 

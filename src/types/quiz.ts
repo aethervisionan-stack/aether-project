@@ -241,7 +241,7 @@ export interface QuizPersistedState {
 /** Persisted ranking mode (figures → geometric for public copy) */
 export type LeaderboardMode = "geometric" | "questions" | "hybrid";
 
-export type LeaderboardFilter = "all" | "figures" | "questions";
+export type LeaderboardFilter = "all" | "figures" | "questions" | "hybrid";
 
 export interface LeaderboardEntry {
   id: string;
