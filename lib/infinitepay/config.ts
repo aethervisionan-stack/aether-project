@@ -85,7 +85,8 @@ export function appPublicUrl(): string {
   if (process.env.VERCEL_URL) {
     return `https://${process.env.VERCEL_URL.replace(/\/$/, "")}`;
   }
-  return "http://localhost:3000";
+  const port = (process.env.PORT ?? "3010").trim() || "3010";
+  return `http://localhost:${port}`;
 }
 
 export function parseInfinitePayTier(raw: unknown): InfinitePayTier | null {

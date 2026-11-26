@@ -8,7 +8,8 @@ const nextConfig: NextConfig = {
   devIndicators: false,
   // Do not auto-write AGENTS.md on `next dev`.
   agentRules: false,
-  // Prefer http://127.0.0.1:3000; keep Cross-Origin quiet if preview hits localhost.
+  // Dedicated local port for aether-project: http://127.0.0.1:3010 (see scripts/dev-with-port.mjs).
+  // Prefer PORT=3010 in .env.local; if busy, the launcher picks the next free port — never kills others.
   allowedDevOrigins: ["127.0.0.1", "localhost"],
   serverExternalPackages: ["@neondatabase/serverless"],
   transpilePackages: [

@@ -6,9 +6,10 @@
     "node": ">=20"
   },
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "node scripts/dev-with-port.mjs",
+    "dev:next": "next dev --turbopack -p 3010",
     "build": "next build",
-    "start": "next start",
+    "start": "next start -p 3010",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "token:metadata": "tsx scripts/register-vision-metadata.ts",
