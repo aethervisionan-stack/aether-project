@@ -2,10 +2,10 @@ import { NextResponse } from "next/server";
 import {
   answerProfileDoubtLocally,
   buildProfileAssistantSystemPrompt,
+  normalizeAssistantContext,
   type ProfileAssistantContext,
   type ProfileChatMessage,
 } from "@/src/lib/iqProfileAssistant";
-import type { IqResult } from "@/src/types/quiz";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,22 +15,8 @@ type Body = {
   context?: ProfileAssistantContext;
 };
 
-const MAX_HISTORY = 10;
-
-function isIqResult(v: unknown): v is IqResult {
-  if (!v || typeof v !== "object") return false;
-  const r = v as IqResult;
-  return (
-    typeof r.iq === "number" &&
-    typeof r.percentile === "number" &&
-    typeof r.consistencyScore === "number" &&
-    Array.isArray(r.indexScores) &&
-    r.cognitiveProfile != null &&
-    typeof r.cognitiveProfile === "object" &&
-    r.anomalies != null &&
-    typeof r.anomalies === "object"
-  );
-}
+/** Keep enough turns for fluent follow-ups while staying grounded. */
+const MAX_HISTORY = 16;
 
 function isContext(v: unknown): v is ProfileAssistantContext {
   if (!v || typeof v !== "object") return false;
@@ -39,7 +25,9 @@ function isContext(v: unknown): v is ProfileAssistantContext {
     typeof c.participantName === "string" &&
     typeof c.rankTotal === "number" &&
     (c.rank === null || typeof c.rank === "number") &&
-    isIqResult(c.result)
+    c.result != null &&
+    typeof c.result === "object" &&
+    typeof (c.result as { iq?: unknown }).iq === "number"
   );
 }
 
@@ -59,11 +47,13 @@ async function callGemini(
   apiKey: string,
 ): Promise<string> {
   const preferred = process.env.GEMINI_MENTOR_MODEL?.trim();
+  // Prefer currently available Flash IDs (2.x retired for many new keys).
   const models = [
     preferred,
-    "gemini-2.5-flash",
-    "gemini-2.0-flash-lite",
-    "gemini-2.0-flash",
+    "gemini-3.5-flash-lite",
+    "gemini-3.8-flash",
+    "gemini-3.5-flash",
+    "gemini-flash-latest",
   ].filter((m, i, arr): m is string => Boolean(m) && arr.indexOf(m) === i);
 
   const contents = history.map((m) => ({
@@ -81,8 +71,8 @@ async function callGemini(
         system_instruction: { parts: [{ text: system }] },
         contents,
         generationConfig: {
-          temperature: 0.35,
-          maxOutputTokens: 700,
+          temperature: 0.65,
+          maxOutputTokens: 900,
         },
       }),
     });
@@ -119,8 +109,8 @@ async function callOpenAI(
     },
     body: JSON.stringify({
       model: "gpt-4o-mini",
-      temperature: 0.35,
-      max_tokens: 700,
+      temperature: 0.65,
+      max_tokens: 900,
       messages: [{ role: "system", content: system }, ...history],
     }),
   });
@@ -149,6 +139,17 @@ export async function POST(req: Request) {
       );
     }
 
+    const ctx = normalizeAssistantContext(body.context);
+    if (!ctx) {
+      return NextResponse.json(
+        {
+          error: "IqResult esparso demais para o assistente.",
+          code: "SPARSE_RESULT",
+        },
+        { status: 400 },
+      );
+    }
+
     const history = trimHistory(body.messages ?? []);
     if (history.length === 0) {
       return NextResponse.json(
@@ -158,13 +159,15 @@ export async function POST(req: Request) {
     }
 
     const lastUser = [...history].reverse().find((m) => m.role === "user");
-    const localFallback = lastUser
-      ? answerProfileDoubtLocally(lastUser.content, body.context)
-      : answerProfileDoubtLocally("resumo", body.context);
+    const localFallback = answerProfileDoubtLocally(
+      lastUser?.content ?? "",
+      ctx,
+    );
 
     const geminiKey = process.env.GEMINI_API_KEY?.trim();
     const openaiKey = process.env.OPENAI_API_KEY?.trim();
 
+    // Safe fallback only when keys are missing — no keyword template engine.
     if (!geminiKey && !openaiKey) {
       return NextResponse.json({
         reply: localFallback,
@@ -173,9 +176,8 @@ export async function POST(req: Request) {
       });
     }
 
-    const system = buildProfileAssistantSystemPrompt(body.context);
-
     try {
+      const system = buildProfileAssistantSystemPrompt(ctx);
       let reply: string;
       let provider: "gemini" | "openai";
 

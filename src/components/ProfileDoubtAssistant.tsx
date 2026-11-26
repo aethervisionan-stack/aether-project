@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   PROFILE_ASSISTANT_DISCLAIMER,
   PROFILE_ASSISTANT_SUGGESTIONS,
-  answerProfileDoubtLocally,
+  normalizeAssistantContext,
   type ProfileAssistantContext,
   type ProfileChatMessage,
 } from "@/src/lib/iqProfileAssistant";
@@ -20,7 +20,7 @@ type Props = {
 type UiMessage = ProfileChatMessage & { at: number; source?: string };
 
 const WELCOME =
-  "Pergunte sobre seu QI, índices, forças/fraquezas, anomalias ou ranking. Respondo só com os dados desta sessão.";
+  "Pergunte o que quiser sobre este resultado — forças, o que treinar, QI, percentil ou ranking. Eu respondo em português, com base só nos dados desta sessão.";
 
 export function ProfileDoubtAssistant({
   result,
@@ -28,13 +28,14 @@ export function ProfileDoubtAssistant({
   rank,
   rankTotal,
 }: Props) {
-  const ctx = useMemo<ProfileAssistantContext>(
-    () => ({
-      result,
-      participantName,
-      rank,
-      rankTotal,
-    }),
+  const ctx = useMemo<ProfileAssistantContext | null>(
+    () =>
+      normalizeAssistantContext({
+        result,
+        participantName,
+        rank,
+        rankTotal,
+      }),
     [result, participantName, rank, rankTotal],
   );
 
@@ -58,7 +59,7 @@ export function ProfileDoubtAssistant({
 
   async function send(text: string) {
     const trimmed = text.trim();
-    if (!trimmed || sending) return;
+    if (!trimmed || sending || !ctx) return;
 
     setError(null);
     setInput("");
@@ -101,38 +102,60 @@ export function ProfileDoubtAssistant({
             source: data.provider || "api",
           },
         ]);
+        if (data.provider === "local") {
+          setError("Resposta de contingência — a IA conversacional não respondeu.");
+        }
         return;
       }
 
-      // Offline / network / API failure → local grounded reply
-      const local = answerProfileDoubtLocally(trimmed, ctx);
       setMessages((prev) => [
         ...prev,
         {
           role: "assistant",
-          content: local,
+          content:
+            "Não consegui falar com a IA agora. Tente de novo em instantes — seu perfil continua no painel acima.",
           at: Date.now(),
           source: "local",
         },
       ]);
-      if (data.error && res.status >= 500) {
-        setError("Usando respostas locais (API indisponível).");
+      if (data.error) {
+        setError("Assistente temporariamente indisponível.");
       }
     } catch {
-      const local = answerProfileDoubtLocally(trimmed, ctx);
       setMessages((prev) => [
         ...prev,
         {
           role: "assistant",
-          content: local,
+          content:
+            "Sem rede no momento. Assim que a conexão voltar, pergunte de novo — eu uso Gemini com o IqResult completo desta sessão.",
           at: Date.now(),
           source: "local",
         },
       ]);
-      setError("Sem rede — resposta local grounded.");
+      setError("Sem rede — tente novamente.");
     } finally {
       setSending(false);
     }
+  }
+
+  if (!ctx) {
+    return (
+      <section
+        aria-labelledby="profile-doubt-heading"
+        className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4 sm:p-5"
+      >
+        <h2
+          id="profile-doubt-heading"
+          className="text-sm font-semibold text-zinc-100"
+        >
+          Dúvidas sobre o perfil
+        </h2>
+        <p className="mt-2 text-sm text-zinc-500">
+          Resultado incompleto nesta sessão — o chat fica disponível quando o
+          IqResult estiver completo.
+        </p>
+      </section>
+    );
   }
 
   return (
@@ -149,8 +172,8 @@ export function ProfileDoubtAssistant({
             Dúvidas sobre o perfil
           </h2>
           <p className="mt-1 text-sm leading-relaxed text-zinc-500">
-            Assistente grounded no seu IqResult — funciona offline; usa Gemini
-            quando a API estiver configurada.
+            Chat com Gemini grounded no seu IqResult e no histórico desta
+            conversa.
           </p>
         </div>
       </div>
@@ -184,7 +207,7 @@ export function ProfileDoubtAssistant({
           </div>
         ))}
         {sending ? (
-          <p className="text-xs text-zinc-500">Analisando seu perfil…</p>
+          <p className="text-xs text-zinc-500">Pensando no seu perfil…</p>
         ) : null}
       </div>
 
@@ -218,7 +241,7 @@ export function ProfileDoubtAssistant({
           value={input}
           onChange={(e) => setInput(e.target.value)}
           disabled={sending}
-          placeholder="Ex.: o que significam meus índices?"
+          placeholder="Ex.: como posso melhorar na próxima vez?"
           className="min-w-0 flex-1 rounded-xl border border-zinc-700 bg-zinc-950 px-3.5 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-cyan-500/50 focus:outline-none"
           autoComplete="off"
         />

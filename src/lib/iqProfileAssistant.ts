@@ -1,5 +1,13 @@
-import { indexLabel } from "@/src/lib/chcCatalog";
-import { MODE_META, type IqResult } from "@/src/types/quiz";
+import { INDEX_META, indexLabel } from "@/src/lib/chcCatalog";
+import {
+  MODE_META,
+  type AnomalyKind,
+  type AnomalyHit,
+  type CognitiveIndexId,
+  type IqResult,
+  type PrecisionDiagnosis,
+  type TimeMetrics,
+} from "@/src/types/quiz";
 
 export type ProfileAssistantContext = {
   participantName: string;
@@ -13,60 +21,290 @@ export type ProfileChatMessage = {
   content: string;
 };
 
+/** Soft non-clinical note — show once in the UI, not on every reply. */
 export const PROFILE_ASSISTANT_DISCLAIMER =
-  "Este assistente explica apenas os números desta sessão. Não é aconselhamento clínico, diagnóstico psicológico nem orientação médica.";
+  "Nota: este chat interpreta só os números desta sessão. Não substitui avaliação clínica, laudo psicológico nem orientação médica.";
 
-const SYSTEM_GUIDANCE_PT = `Você é um assistente educacional do Teste de QI (app Aether).
-Responda SOMENTE com base no JSON de resultado (IqResult) e no ranking local fornecidos.
-Regras:
-- Idioma: português do Brasil, tom claro e direto.
-- Cite números concretos do perfil (QI, IC, percentil, índices, forças/fraquezas, anomalias, consistência, ranking).
-- NÃO invente dados ausentes do JSON.
-- NÃO faça diagnósticos clínicos, patologize, prescreva tratamento ou afirme transtornos.
-- Se a pergunta for clínica/médica, recuse e lembre o disclaimer.
-- Se a pergunta não couber no perfil, diga o que o painel cobre e convide a perguntar sobre QI, índices, forças, anomalias ou ranking.
-- Respostas curtas (2–5 frases), sem markdown excessivo.`;
+const ANOMALY_KINDS = new Set<AnomalyKind>([
+  "chute_rapido",
+  "padrao_erratico",
+  "incompleto",
+  "hesitacao_alta",
+  "distrator_sistematico",
+  "latencia_anomala",
+]);
 
-/** Compact snapshot sent to the optional LLM — no item-level answers. */
-export function buildGroundedSnapshot(ctx: ProfileAssistantContext) {
-  const { result, participantName, rank, rankTotal } = ctx;
-  const ci = result.confidenceMargin ?? result.marginOfError;
+const EMPTY_ANOMALIES: IqResult["anomalies"] = {
+  count: 0,
+  totalImpact: 0,
+  hits: [],
+};
+
+const EMPTY_PROFILE: IqResult["cognitiveProfile"] = {
+  shape: "equilibrado",
+  label: "Perfil indeterminado",
+  detail: "Dados de perfil incompletos nesta sessão.",
+  spread: 0,
+  strengths: [],
+  improvements: [],
+};
+
+const EMPTY_DIAGNOSIS: PrecisionDiagnosis = {
+  precisionScore: 0,
+  reliabilityIndex: 0,
+  consistencyIndex: 0,
+  consistencyScore: 0,
+  guessingFlag: false,
+  incompleteFlag: false,
+  inconsistentFlag: false,
+  warnings: [],
+  bandTelemetry: [],
+  hardAccuracy: 0,
+  avgOptionSwitches: 0,
+  answeredInTime: 0,
+  timedOut: false,
+};
+
+const EMPTY_TIME: TimeMetrics = {
+  totalMs: 0,
+  avgMs: 0,
+  medianMs: 0,
+  answeredCount: 0,
+  unansweredCount: 0,
+};
+
+function asAnomalyKind(v: unknown): AnomalyKind {
+  return typeof v === "string" && ANOMALY_KINDS.has(v as AnomalyKind)
+    ? (v as AnomalyKind)
+    : "padrao_erratico";
+}
+
+function isCognitiveIndexId(v: unknown): v is CognitiveIndexId {
+  return typeof v === "string" && Object.prototype.hasOwnProperty.call(INDEX_META, v);
+}
+
+function safeIndexLabel(id: unknown, fallback = "Índice"): string {
+  if (!isCognitiveIndexId(id)) return fallback;
+  try {
+    return indexLabel(id);
+  } catch {
+    return fallback;
+  }
+}
+
+function asArray<T>(v: unknown): T[] {
+  return Array.isArray(v) ? (v as T[]) : [];
+}
+
+function asNumber(v: unknown, fallback = 0): number {
+  return typeof v === "number" && Number.isFinite(v) ? v : fallback;
+}
+
+function asString(v: unknown, fallback = ""): string {
+  return typeof v === "string" ? v : fallback;
+}
+
+/**
+ * Normalize sparse / partial IqResult from older persisted state so
+ * snapshot + prompts never crash on missing nested fields.
+ */
+export function normalizeIqResult(raw: Partial<IqResult> | null | undefined): IqResult | null {
+  if (!raw || typeof raw !== "object") return null;
+  if (typeof raw.iq !== "number" || !Number.isFinite(raw.iq)) return null;
+
+  const anomaliesRaw = raw.anomalies;
+  const profileRaw = raw.cognitiveProfile;
+  const diagnosisRaw = raw.diagnosis;
+
+  const hits: AnomalyHit[] = asArray(anomaliesRaw?.hits).map((h) => ({
+    kind: asAnomalyKind((h as { kind?: string }).kind),
+    label: asString((h as { label?: string }).label, "Sinal"),
+    detail: asString((h as { detail?: string }).detail, ""),
+    marginImpact: asNumber((h as { marginImpact?: number }).marginImpact, 0),
+  }));
+
+  const anomalies: IqResult["anomalies"] = {
+    count: asNumber(anomaliesRaw?.count, hits.length),
+    totalImpact: asNumber(anomaliesRaw?.totalImpact, 0),
+    hits,
+  };
+
+  const cognitiveProfile: IqResult["cognitiveProfile"] = {
+    shape:
+      profileRaw?.shape === "assimetrico" || profileRaw?.shape === "equilibrado"
+        ? profileRaw.shape
+        : EMPTY_PROFILE.shape,
+    label: asString(profileRaw?.label, EMPTY_PROFILE.label),
+    detail: asString(profileRaw?.detail, EMPTY_PROFILE.detail),
+    spread: asNumber(profileRaw?.spread, 0),
+    strengths: asArray(profileRaw?.strengths)
+      .filter((s) => isCognitiveIndexId((s as { id?: unknown }).id))
+      .map((s) => ({
+        id: (s as { id: CognitiveIndexId }).id,
+        score: asNumber((s as { score?: number }).score, 0),
+        label: asString(
+          (s as { label?: string }).label,
+          safeIndexLabel((s as { id: CognitiveIndexId }).id),
+        ),
+      })),
+    improvements: asArray(profileRaw?.improvements)
+      .filter((s) => isCognitiveIndexId((s as { id?: unknown }).id))
+      .map((s) => ({
+        id: (s as { id: CognitiveIndexId }).id,
+        score: asNumber((s as { score?: number }).score, 0),
+        label: asString(
+          (s as { label?: string }).label,
+          safeIndexLabel((s as { id: CognitiveIndexId }).id),
+        ),
+      })),
+  };
+
+  const consistencyScore = asNumber(
+    diagnosisRaw?.consistencyScore ??
+      diagnosisRaw?.consistencyIndex ??
+      raw.consistencyScore,
+    0,
+  );
+
+  const diagnosis: PrecisionDiagnosis = {
+    precisionScore: asNumber(diagnosisRaw?.precisionScore, consistencyScore),
+    reliabilityIndex: asNumber(diagnosisRaw?.reliabilityIndex, consistencyScore),
+    consistencyIndex: asNumber(diagnosisRaw?.consistencyIndex, consistencyScore),
+    consistencyScore,
+    guessingFlag: Boolean(diagnosisRaw?.guessingFlag),
+    incompleteFlag: Boolean(diagnosisRaw?.incompleteFlag),
+    inconsistentFlag: Boolean(diagnosisRaw?.inconsistentFlag),
+    warnings: asArray<string>(diagnosisRaw?.warnings),
+    bandTelemetry: asArray(diagnosisRaw?.bandTelemetry),
+    hardAccuracy: asNumber(diagnosisRaw?.hardAccuracy, 0),
+    avgOptionSwitches: asNumber(diagnosisRaw?.avgOptionSwitches, 0),
+    answeredInTime: asNumber(diagnosisRaw?.answeredInTime, 0),
+    timedOut: Boolean(diagnosisRaw?.timedOut),
+  };
+
+  const confidenceMargin = asNumber(
+    raw.confidenceMargin ?? raw.marginOfError,
+    0,
+  );
+
   return {
-    nome: participantName || "Participante",
+    mode: (raw.mode ?? "hybrid") as IqResult["mode"],
+    rawScore: asNumber(raw.rawScore, 0),
+    maxScore: asNumber(raw.maxScore, 0),
+    accuracy: asNumber(raw.accuracy, 0),
+    iq: raw.iq,
+    theta: asNumber(raw.theta, 0),
+    marginOfError: confidenceMargin,
+    confidenceMargin,
+    consistencyScore: asNumber(raw.consistencyScore, diagnosis.consistencyScore),
+    iqLow: asNumber(raw.iqLow, raw.iq),
+    iqHigh: asNumber(raw.iqHigh, raw.iq),
+    percentile: asNumber(raw.percentile, 50),
+    band: asString(raw.band, "—"),
+    competences: (raw.competences ?? {}) as IqResult["competences"],
+    activeCompetences: asArray(raw.activeCompetences),
+    indexScores: asArray(raw.indexScores),
+    subtestScores: asArray(raw.subtestScores),
+    anomalies: anomalies.count || anomalies.hits.length ? anomalies : EMPTY_ANOMALIES,
+    cognitiveProfile:
+      profileRaw && typeof profileRaw === "object"
+        ? cognitiveProfile
+        : EMPTY_PROFILE,
+    avgTimeMs: asNumber(raw.avgTimeMs, 0),
+    timeMetrics: raw.timeMetrics
+      ? {
+          totalMs: asNumber(raw.timeMetrics.totalMs, 0),
+          avgMs: asNumber(raw.timeMetrics.avgMs, 0),
+          medianMs: asNumber(raw.timeMetrics.medianMs, 0),
+          answeredCount: asNumber(raw.timeMetrics.answeredCount, 0),
+          unansweredCount: asNumber(raw.timeMetrics.unansweredCount, 0),
+        }
+      : EMPTY_TIME,
+    answers: asArray(raw.answers),
+    diagnosis: diagnosisRaw && typeof diagnosisRaw === "object" ? diagnosis : EMPTY_DIAGNOSIS,
+  };
+}
+
+export function normalizeAssistantContext(
+  ctx: ProfileAssistantContext,
+): ProfileAssistantContext | null {
+  const result = normalizeIqResult(ctx?.result);
+  if (!result) return null;
+  return {
+    participantName: asString(ctx.participantName, "Participante"),
+    rank: ctx.rank == null ? null : asNumber(ctx.rank, 0),
+    rankTotal: asNumber(ctx.rankTotal, 0),
+    result,
+  };
+}
+
+const SYSTEM_GUIDANCE_PT = `Você é o assistente conversacional do Teste de QI (Aether).
+Fale em português do Brasil, de forma natural e fluida — como um educador claro, nunca como um dump de JSON ou lista crua de anomalias.
+
+Fonte de verdade: o JSON IqResult + ranking local + o histórico deste chat.
+Nunca invente números que não estejam no JSON.
+
+Como responder por intenção:
+1) Forças / destaques → explique o que brilha no perfil (índices altos, forma, detalhe) com linguagem humana; cite 1–2 números só para ancorar.
+2) Fraquezas / o que melhorar / anomalias / consistência → NÃO repita o relatório bruto de anomalias. Traduza o sinal em linguagem prática (ex.: ritmo impulsivo, hesitação, sessão incompleta) e ofereça 2–3 dicas concretas e leves para a próxima sessão (pausar 2s antes de marcar, reler o enunciado, terminar com calma, treinar o índice mais baixo com exercícios curtos). Tom encorajador, sem patologizar.
+3) QI / percentil / IC / ranking / índices → explique o significado na escala desta sessão, com os números do JSON.
+4) Fora do escopo ou pedido clínico (diagnóstico, transtorno, medicação, laudo) → recuse com delicadeza e diga que só interpreta o painel desta sessão.
+
+Estilo:
+- 2–6 frases, conversacionais; evite bullets longos e markdown pesado.
+- NÃO cole o disclaimer clínico em toda resposta (a UI já mostra uma nota suave uma vez). Só mencione se a pessoa pedir opinião clínica.
+- Use o histórico para não se repetir e para aprofundar follow-ups.
+- Se um campo estiver vazio/ausente no JSON, diga que não há dado suficiente — não preencha com chute.`;
+
+/** Compact snapshot for the LLM — no item-level answers. */
+export function buildGroundedSnapshot(ctx: ProfileAssistantContext) {
+  const normalized = normalizeAssistantContext(ctx) ?? ctx;
+  const { result, participantName, rank, rankTotal } = normalized;
+  const ci = result.confidenceMargin ?? result.marginOfError;
+  const profile = result.cognitiveProfile ?? EMPTY_PROFILE;
+  const anomalies = result.anomalies ?? EMPTY_ANOMALIES;
+  const diagnosis = result.diagnosis ?? EMPTY_DIAGNOSIS;
+
+  return {
+    nome: participantName?.trim() || "Participante",
     modo: MODE_META[result.mode]?.label ?? result.mode,
     qi: result.iq,
-    intervaloConfianca: { low: result.iqLow, high: result.iqHigh, meiaLargura: ci },
+    intervaloConfianca: {
+      low: result.iqLow,
+      high: result.iqHigh,
+      meiaLargura: ci,
+    },
     percentil: result.percentile,
     faixa: result.band,
     consistencia: result.consistencyScore,
     perfil: {
-      forma: result.cognitiveProfile.shape,
-      rotulo: result.cognitiveProfile.label,
-      detalhe: result.cognitiveProfile.detail,
-      amplitude: result.cognitiveProfile.spread,
-      forcas: result.cognitiveProfile.strengths.map((s) => ({
+      forma: profile.shape,
+      rotulo: profile.label,
+      detalhe: profile.detail,
+      amplitude: profile.spread,
+      forcas: (profile.strengths ?? []).map((s) => ({
         id: s.id,
         label: s.label,
         score: s.score,
       })),
-      aDesenvolver: result.cognitiveProfile.improvements.map((s) => ({
+      aDesenvolver: (profile.improvements ?? []).map((s) => ({
         id: s.id,
         label: s.label,
         score: s.score,
       })),
     },
-    indices: result.indexScores.map((ix) => ({
+    indices: (result.indexScores ?? []).map((ix) => ({
       id: ix.id,
-      label: indexLabel(ix.id),
+      label: safeIndexLabel(ix.id, asString(ix.id, "Índice")),
       score: ix.score,
       qiAprox: ix.iqApprox,
       descriptor: ix.descriptor,
       respondidos: `${ix.answered}/${ix.total}`,
     })),
     anomalias: {
-      count: result.anomalies.count,
-      impactoMargem: result.anomalies.totalImpact,
-      hits: result.anomalies.hits.map((h) => ({
+      count: anomalies.count,
+      impactoMargem: anomalies.totalImpact,
+      hits: (anomalies.hits ?? []).map((h) => ({
         kind: h.kind,
         label: h.label,
         detail: h.detail,
@@ -76,14 +314,18 @@ export function buildGroundedSnapshot(ctx: ProfileAssistantContext) {
     rankingLocal:
       rank != null
         ? { lugar: rank, total: rankTotal }
-        : { lugar: null, total: rankTotal, nota: "Sem entrada de ranking nesta sessão." },
+        : {
+            lugar: null,
+            total: rankTotal,
+            nota: "Sem entrada de ranking nesta sessão.",
+          },
     diagnosticoSessao: {
-      timedOut: result.diagnosis.timedOut,
-      answeredInTime: result.diagnosis.answeredInTime,
-      guessingFlag: result.diagnosis.guessingFlag,
-      incompleteFlag: result.diagnosis.incompleteFlag,
-      inconsistentFlag: result.diagnosis.inconsistentFlag,
-      warnings: result.diagnosis.warnings.slice(0, 6),
+      timedOut: diagnosis.timedOut,
+      answeredInTime: diagnosis.answeredInTime,
+      guessingFlag: diagnosis.guessingFlag,
+      incompleteFlag: diagnosis.incompleteFlag,
+      inconsistentFlag: diagnosis.inconsistentFlag,
+      warnings: (diagnosis.warnings ?? []).slice(0, 6),
     },
   };
 }
@@ -94,144 +336,32 @@ export function buildProfileAssistantSystemPrompt(
   const snapshot = buildGroundedSnapshot(ctx);
   return `${SYSTEM_GUIDANCE_PT}
 
-Disclaimer obrigatório (mencione se a pergunta for clínica): ${PROFILE_ASSISTANT_DISCLAIMER}
-
 JSON do perfil (única fonte de verdade):
 ${JSON.stringify(snapshot, null, 2)}`;
 }
 
-function norm(q: string): string {
-  return q
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/\p{M}/gu, "");
-}
-
-function looksClinical(q: string): boolean {
-  const n = norm(q);
-  return /\b(diagnost|transtorno|doenca|doença|tdah|autis|depress|ansied|medic|psiquiat|psicolog|clinico|clínico|tratamento|terapia|laudo)\b/.test(
-    n,
-  );
-}
-
-function listStrengths(ctx: ProfileAssistantContext): string {
-  const s = ctx.result.cognitiveProfile.strengths;
-  if (!s.length) return "Nenhum ponto forte destacado nesta sessão.";
-  return s.map((x) => `${x.label} (${x.score}%)`).join("; ");
-}
-
-function listImprovements(ctx: ProfileAssistantContext): string {
-  const s = ctx.result.cognitiveProfile.improvements;
-  if (!s.length) return "Nenhum ponto a desenvolver destacado nesta sessão.";
-  return s.map((x) => `${x.label} (${x.score}%)`).join("; ");
-}
-
-function listIndices(ctx: ProfileAssistantContext): string {
-  return ctx.result.indexScores
-    .map(
-      (ix) =>
-        `${indexLabel(ix.id)}: ${ix.score}% (QI≈${ix.iqApprox}, ${ix.descriptor})`,
-    )
-    .join("; ");
-}
-
-function listAnomalies(ctx: ProfileAssistantContext): string {
-  const a = ctx.result.anomalies;
-  if (a.count === 0) {
-    return "Nenhuma anomalia comportamental foi marcada nesta sessão.";
-  }
-  const hits = a.hits
-    .map((h) => `${h.label} (+${h.marginImpact} na margem): ${h.detail}`)
-    .join(" ");
-  return `${a.count} anomalia(s), impacto aproximado +${a.totalImpact} na margem. ${hits}`;
-}
-
-function rankLine(ctx: ProfileAssistantContext): string {
-  if (ctx.rank == null) {
-    return `Não há posição de ranking registrada para esta sessão (total local: ${ctx.rankTotal}).`;
-  }
-  return `Você está em #${ctx.rank} entre ${ctx.rankTotal} resultado(s) neste navegador.`;
-}
-
-/** Offline grounded replies — answers only from IqResult + ranking. */
+/**
+ * Safe fallback ONLY when Gemini/OpenAI fail or keys are missing.
+ * Natural PT-BR, no keyword templates, no raw anomaly dumps.
+ */
 export function answerProfileDoubtLocally(
-  question: string,
+  _question: string,
   ctx: ProfileAssistantContext,
 ): string {
-  const q = question.trim();
-  if (!q) {
-    return "Faça uma pergunta sobre seu QI, índices, forças, anomalias ou ranking.";
+  const normalized = normalizeAssistantContext(ctx);
+  if (!normalized) {
+    return "Não consegui ler o perfil desta sessão agora. Tente de novo em instantes ou refaça o teste para gerar um resultado completo.";
   }
-
-  if (looksClinical(q)) {
-    return `Não posso oferecer interpretação clínica nem diagnóstico. ${PROFILE_ASSISTANT_DISCLAIMER} Posso explicar os números desta sessão: QI, índices, forças/fraquezas, anomalias e ranking.`;
-  }
-
-  const n = norm(q);
-  const r = ctx.result;
-  const ci = r.confidenceMargin ?? r.marginOfError;
-  const name = ctx.participantName?.trim() || "Participante";
-
-  if (
-    /\b(qi|qi estimado|score|pontuacao|pontuação|nota|resultado geral|meu resultado)\b/.test(
-      n,
-    ) ||
-    /\biq\b/.test(n)
-  ) {
-    return `${name}, seu QI estimado nesta sessão é ${r.iq} (±${ci}), intervalo aproximado ${r.iqLow}–${r.iqHigh}, na faixa "${r.band}". Percentil ${r.percentile.toFixed(1)}. ${PROFILE_ASSISTANT_DISCLAIMER}`;
-  }
-
-  if (/\b(percentil|raridade|populacao|população)\b/.test(n)) {
-    return `Seu percentil é ${r.percentile.toFixed(1)} (faixa "${r.band}"). Isso descreve a posição relativa estimada nesta escala 100/15 da sessão — não um laudo. ${PROFILE_ASSISTANT_DISCLAIMER}`;
-  }
-
-  if (/\b(indice|índice|indices|índices|chc|verbal|fluido|espacial|memoria|memória|velocidade|reacao|reação)\b/.test(n)) {
-    return `Índices desta sessão: ${listIndices(ctx)}. Perfil: ${r.cognitiveProfile.label}. ${PROFILE_ASSISTANT_DISCLAIMER}`;
-  }
-
-  if (/\b(forca|força|forte|destaque|brilho|melhor)\b/.test(n)) {
-    return `Pontos fortes no perfil: ${listStrengths(ctx)}. ${r.cognitiveProfile.detail} ${PROFILE_ASSISTANT_DISCLAIMER}`;
-  }
-
-  if (
-    /\b(fraco|fraqueza|melhorar|desenvolver|ponto a|limitacao|limitação|pior)\b/.test(
-      n,
-    )
-  ) {
-    return `Pontos a desenvolver nesta sessão: ${listImprovements(ctx)}. São diferenças relativas entre índices desta bateria, não um diagnóstico. ${PROFILE_ASSISTANT_DISCLAIMER}`;
-  }
-
-  if (/\b(anomalia|anomalias|chute|impulso|hesit|erratic|incomplet)\b/.test(n)) {
-    return `${listAnomalies(ctx)} Consistência da sessão: ${r.consistencyScore}/100. ${PROFILE_ASSISTANT_DISCLAIMER}`;
-  }
-
-  if (/\b(ranking|rank|lugar|posicao|posição|classificacao|classificação|leaderboard|colocacao|colocação)\b/.test(n)) {
-    return `${rankLine(ctx)} O ranking é local neste navegador e usa o QI IRT da sessão. ${PROFILE_ASSISTANT_DISCLAIMER}`;
-  }
-
-  if (/\b(consistencia|consistência|confiabilidade|sessao|sessão)\b/.test(n)) {
-    const flags = [
-      r.diagnosis.guessingFlag ? "sinal de chute/impulso" : null,
-      r.diagnosis.incompleteFlag ? "sessão incompleta" : null,
-      r.diagnosis.inconsistentFlag ? "padrão inconsistente" : null,
-      r.diagnosis.timedOut ? "tempo esgotado" : null,
-    ].filter(Boolean);
-    const flagTxt = flags.length
-      ? ` Alertas: ${flags.join("; ")}.`
-      : " Sem alertas graves de consistência.";
-    return `Consistência ${r.consistencyScore}/100.${flagTxt} ${PROFILE_ASSISTANT_DISCLAIMER}`;
-  }
-
-  if (/\b(perfil|resumo|overview|explique|explicar|duvida|dúvida|ajuda|o que significa)\b/.test(n)) {
-    return `${name}: QI ${r.iq} (±${ci}), percentil ${r.percentile.toFixed(1)}, perfil "${r.cognitiveProfile.label}". Forças: ${listStrengths(ctx)}. A desenvolver: ${listImprovements(ctx)}. ${rankLine(ctx)} ${PROFILE_ASSISTANT_DISCLAIMER}`;
-  }
-
-  return `Posso responder só com base no seu IqResult desta sessão. Pergunte sobre QI, percentil, índices, forças/fraquezas, anomalias, consistência ou ranking. Resumo rápido: QI ${r.iq} (±${ci}), ${r.cognitiveProfile.label}. ${PROFILE_ASSISTANT_DISCLAIMER}`;
+  const { result, participantName } = normalized;
+  const name = participantName.trim() || "Participante";
+  const ci = result.confidenceMargin ?? result.marginOfError;
+  const label = result.cognitiveProfile?.label || "perfil desta sessão";
+  return `${name}, a IA conversacional está temporariamente indisponível. Pelo painel desta sessão: QI estimado ${result.iq} (±${ci}), perfil "${label}". Quando a conexão voltar, pergunte de novo sobre forças, o que treinar ou como interpretar o resultado — sem precisar repetir a pergunta com palavras-chave.`;
 }
 
 export const PROFILE_ASSISTANT_SUGGESTIONS = [
-  "O que meu QI significa nesta sessão?",
-  "Quais são meus pontos fortes?",
-  "Onde estão as anomalias?",
-  "Qual é minha posição no ranking?",
+  "O que brilha no meu perfil?",
+  "Como posso melhorar na próxima sessão?",
+  "O que meu QI e o percentil querem dizer?",
+  "Como estou no ranking local?",
 ] as const;
