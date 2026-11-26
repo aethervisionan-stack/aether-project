@@ -12,12 +12,10 @@ import { putPagbankOrder } from "@/lib/pagbank/store";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function mockPixPayload(orderId: string, amountCentavos: number) {
-  // Placeholder EMV-ish string for UI / copy in mock mode — not a real Pix.
-  const amount = (amountCentavos / 100).toFixed(2);
-  const text = `00020126580014BR.GOV.BCB.PIX0136${orderId}5204000053039865404${amount}5802BR5913Arquetipo Quiz6009SAO PAULO62070503***6304ABCD`;
+function mockPixPayload(_orderId: string, _amountCentavos: number) {
+  // Never return forged EMV — banks reject CRC/placeholder payloads.
   return {
-    pixCopyPaste: text,
+    pixCopyPaste: "" as string,
     qrCodeImageUrl: null as string | null,
   };
 }
@@ -53,11 +51,12 @@ export async function POST(req: Request) {
         product,
         amountCentavos: meta.amountCentavos,
         amountLabel: meta.amountLabel,
-        pixCopyPaste: pix.pixCopyPaste,
-        qrCodeImageUrl: pix.qrCodeImageUrl,
+        pixCopyPaste: null,
+        qrCodeImageUrl: null,
         status: "waiting",
         mock: true,
         simulateAllowed,
+        error: "PIX_MOCK_NO_EMV",
       });
     }
 

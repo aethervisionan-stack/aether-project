@@ -113,10 +113,13 @@ async function tryPagbankEmvFallback(input: {
       mock: false,
       createdAt: Date.now(),
     });
+    const baseHint = created.apiBase?.includes("sandbox")
+      ? "sandbox"
+      : "production";
     return {
       emv: created.pixCopyPaste.trim(),
       pagbankOrderId: created.orderId,
-      fieldsUsed: ["pagbank.qr_codes.text|charges.qr_code.text"],
+      fieldsUsed: [`pagbank.qr_codes.text(${baseHint})`],
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

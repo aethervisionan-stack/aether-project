@@ -60,18 +60,27 @@ export function pagbankProductMeta(product: PagbankProduct = "basic_3") {
   };
 }
 
+/** Normalize token: trim quotes and a pasted `Bearer ` prefix. */
 export function pagbankToken(): string | undefined {
-  return (
+  const raw =
     process.env.PAGBANK_TOKEN?.trim() ||
     process.env.PAGSEGURO_TOKEN?.trim() ||
-    undefined
-  );
+    "";
+  if (!raw) return undefined;
+  let token = raw.replace(/^['"]+|['"]+$/g, "").trim();
+  token = token.replace(/^Bearer\s+/i, "").trim();
+  return token || undefined;
+}
+
+export function pagbankSandboxMode(): boolean {
+  const v = (process.env.PAGBANK_SANDBOX ?? "").trim().toLowerCase();
+  return v === "true" || v === "1" || v === "yes";
 }
 
 export function pagbankApiBase(): string {
   const explicit = process.env.PAGBANK_API_URL?.trim();
   if (explicit) return explicit.replace(/\/$/, "");
-  if (process.env.PAGBANK_SANDBOX === "true") {
+  if (pagbankSandboxMode()) {
     return "https://sandbox.api.pagseguro.com";
   }
   return "https://api.pagseguro.com";

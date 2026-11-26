@@ -1,8 +1,10 @@
 import { isValidPixEmv } from "@/lib/infinitepay/pixEmv";
+import { appPublicUrl } from "@/lib/infinitepay/config";
 import {
   PAGBANK_UNLOCK_AMOUNT_CENTAVOS,
   pagbankApiBase,
   pagbankProductMeta,
+  pagbankSandboxMode,
   pagbankToken,
   type PagbankProduct,
 } from "./config";
@@ -16,6 +18,7 @@ export type PagbankCreateResult = {
   amountLabel: string;
   product: PagbankProduct;
   status: "waiting";
+  apiBase?: string;
 };
 
 export type PagbankStatusResult = {
@@ -43,6 +46,33 @@ function pickString(...vals: unknown[]): string | null {
   return null;
 }
 
+function formatPagbankError(status: number, body: Json): string {
+  const parts: string[] = [];
+  const code = pickString(body.code, body.error_code);
+  const description = pickString(
+    body.description,
+    body.message,
+    body.error_description,
+  );
+  if (code) parts.push(code);
+  if (description) parts.push(description);
+
+  for (const raw of asArray(body.error_messages)) {
+    if (typeof raw === "string" && raw.trim()) {
+      parts.push(raw.trim());
+      continue;
+    }
+    const row = asRecord(raw);
+    if (!row) continue;
+    const c = pickString(row.code, row.error_code);
+    const d = pickString(row.description, row.message);
+    if (c || d) parts.push([c, d].filter(Boolean).join(": "));
+  }
+
+  if (parts.length) return `PagBank create failed (${status}): ${parts.join(" | ")}`;
+  return `PagBank create failed (${status})`;
+}
+
 function authHeaders(): HeadersInit {
   const token = pagbankToken();
   if (!token) throw new Error("PAGBANK_TOKEN missing");
@@ -53,7 +83,7 @@ function authHeaders(): HeadersInit {
   };
 }
 
-function expirationIso(hours = 1): string {
+function expirationIso(hours = 2): string {
   return new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
 }
 
@@ -61,14 +91,13 @@ function extractPixFromOrder(body: Json): {
   pixCopyPaste: string;
   qrCodeImageUrl: string | null;
 } {
-  const charges = asArray(body.charges);
-  for (const raw of charges) {
-    const charge = asRecord(raw);
-    if (!charge) continue;
-    const qr = asRecord(charge.qr_code);
-    const text = pickString(qr?.text);
+  // Prefer top-level qr_codes (homolog / Orders QR arrangement).
+  for (const raw of asArray(body.qr_codes)) {
+    const qr = asRecord(raw);
+    if (!qr) continue;
+    const text = pickString(qr.text);
     let png: string | null = null;
-    for (const linkRaw of asArray(charge.links)) {
+    for (const linkRaw of asArray(qr.links)) {
       const link = asRecord(linkRaw);
       if (!link) continue;
       if (String(link.rel).toUpperCase() === "QRCODE.PNG") {
@@ -80,12 +109,13 @@ function extractPixFromOrder(body: Json): {
     }
   }
 
-  for (const raw of asArray(body.qr_codes)) {
-    const qr = asRecord(raw);
-    if (!qr) continue;
-    const text = pickString(qr.text);
+  for (const raw of asArray(body.charges)) {
+    const charge = asRecord(raw);
+    if (!charge) continue;
+    const qr = asRecord(charge.qr_code);
+    const text = pickString(qr?.text);
     let png: string | null = null;
-    for (const linkRaw of asArray(qr.links)) {
+    for (const linkRaw of asArray(charge.links)) {
       const link = asRecord(linkRaw);
       if (!link) continue;
       if (String(link.rel).toUpperCase() === "QRCODE.PNG") {
@@ -108,6 +138,73 @@ function normalizeChargeStatus(raw: unknown): PagbankStatusResult["status"] {
   return "waiting";
 }
 
+function buildQrCodesPayload(input: {
+  reference: string;
+  amount: number;
+  itemReference: string;
+  itemName: string;
+  taxId: string;
+}): Json {
+  const notify = appPublicUrl().replace(/\/$/, "");
+  const notificationUrls =
+    notify.startsWith("https://") && !/localhost/i.test(notify)
+      ? [`${notify}/api/pagbank/webhook`]
+      : [];
+
+  const payload: Json = {
+    reference_id: input.reference,
+    customer: {
+      name: "Cliente Arquetipo",
+      // Valid TLD — @pagador.local was rejected / contributed to failures.
+      email: `cliente.arquetipo.${input.taxId.slice(0, 8)}@example.com`,
+      tax_id: input.taxId,
+      phones: [
+        {
+          country: "55",
+          area: "11",
+          number: "999999999",
+          type: "MOBILE",
+        },
+      ],
+    },
+    items: [
+      {
+        reference_id: input.itemReference.slice(0, 64),
+        name: input.itemName.slice(0, 100),
+        quantity: 1,
+        unit_amount: input.amount,
+      },
+    ],
+    // Homolog-proven path (sandbox success): qr_codes arrangement → text EMV.
+    qr_codes: [
+      {
+        amount: { value: input.amount },
+        expiration_date: expirationIso(24),
+      },
+    ],
+  };
+
+  if (notificationUrls.length) {
+    payload.notification_urls = notificationUrls;
+  }
+
+  return payload;
+}
+
+async function postOrder(
+  apiBase: string,
+  payload: Json,
+): Promise<{ ok: true; body: Json } | { ok: false; status: number; body: Json }> {
+  const res = await fetch(`${apiBase}/orders`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify(payload),
+  });
+  const body = (await res.json().catch(() => ({}))) as Json;
+  if (!res.ok) return { ok: false, status: res.status, body };
+  return { ok: true, body };
+}
+
 export async function createPagbankPixOrder(
   product: PagbankProduct = "basic_3",
 ): Promise<PagbankCreateResult> {
@@ -122,7 +219,11 @@ export async function createPagbankPixOrder(
   });
 }
 
-/** Create a Pix order with an explicit amount (e.g. InfinitePay tier prices). */
+/**
+ * Create a Pix order with an explicit amount.
+ * Uses Orders `qr_codes` arrangement (returns `qr_codes[].text` EMV).
+ * If production returns ACCESS_DENIED/403 and sandbox is not forced, retries sandbox once.
+ */
 export async function createPagbankPixOrderCustom(input: {
   amountCentavos: number;
   amountLabel: string;
@@ -140,60 +241,50 @@ export async function createPagbankPixOrderCustom(input: {
     `arq-${product}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const taxId = generateValidCPF();
 
-  const payload = {
-    reference_id: reference,
-    customer: {
-      name: "Cliente Arquétipo",
-      email: `arquetipo.${taxId.slice(0, 6)}@pagador.local`,
-      tax_id: taxId,
-      phones: [
-        {
-          country: "55",
-          area: "11",
-          number: "999999999",
-          type: "MOBILE",
-        },
-      ],
-    },
-    items: [
-      {
-        reference_id: input.itemReference.slice(0, 64),
-        name: input.itemName.slice(0, 100),
-        quantity: 1,
-        unit_amount: amount,
-      },
-    ],
-    charges: [
-      {
-        reference_id: `charge-${reference}`.slice(0, 64),
-        description: input.chargeDescription.slice(0, 64),
-        amount: { value: amount, currency: "BRL" },
-        payment_method: {
-          type: "PIX",
-          pix: { expiration_date: expirationIso(2) },
-        },
-      },
-    ],
-  };
-
-  const res = await fetch(`${pagbankApiBase()}/orders`, {
-    method: "POST",
-    headers: authHeaders(),
-    body: JSON.stringify(payload),
+  const payload = buildQrCodesPayload({
+    reference,
+    amount,
+    itemReference: input.itemReference,
+    itemName: input.itemName,
+    taxId,
   });
 
-  const body = (await res.json().catch(() => ({}))) as Json;
-  if (!res.ok) {
-    const msg =
-      pickString(body.message, body.error_messages) ||
-      `PagBank create failed (${res.status})`;
+  const primaryBase = pagbankApiBase();
+  let result = await postOrder(primaryBase, payload);
+  let usedBase = primaryBase;
+
+  // Prod Orders often 403 ACCESS_DENIED (whitelist). Homolog worked on sandbox
+  // with the same qr_codes shape — retry sandbox once when not already there.
+  if (
+    !result.ok &&
+    result.status === 403 &&
+    !pagbankSandboxMode() &&
+    !process.env.PAGBANK_API_URL?.trim()
+  ) {
+    const sandboxBase = "https://sandbox.api.pagseguro.com";
+    console.error("[pagbank:create] prod 403 — retrying sandbox once", {
+      code: pickString(result.body.code),
+      description: pickString(result.body.description),
+    });
+    result = await postOrder(sandboxBase, payload);
+    usedBase = sandboxBase;
+  }
+
+  if (!result.ok) {
+    const msg = formatPagbankError(result.status, result.body);
+    console.error("[pagbank:create] failed", {
+      status: result.status,
+      apiBase: usedBase,
+      code: pickString(result.body.code),
+      // never log token
+    });
     throw new Error(msg);
   }
 
-  const orderId = pickString(body.id);
+  const orderId = pickString(result.body.id);
   if (!orderId) throw new Error("PagBank create missing order id");
 
-  const pix = extractPixFromOrder(body);
+  const pix = extractPixFromOrder(result.body);
   return {
     orderId,
     pixCopyPaste: pix.pixCopyPaste,
@@ -202,43 +293,64 @@ export async function createPagbankPixOrderCustom(input: {
     amountLabel: input.amountLabel,
     product,
     status: "waiting",
+    apiBase: usedBase,
   };
 }
 
 export async function fetchPagbankOrderStatus(
   orderId: string,
 ): Promise<PagbankStatusResult> {
-  const res = await fetch(
-    `${pagbankApiBase()}/orders/${encodeURIComponent(orderId)}`,
-    {
-      method: "GET",
-      headers: authHeaders(),
-      cache: "no-store",
-    },
-  );
-
-  const body = (await res.json().catch(() => ({}))) as Json;
-  if (!res.ok) {
-    throw new Error(
-      pickString(body.message) || `PagBank status failed (${res.status})`,
-    );
+  const bases = [pagbankApiBase()];
+  if (!pagbankSandboxMode() && !process.env.PAGBANK_API_URL?.trim()) {
+    bases.push("https://sandbox.api.pagseguro.com");
   }
 
-  let status: PagbankStatusResult["status"] = "waiting";
-  for (const raw of asArray(body.charges)) {
-    const charge = asRecord(raw);
-    if (!charge) continue;
-    const next = normalizeChargeStatus(charge.status);
-    if (next === "paid") {
-      status = "paid";
-      break;
+  let lastError: Error | null = null;
+  for (const base of bases) {
+    try {
+      const res = await fetch(
+        `${base}/orders/${encodeURIComponent(orderId)}`,
+        {
+          method: "GET",
+          headers: authHeaders(),
+          cache: "no-store",
+        },
+      );
+      const body = (await res.json().catch(() => ({}))) as Json;
+      if (!res.ok) {
+        lastError = new Error(
+          pickString(body.message, body.description) ||
+            `PagBank status failed (${res.status})`,
+        );
+        continue;
+      }
+
+      let status: PagbankStatusResult["status"] = "waiting";
+      for (const raw of asArray(body.charges)) {
+        const charge = asRecord(raw);
+        if (!charge) continue;
+        const next = normalizeChargeStatus(charge.status);
+        if (next === "paid") {
+          status = "paid";
+          break;
+        }
+        if (next !== "waiting") status = next;
+      }
+      // qr_codes-only orders may have no charges — treat as waiting until paid webhook.
+      if (status === "waiting") {
+        const topStatus = String(body.status ?? "").toUpperCase();
+        if (topStatus === "PAID") status = "paid";
+      }
+
+      return {
+        orderId: pickString(body.id) || orderId,
+        status,
+        amountCentavos: PAGBANK_UNLOCK_AMOUNT_CENTAVOS,
+      };
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
     }
-    if (next !== "waiting") status = next;
   }
 
-  return {
-    orderId: pickString(body.id) || orderId,
-    status,
-    amountCentavos: PAGBANK_UNLOCK_AMOUNT_CENTAVOS,
-  };
+  throw lastError ?? new Error("PagBank status failed");
 }
