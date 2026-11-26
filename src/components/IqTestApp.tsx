@@ -17,7 +17,17 @@ import {
   percentilePlainLanguage,
   sessionConsistencyLabel,
 } from "@/src/lib/iqCalculator";
-import { competenceHelp, ESCALA_HELP } from "@/src/lib/skillHelp";
+import {
+  INDEX_META,
+  indexLabel,
+  subtestLabel,
+} from "@/src/lib/chcCatalog";
+import {
+  competenceHelp,
+  ESCALA_HELP,
+  indexHelp,
+  subtestHelp,
+} from "@/src/lib/skillHelp";
 import {
   buildLeaderboardEntry,
   durationSecondsFromSession,
@@ -40,7 +50,6 @@ import {
   QUIZ_TOTAL_QUESTIONS,
   bandProgressLabel,
   type AssessmentMode,
-  type CompetenceScores,
   type QuizItem,
   type QuizPersistedState,
 } from "@/src/types/quiz";
@@ -1135,49 +1144,210 @@ function ResultsDashboard({
         <BellCurveChart iq={result.iq} percentile={result.percentile} />
       </div>
 
-      <section aria-labelledby="skills-heading">
+      <section
+        aria-labelledby="profile-heading"
+        className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4 sm:p-5"
+      >
         <h2
-          id="skills-heading"
-          className="mb-3 text-center text-sm font-medium text-zinc-400"
+          id="profile-heading"
+          className="text-sm font-semibold text-zinc-100"
         >
-          Sub-habilidades nesta sessão
+          Perfil cognitivo
         </h2>
-        <div className="grid gap-3 sm:grid-cols-2">
-          {(result.activeCompetences.length
-            ? result.activeCompetences
-            : (Object.keys(result.competences) as (keyof CompetenceScores)[])
-          ).map((key) => {
-            const value = result.competences[key];
-            return (
-              <div
-                key={key}
-                className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4"
-              >
-                <div className="mb-2 flex items-center justify-between gap-2 text-sm">
-                  <span className="inline-flex min-w-0 items-center gap-1.5 text-zinc-300">
-                    <span className="truncate">{competenceLabel(key)}</span>
-                    <SkillHelpTip
-                      label={competenceLabel(key)}
-                      help={competenceHelp(key)}
-                    />
-                  </span>
-                  <span className="shrink-0 tabular-nums text-zinc-400">
-                    {value}%
-                  </span>
-                </div>
-                <div className="h-1.5 overflow-hidden rounded-full bg-zinc-800">
-                  <motion.div
-                    className="h-full bg-indigo-400"
-                    initial={{ width: 0 }}
-                    animate={{ width: `${value}%` }}
-                    transition={{ duration: 0.7, delay: 0.1 }}
-                  />
-                </div>
-              </div>
-            );
-          })}
+        <p className="mt-1 font-iq-display text-lg text-zinc-50">
+          {result.cognitiveProfile.label}
+        </p>
+        <p className="mt-1.5 text-sm leading-relaxed text-zinc-400">
+          {result.cognitiveProfile.detail}
+        </p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <div>
+            <p className="text-[11px] uppercase tracking-wider text-emerald-400/90">
+              Pontos fortes
+            </p>
+            <ul className="mt-1.5 space-y-1">
+              {result.cognitiveProfile.strengths.length ? (
+                result.cognitiveProfile.strengths.map((s) => (
+                  <li
+                    key={s.id}
+                    className="text-sm tabular-nums text-zinc-300"
+                  >
+                    {s.label}{" "}
+                    <span className="text-zinc-500">({s.score}%)</span>
+                  </li>
+                ))
+              ) : (
+                <li className="text-sm text-zinc-600">—</li>
+              )}
+            </ul>
+          </div>
+          <div>
+            <p className="text-[11px] uppercase tracking-wider text-amber-300/90">
+              Pontos a desenvolver
+            </p>
+            <ul className="mt-1.5 space-y-1">
+              {result.cognitiveProfile.improvements.length ? (
+                result.cognitiveProfile.improvements.map((s) => (
+                  <li
+                    key={s.id}
+                    className="text-sm tabular-nums text-zinc-300"
+                  >
+                    {s.label}{" "}
+                    <span className="text-zinc-500">({s.score}%)</span>
+                  </li>
+                ))
+              ) : (
+                <li className="text-sm text-zinc-600">—</li>
+              )}
+            </ul>
+          </div>
         </div>
       </section>
+
+      <section aria-labelledby="indices-heading">
+        <h2
+          id="indices-heading"
+          className="mb-3 text-center text-sm font-medium text-zinc-400"
+        >
+          Índices cognitivos
+        </h2>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {result.indexScores.map((ix) => (
+            <div
+              key={ix.id}
+              className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4"
+            >
+              <div className="mb-2 flex items-center justify-between gap-2 text-sm">
+                <span className="inline-flex min-w-0 items-center gap-1.5 text-zinc-300">
+                  <span className="truncate">{indexLabel(ix.id)}</span>
+                  <SkillHelpTip
+                    label={indexLabel(ix.id)}
+                    help={indexHelp(ix.id)}
+                  />
+                </span>
+                <span className="shrink-0 tabular-nums text-zinc-400">
+                  {ix.score}%
+                </span>
+              </div>
+              <div className="h-1.5 overflow-hidden rounded-full bg-zinc-800">
+                <motion.div
+                  className="h-full bg-cyan-400/90"
+                  initial={{ width: 0 }}
+                  animate={{ width: `${ix.score}%` }}
+                  transition={{ duration: 0.7, delay: 0.1 }}
+                />
+              </div>
+              <p className="mt-2 text-[11px] text-zinc-500">
+                {ix.descriptor} · QI≈{ix.iqApprox} · {ix.answered}/{ix.total}{" "}
+                itens
+                {ix.avgTimeMs
+                  ? ` · ${(ix.avgTimeMs / 1000).toFixed(1)}s méd.`
+                  : ""}
+              </p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section aria-labelledby="subtests-heading">
+        <h2
+          id="subtests-heading"
+          className="mb-3 text-center text-sm font-medium text-zinc-400"
+        >
+          Subtestes
+        </h2>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {result.subtestScores.map((st) => (
+            <div
+              key={st.id}
+              className="flex items-center justify-between gap-3 rounded-xl border border-zinc-800/80 bg-zinc-950/40 px-3.5 py-2.5"
+            >
+              <span className="inline-flex min-w-0 items-center gap-1.5 text-sm text-zinc-300">
+                <span className="truncate">{subtestLabel(st.id)}</span>
+                <SkillHelpTip
+                  label={subtestLabel(st.id)}
+                  help={subtestHelp(st.id)}
+                />
+              </span>
+              <span className="shrink-0 text-right text-xs tabular-nums text-zinc-500">
+                <span className="text-zinc-300">{st.score}%</span>
+                <span className="mt-0.5 block text-[10px]">
+                  {INDEX_META[st.index].short} · {st.descriptor}
+                </span>
+              </span>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {result.anomalies.count > 0 ? (
+        <section
+          aria-labelledby="anomalies-heading"
+          className="rounded-2xl border border-orange-500/30 bg-orange-500/5 p-4 sm:p-5"
+        >
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h2
+              id="anomalies-heading"
+              className="text-sm font-semibold text-zinc-100"
+            >
+              Anomalias detectadas
+            </h2>
+            <p className="text-sm tabular-nums text-orange-200">
+              {result.anomalies.count} · impacto ≈+
+              {result.anomalies.totalImpact} na margem
+            </p>
+          </div>
+          <ul className="mt-3 space-y-2">
+            {result.anomalies.hits.map((h) => (
+              <li key={h.kind} className="text-sm leading-relaxed text-orange-100/90">
+                <span className="font-medium">{h.label}</span>
+                <span className="text-orange-200/70">
+                  {" "}
+                  (+{h.marginImpact}) — {h.detail}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {result.activeCompetences.length > 0 ? (
+        <details className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
+          <summary className="cursor-pointer text-sm font-medium text-zinc-400">
+            Sub-habilidades legadas (compatibilidade)
+          </summary>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            {result.activeCompetences.map((key) => {
+              const value = result.competences[key];
+              return (
+                <div
+                  key={key}
+                  className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-3"
+                >
+                  <div className="mb-1.5 flex items-center justify-between gap-2 text-sm">
+                    <span className="inline-flex min-w-0 items-center gap-1.5 text-zinc-400">
+                      <span className="truncate">{competenceLabel(key)}</span>
+                      <SkillHelpTip
+                        label={competenceLabel(key)}
+                        help={competenceHelp(key)}
+                      />
+                    </span>
+                    <span className="shrink-0 tabular-nums text-zinc-500">
+                      {value}%
+                    </span>
+                  </div>
+                  <div className="h-1 overflow-hidden rounded-full bg-zinc-800">
+                    <div
+                      className="h-full bg-indigo-400/70"
+                      style={{ width: `${value}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </details>
+      ) : null}
 
       <details className="group rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4 sm:p-5">
         <summary className="cursor-pointer list-none text-sm font-medium text-zinc-300 marker:content-none [&::-webkit-details-marker]:hidden">

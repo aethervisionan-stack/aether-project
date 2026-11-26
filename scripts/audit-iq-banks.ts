@@ -164,22 +164,34 @@ function auditMatrixLogic(qs: MatrixQuestion[]): Issue[] {
 
 function auditTextLogic(qs: TextQuestion[]): Issue[] {
   const issues: Issue[] = [];
-  const numericAnswers: Record<number, string> = {
-    2: "42",
-    6: "47",
-    8: "34",
-    12: "172",
-    14: "100",
-    18: "3263442",
-    20: "254₇",
-    22: "99",
-    24: "24",
-    26: "3",
-    28: "99",
-    30: "n/(n+1)",
+
+  /** Spot-checks for the CHC text bank (id → correct option text) */
+  const knownAnswers: Record<number, string> = {
+    2: "48", // 3,6,12,24,?
+    4: "−3", // span 4-9-2
+    5: "3", // count △
+    10: "12", // S=5 → +3 ×2 −4
+    16: "9", // reverse 7-1-8-3 mid sum
+    20: "380", // machine n²−n twice from 5
+    22: "15", // queue update
+    26: "16", // recurrence a5
+    28: "7", // span 6-2-9-4-1
+    30: "23", // prime >20
   };
 
+  const indexCounts = new Map<string, number>();
+
   for (const q of qs) {
+    if (!q.index || !q.subtest) {
+      issues.push({
+        severity: "error",
+        code: "text_missing_chc_tag",
+        detail: `T${q.id}: missing index/subtest`,
+      });
+    } else {
+      indexCounts.set(q.index, (indexCounts.get(q.index) ?? 0) + 1);
+    }
+
     if (
       /\b(wait|recalculate|Let me|Verifique)\b/i.test(q.explanation.pt) ||
       /\b(TODO|FIXME)\b/.test(q.explanation.pt)
@@ -192,15 +204,14 @@ function auditTextLogic(qs: TextQuestion[]): Issue[] {
     }
 
     const correct = q.options[q.correctIndex];
-    if (numericAnswers[q.id] && correct !== numericAnswers[q.id]) {
+    if (knownAnswers[q.id] && correct !== knownAnswers[q.id]) {
       issues.push({
         severity: "error",
         code: "text_wrong_answer",
-        detail: `T${q.id}: expected «${numericAnswers[q.id]}», got «${correct}»`,
+        detail: `T${q.id}: expected «${knownAnswers[q.id]}», got «${correct}»`,
       });
     }
 
-    // Accidentally correct distractors: option text equals correct
     const texts = q.options.map((t) => t.trim().toLowerCase());
     if (new Set(texts).size !== texts.length) {
       issues.push({
@@ -210,9 +221,8 @@ function auditTextLogic(qs: TextQuestion[]): Issue[] {
       });
     }
 
-    // Placeholder distractors
     for (const opt of q.options) {
-      if (/alternativa inválida/i.test(opt)) {
+      if (/alternativa inválida|opção descartável/i.test(opt)) {
         issues.push({
           severity: "error",
           code: "text_placeholder_distractor",
@@ -221,7 +231,6 @@ function auditTextLogic(qs: TextQuestion[]): Issue[] {
       }
     }
 
-    // Band option counts
     const expect = q.difficulty >= 3 ? 6 : 4;
     if (q.options.length !== expect) {
       issues.push({
@@ -230,69 +239,53 @@ function auditTextLogic(qs: TextQuestion[]): Issue[] {
         detail: `T${q.id}: ${q.options.length} opts, expected ${expect}`,
       });
     }
+
+    if (q.distractorErrors.filter((e) => e === null).length !== 1) {
+      issues.push({
+        severity: "error",
+        code: "text_unique_correct",
+        detail: `T${q.id}: expected exactly one null distractorError`,
+      });
+    }
   }
 
-  // Independent numeric checks
-  // Q2: n(n+1): 1*2=2,2*3=6,3*4=12,4*5=20,5*6=30,6*7=42
-  // Q6: r=3, a15=a7+8*3=23+24=47
-  // Q8: 2a-2 → 34
-  // Q12: 43*4=172
-  // Q14: 2*52-4=100
-  // Q18: 1806*1807
-  if (1806 * 1807 !== 3263442) {
-    issues.push({
-      severity: "error",
-      code: "text_q18_math",
-      detail: `1806*1807=${1806 * 1807}, expected 3263442`,
-    });
-  }
-  // Q20: 345_6 = 137_10 → 254_7
-  const dec = 3 * 36 + 4 * 6 + 5;
-  if (dec !== 137) {
-    issues.push({
-      severity: "error",
-      code: "text_q20_dec",
-      detail: `345_6 dec=${dec}`,
-    });
-  }
-  const b7 = 2 * 49 + 5 * 7 + 4;
-  if (b7 !== 137) {
-    issues.push({
-      severity: "error",
-      code: "text_q20_b7",
-      detail: `254_7 dec=${b7}`,
-    });
-  }
-  // Q24 trailing zeros of 100!
-  let zeros = 0;
-  for (let p = 5; p <= 100; p *= 5) zeros += Math.floor(100 / p);
-  if (zeros !== 24) {
-    issues.push({
-      severity: "error",
-      code: "text_q24_zeros",
-      detail: `100! zeros=${zeros}`,
-    });
-  }
-  // Q16 clock: 180 * 60/58
-  const realMin = (180 * 60) / 58;
-  if (Math.abs(realMin - 5400 / 29) > 1e-9) {
-    issues.push({
-      severity: "error",
-      code: "text_q16_clock",
-      detail: `clock realMin=${realMin}`,
-    });
+  for (const need of [
+    "verbal",
+    "fluido",
+    "espacial",
+    "memoria_trabalho",
+    "velocidade_processamento",
+    "tempo_reacao",
+  ]) {
+    if ((indexCounts.get(need) ?? 0) < 5) {
+      issues.push({
+        severity: "error",
+        code: "text_chc_coverage",
+        detail: `index ${need} has ${indexCounts.get(need) ?? 0} items (need ≥5)`,
+      });
+    }
   }
 
-  // Q30: telescoping equals n/(n+1); distractor "1-1/n" must NOT equal for general n
-  // For n=1: 1/2 vs 0 — distinct. Good.
-
-  // Ambiguous verbal: Q15 "succinto" misspelling of Portuguese "sucinto"
-  const t15 = qs.find((q) => q.id === 15);
-  if (t15?.options.some((o) => o === "succinto")) {
+  // Independent math for CHC spot-checks
+  if (5 + 3 !== 8 || 8 * 2 !== 16 || 16 - 4 !== 12) {
     issues.push({
-      severity: "warn",
-      code: "text_q15_spelling",
-      detail: `T15: option «succinto» should be PT «sucinto»`,
+      severity: "error",
+      code: "text_update_math",
+      detail: "atualização mental 5+3×2−4",
+    });
+  }
+  if (8 + 2 * 4 !== 16) {
+    issues.push({
+      severity: "error",
+      code: "text_recurrence_math",
+      detail: "a5 recurrence",
+    });
+  }
+  if (20 * 20 - 20 !== 380) {
+    issues.push({
+      severity: "error",
+      code: "text_machine_math",
+      detail: "n²−n reentrada",
     });
   }
 
@@ -339,6 +332,36 @@ function auditScoring(): Issue[] {
       severity: "error",
       code: "score_ceiling",
       detail: `all-correct IQ=${hi.iq} (expected ≥130)`,
+    });
+  }
+  if (!hi.indexScores?.length || !Number.isFinite(hi.cognitiveProfile?.spread)) {
+    issues.push({
+      severity: "error",
+      code: "chc_result_missing",
+      detail: "IqResult missing CHC indexScores/profile",
+    });
+  }
+  for (const ix of hi.indexScores ?? []) {
+    if (!Number.isFinite(ix.score) || !Number.isFinite(ix.iqApprox)) {
+      issues.push({
+        severity: "error",
+        code: "chc_nan",
+        detail: `index ${ix.id} NaN`,
+      });
+    }
+  }
+  const qHi = calculateIqResult(
+    texts,
+    texts.map((q) => q.correctIndex),
+    Array(texts.length).fill(25_000),
+    Array(texts.length).fill(0),
+    "questions",
+  );
+  if (qHi.indexScores.length < 6) {
+    issues.push({
+      severity: "error",
+      code: "chc_questions_indices",
+      detail: `questions all-correct indices=${qHi.indexScores.length}`,
     });
   }
   if (lo.iq > 90) {

@@ -2,6 +2,7 @@ import type { AssessmentMode, QuizPersistedState } from "@/src/types/quiz";
 import {
   QUIZ_STORAGE_KEY_LEGACY_V1,
   QUIZ_STORAGE_KEY_LEGACY_V2,
+  QUIZ_STORAGE_KEY_LEGACY_V3,
   QUIZ_STORAGE_VERSION,
   QUIZ_TOTAL_QUESTIONS,
   quizStorageKey,
@@ -66,8 +67,12 @@ export function clearQuizState(mode?: AssessmentMode): void {
         localStorage.removeItem(quizStorageKey(m));
       }
     }
+    localStorage.removeItem(QUIZ_STORAGE_KEY_LEGACY_V3);
     localStorage.removeItem(QUIZ_STORAGE_KEY_LEGACY_V2);
     localStorage.removeItem(QUIZ_STORAGE_KEY_LEGACY_V1);
+    for (const m of ["figures", "questions", "hybrid"] as AssessmentMode[]) {
+      localStorage.removeItem(`professional-iq-test-v3-${m}`);
+    }
   } catch {
     // ignore
   }

@@ -1,12 +1,50 @@
 import type {
   CellContent,
+  CognitiveIndexId,
   DistractorError,
   DistractorSpec,
   FillKind,
   Glyph,
   MatrixQuestion,
+  RuleCategory,
   ShapeKind,
+  SubtestId,
 } from "@/src/types/quiz";
+
+/** Derive CHC index/subtest from legacy visual rule categories */
+function tagFromCategories(
+  cats: RuleCategory[],
+  id: number,
+): { index: CognitiveIndexId; subtest: SubtestId } {
+  const set = new Set(cats);
+  if (set.has("spatial") && !set.has("boolean") && !set.has("pattern")) {
+    const spatialSubs: SubtestId[] = [
+      "rotacao_mental",
+      "visualizacao",
+      "completamento_espacial",
+    ];
+    return { index: "espacial", subtest: spatialSubs[id % 3] };
+  }
+  if (set.has("spatial")) {
+    return {
+      index: "espacial",
+      subtest: id % 2 === 0 ? "rotacao_mental" : "visualizacao",
+    };
+  }
+  if (set.has("numerical") && id % 5 === 0) {
+    return { index: "velocidade_processamento", subtest: "codificacao" };
+  }
+  if (set.has("pattern")) {
+    return { index: "fluido", subtest: "matrizes_abstratas" };
+  }
+  if (set.has("boolean")) {
+    return { index: "fluido", subtest: "inducao_regras" };
+  }
+  if (set.has("numerical")) {
+    return { index: "fluido", subtest: "sequencias_logicas" };
+  }
+  return { index: "fluido", subtest: "matrizes_abstratas" };
+}
 
 /* ─── Cell builders ───────────────────────────────────────────────── */
 
@@ -214,12 +252,19 @@ function pushQ(
   qs: MatrixQuestion[],
   partial: Omit<
     MatrixQuestion,
-    "kind" | "options" | "correctIndex" | "distractorErrors"
+    | "kind"
+    | "options"
+    | "correctIndex"
+    | "distractorErrors"
+    | "index"
+    | "subtest"
   > & {
     correct: CellContent;
     distractors: DistractorSpec[];
     seed: number;
     optionCount?: 6 | 8;
+    index?: CognitiveIndexId;
+    subtest?: SubtestId;
   },
 ) {
   const optionCount =
@@ -230,6 +275,10 @@ function pushQ(
     partial.seed,
     optionCount,
   );
+  const tagged =
+    partial.index && partial.subtest
+      ? { index: partial.index, subtest: partial.subtest }
+      : tagFromCategories(partial.categories, partial.id);
   qs.push({
     kind: "matrix",
     id: partial.id,
@@ -237,6 +286,8 @@ function pushQ(
     weight: partial.weight,
     irtB: partial.irtB,
     categories: partial.categories,
+    index: tagged.index,
+    subtest: tagged.subtest,
     cells: partial.cells,
     options,
     correctIndex,

@@ -17,26 +17,27 @@ import { ESCALA_HELP } from "@/src/lib/skillHelp";
 
 const RIGOR_CHIPS = [
   { label: "30 itens" },
-  { label: "5 bandas" },
+  { label: "6 índices CHC" },
+  { label: "L1–L5" },
   { label: "Escala 100/15", help: true },
-  { label: "IRT ponderado" },
+  { label: "IRT 3PL" },
   { label: "localStorage isolado" },
 ] as const;
 
 const TRANSPARENCY = [
   {
     t: "Base teórica",
-    d: "Inspirado em modelos clássicos de inteligência fluida e raciocínio abstrato-lógico — em especial Matrizes Progressivas de Raven e provas de raciocínio dedutivo/analítico. O foco é padrão, regra e inferência, não conhecimento escolar.",
+    d: "Estrutura inspirada no modelo CHC de habilidades cognitivas: seis índices (Verbal, Fluido, Espacial, Memória de trabalho, Velocidade de processamento, Tempo de reação) com subtestes próprios. O QI global vem de IRT 3PL — não de conhecimento escolar decorado.",
     span: "md:col-span-2 md:row-span-1",
   },
   {
     t: "Arquitetura das questões",
-    d: "Itens estruturados com apoio de IA para definir regras lógicas objetivas, dificuldade progressiva e distratores coerentes. A alternativa correta exige raciocínio real; chutar sem método tende a falhar.",
+    d: "Itens progressivos L1–L5 em SVG e/ou texto, com distratores diagnósticos e uma única alternativa correta acompanhada de explicação. Telemetria de tempo e hesitação alimenta consistência e anomalias.",
     span: "md:col-span-1",
   },
   {
     t: "Limite deste resultado",
-    d: "Este teste oferece uma estimativa digital de desempenho lógico. Não é avaliação neuropsicológica clínica presencial nem laudo emitido por profissional habilitado.",
+    d: "Estimativa digital de perfil cognitivo e QI. Não substitui avaliação neuropsicológica clínica presencial nem laudo de profissional habilitado.",
     span: "md:col-span-3",
   },
 ] as const;
@@ -159,8 +160,8 @@ export function IqLanding({
             Teste de QI Profissional
           </h1>
           <p className="max-w-lg text-base leading-relaxed text-zinc-400 sm:text-lg">
-            Protocolo digital de inteligência fluida com modos isolados,
-            calibração por dificuldade e ranking local transparente.
+            Perfil cognitivo em seis índices, pontuação IRT 3PL (escala 100/15)
+            e painel diagnóstico — com modos isolados e ranking local.
           </p>
           <ul className="flex flex-wrap gap-2">
             {RIGOR_CHIPS.map((chip) => (

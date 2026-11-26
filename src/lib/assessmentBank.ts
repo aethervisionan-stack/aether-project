@@ -89,12 +89,12 @@ export function getModeRules(mode: AssessmentMode): {
       title: "Figuras Geométricas",
       bullets: [
         {
-          t: "Visual",
-          d: "Matrizes 3×3 SVG. Níveis altos combinam múltiplas regras e até 8 opções.",
+          t: "Índices",
+          d: "Carga principal em Fluido e Espacial (matrizes SVG com regras compostas).",
         },
         {
           t: "30 minutos",
-          d: "Cronômetro global. Telemetria de tempo e hesitação por item.",
+          d: "Cronômetro global. Telemetria de tempo, hesitação e banda L1–L5.",
         },
         {
           t: "Teclado",
@@ -108,12 +108,12 @@ export function getModeRules(mode: AssessmentMode): {
       title: "Perguntas objetivas",
       bullets: [
         {
-          t: "Objetivas",
-          d: "Lógica dedutiva, sequências, relações verbais e problemas analíticos — uma única resposta correta.",
+          t: "Seis índices",
+          d: "Verbal, Fluido, Espacial, Memória de trabalho, Velocidade de processamento e Tempo de reação — 5 bandas.",
         },
         {
           t: "30 minutos",
-          d: "Cronômetro global. Leia premissas com cuidado; respostas precipitadas reduzem a confiabilidade.",
+          d: "Cronômetro global. Respostas precipitadas reduzem consistência e alargam a margem.",
         },
         {
           t: "Teclado",
@@ -127,11 +127,11 @@ export function getModeRules(mode: AssessmentMode): {
     bullets: [
       {
         t: "Misto",
-        d: "15 matrizes + 15 perguntas intercaladas por nível (1–5).",
+        d: "15 matrizes + 15 perguntas intercaladas por nível (L1–L5), perfil cognitivo completo.",
       },
       {
         t: "30 minutos",
-        d: "Mesmo cronômetro; QI ponderado unificado com sub-habilidades de ambos os conjuntos.",
+        d: "QI IRT 3PL unificado + escores por índice/subteste e detecção de anomalias.",
       },
       {
         t: "Teclado",

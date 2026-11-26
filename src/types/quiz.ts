@@ -1,4 +1,4 @@
-/** Professional IQ Test — multi-mode psychometric types (v3) */
+/** Professional IQ Test — multi-mode psychometric types (v4 CHC) */
 
 export type AssessmentMode = "figures" | "questions" | "hybrid";
 
@@ -27,6 +27,36 @@ export type QuestionSkill =
   | "numeric"
   | "verbal"
   | "analytical";
+
+/** Six CHC-inspired cognitive indices (PT-BR product labels) */
+export type CognitiveIndexId =
+  | "verbal"
+  | "fluido"
+  | "espacial"
+  | "memoria_trabalho"
+  | "velocidade_processamento"
+  | "tempo_reacao";
+
+/** Subtests nested under the six indices */
+export type SubtestId =
+  | "vocabulario"
+  | "analogias_verbais"
+  | "compreensao_verbal"
+  | "matrizes_abstratas"
+  | "inducao_regras"
+  | "sequencias_logicas"
+  | "rotacao_mental"
+  | "visualizacao"
+  | "completamento_espacial"
+  | "span_digitos"
+  | "atualizacao_mental"
+  | "sequencia_reversa"
+  | "busca_simbolos"
+  | "pareamento_rapido"
+  | "codificacao"
+  | "decisao_rapida"
+  | "julgamento_latencia"
+  | "resposta_deliberada";
 
 /** 1 Basic → 5 Extreme (high ceiling QI 135–155+) */
 export type DifficultyBand = 1 | 2 | 3 | 4 | 5;
@@ -107,6 +137,10 @@ export interface MatrixQuestion {
   /** Rough latent difficulty (b-parameter), ~ −2 … +2.5 */
   irtB: number;
   categories: RuleCategory[];
+  /** CHC index this item primarily loads */
+  index: CognitiveIndexId;
+  /** Nested subtest within the index */
+  subtest: SubtestId;
   /** 9 cells; index 8 is always the empty "?" target */
   cells: (CellContent | null)[];
   /** 6 options (bands 1–2) or 8 (bands 3–5) */
@@ -129,6 +163,10 @@ export interface TextQuestion {
   weight: number;
   irtB: number;
   skills: QuestionSkill[];
+  /** CHC index this item primarily loads */
+  index: CognitiveIndexId;
+  /** Nested subtest within the index */
+  subtest: SubtestId;
   stem: string;
   premises?: string[];
   options: string[];
@@ -208,6 +246,61 @@ export interface TimeMetrics {
   unansweredCount: number;
 }
 
+export interface IndexScore {
+  id: CognitiveIndexId;
+  /** 0–100 weighted accuracy within the index */
+  score: number;
+  /** Approximate index IQ on 100/15 (session-relative) */
+  iqApprox: number;
+  descriptor: string;
+  answered: number;
+  total: number;
+  avgTimeMs: number;
+}
+
+export interface SubtestScore {
+  id: SubtestId;
+  index: CognitiveIndexId;
+  score: number;
+  descriptor: string;
+  answered: number;
+  total: number;
+}
+
+export type AnomalyKind =
+  | "chute_rapido"
+  | "padrao_erratico"
+  | "incompleto"
+  | "hesitacao_alta"
+  | "distrator_sistematico"
+  | "latencia_anomala";
+
+export interface AnomalyHit {
+  kind: AnomalyKind;
+  label: string;
+  detail: string;
+  /** Estimated widening of confidence margin (IQ points) */
+  marginImpact: number;
+}
+
+export interface AnomalyReport {
+  count: number;
+  totalImpact: number;
+  hits: AnomalyHit[];
+}
+
+export type ProfileShape = "equilibrado" | "assimetrico";
+
+export interface CognitiveProfile {
+  shape: ProfileShape;
+  label: string;
+  detail: string;
+  /** Spread (max−min) of active index scores */
+  spread: number;
+  strengths: { id: CognitiveIndexId; score: number; label: string }[];
+  improvements: { id: CognitiveIndexId; score: number; label: string }[];
+}
+
 export interface IqResult {
   mode: AssessmentMode;
   rawScore: number;
@@ -230,6 +323,11 @@ export interface IqResult {
   competences: CompetenceScores;
   /** Which competence keys had items in this session */
   activeCompetences: (keyof CompetenceScores)[];
+  /** CHC index scores (only indices with items appear as active) */
+  indexScores: IndexScore[];
+  subtestScores: SubtestScore[];
+  anomalies: AnomalyReport;
+  cognitiveProfile: CognitiveProfile;
   avgTimeMs: number;
   timeMetrics: TimeMetrics;
   answers: AnswerRecord[];
@@ -238,7 +336,7 @@ export interface IqResult {
 
 export interface QuizPersistedState {
   /** Storage schema version — bump when incompatible */
-  version: 3;
+  version: 4;
   mode: AssessmentMode;
   phase: QuizPhase;
   currentIndex: number;
@@ -296,9 +394,10 @@ export const LEADERBOARD_MODE_LABEL: Record<LeaderboardMode, string> = {
 export const QUIZ_TOTAL_QUESTIONS = 30;
 export const QUIZ_DURATION_MS = 30 * 60 * 1000;
 
-/** v3 keys are mode-isolated; legacy keys ignored */
-export const QUIZ_STORAGE_VERSION = 3 as const;
-export const QUIZ_STORAGE_KEY_PREFIX = "professional-iq-test-v3";
+/** v4 keys are mode-isolated; legacy keys ignored */
+export const QUIZ_STORAGE_VERSION = 4 as const;
+export const QUIZ_STORAGE_KEY_PREFIX = "professional-iq-test-v4";
+export const QUIZ_STORAGE_KEY_LEGACY_V3 = "professional-iq-test-v3";
 export const QUIZ_STORAGE_KEY_LEGACY_V2 = "professional-iq-test-v2";
 export const QUIZ_STORAGE_KEY_LEGACY_V1 = "professional-iq-test-v1";
 
@@ -314,19 +413,19 @@ export const MODE_META: Record<
     label: "Figuras Geométricas",
     short: "Figuras",
     blurb:
-      "Matrizes 3×3 de alta dificuldade, multi-regras e até 8 opções com distratores diagnósticos.",
+      "Matrizes 3×3 com carga em raciocínio fluido e espacial — multi-regras, até 8 opções e distratores diagnósticos.",
   },
   questions: {
     label: "Perguntas",
     short: "Perguntas",
     blurb:
-      "Itens objetivos: lógica dedutiva, sequências numéricas, relações verbais e resolução analítica.",
+      "Bateria objetiva nos seis índices: Verbal, Fluido, Espacial, Memória de trabalho, Velocidade e Tempo de reação.",
   },
   hybrid: {
     label: "Completo / Híbrido",
     short: "Híbrido",
     blurb:
-      "Combina matrizes visuais e perguntas objetivas na mesma bateria ponderada.",
+      "Matrizes SVG + itens textuais intercalados por nível, cobrindo o perfil cognitivo completo.",
   },
 };
 

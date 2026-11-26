@@ -1,3 +1,4 @@
+import { buildChcTextQuestions } from "@/src/data/chcTextBank";
 import type {
   DifficultyBand,
   TextDistractorError,
@@ -6,12 +7,14 @@ import type {
 
 type PartialText = Omit<
   TextQuestion,
-  "kind" | "options" | "correctIndex" | "distractorErrors"
+  "kind" | "options" | "correctIndex" | "distractorErrors" | "index" | "subtest"
 > & {
   correct: string;
   distractors: { text: string; error: TextDistractorError }[];
   /** Deterministic shuffle seed */
   seed: number;
+  index?: TextQuestion["index"];
+  subtest?: TextQuestion["subtest"];
 };
 
 function mulberry32(seed: number) {
@@ -52,6 +55,23 @@ function optionCount(band: DifficultyBand): number {
   return band >= 3 ? 6 : 4;
 }
 
+function deriveTextTag(partial: PartialText): {
+  index: TextQuestion["index"];
+  subtest: TextQuestion["subtest"];
+} {
+  if (partial.index && partial.subtest) {
+    return { index: partial.index, subtest: partial.subtest };
+  }
+  const skill = partial.skills[0];
+  if (skill === "verbal")
+    return { index: "verbal", subtest: "vocabulario" };
+  if (skill === "numeric")
+    return { index: "fluido", subtest: "sequencias_logicas" };
+  if (skill === "logical")
+    return { index: "fluido", subtest: "inducao_regras" };
+  return { index: "fluido", subtest: "sequencias_logicas" };
+}
+
 function pushT(qs: TextQuestion[], partial: PartialText) {
   const need = optionCount(partial.difficulty) - 1;
   const distractors = partial.distractors.slice(0, need);
@@ -62,6 +82,7 @@ function pushT(qs: TextQuestion[], partial: PartialText) {
     });
   }
   const packed = packTextOptions(partial.correct, distractors, partial.seed);
+  const tag = deriveTextTag(partial);
   qs.push({
     kind: "text",
     id: partial.id,
@@ -69,6 +90,8 @@ function pushT(qs: TextQuestion[], partial: PartialText) {
     weight: partial.weight,
     irtB: partial.irtB,
     skills: partial.skills,
+    index: tag.index,
+    subtest: tag.subtest,
     stem: partial.stem,
     premises: partial.premises,
     explanation: partial.explanation,
@@ -767,9 +790,15 @@ function buildTextQuestions(): TextQuestion[] {
 
 let _cache: TextQuestion[] | null = null;
 
+/** Banco CHC ativo (6 índices × 5 bandas). Legacy builder mantido para referência. */
 export function getTextQuestions(): TextQuestion[] {
-  if (!_cache) _cache = buildTextQuestions();
+  if (!_cache) _cache = buildChcTextQuestions();
   return _cache;
+}
+
+/** @deprecated Prefer getTextQuestions — legado pré-CHC */
+export function getLegacyTextQuestions(): TextQuestion[] {
+  return buildTextQuestions();
 }
 
 export function getTextTutorialExample(): {

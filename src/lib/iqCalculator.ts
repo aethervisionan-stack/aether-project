@@ -1,16 +1,23 @@
 import type {
   AnswerRecord,
+  AnomalyHit,
+  AnomalyReport,
   AnyDistractorError,
   AssessmentMode,
   BandTelemetry,
+  CognitiveIndexId,
+  CognitiveProfile,
   CompetenceScores,
   DifficultyBand,
   DistractorError,
+  IndexScore,
   IqResult,
   PrecisionDiagnosis,
   QuestionSkill,
   QuizItem,
   RuleCategory,
+  SubtestId,
+  SubtestScore,
   TextDistractorError,
   TimeMetrics,
 } from "@/src/types/quiz";
@@ -19,6 +26,11 @@ import {
   competenceKeysForMode,
   isMatrixItem,
 } from "@/src/types/quiz";
+import {
+  INDEX_META,
+  INDEX_ORDER,
+  scoreDescriptor,
+} from "@/src/lib/chcCatalog";
 
 /** Standard normal CDF via Abramowitz & Stegun approximation */
 export function normalCdf(z: number): number {
@@ -564,6 +576,262 @@ function buildDiagnosis(
   };
 }
 
+function buildIndexAndSubtestScores(
+  questions: QuizItem[],
+  answers: AnswerRecord[],
+  globalIq: number,
+): { indexScores: IndexScore[]; subtestScores: SubtestScore[] } {
+  const indexAcc = new Map<
+    CognitiveIndexId,
+    { correctW: number; totalW: number; answered: number; total: number; timeSum: number; timeN: number }
+  >();
+  const subAcc = new Map<
+    SubtestId,
+    { correctW: number; totalW: number; answered: number; total: number; index: CognitiveIndexId }
+  >();
+
+  for (let i = 0; i < questions.length; i++) {
+    const q = questions[i];
+    const a = answers[i];
+    const idx = q.index;
+    const sub = q.subtest;
+    if (!indexAcc.has(idx)) {
+      indexAcc.set(idx, {
+        correctW: 0,
+        totalW: 0,
+        answered: 0,
+        total: 0,
+        timeSum: 0,
+        timeN: 0,
+      });
+    }
+    if (!subAcc.has(sub)) {
+      subAcc.set(sub, {
+        correctW: 0,
+        totalW: 0,
+        answered: 0,
+        total: 0,
+        index: idx,
+      });
+    }
+    const ib = indexAcc.get(idx)!;
+    const sb = subAcc.get(sub)!;
+    ib.total += 1;
+    sb.total += 1;
+    ib.totalW += q.weight;
+    sb.totalW += q.weight;
+    if (a.selectedIndex !== null) {
+      ib.answered += 1;
+      sb.answered += 1;
+      if (a.timeMs > 0) {
+        ib.timeSum += a.timeMs;
+        ib.timeN += 1;
+      }
+    }
+    if (a.correct) {
+      ib.correctW += q.weight;
+      sb.correctW += q.weight;
+    }
+  }
+
+  const indexScores: IndexScore[] = INDEX_ORDER.filter((id) => indexAcc.has(id)).map(
+    (id) => {
+      const b = indexAcc.get(id)!;
+      const score =
+        b.totalW > 0
+          ? clamp(Math.round((b.correctW / b.totalW) * 100), 0, 100)
+          : 0;
+      // Map 0–100 accuracy toward session IQ with gentle regression to 100
+      const iqApprox = clamp(
+        Math.round(100 + (score - 50) * 0.7 + (globalIq - 100) * 0.25),
+        68,
+        160,
+      );
+      return {
+        id,
+        score: finiteOr(score, 0),
+        iqApprox: finiteOr(iqApprox, 100),
+        descriptor: scoreDescriptor(score),
+        answered: b.answered,
+        total: b.total,
+        avgTimeMs:
+          b.timeN > 0 ? Math.round(b.timeSum / b.timeN) : 0,
+      };
+    },
+  );
+
+  const subtestScores: SubtestScore[] = [...subAcc.entries()]
+    .map(([id, b]) => {
+      const score =
+        b.totalW > 0
+          ? clamp(Math.round((b.correctW / b.totalW) * 100), 0, 100)
+          : 0;
+      return {
+        id,
+        index: b.index,
+        score: finiteOr(score, 0),
+        descriptor: scoreDescriptor(score),
+        answered: b.answered,
+        total: b.total,
+      };
+    })
+    .sort((a, b) => a.index.localeCompare(b.index) || a.id.localeCompare(b.id));
+
+  return { indexScores, subtestScores };
+}
+
+function buildAnomalies(
+  questions: QuizItem[],
+  answers: AnswerRecord[],
+  diagnosis: PrecisionDiagnosis,
+): AnomalyReport {
+  const hits: AnomalyHit[] = [];
+
+  if (diagnosis.guessingFlag) {
+    hits.push({
+      kind: "chute_rapido",
+      label: "Chute / impulso em itens difíceis",
+      detail:
+        "Vários itens de alta complexidade foram respondidos muito abaixo do tempo típico da banda.",
+      marginImpact: 2,
+    });
+  }
+  if (diagnosis.inconsistentFlag) {
+    hits.push({
+      kind: "padrao_erratico",
+      label: "Padrão errático",
+      detail:
+        "Erros em faixas fáceis com acertos em difíceis, ou alta variância no mesmo nível.",
+      marginImpact: 2,
+    });
+  }
+  if (diagnosis.incompleteFlag) {
+    hits.push({
+      kind: "incompleto",
+      label: "Sessão incompleta",
+      detail: "Itens sem resposta reduzem a informação de Fisher e alargam a margem.",
+      marginImpact: 2,
+    });
+  }
+  if (diagnosis.avgOptionSwitches > 2.8) {
+    hits.push({
+      kind: "hesitacao_alta",
+      label: "Hesitação elevada",
+      detail: "Muitas trocas de opção por item sugerem incerteza ou exploração aleatória.",
+      marginImpact: 1,
+    });
+  }
+
+  // Systematic distractor cluster
+  const errCounts = new Map<string, number>();
+  for (const a of answers) {
+    if (a.distractorError) {
+      errCounts.set(
+        a.distractorError,
+        (errCounts.get(a.distractorError) ?? 0) + 1,
+      );
+    }
+  }
+  let topErr: string | null = null;
+  let topN = 0;
+  for (const [k, v] of errCounts) {
+    if (v > topN) {
+      topN = v;
+      topErr = k;
+    }
+  }
+  if (topErr && topN >= 4) {
+    hits.push({
+      kind: "distrator_sistematico",
+      label: "Distrator sistemático",
+      detail: `O mesmo tipo de erro lógico (“${distractorErrorLabel(topErr as AnyDistractorError)}”) repetiu-se ${topN} vezes.`,
+      marginImpact: 1,
+    });
+  }
+
+  // Latency anomalies on RT / speed indices
+  let latencyHits = 0;
+  for (let i = 0; i < questions.length; i++) {
+    const q = questions[i];
+    const a = answers[i];
+    if (a.selectedIndex === null || a.timeMs <= 0) continue;
+    if (
+      q.index !== "tempo_reacao" &&
+      q.index !== "velocidade_processamento"
+    ) {
+      continue;
+    }
+    const exp = expectedTimeMs(q.difficulty, q.kind);
+    if (a.correct && a.timeMs > exp * 2.2) latencyHits += 1;
+    if (!a.correct && a.timeMs < exp * 0.22) latencyHits += 1;
+  }
+  if (latencyHits >= 3) {
+    hits.push({
+      kind: "latencia_anomala",
+      label: "Latência anômala",
+      detail:
+        "Em itens de velocidade/reação, houve acertos excessivamente lentos ou erros ultrarrápidos.",
+      marginImpact: 1,
+    });
+  }
+
+  const totalImpact = hits.reduce((s, h) => s + h.marginImpact, 0);
+  return {
+    count: hits.length,
+    totalImpact,
+    hits,
+  };
+}
+
+function buildCognitiveProfile(indexScores: IndexScore[]): CognitiveProfile {
+  const active = indexScores.filter((s) => s.total > 0);
+  if (active.length === 0) {
+    return {
+      shape: "equilibrado",
+      label: "Perfil indeterminado",
+      detail: "Sem índices ativos nesta sessão.",
+      spread: 0,
+      strengths: [],
+      improvements: [],
+    };
+  }
+  const scores = active.map((s) => s.score);
+  const spread = Math.max(...scores) - Math.min(...scores);
+  const shape = spread >= 28 ? "assimetrico" : "equilibrado";
+  const sorted = [...active].sort((a, b) => b.score - a.score);
+  const strengthN = sorted.length <= 2 ? 1 : Math.min(2, sorted.length);
+  const improveN = sorted.length <= 2 ? 1 : Math.min(2, sorted.length - strengthN);
+  const strengths = sorted.slice(0, strengthN).map((s) => ({
+    id: s.id,
+    score: s.score,
+    label: INDEX_META[s.id].label,
+  }));
+  const improvements = [...sorted]
+    .reverse()
+    .slice(0, improveN)
+    .filter((s) => !strengths.some((x) => x.id === s.id))
+    .map((s) => ({
+      id: s.id,
+      score: s.score,
+      label: INDEX_META[s.id].label,
+    }));
+
+  return {
+    shape,
+    label:
+      shape === "equilibrado"
+        ? "Perfil equilibrado"
+        : "Perfil assimétrico",
+    detail:
+      shape === "equilibrado"
+        ? `Os índices ativos variam pouco entre si (amplitude ${spread} pontos) — desempenho relativamente homogêneo nesta sessão.`
+        : `Há contraste claro entre índices (amplitude ${spread} pontos). Use forças e pontos de melhoria abaixo para interpretar o perfil, não só o QI global.`,
+    spread: finiteOr(spread, 0),
+    strengths,
+    improvements,
+  };
+}
+
 export function calculateIqResult(
   questions: QuizItem[],
   selected: (number | null)[],
@@ -601,7 +869,6 @@ export function calculateIqResult(
   const catTotal = emptyCompetences();
   const seenSkills = new Set<keyof CompetenceScores>();
 
-  // null = unanswered omitted from likelihood; false = wrong; true = right
   // Timed forms: treat unanswered as incorrect (conservative)
   const correctFlags: (boolean | null)[] = answers.map((a) =>
     a.selectedIndex === null ? false : a.correct,
@@ -638,13 +905,28 @@ export function calculateIqResult(
     calcOptions,
   );
 
+  const { indexScores, subtestScores } = buildIndexAndSubtestScores(
+    questions,
+    answers,
+    iq,
+  );
+  const anomalies = buildAnomalies(questions, answers, diagnosis);
+  const cognitiveProfile = buildCognitiveProfile(indexScores);
+
   const reliabilityFactor =
     0.65 + (diagnosis.reliabilityIndex / 100) * 0.55;
   const consistencyFactor =
     0.75 + (diagnosis.consistencyScore / 100) * 0.35;
-  // Wider margin when SE high or consistency low
+  // Wider margin when SE high, consistency low, or anomalies present
+  const anomalyWiden = 1 + Math.min(0.35, anomalies.totalImpact * 0.06);
   const confidenceMargin = clamp(
-    Math.round(15 * se * (2 - reliabilityFactor) * (1.35 - consistencyFactor * 0.35)),
+    Math.round(
+      15 *
+        se *
+        (2 - reliabilityFactor) *
+        (1.35 - consistencyFactor * 0.35) *
+        anomalyWiden,
+    ),
     3,
     14,
   );
@@ -701,6 +983,10 @@ export function calculateIqResult(
     band: iqBand(iq),
     competences,
     activeCompetences,
+    indexScores,
+    subtestScores,
+    anomalies,
+    cognitiveProfile,
     avgTimeMs,
     timeMetrics,
     answers,

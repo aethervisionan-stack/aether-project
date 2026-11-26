@@ -107,6 +107,29 @@ function assertValidResult(result: IqResult, label: string): void {
     assert(isFiniteNumber(bt.accuracy), `${label}: band ${bt.band} accuracy`);
     assert(bt.accuracy >= 0 && bt.accuracy <= 1, `${label}: band accuracy range`);
   }
+
+  // CHC layers
+  assert(Array.isArray(result.indexScores), `${label}: indexScores`);
+  assert(result.indexScores.length >= 1, `${label}: no index scores`);
+  for (const ix of result.indexScores) {
+    assert(isFiniteNumber(ix.score) && ix.score >= 0 && ix.score <= 100, `${label}: index ${ix.id}`);
+    assert(isFiniteNumber(ix.iqApprox) && ix.iqApprox >= 68 && ix.iqApprox <= 160, `${label}: iqApprox ${ix.id}`);
+    assert(typeof ix.descriptor === "string" && ix.descriptor.length > 0, `${label}: descriptor ${ix.id}`);
+    assert(ix.total >= 1, `${label}: index total ${ix.id}`);
+  }
+  assert(Array.isArray(result.subtestScores), `${label}: subtestScores`);
+  for (const st of result.subtestScores) {
+    assert(isFiniteNumber(st.score) && st.score >= 0 && st.score <= 100, `${label}: subtest ${st.id}`);
+  }
+  assert(result.anomalies && isFiniteNumber(result.anomalies.count), `${label}: anomalies`);
+  assert(result.anomalies.count === result.anomalies.hits.length, `${label}: anomaly count`);
+  assert(isFiniteNumber(result.anomalies.totalImpact), `${label}: anomaly impact`);
+  assert(
+    result.cognitiveProfile.shape === "equilibrado" ||
+      result.cognitiveProfile.shape === "assimetrico",
+    `${label}: profile shape`,
+  );
+  assert(isFiniteNumber(result.cognitiveProfile.spread), `${label}: profile spread`);
 }
 
 function deliberateTime(q: QuizItem): number {
@@ -323,6 +346,69 @@ function testNavHelpers(): void {
   assert(findNextUnanswered([], 0) === -1, "empty → -1");
 }
 
+function testChcCoverage(): void {
+  const questions = getAssessmentItems("questions");
+  assert(questions.length === QUIZ_TOTAL_QUESTIONS, "questions size");
+  const indices = new Set(questions.map((q) => q.index));
+  for (const need of [
+    "verbal",
+    "fluido",
+    "espacial",
+    "memoria_trabalho",
+    "velocidade_processamento",
+    "tempo_reacao",
+  ] as const) {
+    assert(indices.has(need), `questions missing index ${need}`);
+  }
+  for (const band of [1, 2, 3, 4, 5] as const) {
+    assert(
+      questions.filter((q) => q.difficulty === band).length === 6,
+      `questions band ${band} count`,
+    );
+  }
+  for (const q of questions) {
+    assert(q.index && q.subtest, `tag missing ${q.id}`);
+    assert(q.explanation?.pt?.length > 10, `explanation ${q.id}`);
+    assert(
+      q.distractorErrors.filter((e) => e === null).length === 1,
+      `unique correct ${q.id}`,
+    );
+  }
+
+  const figs = getAssessmentItems("figures");
+  for (const q of figs) {
+    assert(q.index && q.subtest, `fig tag ${q.id}`);
+  }
+
+  // Asymmetric profile: ace verbal/fluid, fail WM/speed/RT on questions
+  const selected = questions.map((q) =>
+    q.index === "verbal" || q.index === "fluido" || q.index === "espacial"
+      ? q.correctIndex
+      : (q.correctIndex + 1) % q.options.length,
+  );
+  const asym = calculateIqResult(
+    questions,
+    selected,
+    Array(questions.length).fill(28_000),
+    Array(questions.length).fill(0),
+    "questions",
+  );
+  assertValidResult(asym, "asymmetric_profile");
+  softAssert(
+    asym.cognitiveProfile.shape === "assimetrico" ||
+      asym.cognitiveProfile.spread >= 20,
+    `expected asymmetric/spread, got ${asym.cognitiveProfile.shape} spread=${asym.cognitiveProfile.spread}`,
+  );
+  softAssert(
+    asym.cognitiveProfile.strengths.length >= 1,
+    "asymmetric strengths",
+  );
+  softAssert(
+    asym.cognitiveProfile.improvements.length >= 1,
+    "asymmetric improvements",
+  );
+}
+
 function testIrtSanity(): void {
   const figs = getAssessmentItems("figures");
   assert(figs.length === QUIZ_TOTAL_QUESTIONS, "figures size");
@@ -411,6 +497,7 @@ function main(): void {
   const scenarios: ScenarioResult[] = [];
 
   try {
+    testChcCoverage();
     testIrtSanity();
     testNavHelpers();
     testFinishFlowState();

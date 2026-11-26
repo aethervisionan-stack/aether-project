@@ -1,4 +1,8 @@
-import type { CompetenceScores } from "@/src/types/quiz";
+import type { CognitiveIndexId, CompetenceScores, SubtestId } from "@/src/types/quiz";
+import {
+  indexHelp as chcIndexHelp,
+  subtestHelp as chcSubtestHelp,
+} from "@/src/lib/chcCatalog";
 
 /**
  * Short PT-BR gloss for the standardized IQ scale (mean 100, SD 15).
@@ -29,4 +33,12 @@ export const COMPETENCE_HELP: Record<keyof CompetenceScores, string> = {
 
 export function competenceHelp(key: keyof CompetenceScores): string {
   return COMPETENCE_HELP[key];
+}
+
+export function indexHelp(key: CognitiveIndexId): string {
+  return chcIndexHelp(key);
+}
+
+export function subtestHelp(key: SubtestId): string {
+  return chcSubtestHelp(key);
 }
