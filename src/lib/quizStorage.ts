@@ -25,6 +25,12 @@ export function loadQuizState(mode: AssessmentMode): QuizPersistedState | null {
     if (!Array.isArray(parsed.timeSpentMs)) {
       parsed.timeSpentMs = Array(total).fill(0);
     }
+    if (typeof parsed.participantName !== "string") {
+      parsed.participantName = "";
+    }
+    if (parsed.leaderboardEntryId === undefined) {
+      parsed.leaderboardEntryId = null;
+    }
     return parsed;
   } catch {
     return null;
@@ -61,6 +67,7 @@ export function clearQuizState(mode?: AssessmentMode): void {
 export function createInitialState(
   mode: AssessmentMode,
   totalQuestions = QUIZ_TOTAL_QUESTIONS,
+  participantName = "",
 ): QuizPersistedState {
   return {
     version: QUIZ_STORAGE_VERSION,
@@ -76,6 +83,8 @@ export function createInitialState(
     finishedAt: null,
     result: null,
     totalQuestions,
+    participantName,
+    leaderboardEntryId: null,
   };
 }
 
@@ -94,5 +103,7 @@ export function createModeSelectState(): QuizPersistedState {
     finishedAt: null,
     result: null,
     totalQuestions: QUIZ_TOTAL_QUESTIONS,
+    participantName: "",
+    leaderboardEntryId: null,
   };
 }

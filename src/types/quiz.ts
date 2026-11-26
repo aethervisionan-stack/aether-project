@@ -230,7 +230,42 @@ export interface QuizPersistedState {
   finishedAt: number | null;
   result: IqResult | null;
   totalQuestions: number;
+  /** Display name for ranking (empty → anonymous default at submit) */
+  participantName: string;
+  /** Leaderboard entry id written after this session finished */
+  leaderboardEntryId: string | null;
 }
+
+/** Persisted ranking mode (figures → geometric for public copy) */
+export type LeaderboardMode = "geometric" | "questions" | "hybrid";
+
+export type LeaderboardFilter = "all" | "figures" | "questions";
+
+export interface LeaderboardEntry {
+  id: string;
+  name: string;
+  iqScore: number;
+  confidenceMargin: number;
+  percentile: number;
+  mode: LeaderboardMode;
+  /** 0–100 precision/consistency composite used for tie-break */
+  accuracyLevel: number;
+  durationSeconds: number;
+  createdAt: number;
+  /** Computed at read time — not persisted */
+  isCurrentUser?: boolean;
+}
+
+export const LEADERBOARD_STORAGE_KEY = "professional-iq-leaderboard-v1";
+export const LEADERBOARD_CURRENT_ID_KEY =
+  "professional-iq-leaderboard-current-v1";
+export const ANONYMOUS_PARTICIPANT_NAME = "Anônimo";
+
+export const LEADERBOARD_MODE_LABEL: Record<LeaderboardMode, string> = {
+  geometric: "Figuras",
+  questions: "Perguntas",
+  hybrid: "Híbrido",
+};
 
 export const QUIZ_TOTAL_QUESTIONS = 30;
 export const QUIZ_DURATION_MS = 30 * 60 * 1000;

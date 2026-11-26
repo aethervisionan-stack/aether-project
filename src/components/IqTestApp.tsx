@@ -17,6 +17,14 @@ import {
   sessionConsistencyLabel,
 } from "@/src/lib/iqCalculator";
 import {
+  buildLeaderboardEntry,
+  durationSecondsFromSession,
+  getLeaderboardRank,
+  listLeaderboard,
+  normalizeParticipantName,
+  submitLeaderboardEntry,
+} from "@/src/lib/leaderboard";
+import {
   clearQuizState,
   createInitialState,
   createModeSelectState,
@@ -24,6 +32,7 @@ import {
   saveQuizState,
 } from "@/src/lib/quizStorage";
 import {
+  ANONYMOUS_PARTICIPANT_NAME,
   MODE_META,
   QUIZ_DURATION_MS,
   QUIZ_TOTAL_QUESTIONS,
@@ -34,6 +43,10 @@ import {
   type QuizPersistedState,
 } from "@/src/types/quiz";
 import { BellCurveChart } from "@/src/components/BellCurveChart";
+import {
+  LeaderboardPanel,
+  UserRankBanner,
+} from "@/src/components/LeaderboardPanel";
 import { MatrixRenderer, OptionGrid } from "@/src/components/MatrixRenderer";
 
 function formatTime(ms: number): string {
@@ -64,6 +77,8 @@ export function IqTestApp() {
   const [tutorialPick, setTutorialPick] = useState<number | null>(null);
   const [tutorialOk, setTutorialOk] = useState(false);
   const [reviewIndex, setReviewIndex] = useState(0);
+  const [nameError, setNameError] = useState<string | null>(null);
+  const [leaderboardTick, setLeaderboardTick] = useState(0);
 
   const mode: AssessmentMode | null =
     state.phase === "modeSelect" ? null : state.mode;
@@ -109,17 +124,42 @@ export function IqTestApp() {
         switches,
         prev.mode,
       );
+      const finishedAt = Date.now();
+      const displayName = normalizeParticipantName(prev.participantName ?? "");
+      let leaderboardEntryId = prev.leaderboardEntryId;
+      if (!leaderboardEntryId) {
+        const entry = buildLeaderboardEntry({
+          name: displayName,
+          result,
+          durationSeconds: durationSecondsFromSession(
+            prev.startedAt,
+            finishedAt,
+            timeSpent,
+          ),
+          createdAt: finishedAt,
+        });
+        submitLeaderboardEntry(entry);
+        leaderboardEntryId = entry.id;
+      }
       return {
         ...prev,
+        participantName: displayName,
         phase: "results",
         timeSpentMs: timeSpent,
         questionStartedAt: null,
-        finishedAt: Date.now(),
+        finishedAt,
         result,
+        leaderboardEntryId,
       };
     },
     [],
   );
+
+  useEffect(() => {
+    if (state.phase === "results" && state.leaderboardEntryId) {
+      setLeaderboardTick((t) => t + 1);
+    }
+  }, [state.phase, state.leaderboardEntryId]);
 
   const onExpire = useCallback(() => {
     setState((prev) => {
@@ -142,24 +182,43 @@ export function IqTestApp() {
     const saved = loadQuizState(m);
     setTutorialPick(null);
     setTutorialOk(false);
+    setNameError(null);
     setReviewIndex(0);
+    const keepName = state.participantName ?? "";
     if (saved && saved.phase !== "onboarding" && saved.phase !== "modeSelect") {
-      setState(saved);
+      setState({
+        ...saved,
+        participantName: saved.participantName || keepName,
+      });
       return;
     }
-    setState(createInitialState(m, getAssessmentItems(m).length));
+    setState({
+      ...createInitialState(m, getAssessmentItems(m).length, keepName),
+      participantName: saved?.participantName || keepName,
+    });
   };
 
   const startOfficial = () => {
     if (!mode) return;
+    const raw = state.participantName ?? "";
+    // Empty → Anônimo at submit; reject whitespace-only noise
+    if (raw.length > 0 && raw.trim().length === 0) {
+      setNameError(
+        "Nome inválido. Preencha um nome/apelido ou deixe em branco para Anônimo.",
+      );
+      return;
+    }
+    setNameError(null);
+    const name = raw.trim();
     const now = Date.now();
     const n = getAssessmentItems(mode).length;
     setState({
-      ...createInitialState(mode, n),
+      ...createInitialState(mode, n, name),
       phase: "test",
       startedAt: now,
       endsAt: now + QUIZ_DURATION_MS,
       questionStartedAt: now,
+      participantName: name,
     });
   };
 
@@ -285,12 +344,14 @@ export function IqTestApp() {
     return () => window.removeEventListener("keydown", onKey);
   });
 
-  const resetAll = () => {
+  const resetAll = (keepName = true) => {
+    const name = keepName ? (state.participantName ?? "") : "";
     if (mode) clearQuizState(mode);
     setTutorialPick(null);
     setTutorialOk(false);
+    setNameError(null);
     setReviewIndex(0);
-    setState(createModeSelectState());
+    setState({ ...createModeSelectState(), participantName: name });
   };
 
   if (!hydrated) {
@@ -346,6 +407,8 @@ export function IqTestApp() {
             </header>
 
             <PsychometricTransparencyBlock />
+
+            <LeaderboardPanel refreshKey={leaderboardTick} />
 
             <div className="grid gap-4 sm:grid-cols-3">
               {(Object.keys(MODE_META) as AssessmentMode[]).map((m) => {
@@ -405,6 +468,40 @@ export function IqTestApp() {
             </header>
 
             <PsychometricTransparencyBlock compact />
+
+            <div className="mx-auto w-full max-w-md space-y-2 rounded-2xl border border-zinc-800 bg-zinc-950/70 p-5">
+              <label
+                htmlFor="iq-participant-name"
+                className="block text-sm font-medium text-zinc-200"
+              >
+                Nome / Apelido
+              </label>
+              <input
+                id="iq-participant-name"
+                type="text"
+                autoComplete="nickname"
+                maxLength={40}
+                value={state.participantName ?? ""}
+                onChange={(e) => {
+                  setNameError(null);
+                  setState((prev) => ({
+                    ...prev,
+                    participantName: e.target.value,
+                  }));
+                }}
+                placeholder={`Ex.: Maria Silva (vazio → ${ANONYMOUS_PARTICIPANT_NAME})`}
+                className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2.5 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/30"
+              />
+              <p className="text-xs leading-relaxed text-zinc-500">
+                Use um nome real para figurar com clareza no ranking local.
+                Campo vazio registra como {ANONYMOUS_PARTICIPANT_NAME}.
+              </p>
+              {nameError ? (
+                <p className="text-xs text-amber-400" role="alert">
+                  {nameError}
+                </p>
+              ) : null}
+            </div>
 
             <div className="grid gap-4 rounded-2xl border border-zinc-800 bg-zinc-900/50 p-5 sm:grid-cols-3 sm:p-6">
               {rules.bullets.map((item) => (
@@ -655,6 +752,11 @@ export function IqTestApp() {
               phase={state.phase}
               reviewIndex={reviewIndex}
               setReviewIndex={setReviewIndex}
+              participantName={
+                state.participantName || ANONYMOUS_PARTICIPANT_NAME
+              }
+              leaderboardEntryId={state.leaderboardEntryId}
+              leaderboardTick={leaderboardTick}
               onOpenReview={() => {
                 setReviewIndex(0);
                 setState((p) => ({ ...p, phase: "review" }));
@@ -662,7 +764,8 @@ export function IqTestApp() {
               onBackFromReview={() =>
                 setState((p) => ({ ...p, phase: "results" }))
               }
-              onReset={resetAll}
+              onResetSameName={() => resetAll(true)}
+              onResetOtherName={() => resetAll(false)}
             />
           )}
       </AnimatePresence>
@@ -739,9 +842,13 @@ function ResultsDashboard({
   phase,
   reviewIndex,
   setReviewIndex,
+  participantName,
+  leaderboardEntryId,
+  leaderboardTick,
   onOpenReview,
   onBackFromReview,
-  onReset,
+  onResetSameName,
+  onResetOtherName,
 }: {
   result: NonNullable<QuizPersistedState["result"]>;
   questions: QuizItem[];
@@ -749,9 +856,13 @@ function ResultsDashboard({
   phase: "results" | "review";
   reviewIndex: number;
   setReviewIndex: (n: number) => void;
+  participantName: string;
+  leaderboardEntryId: string | null;
+  leaderboardTick: number;
   onOpenReview: () => void;
   onBackFromReview: () => void;
-  onReset: () => void;
+  onResetSameName: () => void;
+  onResetOtherName: () => void;
 }) {
   const pctCopy = percentilePlainLanguage(result.percentile);
   const consistency = sessionConsistencyLabel(result.diagnosis);
@@ -761,6 +872,16 @@ function ResultsDashboard({
       : consistency.tone === "caution"
         ? "border-amber-500/35 bg-amber-500/5 text-amber-200"
         : "border-orange-500/40 bg-orange-500/8 text-orange-200";
+
+  const allRanked = useMemo(() => {
+    void leaderboardTick;
+    return listLeaderboard("all", leaderboardEntryId);
+  }, [leaderboardEntryId, leaderboardTick]);
+  const userRank = useMemo(() => {
+    if (!leaderboardEntryId) return null;
+    void leaderboardTick;
+    return getLeaderboardRank(leaderboardEntryId, "all");
+  }, [leaderboardEntryId, leaderboardTick]);
 
   return (
     <motion.section
@@ -772,6 +893,7 @@ function ResultsDashboard({
       <header className="space-y-3 text-center">
         <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">
           Resultado · {MODE_META[result.mode].label}
+          {participantName ? ` · ${participantName}` : ""}
         </p>
         <motion.h1
           className="font-iq-display text-5xl text-zinc-50 tabular-nums sm:text-6xl"
@@ -790,6 +912,14 @@ function ResultsDashboard({
           ponderados {result.rawScore.toFixed(1)}/{result.maxScore.toFixed(1)}.
         </p>
       </header>
+
+      <UserRankBanner rank={userRank} total={allRanked.length} />
+
+      <LeaderboardPanel
+        refreshKey={leaderboardTick}
+        highlightEntryId={leaderboardEntryId}
+        compact
+      />
 
       <div className="grid gap-3 sm:grid-cols-2">
         <article className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4 sm:p-5">
@@ -931,10 +1061,17 @@ function ResultsDashboard({
         </button>
         <button
           type="button"
-          onClick={onReset}
+          onClick={onResetSameName}
           className="rounded-xl bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-zinc-950 hover:bg-emerald-400"
         >
-          Nova avaliação
+          Nova tentativa (mesmo nome)
+        </button>
+        <button
+          type="button"
+          onClick={onResetOtherName}
+          className="rounded-xl border border-zinc-700 px-5 py-2.5 text-sm text-zinc-300 hover:border-zinc-500 hover:text-zinc-100"
+        >
+          Nova tentativa (outro nome)
         </button>
       </div>
 
