@@ -97,7 +97,17 @@ export function IqUnlockCard({
       const created = await createIqPixPayment(sessionId);
       setPix(created);
       if (created.amountLabel) onAmountLabel?.(created.amountLabel);
-      if (created.notice) setError(created.notice);
+      // Surface sim/config notices only — never CHECKOUT_ONLY / EMV jargon as a box.
+      if (
+        created.notice &&
+        (created.simulated ||
+          (typeof created.code === "string" &&
+            created.code.startsWith("SIMULATED")))
+      ) {
+        setError(created.notice);
+      } else {
+        setError(null);
+      }
       try {
         window.sessionStorage.setItem(
           "iq_pix_pending",
@@ -186,7 +196,7 @@ export function IqUnlockCard({
     <motion.section
       initial={reduce ? false : { opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      className="mx-auto max-w-lg rounded-2xl border border-zinc-700/80 bg-gradient-to-b from-zinc-900/90 to-zinc-950 p-6 shadow-[0_0_40px_-18px_rgba(34,211,238,0.35)] sm:p-8"
+      className="w-full rounded-2xl border border-zinc-700/80 bg-gradient-to-b from-zinc-900/90 to-zinc-950 p-6 shadow-[0_0_40px_-18px_rgba(34,211,238,0.35)] sm:p-8"
       aria-labelledby="iq-unlock-heading"
     >
       <div className="flex flex-col items-center text-center">
@@ -319,13 +329,19 @@ export function IqUnlockCard({
           ) : null}
 
           {!hasRealEmv && checkoutUrl && !isSim ? (
-            <button
-              type="button"
-              onClick={openCheckout}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-400 via-cyan-400 to-indigo-400 px-6 py-3.5 text-sm font-semibold text-[#06070A] shadow-[0_0_28px_-6px_rgba(52,211,153,0.45)] transition hover:brightness-110"
-            >
-              Abrir pagamento Pix na InfinitePay
-            </button>
+            <div className="space-y-3">
+              <p className="text-center text-sm leading-relaxed text-zinc-300">
+                Abra a InfinitePay para pagar com Pix. Depois volte aqui — a
+                liberação acontece assim que o pagamento confirmar.
+              </p>
+              <button
+                type="button"
+                onClick={openCheckout}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-400 via-cyan-400 to-indigo-400 px-6 py-3.5 text-sm font-semibold text-[#06070A] shadow-[0_0_28px_-6px_rgba(52,211,153,0.45)] transition hover:brightness-110"
+              >
+                Abrir InfinitePay para pagar Pix
+              </button>
+            </div>
           ) : null}
 
           {(error || null) && (

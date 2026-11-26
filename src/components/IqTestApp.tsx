@@ -839,14 +839,22 @@ export function IqTestApp() {
                   {unlockVerifyError}
                 </p>
               ) : null}
-              <IqUnlockCard
-                sessionId={state.sessionId}
-                amountLabel={unlockAmountLabel}
-                onAmountLabel={setUnlockAmountLabel}
-                onUnlocked={(paymentId) => {
-                  applyServerUnlock(paymentId);
-                }}
-              />
+              <div className="mx-auto grid max-w-6xl gap-6 lg:grid-cols-2 lg:items-start">
+                <IqUnlockCard
+                  sessionId={state.sessionId}
+                  amountLabel={unlockAmountLabel}
+                  onAmountLabel={setUnlockAmountLabel}
+                  onUnlocked={(paymentId) => {
+                    applyServerUnlock(paymentId);
+                  }}
+                />
+                {/* Public Hall of Fame while locked — names/scores only; no locked session IQ leak. */}
+                <LeaderboardPanel
+                  refreshKey={leaderboardTick}
+                  hallOfFame
+                  compact
+                />
+              </div>
               <div className="flex flex-wrap justify-center gap-3 pt-2">
                 <button
                   type="button"

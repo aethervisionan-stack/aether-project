@@ -32,7 +32,7 @@ export type InfinitePayPixCreateResult = {
   emvResolved?: boolean;
   /** Machine-readable reason when EMV is missing or flow is simulated. */
   code?: string;
-  /** Clear PT-BR notice for the UI (sim / checkout-only / misconfig). */
+  /** Optional PT-BR notice for sim/misconfig only — never CHECKOUT_ONLY jargon. */
   notice?: string;
   raw?: Record<string, unknown>;
 };
@@ -253,9 +253,8 @@ export async function createInfinitePayPixPayment(input: {
     checkoutUrl,
     emvResolved: Boolean(emv),
     code: emv ? "PIX_EMV" : "CHECKOUT_ONLY",
-    notice: emv
-      ? undefined
-      : "Checkout InfinitePay criado. A API do Checkout Integrado não devolve o código Pix (EMV) — abra o link da InfinitePay para ver o QR Pix real e pagar. Depois volte aqui; a liberação ocorre pelo webhook/confirmação.",
+    // No technical CHECKOUT_ONLY jargon in the UI — card shows a short Pix CTA.
+    notice: undefined,
     raw: data,
   };
 }
