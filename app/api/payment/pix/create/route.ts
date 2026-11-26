@@ -52,12 +52,13 @@ export async function POST(req: Request) {
     const now = Date.now();
 
     const useSim = iqPaymentSimulateLocal(reqUrl);
+    const hasRealCreds = canCreateRealPix();
 
-    if (!useSim && !canCreateRealPix()) {
+    if (!useSim && !hasRealCreds) {
       return NextResponse.json(
         {
           error:
-            "InfinitePay não configurada. Defina INFINITEPAY_HANDLE e/ou INFINITEPAY_API_KEY no .env.local. Em produção a simulação local não está disponível.",
+            "InfinitePay não configurada. Defina INFINITEPAY_HANDLE (InfiniteTag sem $) e/ou INFINITEPAY_API_KEY (inchk_…) no .env.local e reinicie o servidor. Em produção a simulação local não está disponível.",
           code: "MISSING_CREDENTIALS",
         },
         { status: 503 },
@@ -65,7 +66,11 @@ export async function POST(req: Request) {
     }
 
     const pix = useSim
-      ? await createSimulatedInfinitePayPix({ sessionId, amountCentavos })
+      ? await createSimulatedInfinitePayPix({
+          sessionId,
+          amountCentavos,
+          reason: hasRealCreds ? "forced_simulate" : "missing_credentials",
+        })
       : await createInfinitePayPixPayment({
           sessionId,
           amountCentavos,
@@ -79,8 +84,8 @@ export async function POST(req: Request) {
       amountCentavos,
       status: "pending",
       simulated: useSim,
-      qrCode: pix.qrCode,
-      qrCodeBase64: pix.qrCodeBase64,
+      qrCode: pix.qrCode || undefined,
+      qrCodeBase64: pix.qrCodeBase64 || undefined,
       expiresAt: pix.expiresAt,
       createdAt: now,
       updatedAt: Date.now(),
@@ -89,8 +94,8 @@ export async function POST(req: Request) {
     return NextResponse.json({
       paymentId: pix.paymentId,
       order_nsu: pix.order_nsu,
-      qrCode: pix.qrCode,
-      qrCodeBase64: pix.qrCodeBase64,
+      qrCode: pix.qrCode || "",
+      qrCodeBase64: pix.qrCodeBase64 || "",
       expiresAt: pix.expiresAt,
       sessionId,
       amountCentavos,
@@ -99,6 +104,9 @@ export async function POST(req: Request) {
       status: pix.status,
       emvResolved: pix.emvResolved ?? false,
       checkoutUrl: pix.checkoutUrl ?? null,
+      code: pix.code ?? (useSim ? "SIMULATED" : undefined),
+      notice: pix.notice ?? null,
+      canSimApprove: useSim,
     });
   } catch (err) {
     const message =

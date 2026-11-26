@@ -16,6 +16,11 @@ export type IqPixCreateResult = {
   amountCentavos: number;
   amountLabel: string;
   simulated?: boolean;
+  emvResolved?: boolean;
+  checkoutUrl?: string | null;
+  code?: string;
+  notice?: string | null;
+  canSimApprove?: boolean;
 };
 
 export async function createIqPixPayment(
@@ -34,17 +39,27 @@ export async function createIqPixPayment(
     amountCentavos?: number;
     amountLabel?: string;
     simulated?: boolean;
+    emvResolved?: boolean;
+    checkoutUrl?: string | null;
+    code?: string;
+    notice?: string | null;
+    canSimApprove?: boolean;
     error?: string;
   };
-  if (!res.ok || !data.paymentId || !data.qrCode) {
+  const hasEmv = typeof data.qrCode === "string" && data.qrCode.startsWith("000201");
+  const hasCheckout =
+    typeof data.checkoutUrl === "string" && /^https?:\/\//i.test(data.checkoutUrl);
+  // Accept real EMV, InfinitePay checkout-only, or honest simulation (no fake bank QR).
+  if (!res.ok || !data.paymentId || !(hasEmv || hasCheckout || data.simulated)) {
     throw new Error(
       data.error ||
+        data.notice ||
         "Não foi possível gerar o Pix. Tente de novo — sua sessão permanece salva.",
     );
   }
   return {
     paymentId: data.paymentId,
-    qrCode: data.qrCode,
+    qrCode: hasEmv ? data.qrCode! : "",
     qrCodeBase64: data.qrCodeBase64 || "",
     expiresAt: data.expiresAt || new Date(Date.now() + 30 * 60_000).toISOString(),
     amountCentavos:
@@ -52,6 +67,11 @@ export async function createIqPixPayment(
     amountLabel:
       typeof data.amountLabel === "string" ? data.amountLabel : "R$ 1,00",
     simulated: data.simulated,
+    emvResolved: Boolean(data.emvResolved && hasEmv),
+    checkoutUrl: hasCheckout ? data.checkoutUrl : null,
+    code: typeof data.code === "string" ? data.code : undefined,
+    notice: typeof data.notice === "string" ? data.notice : null,
+    canSimApprove: Boolean(data.canSimApprove ?? data.simulated),
   };
 }
 

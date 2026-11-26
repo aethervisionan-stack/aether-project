@@ -97,6 +97,7 @@ export function IqUnlockCard({
       const created = await createIqPixPayment(sessionId);
       setPix(created);
       if (created.amountLabel) onAmountLabel?.(created.amountLabel);
+      if (created.notice) setError(created.notice);
       try {
         window.sessionStorage.setItem(
           "iq_pix_pending",
@@ -108,7 +109,7 @@ export function IqUnlockCard({
       } catch {
         // ignore
       }
-      setCanSimApprove(Boolean(created.simulated));
+      setCanSimApprove(Boolean(created.canSimApprove ?? created.simulated));
       startPoll();
     } catch (err) {
       setError(
@@ -125,7 +126,7 @@ export function IqUnlockCard({
   }
 
   async function copyPixCode() {
-    if (!pix?.qrCode) return;
+    if (!pix?.qrCode || !pix.qrCode.startsWith("000201")) return;
     try {
       await navigator.clipboard.writeText(pix.qrCode);
       setCopied(true);
@@ -135,6 +136,12 @@ export function IqUnlockCard({
         "Não foi possível copiar automaticamente. Selecione o código e copie manualmente.",
       );
     }
+  }
+
+  function openCheckout() {
+    const url = pix?.checkoutUrl;
+    if (!url || !/^https?:\/\//i.test(url)) return;
+    window.open(url, "_blank", "noopener,noreferrer");
   }
 
   async function simApprove() {
@@ -162,11 +169,18 @@ export function IqUnlockCard({
     }
   }
 
+  const hasRealEmv = Boolean(pix?.qrCode?.startsWith("000201"));
   const qrSrc =
+    hasRealEmv &&
     pix?.qrCodeBase64 &&
     !pix.qrCodeBase64.startsWith("iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB")
       ? `data:image/png;base64,${pix.qrCodeBase64}`
       : null;
+  const checkoutUrl =
+    pix?.checkoutUrl && /^https?:\/\//i.test(pix.checkoutUrl)
+      ? pix.checkoutUrl
+      : null;
+  const isSim = Boolean(pix?.simulated);
 
   return (
     <motion.section
@@ -250,55 +264,82 @@ export function IqUnlockCard({
         </>
       ) : (
         <div className="mt-6 space-y-4">
-          <div className="mx-auto flex w-fit flex-col items-center rounded-2xl bg-white p-4 shadow-[0_0_0_1px_rgba(0,0,0,0.04)]">
-            {qrSrc ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={qrSrc}
-                alt="QR Code Pix para desbloquear o resultado"
-                width={240}
-                height={240}
-                className="h-60 w-60"
-              />
-            ) : (
-              <QRCodeSVG
-                value={pix.qrCode}
-                size={240}
-                level="M"
-                bgColor="#ffffff"
-                fgColor="#0a0a0a"
-                aria-label="QR Code Pix para desbloquear o resultado"
-              />
-            )}
-          </div>
+          {hasRealEmv ? (
+            <>
+              <div className="mx-auto flex w-fit flex-col items-center rounded-2xl bg-white p-4 shadow-[0_0_0_1px_rgba(0,0,0,0.04)]">
+                {qrSrc ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={qrSrc}
+                    alt="QR Code Pix para desbloquear o resultado"
+                    width={240}
+                    height={240}
+                    className="h-60 w-60"
+                  />
+                ) : (
+                  <QRCodeSVG
+                    value={pix.qrCode}
+                    size={240}
+                    level="M"
+                    bgColor="#ffffff"
+                    fgColor="#0a0a0a"
+                    aria-label="QR Code Pix para desbloquear o resultado"
+                  />
+                )}
+              </div>
 
-          <p className="text-center text-sm text-zinc-300">
-            Escaneie o QR Code ou copie o código Pix abaixo.
-          </p>
+              <p className="text-center text-sm text-zinc-300">
+                Escaneie o QR Code ou copie o código Pix abaixo.
+              </p>
 
-          <div className="rounded-xl border border-zinc-800 bg-zinc-950/80 px-3 py-2">
-            <p className="break-all font-mono text-[11px] leading-relaxed text-zinc-400">
-              {pix.qrCode}
+              <div className="rounded-xl border border-zinc-800 bg-zinc-950/80 px-3 py-2">
+                <p className="break-all font-mono text-[11px] leading-relaxed text-zinc-400">
+                  {pix.qrCode}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => void copyPixCode()}
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-cyan-500/35 bg-cyan-500/10 px-4 py-3 text-sm font-medium text-cyan-100 transition hover:bg-cyan-500/15"
+              >
+                {copied ? (
+                  <>
+                    <Check className="h-4 w-4 text-emerald-300" aria-hidden />
+                    Código Pix copiado
+                  </>
+                ) : (
+                  <>
+                    <Copy className="h-4 w-4" aria-hidden />
+                    Copiar código Pix
+                  </>
+                )}
+              </button>
+            </>
+          ) : null}
+
+          {!hasRealEmv && checkoutUrl && !isSim ? (
+            <button
+              type="button"
+              onClick={openCheckout}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-400 via-cyan-400 to-indigo-400 px-6 py-3.5 text-sm font-semibold text-[#06070A] shadow-[0_0_28px_-6px_rgba(52,211,153,0.45)] transition hover:brightness-110"
+            >
+              Abrir pagamento Pix na InfinitePay
+            </button>
+          ) : null}
+
+          {(error || null) && (
+            <p
+              role="alert"
+              className={`rounded-xl px-3 py-2 text-sm ${
+                isSim
+                  ? "border border-amber-500/35 bg-amber-500/10 text-amber-100"
+                  : "border border-red-500/35 bg-red-500/10 text-red-200"
+              }`}
+            >
+              {error}
             </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => void copyPixCode()}
-            className="flex w-full items-center justify-center gap-2 rounded-xl border border-cyan-500/35 bg-cyan-500/10 px-4 py-3 text-sm font-medium text-cyan-100 transition hover:bg-cyan-500/15"
-          >
-            {copied ? (
-              <>
-                <Check className="h-4 w-4 text-emerald-300" aria-hidden />
-                Código Pix copiado
-              </>
-            ) : (
-              <>
-                <Copy className="h-4 w-4" aria-hidden />
-                Copiar código Pix
-              </>
-            )}
-          </button>
+          )}
 
           {awaiting ? (
             <p
@@ -309,15 +350,6 @@ export function IqUnlockCard({
               Aguardando confirmação do pagamento…
             </p>
           ) : null}
-
-          {(error || null) && (
-            <p
-              role="alert"
-              className="rounded-xl border border-red-500/35 bg-red-500/10 px-3 py-2 text-sm text-red-200"
-            >
-              {error}
-            </p>
-          )}
 
           {canSimApprove ? (
             <button
@@ -338,7 +370,7 @@ export function IqUnlockCard({
             onClick={() => void startPix()}
             className="w-full text-center text-xs text-zinc-500 underline-offset-2 hover:text-zinc-300 hover:underline"
           >
-            Gerar novo QR Pix
+            {hasRealEmv ? "Gerar novo QR Pix" : "Gerar novo pagamento"}
           </button>
         </div>
       )}

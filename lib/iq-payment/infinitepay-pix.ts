@@ -1,9 +1,10 @@
 /**
  * InfinitePay Pix helpers for IQ unlock (R$1 via INFINITEPAY_HANDLE / INFINITEPAY_API_KEY).
- * Creates Checkout Integrado link, resolves Pix EMV when available, else QR of checkout URL.
+ * Creates Checkout Integrado link and resolves Pix EMV when InfinitePay exposes it.
+ * Docs: Checkout Integrado does NOT return Pix EMV/QR — only a checkout URL. Never encode
+ * that URL as a bank-scannable "Pix" payload (banks reject it as serviço indisponível).
  */
 
-import { buildPixCopyPaste, pixConfig } from "@/lib/pix";
 import { resolveInfinitePayPixEmv } from "@/lib/infinitepay/fetchPixEmv";
 import { isValidPixEmv } from "@/lib/infinitepay/pixEmv";
 import { putInfinitePayOrderAsync } from "@/lib/infinitepay/store";
@@ -22,12 +23,17 @@ import {
 export type InfinitePayPixCreateResult = {
   paymentId: string;
   order_nsu: string;
+  /** Pix EMV (copia-e-cola) only — never a checkout URL. Empty when unavailable. */
   qrCode: string;
   qrCodeBase64: string;
   expiresAt: string;
   status: string;
   checkoutUrl?: string;
   emvResolved?: boolean;
+  /** Machine-readable reason when EMV is missing or flow is simulated. */
+  code?: string;
+  /** Clear PT-BR notice for the UI (sim / checkout-only / misconfig). */
+  notice?: string;
   raw?: Record<string, unknown>;
 };
 
@@ -37,8 +43,8 @@ function buildAuthHeaders(): HeadersInit {
   };
   const key = infinitepayApiKey();
   if (isRealApiKey(key)) {
+    // InfinitePay Checkout Integrado docs: X-Api-Key only (server-side).
     headers["X-Api-Key"] = key;
-    headers.Authorization = `Bearer ${key}`;
   }
   return headers;
 }
@@ -95,25 +101,26 @@ export function defaultPixExpiresAt(minutes = 30): string {
   return new Date(Date.now() + minutes * 60_000).toISOString();
 }
 
-/** Localhost / missing-cred simulation — never used in Vercel production. */
+/**
+ * Localhost / missing-cred simulation — never used in Vercel production.
+ * Does NOT emit a fake Pix EMV: banks reject placeholder keys as "serviço indisponível".
+ */
 export async function createSimulatedInfinitePayPix(input: {
   sessionId: string;
   amountCentavos?: number;
+  reason?: "missing_credentials" | "forced_simulate";
 }): Promise<InfinitePayPixCreateResult> {
   const amountCentavos = input.amountCentavos ?? iqUnlockAmountCentavos();
   const order_nsu = `iq__${input.sessionId}__${Date.now()}`;
   const paymentId = `sim_${input.sessionId}_${Date.now()}`;
-  const pix = pixConfig();
-  const qrCode = buildPixCopyPaste({
-    pixKey: pix.key,
-    merchantName: pix.merchantName || "TESTE QI",
-    merchantCity: pix.merchantCity,
-    amountBrl: amountCentavos / 100,
-    txid: paymentId.replace(/[^a-zA-Z0-9]/g, "").slice(0, 25),
-  });
-  const qrCodeBase64 = await qrCodeToBase64Png(qrCode);
   const appUrl = appPublicUrl();
   const checkoutUrl = `${appUrl}/teste-qi?payment_return=1&session_id=${encodeURIComponent(input.sessionId)}&order_nsu=${encodeURIComponent(order_nsu)}&transaction_nsu=SIM_${Date.now()}&slug=sim-iq-local&capture_method=pix&simulated=1`;
+
+  const reason = input.reason ?? "missing_credentials";
+  const notice =
+    reason === "forced_simulate"
+      ? "Modo simulação forçado (INFINITEPAY_SIMULATE=1). Remova essa variável do ambiente, deixe INFINITEPAY_HANDLE e INFINITEPAY_API_KEY no .env.local e reinicie a porta 3010 para Pix real via InfinitePay. Apps de banco não aceitam QR simulado."
+      : "InfinitePay em modo simulação: defina INFINITEPAY_HANDLE (InfiniteTag sem $) e/ou INFINITEPAY_API_KEY (inchk_…) no .env.local e reinicie a porta 3010. Sem isso, não há Pix real — use “Simular pagamento” só em localhost.";
 
   await putInfinitePayOrderAsync({
     order_nsu,
@@ -123,19 +130,20 @@ export async function createSimulatedInfinitePayPix(input: {
     status: "created",
     url: checkoutUrl,
     simulated: true,
-    pixCopyPaste: qrCode,
     createdAt: Date.now(),
   });
 
   return {
     paymentId,
     order_nsu,
-    qrCode,
-    qrCodeBase64,
+    qrCode: "",
+    qrCodeBase64: "",
     expiresAt: defaultPixExpiresAt(30),
     status: "pending",
     checkoutUrl,
-    emvResolved: true,
+    emvResolved: false,
+    code: reason === "forced_simulate" ? "SIMULATED_FORCED" : "SIMULATED_MISSING_CREDENTIALS",
+    notice,
   };
 }
 
@@ -219,9 +227,9 @@ export async function createInfinitePayPixPayment(input: {
   const emvResult = await resolveInfinitePayPixEmv(data, checkoutUrl);
   const emv =
     emvResult.emv && isValidPixEmv(emvResult.emv) ? emvResult.emv : null;
-  // Prefer Pix copia-e-cola when InfinitePay exposes it; else QR the checkout URL.
-  const qrCode = emv ?? checkoutUrl;
-  const qrCodeBase64 = await qrCodeToBase64Png(qrCode);
+  // Never fall back to checkout URL as "Pix" — bank apps cannot pay that.
+  const qrCode = emv ?? "";
+  const qrCodeBase64 = emv ? await qrCodeToBase64Png(emv) : "";
 
   await putInfinitePayOrderAsync({
     order_nsu,
@@ -244,6 +252,10 @@ export async function createInfinitePayPixPayment(input: {
     status: "pending",
     checkoutUrl,
     emvResolved: Boolean(emv),
+    code: emv ? "PIX_EMV" : "CHECKOUT_ONLY",
+    notice: emv
+      ? undefined
+      : "Checkout InfinitePay criado. A API do Checkout Integrado não devolve o código Pix (EMV) — abra o link da InfinitePay para ver o QR Pix real e pagar. Depois volte aqui; a liberação ocorre pelo webhook/confirmação.",
     raw: data,
   };
 }
