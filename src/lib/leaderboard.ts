@@ -17,6 +17,10 @@ import {
   LEADERBOARD_STORAGE_KEY,
 } from "@/src/types/quiz";
 import { isDataUrlAvatar } from "@/src/lib/avatarImage";
+import {
+  isSeedLeaderboardId,
+  SEED_LEADERBOARD_ENTRIES,
+} from "@/src/lib/leaderboardSeeds";
 
 export type { LeaderboardEntry, LeaderboardFilter, LeaderboardMode };
 
@@ -69,6 +73,7 @@ function matchesFilter(
   return entry.mode === "hybrid";
 }
 
+/** Real local entries only — strip any seed ids that may have leaked into storage. */
 function readRawEntries(): LeaderboardEntry[] {
   if (typeof window === "undefined") return [];
   try {
@@ -81,6 +86,7 @@ function readRawEntries(): LeaderboardEntry[] {
         (e) =>
           e &&
           typeof e.id === "string" &&
+          !isSeedLeaderboardId(e.id) &&
           typeof e.name === "string" &&
           typeof e.iqScore === "number" &&
           typeof e.mode === "string",
@@ -94,20 +100,35 @@ function readRawEntries(): LeaderboardEntry[] {
   }
 }
 
+/**
+ * Baseline seeds + real local rows. Seeds never persist and never replace a
+ * real entry (paid unlock / local finish). Real users sort by the same rules.
+ */
+function mergeWithSeeds(real: LeaderboardEntry[]): LeaderboardEntry[] {
+  const realIds = new Set(real.map((e) => e.id));
+  const seeds = SEED_LEADERBOARD_ENTRIES.filter((s) => !realIds.has(s.id)).map(
+    (s) => ({ ...s }),
+  );
+  return [...real, ...seeds];
+}
+
 function writeRawEntries(entries: LeaderboardEntry[]): void {
   if (typeof window === "undefined") return;
   try {
-    const persisted = entries.map((entry) => {
-      const { isCurrentUser: _ignored, ...rest } = entry;
-      void _ignored;
-      // Keep avatarUrl when present; omit when absent so payload stays remote-ready.
-      if (!rest.avatarUrl) {
-        const { avatarUrl: _noAvatar, ...withoutAvatar } = rest;
-        void _noAvatar;
-        return withoutAvatar;
-      }
-      return rest;
-    });
+    // Never persist seed baseline — paid/local unlocks stay authoritative.
+    const persisted = entries
+      .filter((entry) => !isSeedLeaderboardId(entry.id))
+      .map((entry) => {
+        const { isCurrentUser: _ignored, ...rest } = entry;
+        void _ignored;
+        // Keep avatarUrl when present; omit when absent so payload stays remote-ready.
+        if (!rest.avatarUrl) {
+          const { avatarUrl: _noAvatar, ...withoutAvatar } = rest;
+          void _noAvatar;
+          return withoutAvatar;
+        }
+        return rest;
+      });
     localStorage.setItem(LEADERBOARD_STORAGE_KEY, JSON.stringify(persisted));
   } catch {
     // quota / private mode
@@ -138,7 +159,7 @@ export function listLeaderboard(
   filter: LeaderboardFilter = "all",
   currentEntryId: string | null = getCurrentLeaderboardEntryId(),
 ): LeaderboardEntry[] {
-  const entries = readRawEntries()
+  const entries = mergeWithSeeds(readRawEntries())
     .filter((e) => matchesFilter(e, filter))
     .map((e) => ({
       ...e,
@@ -192,6 +213,10 @@ export function buildLeaderboardEntry(input: {
 
 /** Append a finished session and mark it as the current user entry. */
 export function submitLeaderboardEntry(entry: LeaderboardEntry): LeaderboardEntry {
+  // Guard: never let a seed-shaped id overwrite or masquerade as a paid unlock.
+  if (isSeedLeaderboardId(entry.id)) {
+    return { ...entry, isCurrentUser: true };
+  }
   const entries = readRawEntries();
   entries.push(entry);
   writeRawEntries(entries);

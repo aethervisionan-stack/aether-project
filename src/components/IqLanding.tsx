@@ -10,6 +10,7 @@ import {
 } from "@/src/types/quiz";
 import { ChallengeInviteBanner } from "@/src/components/ChallengeSharePanel";
 import { LeaderboardPanel } from "@/src/components/LeaderboardPanel";
+import { OnlinePresenceBadge } from "@/src/components/OnlinePresenceBadge";
 import { AvatarPicker } from "@/src/components/ParticipantAvatar";
 import { SkillHelpTip } from "@/src/components/SkillHelpTip";
 import type { ChallengeInvite } from "@/src/lib/challengeInvite";
@@ -172,6 +173,7 @@ export function IqLanding({
           <p className="text-[11px] font-medium uppercase tracking-[0.28em] text-cyan-300/80">
             Precision Lab · Avaliação psicométrica
           </p>
+          <OnlinePresenceBadge className="pt-1" />
           <h1 className="font-iq-display max-w-[16ch] text-4xl leading-[1.05] tracking-tight text-zinc-50 sm:text-5xl lg:text-[3.35rem]">
             Descubra seu perfil cognitivo
           </h1>

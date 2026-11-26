@@ -87,8 +87,8 @@ export function LeaderboardPanel({
             Ranking
           </h2>
           <p className="max-w-xl text-xs leading-relaxed text-zinc-500 sm:text-sm">
-            Classificação local neste navegador — sem pontuações infladas.
-            Use um nome real para figurar no ranking com clareza.
+            Hall of Fame com referência inicial + seus resultados neste
+            navegador. Use um nome real para figurar no ranking com clareza.
           </p>
         </div>
         <button

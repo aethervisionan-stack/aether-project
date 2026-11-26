@@ -9,6 +9,7 @@ import {
   fetchIqUnlockStatus,
   type IqPixCreateResult,
 } from "@/src/lib/iqUnlockClient";
+import { OnlinePresenceBadge } from "@/src/components/OnlinePresenceBadge";
 
 type Props = {
   sessionId: string;
@@ -213,6 +214,7 @@ export function IqUnlockCard({
         <p className="mt-4 text-[11px] font-medium uppercase tracking-[0.28em] text-emerald-300/85">
           Selo de conclusão
         </p>
+        <OnlinePresenceBadge className="mt-3 justify-center" compact />
         <h1
           id="iq-unlock-heading"
           className="mt-2 font-iq-display text-3xl tracking-tight text-zinc-50"
