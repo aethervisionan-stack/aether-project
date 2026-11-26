@@ -8,7 +8,9 @@ const nextConfig: NextConfig = {
   devIndicators: false,
   // Do not auto-write AGENTS.md on `next dev`.
   agentRules: false,
-  // Prefer http://127.0.0.1:3000; keep Cross-Origin quiet if preview hits localhost.
+  // Dedicated local port for "quiz de QI" / aether IQ test: http://127.0.0.1:3010
+  // (package.json `dev`/`start` use -p 3010; .env.local PORT + NEXT_PUBLIC_APP_URL).
+  // Never kill other projects' listeners on 3000/5173/8000/etc.
   allowedDevOrigins: ["127.0.0.1", "localhost"],
   serverExternalPackages: ["@neondatabase/serverless"],
   transpilePackages: [
