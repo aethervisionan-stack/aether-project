@@ -94,8 +94,95 @@ export function iqBand(iq: number): string {
   if (iq < 100) return "Média-baixa";
   if (iq < 115) return "Média";
   if (iq < 130) return "Acima da média";
-  if (iq < 145) return "Superior (faixa Mensa candidata)";
-  return "Muito superior / faixa gênio";
+  if (iq < 145) return "Superior";
+  return "Muito superior";
+}
+
+/** Plain-language percentile / rarity for Brazilian Portuguese UI */
+export function percentilePlainLanguage(percentile: number): {
+  summary: string;
+  rarity: string;
+} {
+  const p = Math.max(0, Math.min(100, percentile));
+  const above = Math.round((100 - p) * 10) / 10;
+  const below = Math.round(p * 10) / 10;
+  if (p >= 98) {
+    return {
+      summary: `Seu resultado ficou acima de cerca de ${below}% das pessoas nesta escala.`,
+      rarity: "Faixa muito rara na população de referência.",
+    };
+  }
+  if (p >= 90) {
+    return {
+      summary: `Seu resultado ficou acima de cerca de ${below}% das pessoas nesta escala.`,
+      rarity: "Faixa incomum (cerca de 1 em 10 ou mais rara).",
+    };
+  }
+  if (p >= 75) {
+    return {
+      summary: `Seu resultado ficou acima de cerca de ${below}% das pessoas nesta escala.`,
+      rarity: "Acima da média, mas ainda relativamente comum.",
+    };
+  }
+  if (p >= 25) {
+    return {
+      summary: `Seu resultado ficou próximo ao centro da distribuição (cerca de ${below}% abaixo e ${above}% acima).`,
+      rarity: "Faixa típica da população de referência.",
+    };
+  }
+  if (p >= 10) {
+    return {
+      summary: `Seu resultado ficou abaixo de cerca de ${above}% das pessoas nesta escala.`,
+      rarity: "Abaixo da média, mas ainda relativamente comum.",
+    };
+  }
+  return {
+    summary: `Seu resultado ficou abaixo de cerca de ${above}% das pessoas nesta escala.`,
+    rarity: "Faixa menos comum na população de referência.",
+  };
+}
+
+export type ConsistencyTone = "coherent" | "caution" | "inconsistent";
+
+/** Session consistency for results UI (coherent vs rushed/inconsistent) */
+export function sessionConsistencyLabel(diagnosis: PrecisionDiagnosis): {
+  tone: ConsistencyTone;
+  title: string;
+  detail: string;
+} {
+  if (
+    diagnosis.guessingFlag ||
+    diagnosis.inconsistentFlag ||
+    diagnosis.incompleteFlag
+  ) {
+    const parts: string[] = [];
+    if (diagnosis.guessingFlag) parts.push("respostas muito rápidas em itens difíceis");
+    if (diagnosis.inconsistentFlag)
+      parts.push("desempenho irregular no mesmo nível");
+    if (diagnosis.incompleteFlag) parts.push("vários itens sem resposta");
+    return {
+      tone: "inconsistent",
+      title: "Sessão apressada ou inconsistente",
+      detail: `O padrão de resposta sugere ${parts.join("; ")}. O QI estimado tem margem maior de incerteza.`,
+    };
+  }
+  if (
+    diagnosis.reliabilityIndex < 75 ||
+    diagnosis.avgOptionSwitches > 2.5
+  ) {
+    return {
+      tone: "caution",
+      title: "Sessão com algumas ressalvas",
+      detail:
+        "Houve sinais leves de hesitação ou variação. O resultado é útil, mas interprete com a margem de erro indicada.",
+    };
+  }
+  return {
+    tone: "coherent",
+    title: "Sessão coerente",
+    detail:
+      "O ritmo e a consistência das respostas são compatíveis com esforço deliberado. A estimativa é mais estável.",
+  };
 }
 
 function emptyCompetences(): CompetenceScores {

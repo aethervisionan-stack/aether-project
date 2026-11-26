@@ -13,6 +13,8 @@ import {
   calculateIqResult,
   competenceLabel,
   distractorErrorLabel,
+  percentilePlainLanguage,
+  sessionConsistencyLabel,
 } from "@/src/lib/iqCalculator";
 import {
   clearQuizState,
@@ -343,6 +345,8 @@ export function IqTestApp() {
               </p>
             </header>
 
+            <PsychometricTransparencyBlock />
+
             <div className="grid gap-4 sm:grid-cols-3">
               {(Object.keys(MODE_META) as AssessmentMode[]).map((m) => {
                 const meta = MODE_META[m];
@@ -395,10 +399,12 @@ export function IqTestApp() {
                 {rules.title}
               </h1>
               <p className="mx-auto max-w-xl text-base text-zinc-400 sm:text-lg">
-                {MODE_META[mode].blurb} 30 itens · 5 níveis · QI média 100 (DP
-                15) com IC e diagnóstico de precisão.
+                {MODE_META[mode].blurb} 30 itens · 5 níveis · escala com média
+                100 e desvio padrão 15.
               </p>
             </header>
+
+            <PsychometricTransparencyBlock compact />
 
             <div className="grid gap-4 rounded-2xl border border-zinc-800 bg-zinc-900/50 p-5 sm:grid-cols-3 sm:p-6">
               {rules.bullets.map((item) => (
@@ -642,191 +648,305 @@ export function IqTestApp() {
 
         {(state.phase === "results" || state.phase === "review") &&
           state.result && (
-            <motion.section
-              key="results"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="space-y-8 pt-4"
-            >
-              <header className="space-y-2 text-center">
-                <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">
-                  Resultado · {MODE_META[state.result.mode].label}
-                </p>
-                <motion.h1
-                  className="font-iq-display text-6xl text-zinc-50 tabular-nums sm:text-7xl"
-                  initial={{ scale: 0.92, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  transition={{ type: "spring", stiffness: 160, damping: 14 }}
-                >
-                  {state.result.iq}
-                  <span className="ml-2 text-2xl font-normal text-zinc-500 sm:text-3xl">
-                    (±{state.result.marginOfError})
-                  </span>
-                </motion.h1>
-                <p className="text-emerald-400">{state.result.band}</p>
-                <p className="text-sm text-zinc-500">
-                  Percentil {state.result.percentile} · IC≈{" "}
-                  {state.result.iqLow}–{state.result.iqHigh} · acertos
-                  ponderados {state.result.rawScore.toFixed(1)}/
-                  {state.result.maxScore.toFixed(1)}
-                </p>
-              </header>
-
-              <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4 sm:p-6">
-                <BellCurveChart
-                  iq={state.result.iq}
-                  percentile={state.result.percentile}
-                />
-              </div>
-
-              <div>
-                <h2 className="mb-3 text-center text-sm font-medium text-zinc-400">
-                  Sub-habilidades
-                </h2>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {(
-                    state.result.activeCompetences.length
-                      ? state.result.activeCompetences
-                      : (Object.keys(
-                          state.result.competences,
-                        ) as (keyof CompetenceScores)[])
-                  ).map((key) => {
-                    const value = state.result!.competences[key];
-                    return (
-                      <div
-                        key={key}
-                        className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4"
-                      >
-                        <div className="mb-2 flex items-center justify-between text-sm">
-                          <span className="text-zinc-300">
-                            {competenceLabel(key)}
-                          </span>
-                          <span className="tabular-nums text-zinc-400">
-                            {value}%
-                          </span>
-                        </div>
-                        <div className="h-1.5 overflow-hidden rounded-full bg-zinc-800">
-                          <motion.div
-                            className="h-full bg-indigo-400"
-                            initial={{ width: 0 }}
-                            animate={{ width: `${value}%` }}
-                            transition={{ duration: 0.7, delay: 0.1 }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-950/70 p-5 sm:p-6">
-                <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <h2 className="text-lg font-semibold text-zinc-100">
-                    Diagnóstico de Precisão
-                  </h2>
-                  <p className="text-sm tabular-nums text-zinc-400">
-                    Precisão {state.result.diagnosis.precisionScore}/100 ·
-                    Confiabilidade{" "}
-                    {state.result.diagnosis.reliabilityIndex}/100
-                  </p>
-                </div>
-
-                <div className="grid gap-2 sm:grid-cols-5">
-                  {state.result.diagnosis.bandTelemetry.map((bt) => (
-                    <div
-                      key={bt.band}
-                      className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-3 text-center"
-                    >
-                      <p className="text-[10px] uppercase tracking-wider text-zinc-500">
-                        N{bt.band}
-                      </p>
-                      <p className="text-xs text-zinc-300">{bt.label}</p>
-                      <p className="mt-1 text-sm tabular-nums text-zinc-200">
-                        {bt.answered
-                          ? `${Math.round(bt.accuracy * 100)}%`
-                          : "—"}
-                      </p>
-                      <p className="text-[11px] tabular-nums text-zinc-500">
-                        {bt.avgTimeMs
-                          ? `${(bt.avgTimeMs / 1000).toFixed(1)}s méd.`
-                          : "sem tempo"}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="flex flex-wrap gap-4 text-sm text-zinc-400">
-                  <span>
-                    Acurácia N4–5:{" "}
-                    <span className="tabular-nums text-zinc-200">
-                      {Math.round(state.result.diagnosis.hardAccuracy * 100)}%
-                    </span>
-                  </span>
-                  <span>
-                    Tempo médio:{" "}
-                    <span className="tabular-nums text-zinc-200">
-                      {(state.result.avgTimeMs / 1000).toFixed(1)}s
-                    </span>
-                  </span>
-                  <span>
-                    Hesitação (trocas):{" "}
-                    <span className="tabular-nums text-zinc-200">
-                      {state.result.diagnosis.avgOptionSwitches}
-                    </span>
-                  </span>
-                </div>
-
-                <ul className="space-y-1.5">
-                  {state.result.diagnosis.warnings.map((w) => (
-                    <li
-                      key={w}
-                      className={`text-sm leading-relaxed ${
-                        state.result!.diagnosis.guessingFlag ||
-                        state.result!.diagnosis.incompleteFlag ||
-                        state.result!.diagnosis.inconsistentFlag
-                          ? "text-amber-300/90"
-                          : "text-emerald-400/80"
-                      }`}
-                    >
-                      {w}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              <div className="flex flex-wrap justify-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setReviewIndex(0);
-                    setState((p) => ({ ...p, phase: "review" }));
-                  }}
-                  className="rounded-xl border border-zinc-600 px-5 py-2.5 text-sm text-zinc-200 hover:border-zinc-400"
-                >
-                  Revisar erros
-                </button>
-                <button
-                  type="button"
-                  onClick={resetAll}
-                  className="rounded-xl bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-zinc-950 hover:bg-emerald-400"
-                >
-                  Nova avaliação
-                </button>
-              </div>
-
-              {state.phase === "review" && (
-                <ReviewPanel
-                  questions={questions}
-                  answers={state.answers}
-                  index={reviewIndex}
-                  setIndex={setReviewIndex}
-                  onBack={() => setState((p) => ({ ...p, phase: "results" }))}
-                />
-              )}
-            </motion.section>
+            <ResultsDashboard
+              result={state.result}
+              questions={questions}
+              answers={state.answers}
+              phase={state.phase}
+              reviewIndex={reviewIndex}
+              setReviewIndex={setReviewIndex}
+              onOpenReview={() => {
+                setReviewIndex(0);
+                setState((p) => ({ ...p, phase: "review" }));
+              }}
+              onBackFromReview={() =>
+                setState((p) => ({ ...p, phase: "results" }))
+              }
+              onReset={resetAll}
+            />
           )}
       </AnimatePresence>
     </div>
+  );
+}
+
+function PsychometricTransparencyBlock({
+  compact = false,
+}: {
+  compact?: boolean;
+}) {
+  const cards = [
+    {
+      t: "O que é medido",
+      d: "Raciocínio abstrato-lógico, reconhecimento de padrões e dedução. Não mede conhecimento geral, vocabulário escolar nem desempenho acadêmico.",
+    },
+    {
+      t: "Como a pontuação funciona",
+      d: "A escala usa média 100 e desvio padrão 15 (como nas escalas Wechsler). O percentil diz, em linguagem simples, quantas pessoas na população de referência ficariam abaixo do seu resultado.",
+    },
+    {
+      t: "Aviso profissional",
+      d: "Esta é uma avaliação cognitiva digital. Não substitui avaliação neuropsicológica presencial nem laudo emitido por profissional habilitado.",
+    },
+  ];
+
+  return (
+    <section
+      aria-labelledby="iq-transparency-heading"
+      className={`rounded-2xl border border-zinc-800 bg-zinc-900/45 ${
+        compact ? "p-4 sm:p-5" : "p-5 sm:p-6"
+      }`}
+    >
+      <div className="mb-4 space-y-1">
+        <h2
+          id="iq-transparency-heading"
+          className="text-sm font-semibold text-zinc-100 sm:text-base"
+        >
+          Transparência da avaliação
+        </h2>
+        {!compact ? (
+          <p className="text-sm text-zinc-500">
+            Antes de começar, entenda o que este teste cobre — e o que ele não
+            cobre.
+          </p>
+        ) : null}
+      </div>
+      <div
+        className={`grid gap-3 ${compact ? "sm:grid-cols-3" : "sm:grid-cols-3"}`}
+      >
+        {cards.map((c) => (
+          <div
+            key={c.t}
+            className="space-y-1.5 rounded-xl border border-zinc-800/80 bg-zinc-950/50 p-3.5"
+          >
+            <h3 className="text-sm font-medium text-zinc-200">{c.t}</h3>
+            <p className="text-sm leading-relaxed text-zinc-500">{c.d}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ResultsDashboard({
+  result,
+  questions,
+  answers,
+  phase,
+  reviewIndex,
+  setReviewIndex,
+  onOpenReview,
+  onBackFromReview,
+  onReset,
+}: {
+  result: NonNullable<QuizPersistedState["result"]>;
+  questions: QuizItem[];
+  answers: (number | null)[];
+  phase: "results" | "review";
+  reviewIndex: number;
+  setReviewIndex: (n: number) => void;
+  onOpenReview: () => void;
+  onBackFromReview: () => void;
+  onReset: () => void;
+}) {
+  const pctCopy = percentilePlainLanguage(result.percentile);
+  const consistency = sessionConsistencyLabel(result.diagnosis);
+  const consistencyToneClass =
+    consistency.tone === "coherent"
+      ? "border-emerald-500/35 bg-emerald-500/5 text-emerald-300"
+      : consistency.tone === "caution"
+        ? "border-amber-500/35 bg-amber-500/5 text-amber-200"
+        : "border-orange-500/40 bg-orange-500/8 text-orange-200";
+
+  return (
+    <motion.section
+      key="results"
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="space-y-6 pt-4"
+    >
+      <header className="space-y-3 text-center">
+        <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">
+          Resultado · {MODE_META[result.mode].label}
+        </p>
+        <motion.h1
+          className="font-iq-display text-5xl text-zinc-50 tabular-nums sm:text-6xl"
+          initial={{ scale: 0.92, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ type: "spring", stiffness: 160, damping: 14 }}
+        >
+          {result.iq}
+          <span className="ml-2 text-xl font-normal text-zinc-400 sm:text-2xl">
+            (± {result.marginOfError} pts)
+          </span>
+        </motion.h1>
+        <p className="text-emerald-400/90">{result.band}</p>
+        <p className="mx-auto max-w-lg text-sm text-zinc-500">
+          Intervalo aproximado {result.iqLow}–{result.iqHigh}. Acertos
+          ponderados {result.rawScore.toFixed(1)}/{result.maxScore.toFixed(1)}.
+        </p>
+      </header>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <article className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4 sm:p-5">
+          <h2 className="text-sm font-semibold text-zinc-100">
+            Percentil e raridade
+          </h2>
+          <p className="mt-1 text-2xl font-iq-display tabular-nums text-zinc-50">
+            {result.percentile.toFixed(1)}
+            <span className="ml-1 text-sm font-normal text-zinc-500">
+              º percentil
+            </span>
+          </p>
+          <p className="mt-2 text-sm leading-relaxed text-zinc-400">
+            {pctCopy.summary}
+          </p>
+          <p className="mt-1.5 text-sm text-zinc-500">{pctCopy.rarity}</p>
+        </article>
+
+        <article
+          className={`rounded-2xl border p-4 sm:p-5 ${consistencyToneClass}`}
+        >
+          <h2 className="text-sm font-semibold text-zinc-100">
+            Consistência da sessão
+          </h2>
+          <p className="mt-1 text-lg font-medium">{consistency.title}</p>
+          <p className="mt-2 text-sm leading-relaxed opacity-90">
+            {consistency.detail}
+          </p>
+          <p className="mt-3 text-xs tabular-nums opacity-70">
+            Índice de precisão {result.diagnosis.precisionScore}/100 ·
+            confiabilidade {result.diagnosis.reliabilityIndex}/100
+          </p>
+        </article>
+      </div>
+
+      <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4 sm:p-6">
+        <BellCurveChart iq={result.iq} percentile={result.percentile} />
+      </div>
+
+      <section aria-labelledby="skills-heading">
+        <h2
+          id="skills-heading"
+          className="mb-3 text-center text-sm font-medium text-zinc-400"
+        >
+          Sub-habilidades nesta sessão
+        </h2>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {(result.activeCompetences.length
+            ? result.activeCompetences
+            : (Object.keys(result.competences) as (keyof CompetenceScores)[])
+          ).map((key) => {
+            const value = result.competences[key];
+            return (
+              <div
+                key={key}
+                className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4"
+              >
+                <div className="mb-2 flex items-center justify-between text-sm">
+                  <span className="text-zinc-300">{competenceLabel(key)}</span>
+                  <span className="tabular-nums text-zinc-400">{value}%</span>
+                </div>
+                <div className="h-1.5 overflow-hidden rounded-full bg-zinc-800">
+                  <motion.div
+                    className="h-full bg-indigo-400"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${value}%` }}
+                    transition={{ duration: 0.7, delay: 0.1 }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      <section
+        aria-labelledby="precision-heading"
+        className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-950/70 p-5 sm:p-6"
+      >
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 id="precision-heading" className="text-lg font-semibold text-zinc-100">
+            Detalhe por nível de dificuldade
+          </h2>
+          <p className="text-sm tabular-nums text-zinc-500">
+            Tempo médio {(result.avgTimeMs / 1000).toFixed(1)}s · trocas{" "}
+            {result.diagnosis.avgOptionSwitches}
+          </p>
+        </div>
+
+        <div className="grid gap-2 sm:grid-cols-5">
+          {result.diagnosis.bandTelemetry.map((bt) => (
+            <div
+              key={bt.band}
+              className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-3 text-center"
+            >
+              <p className="text-[10px] uppercase tracking-wider text-zinc-500">
+                N{bt.band}
+              </p>
+              <p className="text-xs text-zinc-300">{bt.label}</p>
+              <p className="mt-1 text-sm tabular-nums text-zinc-200">
+                {bt.answered ? `${Math.round(bt.accuracy * 100)}%` : "—"}
+              </p>
+              <p className="text-[11px] tabular-nums text-zinc-500">
+                {bt.avgTimeMs
+                  ? `${(bt.avgTimeMs / 1000).toFixed(1)}s méd.`
+                  : "sem tempo"}
+              </p>
+            </div>
+          ))}
+        </div>
+
+        <ul className="space-y-1.5">
+          {result.diagnosis.warnings.map((w) => (
+            <li
+              key={w}
+              className={`text-sm leading-relaxed ${
+                result.diagnosis.guessingFlag ||
+                result.diagnosis.incompleteFlag ||
+                result.diagnosis.inconsistentFlag
+                  ? "text-amber-300/90"
+                  : "text-emerald-400/80"
+              }`}
+            >
+              {w}
+            </li>
+          ))}
+        </ul>
+
+        <p className="border-t border-zinc-800 pt-3 text-xs leading-relaxed text-zinc-600">
+          Avaliação cognitiva digital — não substitui avaliação
+          neuropsicológica presencial nem laudo profissional.
+        </p>
+      </section>
+
+      <div className="flex flex-wrap justify-center gap-3">
+        <button
+          type="button"
+          onClick={onOpenReview}
+          className="rounded-xl border border-zinc-600 px-5 py-2.5 text-sm text-zinc-200 hover:border-zinc-400"
+        >
+          Revisar itens comentados
+        </button>
+        <button
+          type="button"
+          onClick={onReset}
+          className="rounded-xl bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-zinc-950 hover:bg-emerald-400"
+        >
+          Nova avaliação
+        </button>
+      </div>
+
+      {phase === "review" && (
+        <ReviewPanel
+          questions={questions}
+          answers={answers}
+          index={reviewIndex}
+          setIndex={setReviewIndex}
+          onBack={onBackFromReview}
+        />
+      )}
+    </motion.section>
   );
 }
 
@@ -890,31 +1010,26 @@ function ReviewPanel({
   setIndex: (n: number) => void;
   onBack: () => void;
 }) {
-  const wrong = questions
-    .map((q, i) => ({ q, i, selected: answers[i] }))
-    .filter((x) => x.selected !== x.q.correctIndex);
+  const items = questions.map((q, i) => ({
+    q,
+    i,
+    selected: answers[i],
+    correct: answers[i] === q.correctIndex,
+  }));
+  const total = items.length;
+  if (total === 0) return null;
 
-  if (wrong.length === 0) {
-    return (
-      <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-6 text-center text-sm text-emerald-300">
-        Nenhuma resposta incorreta — excelente.
-        <div className="mt-3">
-          <button
-            type="button"
-            onClick={onBack}
-            className="text-zinc-400 underline-offset-2 hover:underline"
-          >
-            Voltar ao resumo
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  const safe = ((index % wrong.length) + wrong.length) % wrong.length;
-  const item = wrong[safe];
+  const safe = ((index % total) + total) % total;
+  const item = items[safe];
+  const chosenLetter =
+    item.selected != null ? LETTERS[item.selected] : null;
+  const correctLetter = LETTERS[item.q.correctIndex];
+  const shortRule =
+    item.q.explanation.rules[0] ??
+    item.q.explanation.pt.slice(0, 120) +
+      (item.q.explanation.pt.length > 120 ? "…" : "");
   const err =
-    item.selected != null
+    item.selected != null && !item.correct
       ? item.q.distractorErrors[item.selected]
       : null;
 
@@ -922,7 +1037,7 @@ function ReviewPanel({
     <div className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-950/70 p-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-base font-semibold text-zinc-100">
-          Revisão {safe + 1}/{wrong.length} — Questão {item.q.id} ·{" "}
+          Revisão comentada {safe + 1}/{total} — Item {item.q.id} ·{" "}
           {isTextQuestion(item.q) ? "Pergunta" : "Figura"} ·{" "}
           {bandProgressLabel(item.q.difficulty)}
         </h3>
@@ -934,6 +1049,34 @@ function ReviewPanel({
           Fechar revisão
         </button>
       </div>
+
+      <div
+        className={`grid gap-2 rounded-xl border p-3 text-sm sm:grid-cols-3 ${
+          item.correct
+            ? "border-emerald-500/30 bg-emerald-500/5"
+            : item.selected == null
+              ? "border-zinc-700 bg-zinc-900/60"
+              : "border-amber-500/30 bg-amber-500/5"
+        }`}
+      >
+        <p>
+          <span className="text-zinc-500">Sua escolha: </span>
+          <span className="font-medium text-zinc-200">
+            {chosenLetter ? `Opção ${chosenLetter}` : "Sem resposta"}
+          </span>
+        </p>
+        <p>
+          <span className="text-zinc-500">Correta: </span>
+          <span className="font-medium text-emerald-300">
+            Opção {correctLetter}
+          </span>
+        </p>
+        <p>
+          <span className="text-zinc-500">Regra: </span>
+          <span className="text-zinc-300">{shortRule}</span>
+        </p>
+      </div>
+
       <div className="flex flex-col items-center gap-5 lg:flex-row lg:items-start lg:justify-center">
         {isMatrixQuestion(item.q) ? (
           <>
@@ -949,10 +1092,8 @@ function ReviewPanel({
               />
               {err ? (
                 <p className="text-xs text-amber-400/90">
-                  Erro diagnóstico: {distractorErrorLabel(err)}
+                  Tipo de erro: {distractorErrorLabel(err)}
                 </p>
-              ) : item.selected == null ? (
-                <p className="text-xs text-zinc-500">Sem resposta</p>
               ) : null}
               <p className="rounded-lg border border-zinc-800 bg-zinc-900/80 p-3 text-sm leading-relaxed text-zinc-300">
                 {item.q.explanation.pt}
@@ -988,10 +1129,8 @@ function ReviewPanel({
             />
             {err ? (
               <p className="text-xs text-amber-400/90">
-                Erro diagnóstico: {distractorErrorLabel(err)}
+                Tipo de erro: {distractorErrorLabel(err)}
               </p>
-            ) : item.selected == null ? (
-              <p className="text-xs text-zinc-500">Sem resposta</p>
             ) : null}
             <p className="rounded-lg border border-zinc-800 bg-zinc-900/80 p-3 text-sm leading-relaxed text-zinc-300">
               {item.q.explanation.pt}
@@ -1009,18 +1148,40 @@ function ReviewPanel({
           </div>
         )}
       </div>
-      <div className="flex justify-between">
+
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <button
           type="button"
           onClick={() => setIndex(safe - 1)}
-          className="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300"
+          disabled={safe === 0}
+          className="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 disabled:opacity-30"
         >
           ← Anterior
         </button>
+        <div className="flex flex-wrap justify-center gap-1">
+          {items.map((it, i) => (
+            <button
+              key={`${it.q.kind}-${it.q.id}`}
+              type="button"
+              onClick={() => setIndex(i)}
+              className={`h-2 w-2 rounded-full ${
+                i === safe
+                  ? "bg-emerald-400"
+                  : it.correct
+                    ? "bg-emerald-700"
+                    : it.selected == null
+                      ? "bg-zinc-700"
+                      : "bg-amber-600"
+              }`}
+              aria-label={`Ir para item ${i + 1}`}
+            />
+          ))}
+        </div>
         <button
           type="button"
           onClick={() => setIndex(safe + 1)}
-          className="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300"
+          disabled={safe >= total - 1}
+          className="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 disabled:opacity-30"
         >
           Próximo →
         </button>
