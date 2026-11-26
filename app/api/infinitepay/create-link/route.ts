@@ -10,7 +10,7 @@ import {
   parseInfinitePayTier,
   type InfinitePayTier,
 } from "@/lib/infinitepay/config";
-import { putInfinitePayOrder } from "@/lib/infinitepay/store";
+import { putInfinitePayOrderAsync } from "@/lib/infinitepay/store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -91,7 +91,7 @@ export async function POST(req: Request) {
 
     if (infinitepaySimulateLocal(handle)) {
       const url = `${appUrl}/arquetipos?payment_return=1&order_nsu=${encodeURIComponent(order_nsu)}&transaction_nsu=SIM_${Date.now()}&slug=sim-local&capture_method=pix&simulated=1`;
-      putInfinitePayOrder({
+      await putInfinitePayOrderAsync({
         order_nsu,
         tier,
         sessionId,
@@ -106,6 +106,7 @@ export async function POST(req: Request) {
         order_nsu,
         simulated: true,
         amountLabel: meta.amountLabel,
+        amountCentavos: meta.priceCentavos,
         tier,
       });
     }
@@ -140,7 +141,10 @@ export async function POST(req: Request) {
 
     // Advanced options (require API key per InfinitePay docs)
     if (isRealApiKey()) {
-      payload.webhook_url = webhookUrl;
+      payload.webhook = {
+        url: webhookUrl,
+        events: ["paid", "settled"],
+      };
     }
 
     const res = await fetch("https://api.checkout.infinitepay.io/links", {
@@ -171,7 +175,7 @@ export async function POST(req: Request) {
       );
     }
 
-    putInfinitePayOrder({
+    await putInfinitePayOrderAsync({
       order_nsu,
       tier,
       sessionId,
@@ -185,6 +189,7 @@ export async function POST(req: Request) {
       url,
       order_nsu,
       amountLabel: meta.amountLabel,
+      amountCentavos: meta.priceCentavos,
       tier,
     });
   } catch (err) {

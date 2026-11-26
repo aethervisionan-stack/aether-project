@@ -10,8 +10,8 @@ import {
   type InfinitePayTier,
 } from "@/lib/infinitepay/config";
 import {
-  getInfinitePayOrder,
-  markInfinitePayPaid,
+  getInfinitePayOrderAsync,
+  markInfinitePayPaidAsync,
 } from "@/lib/infinitepay/store";
 
 export const runtime = "nodejs";
@@ -43,7 +43,6 @@ function pickString(v: unknown): string | null {
 function detectPaid(data: Record<string, unknown>): boolean {
   if (data.paid === true) return true;
   if (data.success === true && data.paid !== false) {
-    // some responses mark success without explicit paid=false
     if (typeof data.paid === "boolean") return data.paid;
   }
   const status = String(data.status ?? data.payment_status ?? "").toLowerCase();
@@ -70,16 +69,33 @@ export async function POST(req: Request) {
     const transaction_nsu = pickString(body.transaction_nsu);
     const slug = pickString(body.slug);
     const tierFromNsu = extractTierFromOrderNsu(order_nsu);
-    const local = getInfinitePayOrder(order_nsu);
+    const local = await getInfinitePayOrderAsync(order_nsu);
 
-    // Local simulated checkout (placeholder handle)
-    if (
-      infinitepaySimulateLocal() ||
-      body.simulated === true ||
-      body.simulated === "1" ||
-      local?.simulated ||
-      (transaction_nsu && transaction_nsu.startsWith("SIM_"))
-    ) {
+    // Poll path / webhook already marked paid — unlock without payment_check.
+    if (local?.status === "paid") {
+      const tier =
+        tierFromNsu ??
+        (parseInfinitePayTier(local.tier) as InfinitePayTier | null);
+      return NextResponse.json({
+        paid: true,
+        tier,
+        order_nsu,
+        amount: local.amountCentavos || expectedAmountForTier(tier as InfinitePayTier),
+        from: "store",
+      });
+    }
+
+    const wantsSimComplete =
+      Boolean(transaction_nsu) &&
+      (infinitepaySimulateLocal() ||
+        body.simulated === true ||
+        body.simulated === "1" ||
+        local?.simulated ||
+        Boolean(transaction_nsu?.startsWith("SIM_")));
+
+    // Local simulated checkout — only when redirect params are present
+    // (opening the sim checkout URL), never on bare order_nsu poll.
+    if (wantsSimComplete) {
       const tier =
         tierFromNsu ??
         (parseInfinitePayTier(local?.tier) as InfinitePayTier | null);
@@ -89,7 +105,7 @@ export async function POST(req: Request) {
           { status: 400 },
         );
       }
-      markInfinitePayPaid(order_nsu, {
+      await markInfinitePayPaidAsync(order_nsu, {
         transaction_nsu: transaction_nsu ?? undefined,
         slug: slug ?? undefined,
       });
@@ -102,16 +118,14 @@ export async function POST(req: Request) {
       });
     }
 
+    // Modal poll: only order_nsu — wait for webhook / payment_return.
     if (!transaction_nsu || !slug) {
-      return NextResponse.json(
-        {
-          paid: false,
-          error: "transaction_nsu e slug são obrigatórios para payment_check",
-          order_nsu,
-          tier: tierFromNsu,
-        },
-        { status: 400 },
-      );
+      return NextResponse.json({
+        paid: false,
+        pending: true,
+        order_nsu,
+        tier: tierFromNsu ?? parseInfinitePayTier(local?.tier) ?? null,
+      });
     }
 
     const handle = infinitepayHandle();
@@ -159,7 +173,6 @@ export async function POST(req: Request) {
 
     if (paid && tier) {
       const expected = expectedAmountForTier(tier);
-      // amount check: paid amount should be >= expected (installment fees may inflate paid_amount)
       if (amountRaw != null && amountRaw < expected) {
         return NextResponse.json({
           paid: false,
@@ -169,7 +182,7 @@ export async function POST(req: Request) {
           amount: amountRaw,
         });
       }
-      markInfinitePayPaid(order_nsu, { transaction_nsu, slug });
+      await markInfinitePayPaidAsync(order_nsu, { transaction_nsu, slug });
     }
 
     return NextResponse.json({

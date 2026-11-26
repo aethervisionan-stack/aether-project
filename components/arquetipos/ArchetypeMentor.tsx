@@ -4,6 +4,7 @@ import { motion, useReducedMotion } from "framer-motion";
 import {
   Check,
   Copy,
+  ExternalLink,
   KeyRound,
   Loader2,
   Lock,
@@ -12,6 +13,7 @@ import {
   Shield,
   Sparkles,
 } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { NarrativeResult } from "@/src/data/archetypes";
 import { buildMentorProfile } from "@/lib/mentor/profile";
@@ -448,14 +450,69 @@ export function ArchetypeMentor({ result }: Props) {
   );
 }
 
+const MENTOR_POLL_MS = 3500;
+const MENTOR_POLL_MAX_MS = 120_000;
+
 function MentorPassModal({
   onClose,
+  onUnlocked,
 }: {
   onClose: () => void;
   onUnlocked: () => void;
 }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
+  const [orderNsu, setOrderNsu] = useState<string | null>(null);
+  const [pollTimedOut, setPollTimedOut] = useState(false);
+  const pollAbortRef = useRef(false);
+  const onUnlockedRef = useRef(onUnlocked);
+  onUnlockedRef.current = onUnlocked;
+
+  useEffect(() => {
+    if (!orderNsu || !checkoutUrl) return;
+    pollAbortRef.current = false;
+    setPollTimedOut(false);
+    const started = Date.now();
+    let timer: number | undefined;
+
+    async function pollOnce() {
+      if (pollAbortRef.current || !orderNsu) return;
+      try {
+        const res = await fetch("/api/infinitepay/verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ order_nsu: orderNsu }),
+        });
+        const data = (await res.json()) as { paid?: boolean; tier?: string };
+        if (pollAbortRef.current) return;
+        if (data.paid) {
+          pollAbortRef.current = true;
+          onUnlockedRef.current();
+          return;
+        }
+      } catch {
+        // keep polling
+      }
+      if (pollAbortRef.current) return;
+      if (Date.now() - started >= MENTOR_POLL_MAX_MS) {
+        setPollTimedOut(true);
+        return;
+      }
+      timer = window.setTimeout(() => {
+        void pollOnce();
+      }, MENTOR_POLL_MS);
+    }
+
+    timer = window.setTimeout(() => {
+      void pollOnce();
+    }, MENTOR_POLL_MS);
+
+    return () => {
+      pollAbortRef.current = true;
+      if (timer) window.clearTimeout(timer);
+    };
+  }, [orderNsu, checkoutUrl]);
 
   async function startCheckout() {
     if (loading) return;
@@ -494,17 +551,26 @@ function MentorPassModal({
         (u): u is string =>
           typeof u === "string" && /^https?:\/\//i.test(u.trim()),
       );
-      if (!res.ok || !url) {
+      const nsu =
+        typeof data.order_nsu === "string" ? data.order_nsu : null;
+      if (!res.ok || !url || !nsu) {
         throw new Error(
           (typeof data.error === "string" && data.error) ||
             "Não foi possível abrir o checkout",
         );
       }
-      window.location.assign(url.trim());
+      setCheckoutUrl(url.trim());
+      setOrderNsu(nsu);
+      setLoading(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao iniciar pagamento");
       setLoading(false);
     }
+  }
+
+  function handleClose() {
+    pollAbortRef.current = true;
+    onClose();
   }
 
   return (
@@ -523,33 +589,68 @@ function MentorPassModal({
             {MENTOR_PASS_DAYS} dias ilimitados · R$ 5,00
           </h4>
           <p className="mt-2 text-center text-xs leading-relaxed text-[color:var(--cart-muted)]">
-            Após o checkout InfinitePay, o Mentor responde sem limite por{" "}
-            {MENTOR_PASS_DAYS} dias — com código de restauração neste aparelho.
+            Sem cadastro. Pague R$ 5,00 no InfinitePay e o Mentor fica ilimitado
+            por {MENTOR_PASS_DAYS} dias neste aparelho.
           </p>
 
           {error ? (
             <p className="mt-4 text-center text-sm text-red-300/90">{error}</p>
           ) : null}
 
-          <button
-            type="button"
-            disabled={loading}
-            onClick={() => void startCheckout()}
-            className="cart-cta mt-6 inline-flex w-full items-center justify-center gap-2 rounded-sm px-5 py-3 text-sm font-semibold disabled:opacity-50"
-          >
-            {loading ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Abrindo checkout…
-              </>
-            ) : (
-              "Pagar R$ 5,00"
-            )}
-          </button>
+          {checkoutUrl ? (
+            <>
+              <div className="mx-auto mt-5 flex w-fit items-center justify-center rounded-sm bg-white p-3">
+                <QRCodeSVG
+                  value={checkoutUrl}
+                  size={160}
+                  level="M"
+                  includeMargin
+                />
+              </div>
+              <a
+                href={checkoutUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="cart-cta mt-4 inline-flex w-full items-center justify-center gap-2 rounded-sm px-5 py-3 text-sm font-semibold"
+              >
+                <ExternalLink size={16} />
+                Abrir checkout InfinitePay
+              </a>
+              <div className="mt-3 flex items-center justify-center gap-2 text-sm text-[color:var(--cart-muted)]">
+                {!pollTimedOut ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin text-[color:var(--cart-copper)]" />
+                    <span>Aguardando confirmação…</span>
+                  </>
+                ) : (
+                  <span className="text-center text-xs text-amber-200/90">
+                    Ainda não confirmamos. Continue no checkout ou feche e tente
+                    de novo.
+                  </span>
+                )}
+              </div>
+            </>
+          ) : (
+            <button
+              type="button"
+              disabled={loading}
+              onClick={() => void startCheckout()}
+              className="cart-cta mt-6 inline-flex w-full items-center justify-center gap-2 rounded-sm px-5 py-3 text-sm font-semibold disabled:opacity-50"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Gerando pagamento…
+                </>
+              ) : (
+                "Pagar R$ 5,00"
+              )}
+            </button>
+          )}
 
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             className="mt-4 w-full py-2 text-xs uppercase tracking-[0.16em] text-[color:var(--cart-dim)] hover:text-[color:var(--cart-copper)]"
           >
             Fechar

@@ -2,9 +2,9 @@ import { NextResponse } from "next/server";
 import { extractTierFromOrderNsu } from "@/lib/infinitepay/config";
 import {
   claimWebhookIdempotency,
-  getInfinitePayOrder,
-  markInfinitePayPaid,
-  putInfinitePayOrder,
+  getInfinitePayOrderAsync,
+  markInfinitePayPaidAsync,
+  putInfinitePayOrderAsync,
 } from "@/lib/infinitepay/store";
 
 export const runtime = "nodejs";
@@ -29,7 +29,6 @@ export async function POST(req: Request) {
       raw = await req.json();
       received = true;
     } catch {
-      // safe parse failure — still 200
       return NextResponse.json({ ok: true, received: false });
     }
 
@@ -88,15 +87,15 @@ export async function POST(req: Request) {
     }
 
     if (order_nsu && looksPaid(body)) {
-      const existing = getInfinitePayOrder(order_nsu);
+      const existing = await getInfinitePayOrderAsync(order_nsu);
       if (existing) {
-        markInfinitePayPaid(order_nsu, {
+        await markInfinitePayPaidAsync(order_nsu, {
           transaction_nsu: transaction_nsu ?? undefined,
           slug: slug ?? undefined,
         });
       } else {
         const tier = extractTierFromOrderNsu(order_nsu) ?? "unknown";
-        putInfinitePayOrder({
+        await putInfinitePayOrderAsync({
           order_nsu,
           tier,
           sessionId: order_nsu.split("__")[0] ?? "webhook",

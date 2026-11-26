@@ -1,9 +1,10 @@
 "use client";
 
 import { motion, useReducedMotion } from "framer-motion";
-import { Check, Loader2, Lock, Sparkles } from "lucide-react";
+import { Check, ExternalLink, Loader2, Lock, Sparkles, X } from "lucide-react";
 import Image from "next/image";
-import { useMemo, useState } from "react";
+import { QRCodeSVG } from "qrcode.react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { NarrativeResult } from "@/src/data/archetypes";
 import { paywallTeaseFor } from "@/src/data/paywallTeases";
 import {
@@ -15,7 +16,7 @@ import { SanctuaryBackdrop } from "./CinematicChrome";
 
 type Props = {
   result: NarrativeResult;
-  onUnlocked: (tier: InfinitePayTier) => void;
+  onUnlocked: (tier: InfinitePayTier, orderNsu?: string | null) => void;
   /** When verifying return from InfinitePay */
   verifying?: boolean;
   verifyError?: string | null;
@@ -24,6 +25,8 @@ type Props = {
 };
 
 const EASE = [0.22, 1, 0.36, 1] as const;
+const POLL_MS = 3500;
+const POLL_MAX_MS = 120_000;
 
 type BoxId = "result" | "mentor_upgrade";
 
@@ -67,6 +70,14 @@ const BOXES: {
   },
 ];
 
+type CheckoutModal = {
+  url: string;
+  order_nsu: string;
+  tier: InfinitePayTier;
+  amountLabel: string;
+  simulated?: boolean;
+};
+
 function sessionClientId(): string {
   try {
     const existing = window.localStorage.getItem("arq_client_sid");
@@ -97,13 +108,12 @@ function pickCheckoutUrl(data: Record<string, unknown>): string | null {
 
 export function PaywallScreen({
   result,
-  onUnlocked: _onUnlocked,
+  onUnlocked,
   verifying = false,
   verifyError = null,
   onRetryVerify,
   onBackFromVerify,
 }: Props) {
-  void _onUnlocked;
   const reduce = useReducedMotion();
   const dominant = result.dominants[0]?.profile ?? null;
   const tease = useMemo(
@@ -117,6 +127,11 @@ export function PaywallScreen({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [simNotice, setSimNotice] = useState<string | null>(null);
+  const [modal, setModal] = useState<CheckoutModal | null>(null);
+  const [pollTimedOut, setPollTimedOut] = useState(false);
+  const pollAbortRef = useRef(false);
+  const onUnlockedRef = useRef(onUnlocked);
+  onUnlockedRef.current = onUnlocked;
 
   const totalCentavos =
     (selResult && !alreadyResult ? 100 : 0) + (selMentor ? 500 : 0);
@@ -146,11 +161,74 @@ export function PaywallScreen({
     setSelMentor((v) => !v);
   }
 
+  function closeModal() {
+    pollAbortRef.current = true;
+    setModal(null);
+    setPollTimedOut(false);
+    setLoading(false);
+  }
+
+  useEffect(() => {
+    if (!modal) return;
+    pollAbortRef.current = false;
+    setPollTimedOut(false);
+    const started = Date.now();
+    let timer: number | undefined;
+
+    async function pollOnce() {
+      if (pollAbortRef.current || !modal) return;
+      try {
+        const res = await fetch("/api/infinitepay/verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ order_nsu: modal.order_nsu }),
+        });
+        const data = (await res.json()) as {
+          paid?: boolean;
+          tier?: string;
+          order_nsu?: string;
+        };
+        if (pollAbortRef.current) return;
+        if (data.paid && data.tier) {
+          pollAbortRef.current = true;
+          setModal(null);
+          setLoading(false);
+          onUnlockedRef.current(
+            data.tier as InfinitePayTier,
+            data.order_nsu ?? modal.order_nsu,
+          );
+          return;
+        }
+      } catch {
+        // keep polling
+      }
+
+      if (pollAbortRef.current) return;
+      if (Date.now() - started >= POLL_MAX_MS) {
+        setPollTimedOut(true);
+        return;
+      }
+      timer = window.setTimeout(() => {
+        void pollOnce();
+      }, POLL_MS);
+    }
+
+    timer = window.setTimeout(() => {
+      void pollOnce();
+    }, POLL_MS);
+
+    return () => {
+      pollAbortRef.current = true;
+      if (timer) window.clearTimeout(timer);
+    };
+  }, [modal]);
+
   async function checkout() {
     if (!tier || loading) return;
     setLoading(true);
     setError(null);
     setSimNotice(null);
+    setPollTimedOut(false);
     try {
       const res = await fetch("/api/infinitepay/create-link", {
         method: "POST",
@@ -169,14 +247,20 @@ export function PaywallScreen({
       const url = pickCheckoutUrl(data);
       const errMsg =
         typeof data.error === "string" ? data.error : null;
-      if (!res.ok || !url) {
+      const order_nsu =
+        typeof data.order_nsu === "string" ? data.order_nsu : null;
+      if (!res.ok || !url || !order_nsu) {
         throw new Error(errMsg || "Não foi possível abrir o checkout");
       }
 
+      const amountLabel =
+        typeof data.amountLabel === "string" && data.amountLabel
+          ? data.amountLabel
+          : totalLabel || "—";
       const simulated = data.simulated === true;
       if (simulated) {
         setSimNotice(
-          "Modo simulado: InfinitePay ainda usa handle/API placeholder neste ambiente. Vamos liberar localmente após o retorno.",
+          "Modo simulado: abra o checkout para confirmar. Em produção o QR aponta para InfinitePay.",
         );
       }
 
@@ -185,16 +269,21 @@ export function PaywallScreen({
           "infinitepay_pending",
           JSON.stringify({
             tier,
-            order_nsu:
-              typeof data.order_nsu === "string" ? data.order_nsu : null,
+            order_nsu,
           }),
         );
       } catch {
         // ignore
       }
 
-      // Same-tab redirect (prefer assign — not window.open).
-      window.location.assign(url);
+      setModal({
+        url,
+        order_nsu,
+        tier,
+        amountLabel,
+        simulated,
+      });
+      setLoading(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao iniciar pagamento");
       setLoading(false);
@@ -326,7 +415,7 @@ export function PaywallScreen({
           <p className="mt-4 text-center text-sm leading-relaxed text-[color:var(--cart-ink)]">
             {alreadyResult
               ? "Diagnóstico já liberado. Com R$ 5,00 você ativa 30 dias de Mentor — ou some o combo quando quiser renovar a jornada."
-              : "Um único pagamento destrava o nome e o diagnóstico completo, e ajuda a manter os servidores deste santuário acesos: R$ 1,00 o dossiê · R$ 5,00 o Mentor 30 dias · R$ 6,00 o combo."}
+              : "Um único pagamento destrava o nome e o diagnóstico completo: R$ 1,00 o dossiê · R$ 5,00 o Mentor 30 dias · R$ 6,00 o combo."}
           </p>
 
           <div className="mt-4 flex max-w-md items-start gap-2 rounded-sm border border-[color:var(--cart-border-soft)] bg-black/20 px-3 py-3 text-xs leading-relaxed text-[color:var(--cart-dim)]">
@@ -335,9 +424,8 @@ export function PaywallScreen({
               className="mt-0.5 shrink-0 text-[color:var(--cart-copper)]"
             />
             <span>
-              Nome e diagnóstico só aparecem após o pagamento (Diagnóstico ou
-              Combo). Checkout InfinitePay · Pix ou cartão · respostas neste
-              aparelho.
+              Sem cadastro antes do pagamento. Nome e diagnóstico só após
+              Diagnóstico ou Combo. Checkout InfinitePay · Pix ou cartão.
             </span>
           </div>
         </motion.div>
@@ -448,7 +536,7 @@ export function PaywallScreen({
             {loading ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Abrindo checkout…
+                Gerando pagamento…
               </>
             ) : totalLabel ? (
               `Pagar ${totalLabel}`
@@ -461,16 +549,80 @@ export function PaywallScreen({
               {error}
             </p>
           ) : null}
-          {simNotice ? (
+          {simNotice && !modal ? (
             <p className="max-w-md text-center text-xs text-amber-200/90">
               {simNotice}
             </p>
           ) : null}
           <p className="text-center text-[11px] text-[color:var(--cart-dim)]">
-            Checkout InfinitePay · redirecionamento seguro
+            InfinitePay · QR ou checkout · sem nome, e-mail ou CPF
           </p>
         </div>
       </div>
+
+      {modal ? (
+        <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/80 p-4 sm:items-center">
+          <div
+            className="relative w-full max-w-md rounded-sm border border-[color:var(--cart-border-soft)] bg-[#0c0d10] p-5 shadow-2xl sm:p-6"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Pagamento InfinitePay"
+          >
+            <button
+              type="button"
+              onClick={closeModal}
+              className="absolute right-3 top-3 rounded p-1 text-[color:var(--cart-dim)] hover:text-[color:var(--cart-copper)]"
+              aria-label="Fechar"
+            >
+              <X size={18} />
+            </button>
+
+            <p className="cart-display text-center text-[10px] uppercase tracking-[0.28em] text-[color:var(--cart-copper)]">
+              Pagamento
+            </p>
+            <h2 className="cart-display mt-2 text-center text-2xl text-[color:var(--cine-ink)]">
+              {modal.amountLabel}
+            </h2>
+            <p className="mt-1 text-center text-xs text-[color:var(--cart-muted)]">
+              Valor exato do checkout InfinitePay
+            </p>
+
+            <div className="mx-auto mt-5 flex w-fit items-center justify-center rounded-sm bg-white p-3">
+              <QRCodeSVG value={modal.url} size={180} level="M" includeMargin />
+            </div>
+
+            <a
+              href={modal.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="cart-cta mt-5 inline-flex w-full items-center justify-center gap-2 rounded-sm px-5 py-3 text-sm font-semibold"
+            >
+              <ExternalLink size={16} />
+              Abrir checkout InfinitePay
+            </a>
+
+            <div className="mt-4 flex items-center justify-center gap-2 text-sm text-[color:var(--cart-muted)]">
+              {!pollTimedOut ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin text-[color:var(--cart-copper)]" />
+                  <span>Aguardando confirmação…</span>
+                </>
+              ) : (
+                <span className="text-center text-xs text-amber-200/90">
+                  Ainda não confirmamos. Continue no checkout ou feche e tente de
+                  novo — o retorno e o webhook também liberam.
+                </span>
+              )}
+            </div>
+
+            {modal.simulated ? (
+              <p className="mt-3 text-center text-[11px] text-amber-200/80">
+                Simulado: abra o checkout nesta janela para confirmar.
+              </p>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

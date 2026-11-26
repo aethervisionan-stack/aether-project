@@ -405,9 +405,8 @@ export function ArchetypeQuizApp() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  function handleUnlocked(tier: InfinitePayTier) {
-    // Only reachable if a caller forces unlock — still go through tier rules.
-    applyUnlock(tier, null);
+  function handleUnlocked(tier: InfinitePayTier, orderNsu?: string | null) {
+    applyUnlock(tier, orderNsu ?? null);
   }
 
   const fade = !mounted || reduce;
