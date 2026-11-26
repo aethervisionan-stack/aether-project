@@ -33,6 +33,7 @@ import {
 } from "@/src/lib/quizStorage";
 import {
   ANONYMOUS_PARTICIPANT_NAME,
+  LEADERBOARD_MODE_LABEL,
   MODE_META,
   QUIZ_DURATION_MS,
   QUIZ_TOTAL_QUESTIONS,
@@ -44,6 +45,10 @@ import {
 } from "@/src/types/quiz";
 import { BellCurveChart } from "@/src/components/BellCurveChart";
 import {
+  ChallengeInviteBanner,
+  ChallengeSharePanel,
+} from "@/src/components/ChallengeSharePanel";
+import {
   LeaderboardPanel,
   UserRankBanner,
 } from "@/src/components/LeaderboardPanel";
@@ -52,6 +57,11 @@ import {
   ParticipantAvatar,
 } from "@/src/components/ParticipantAvatar";
 import { MatrixRenderer, OptionGrid } from "@/src/components/MatrixRenderer";
+import { ShareResultCard } from "@/src/components/ShareResultCard";
+import {
+  parseChallengeInvite,
+  type ChallengeInvite,
+} from "@/src/lib/challengeInvite";
 
 function formatTime(ms: number): string {
   const s = Math.max(0, Math.ceil(ms / 1000));
@@ -84,6 +94,8 @@ export function IqTestApp() {
   const [nameError, setNameError] = useState<string | null>(null);
   const [avatarError, setAvatarError] = useState<string | null>(null);
   const [leaderboardTick, setLeaderboardTick] = useState(0);
+  const [challengeInvite, setChallengeInvite] =
+    useState<ChallengeInvite | null>(null);
 
   const mode: AssessmentMode | null =
     state.phase === "modeSelect" ? null : state.mode;
@@ -101,6 +113,8 @@ export function IqTestApp() {
 
   useEffect(() => {
     setHydrated(true);
+    if (typeof window === "undefined") return;
+    setChallengeInvite(parseChallengeInvite(window.location.search));
   }, []);
 
   useEffect(() => {
@@ -433,6 +447,14 @@ export function IqTestApp() {
                 exemplo rápido e armazenamento isolado.
               </p>
             </header>
+
+            {challengeInvite ? (
+              <ChallengeInviteBanner
+                challenger={challengeInvite.challenger}
+                targetIq={challengeInvite.targetIq}
+                modeLabel={LEADERBOARD_MODE_LABEL[challengeInvite.mode]}
+              />
+            ) : null}
 
             <PsychometricTransparencyBlock />
 
@@ -983,6 +1005,28 @@ function ResultsDashboard({
         refreshKey={leaderboardTick}
         highlightEntryId={leaderboardEntryId}
         compact
+      />
+
+      <ShareResultCard
+        data={{
+          name: participantName,
+          avatarUrl: participantAvatarUrl,
+          iq: result.iq,
+          marginOfError: result.marginOfError,
+          percentile: result.percentile,
+          rank: userRank,
+          mode: result.mode,
+          credibilityScore: result.diagnosis.reliabilityIndex,
+        }}
+      />
+
+      <ChallengeSharePanel
+        name={participantName}
+        iq={result.iq}
+        marginOfError={result.marginOfError}
+        percentile={result.percentile}
+        rank={userRank}
+        mode={result.mode}
       />
 
       <div className="grid gap-3 sm:grid-cols-2">
