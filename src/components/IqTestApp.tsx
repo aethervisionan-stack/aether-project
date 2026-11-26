@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   createSessionSeed,
@@ -93,8 +93,6 @@ import {
   cleanIqPaymentReturnUrl,
   createIqSessionId,
   fetchIqUnlockStatus,
-  readIqPaymentReturnParams,
-  verifyIqPayment,
 } from "@/src/lib/iqUnlockClient";
 
 function formatTime(ms: number): string {
@@ -134,14 +132,9 @@ export function IqTestApp() {
   const [serverUnlocked, setServerUnlocked] = useState(false);
   const [unlockAmountLabel, setUnlockAmountLabel] = useState("R$ 1,00");
   const [unlockChecking, setUnlockChecking] = useState(false);
-  const [unlockVerifying, setUnlockVerifying] = useState(false);
   const [unlockVerifyError, setUnlockVerifyError] = useState<string | null>(
     null,
   );
-  const unlockVerifyStartedRef = useRef(false);
-  const pendingReturnRef = useRef<ReturnType<
-    typeof readIqPaymentReturnParams
-  > | null>(null);
 
   const mode: AssessmentMode | null =
     state.phase === "modeSelect" ? null : state.mode;
@@ -165,9 +158,7 @@ export function IqTestApp() {
     setHydrated(true);
     if (typeof window === "undefined") return;
     setChallengeInvite(parseChallengeInvite(window.location.search));
-    pendingReturnRef.current = readIqPaymentReturnParams(
-      window.location.search,
-    );
+    cleanIqPaymentReturnUrl();
   }, []);
 
   useEffect(() => {
@@ -201,13 +192,6 @@ export function IqTestApp() {
       return;
     }
 
-    const returnParams = pendingReturnRef.current;
-    if (returnParams && !unlockVerifyStartedRef.current) {
-      unlockVerifyStartedRef.current = true;
-      void runUnlockVerify(returnParams);
-      return;
-    }
-
     let cancelled = false;
     setUnlockChecking(true);
     void (async () => {
@@ -216,7 +200,7 @@ export function IqTestApp() {
         if (cancelled) return;
         setUnlockAmountLabel(status.amountLabel);
         if (status.unlocked) {
-          applyServerUnlock(status.order_nsu);
+          applyServerUnlock(status.paymentId ?? status.order_nsu);
         } else {
           setServerUnlocked(false);
           // Drop stale client-only unlock claims.
@@ -295,7 +279,6 @@ export function IqTestApp() {
     (orderNsu?: string | null) => {
       setServerUnlocked(true);
       setUnlockVerifyError(null);
-      setUnlockVerifying(false);
       setState((prev) => {
         if (!prev.result) {
           return {
@@ -331,55 +314,6 @@ export function IqTestApp() {
       cleanIqPaymentReturnUrl();
     },
     [],
-  );
-
-  const runUnlockVerify = useCallback(
-    async (params: NonNullable<ReturnType<typeof readIqPaymentReturnParams>>) => {
-      const sessionId =
-        params.session_id ||
-        state.sessionId ||
-        (() => {
-          try {
-            const raw = window.sessionStorage.getItem("iq_infinitepay_pending");
-            if (!raw) return null;
-            const parsed = JSON.parse(raw) as { sessionId?: string };
-            return parsed.sessionId ?? null;
-          } catch {
-            return null;
-          }
-        })();
-      if (!sessionId) {
-        setUnlockVerifyError(
-          "Sessão não encontrada para confirmar o pagamento. Abra o checkout de novo — o teste permanece salvo.",
-        );
-        setUnlockVerifying(true);
-        return;
-      }
-      setUnlockVerifying(true);
-      setUnlockVerifyError(null);
-      setState((prev) =>
-        prev.sessionId
-          ? prev
-          : { ...prev, sessionId, unlockOrderNsu: params.order_nsu },
-      );
-      const result = await verifyIqPayment({
-        sessionId,
-        order_nsu: params.order_nsu,
-        transaction_nsu: params.transaction_nsu,
-        slug: params.slug,
-        simulated: params.simulated,
-      });
-      if (result.unlocked) {
-        applyServerUnlock(params.order_nsu);
-        return;
-      }
-      setUnlockVerifyError(
-        result.error ||
-          "Pagamento ainda não confirmado. Tente de novo — sua sessão permanece salva.",
-      );
-      setUnlockVerifying(true);
-    },
-    [applyServerUnlock, state.sessionId],
   );
 
   useEffect(() => {
@@ -897,36 +831,20 @@ export function IqTestApp() {
                     : "Seu diagnóstico já foi calculado. Falta só o passo abaixo para abrir tudo com carinho."}
                 </p>
               </header>
+              {unlockVerifyError ? (
+                <p
+                  role="alert"
+                  className="mx-auto max-w-lg rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-center text-sm text-amber-100/90"
+                >
+                  {unlockVerifyError}
+                </p>
+              ) : null}
               <IqUnlockCard
                 sessionId={state.sessionId}
                 amountLabel={unlockAmountLabel}
-                verifying={unlockVerifying}
-                verifyError={unlockVerifyError}
-                onRetryVerify={() => {
-                  const params =
-                    pendingReturnRef.current ||
-                    readIqPaymentReturnParams(window.location.search);
-                  if (params) {
-                    unlockVerifyStartedRef.current = false;
-                    void runUnlockVerify(params);
-                    return;
-                  }
-                  // Re-check server status without losing session
-                  if (state.sessionId) {
-                    setUnlockVerifying(true);
-                    setUnlockVerifyError(null);
-                    void fetchIqUnlockStatus(state.sessionId).then((status) => {
-                      setUnlockAmountLabel(status.amountLabel);
-                      if (status.unlocked) {
-                        applyServerUnlock(status.order_nsu);
-                      } else {
-                        setUnlockVerifying(false);
-                        setUnlockVerifyError(
-                          "Ainda não há confirmação de pagamento para esta sessão. Conclua o checkout ou tente de novo.",
-                        );
-                      }
-                    });
-                  }
+                onAmountLabel={setUnlockAmountLabel}
+                onUnlocked={(paymentId) => {
+                  applyServerUnlock(paymentId);
                 }}
               />
               <div className="flex flex-wrap justify-center gap-3 pt-2">

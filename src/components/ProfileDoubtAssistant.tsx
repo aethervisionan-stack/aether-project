@@ -99,7 +99,7 @@ export function ProfileDoubtAssistant({
       if (res.status === 402 || data.code === "LOCKED") {
         setError(
           data.error ||
-            "Resultados ainda bloqueados. Confirme o pagamento InfinitePay para usar o assistente.",
+            "Resultados ainda bloqueados. Confirme o pagamento Pix para usar o assistente.",
         );
         setSending(false);
         return;

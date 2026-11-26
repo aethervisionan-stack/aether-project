@@ -1,17 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
-import { Check, Loader2, Lock } from "lucide-react";
-import { createIqCheckout } from "@/src/lib/iqUnlockClient";
-import { redirectToCheckout } from "@/src/utils/checkoutRedirect";
+import { Check, Copy, Loader2, Lock } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
+import {
+  createIqPixPayment,
+  fetchIqUnlockStatus,
+  type IqPixCreateResult,
+} from "@/src/lib/iqUnlockClient";
 
 type Props = {
   sessionId: string;
   amountLabel: string;
-  verifying?: boolean;
-  verifyError?: string | null;
-  onRetryVerify?: () => void;
+  onUnlocked?: (paymentId: string | null) => void;
+  onAmountLabel?: (label: string) => void;
 };
 
 const UNLOCK_BENEFITS = [
@@ -22,91 +25,148 @@ const UNLOCK_BENEFITS = [
   "Convite dedicado à IA para tirar dúvidas do seu resultado",
 ] as const;
 
+const POLL_MS = 2500;
+
 export function IqUnlockCard({
   sessionId,
   amountLabel,
-  verifying = false,
-  verifyError = null,
-  onRetryVerify,
+  onUnlocked,
+  onAmountLabel,
 }: Props) {
   const reduce = useReducedMotion();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pix, setPix] = useState<IqPixCreateResult | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [awaiting, setAwaiting] = useState(false);
+  const [canSimApprove, setCanSimApprove] = useState(false);
+  const [simBusy, setSimBusy] = useState(false);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const unlockedRef = useRef(false);
 
-  async function startCheckout() {
+  const stopPoll = useCallback(() => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }, []);
+
+  const handleUnlocked = useCallback(
+    (paymentId: string | null) => {
+      if (unlockedRef.current) return;
+      unlockedRef.current = true;
+      stopPoll();
+      setAwaiting(false);
+      onUnlocked?.(paymentId);
+    },
+    [onUnlocked, stopPoll],
+  );
+
+  const pollOnce = useCallback(async () => {
+    if (!sessionId || unlockedRef.current) return;
+    try {
+      const status = await fetchIqUnlockStatus(sessionId);
+      if (status.amountLabel) onAmountLabel?.(status.amountLabel);
+      setCanSimApprove(Boolean(status.canSimApprove));
+      if (status.unlocked) {
+        handleUnlocked(status.paymentId);
+      }
+    } catch {
+      // keep polling — transient network blips
+    }
+  }, [handleUnlocked, onAmountLabel, sessionId]);
+
+  const startPoll = useCallback(() => {
+    stopPoll();
+    setAwaiting(true);
+    void pollOnce();
+    pollRef.current = setInterval(() => {
+      void pollOnce();
+    }, POLL_MS);
+  }, [pollOnce, stopPoll]);
+
+  useEffect(() => () => stopPoll(), [stopPoll]);
+
+  async function startPix() {
     if (loading || !sessionId) return;
     setLoading(true);
     setError(null);
+    setCopied(false);
+    unlockedRef.current = false;
     try {
-      const { url, order_nsu } = await createIqCheckout(sessionId);
+      const created = await createIqPixPayment(sessionId);
+      setPix(created);
+      if (created.amountLabel) onAmountLabel?.(created.amountLabel);
       try {
         window.sessionStorage.setItem(
-          "iq_infinitepay_pending",
-          JSON.stringify({ sessionId, order_nsu }),
+          "iq_pix_pending",
+          JSON.stringify({
+            sessionId,
+            paymentId: created.paymentId,
+          }),
         );
       } catch {
         // ignore
       }
-      redirectToCheckout(url);
+      setCanSimApprove(Boolean(created.simulated));
+      startPoll();
     } catch (err) {
       setError(
         err instanceof Error
           ? err.message
-          : "Erro ao iniciar pagamento. Tente de novo — sua sessão permanece salva.",
+          : "Erro ao gerar Pix. Tente de novo — sua sessão permanece salva.",
       );
+      setPix(null);
+      stopPoll();
+      setAwaiting(false);
+    } finally {
       setLoading(false);
     }
   }
 
-  if (verifying) {
-    return (
-      <motion.section
-        initial={reduce ? false : { opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="mx-auto max-w-lg rounded-2xl border border-cyan-500/25 bg-zinc-950/80 p-6 text-center sm:p-8"
-        aria-live="polite"
-      >
-        {verifyError ? (
-          <>
-            <Lock className="mx-auto h-8 w-8 text-amber-300/90" aria-hidden />
-            <h1 className="mt-4 font-iq-display text-2xl text-zinc-50">
-              Pagamento ainda não confirmado
-            </h1>
-            <p className="mt-3 text-sm leading-relaxed text-red-300/90">
-              {verifyError}
-            </p>
-            <p className="mt-2 text-xs text-zinc-500">
-              Sua sessão permanece salva. Você pode tentar de novo sem refazer o
-              teste.
-            </p>
-            {onRetryVerify ? (
-              <button
-                type="button"
-                onClick={onRetryVerify}
-                className="mt-6 rounded-xl bg-gradient-to-r from-emerald-400 via-cyan-400 to-indigo-400 px-6 py-3 text-sm font-semibold text-[#06070A]"
-              >
-                Tentar confirmar de novo
-              </button>
-            ) : null}
-          </>
-        ) : (
-          <>
-            <Loader2
-              className="mx-auto h-8 w-8 animate-spin text-cyan-300"
-              aria-hidden
-            />
-            <h1 className="mt-4 font-iq-display text-2xl text-zinc-50">
-              Confirmando pagamento…
-            </h1>
-            <p className="mt-2 text-sm text-zinc-400">
-              Aguarde um instante — estamos confirmando seu pagamento
-              InfinitePay.
-            </p>
-          </>
-        )}
-      </motion.section>
-    );
+  async function copyPixCode() {
+    if (!pix?.qrCode) return;
+    try {
+      await navigator.clipboard.writeText(pix.qrCode);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2200);
+    } catch {
+      setError(
+        "Não foi possível copiar automaticamente. Selecione o código e copie manualmente.",
+      );
+    }
   }
+
+  async function simApprove() {
+    if (!sessionId || simBusy || unlockedRef.current) return;
+    setSimBusy(true);
+    setError(null);
+    try {
+      const status = await fetchIqUnlockStatus(sessionId, { simApprove: true });
+      if (status.unlocked) {
+        handleUnlocked(status.paymentId);
+      } else {
+        setError(
+          status.error ||
+            "Simulação não disponível neste host. Use localhost em desenvolvimento.",
+        );
+      }
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Falha ao simular pagamento local.",
+      );
+    } finally {
+      setSimBusy(false);
+    }
+  }
+
+  const qrSrc =
+    pix?.qrCodeBase64 &&
+    !pix.qrCodeBase64.startsWith("iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB")
+      ? `data:image/png;base64,${pix.qrCodeBase64}`
+      : null;
 
   return (
     <motion.section
@@ -120,7 +180,11 @@ export function IqUnlockCard({
           className="inline-flex h-14 w-14 items-center justify-center rounded-full border border-emerald-400/40 bg-emerald-400/10 shadow-[0_0_24px_-8px_rgba(52,211,153,0.55)]"
           aria-hidden
         >
-          <Check className="h-6 w-6 text-emerald-300" strokeWidth={2.5} />
+          {pix ? (
+            <Lock className="h-6 w-6 text-emerald-300" strokeWidth={2.5} />
+          ) : (
+            <Check className="h-6 w-6 text-emerald-300" strokeWidth={2.5} />
+          )}
         </span>
         <p className="mt-4 text-[11px] font-medium uppercase tracking-[0.28em] text-emerald-300/85">
           Selo de conclusão
@@ -132,55 +196,152 @@ export function IqUnlockCard({
           Seu resultado está pronto
         </h1>
         <p className="mt-3 max-w-md text-sm leading-relaxed text-zinc-400">
-          Você terminou o teste — obrigado pela dedicação. Com {amountLabel}{" "}
-          você apoia os servidores e a inteligência artificial deste projeto e
-          libera o Hall of Fame, um convite dedicado para conversar com a IA
-          sobre o seu perfil, e o restante do seu diagnóstico.
+          Você terminou o teste — obrigado pela dedicação. Com {amountLabel} via
+          Pix você apoia os servidores e a inteligência artificial deste
+          projeto e libera o Hall of Fame, um convite dedicado para conversar
+          com a IA sobre o seu perfil, e o restante do seu diagnóstico.
         </p>
       </div>
 
-      <ul className="mt-6 space-y-2 text-left text-sm text-zinc-300">
-        {UNLOCK_BENEFITS.map((item) => (
-          <li
-            key={item}
-            className="flex gap-2 rounded-xl border border-zinc-800/80 bg-zinc-900/50 px-3 py-2"
+      {!pix ? (
+        <>
+          <ul className="mt-6 space-y-2 text-left text-sm text-zinc-300">
+            {UNLOCK_BENEFITS.map((item) => (
+              <li
+                key={item}
+                className="flex gap-2 rounded-xl border border-zinc-800/80 bg-zinc-900/50 px-3 py-2"
+              >
+                <span className="mt-0.5 text-cyan-400" aria-hidden>
+                  ✓
+                </span>
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+
+          {(error || null) && (
+            <p
+              role="alert"
+              className="mt-4 rounded-xl border border-red-500/35 bg-red-500/10 px-3 py-2 text-sm text-red-200"
+            >
+              {error}
+            </p>
+          )}
+
+          <button
+            type="button"
+            disabled={loading}
+            onClick={() => void startPix()}
+            className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-400 via-cyan-400 to-indigo-400 px-6 py-3.5 text-sm font-semibold text-[#06070A] shadow-[0_0_28px_-6px_rgba(52,211,153,0.45)] transition enabled:hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <span className="mt-0.5 text-cyan-400" aria-hidden>
-              ✓
-            </span>
-            <span>{item}</span>
-          </li>
-        ))}
-      </ul>
+            {loading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                Gerando Pix…
+              </>
+            ) : (
+              `Desbloquear meu resultado por ${amountLabel}`
+            )}
+          </button>
+          <p className="mt-3 text-center text-xs text-zinc-600">
+            Pagamento Pix via Mercado Pago. A liberação só acontece depois da
+            confirmação do pagamento.
+          </p>
+        </>
+      ) : (
+        <div className="mt-6 space-y-4">
+          <div className="mx-auto flex w-fit flex-col items-center rounded-2xl bg-white p-4 shadow-[0_0_0_1px_rgba(0,0,0,0.04)]">
+            {qrSrc ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={qrSrc}
+                alt="QR Code Pix para desbloquear o resultado"
+                width={240}
+                height={240}
+                className="h-60 w-60"
+              />
+            ) : (
+              <QRCodeSVG
+                value={pix.qrCode}
+                size={240}
+                level="M"
+                bgColor="#ffffff"
+                fgColor="#0a0a0a"
+                aria-label="QR Code Pix para desbloquear o resultado"
+              />
+            )}
+          </div>
 
-      {(error || null) && (
-        <p
-          role="alert"
-          className="mt-4 rounded-xl border border-red-500/35 bg-red-500/10 px-3 py-2 text-sm text-red-200"
-        >
-          {error}
-        </p>
+          <p className="text-center text-sm text-zinc-300">
+            Escaneie o QR Code ou copie o código Pix abaixo.
+          </p>
+
+          <div className="rounded-xl border border-zinc-800 bg-zinc-950/80 px-3 py-2">
+            <p className="break-all font-mono text-[11px] leading-relaxed text-zinc-400">
+              {pix.qrCode}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => void copyPixCode()}
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-cyan-500/35 bg-cyan-500/10 px-4 py-3 text-sm font-medium text-cyan-100 transition hover:bg-cyan-500/15"
+          >
+            {copied ? (
+              <>
+                <Check className="h-4 w-4 text-emerald-300" aria-hidden />
+                Código Pix copiado
+              </>
+            ) : (
+              <>
+                <Copy className="h-4 w-4" aria-hidden />
+                Copiar código Pix
+              </>
+            )}
+          </button>
+
+          {awaiting ? (
+            <p
+              className="flex items-center justify-center gap-2 text-center text-sm text-zinc-400"
+              aria-live="polite"
+            >
+              <Loader2 className="h-4 w-4 animate-spin text-cyan-300" aria-hidden />
+              Aguardando confirmação do pagamento…
+            </p>
+          ) : null}
+
+          {(error || null) && (
+            <p
+              role="alert"
+              className="rounded-xl border border-red-500/35 bg-red-500/10 px-3 py-2 text-sm text-red-200"
+            >
+              {error}
+            </p>
+          )}
+
+          {canSimApprove ? (
+            <button
+              type="button"
+              disabled={simBusy}
+              onClick={() => void simApprove()}
+              className="w-full rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-xs font-medium text-amber-100/90 disabled:opacity-50"
+            >
+              {simBusy
+                ? "Simulando…"
+                : "Simular pagamento (somente localhost / dev)"}
+            </button>
+          ) : null}
+
+          <button
+            type="button"
+            disabled={loading}
+            onClick={() => void startPix()}
+            className="w-full text-center text-xs text-zinc-500 underline-offset-2 hover:text-zinc-300 hover:underline"
+          >
+            Gerar novo QR Pix
+          </button>
+        </div>
       )}
-
-      <button
-        type="button"
-        disabled={loading}
-        onClick={() => void startCheckout()}
-        className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-400 via-cyan-400 to-indigo-400 px-6 py-3.5 text-sm font-semibold text-[#06070A] shadow-[0_0_28px_-6px_rgba(52,211,153,0.45)] transition enabled:hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        {loading ? (
-          <>
-            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-            Abrindo checkout…
-          </>
-        ) : (
-          `Desbloquear meu resultado por ${amountLabel}`
-        )}
-      </button>
-      <p className="mt-3 text-center text-xs text-zinc-600">
-        Pagamento seguro com InfinitePay. A liberação só acontece depois da
-        confirmação do pagamento.
-      </p>
     </motion.section>
   );
 }

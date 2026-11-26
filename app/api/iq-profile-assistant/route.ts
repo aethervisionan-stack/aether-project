@@ -225,7 +225,7 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           error:
-            "Sessão bloqueada. Confirme o pagamento InfinitePay (R$1) para usar o assistente Gemini com o IqResult.",
+            "Sessão bloqueada. Confirme o pagamento Pix (R$1) para usar o assistente Gemini com o IqResult.",
           code: "LOCKED",
         },
         { status: 402 },

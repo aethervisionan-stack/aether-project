@@ -1,12 +1,4 @@
-/** Client helpers for IQ InfinitePay unlock — never treat localStorage as authority. */
-
-export type IqPaymentReturnParams = {
-  order_nsu: string;
-  transaction_nsu: string | null;
-  slug: string | null;
-  simulated: boolean;
-  session_id: string | null;
-};
+/** Client helpers for IQ Mercado Pago Pix unlock — never treat localStorage as authority. */
 
 export function createIqSessionId(): string {
   const rand =
@@ -16,25 +8,110 @@ export function createIqSessionId(): string {
   return `iq_${rand}`;
 }
 
-export function readIqPaymentReturnParams(
-  search = typeof window !== "undefined" ? window.location.search : "",
-): IqPaymentReturnParams | null {
-  try {
-    const params = new URLSearchParams(search);
-    if (params.get("payment_return") !== "1") return null;
-    const order_nsu = params.get("order_nsu")?.trim() || null;
-    if (!order_nsu) return null;
-    return {
-      order_nsu,
-      transaction_nsu: params.get("transaction_nsu")?.trim() || null,
-      slug: params.get("slug")?.trim() || null,
-      simulated:
-        params.get("simulated") === "1" || params.get("simulated") === "true",
-      session_id: params.get("session_id")?.trim() || null,
-    };
-  } catch {
-    return null;
+export type IqPixCreateResult = {
+  paymentId: string;
+  qrCode: string;
+  qrCodeBase64: string;
+  expiresAt: string;
+  amountCentavos: number;
+  amountLabel: string;
+  simulated?: boolean;
+};
+
+export async function createIqPixPayment(
+  sessionId: string,
+): Promise<IqPixCreateResult> {
+  const res = await fetch("/api/payment/pix/create", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sessionId }),
+  });
+  const data = (await res.json().catch(() => ({}))) as {
+    paymentId?: string;
+    qrCode?: string;
+    qrCodeBase64?: string;
+    expiresAt?: string;
+    amountCentavos?: number;
+    amountLabel?: string;
+    simulated?: boolean;
+    error?: string;
+  };
+  if (!res.ok || !data.paymentId || !data.qrCode) {
+    throw new Error(
+      data.error ||
+        "Não foi possível gerar o Pix. Tente de novo — sua sessão permanece salva.",
+    );
   }
+  return {
+    paymentId: data.paymentId,
+    qrCode: data.qrCode,
+    qrCodeBase64: data.qrCodeBase64 || "",
+    expiresAt: data.expiresAt || new Date(Date.now() + 30 * 60_000).toISOString(),
+    amountCentavos:
+      typeof data.amountCentavos === "number" ? data.amountCentavos : 100,
+    amountLabel:
+      typeof data.amountLabel === "string" ? data.amountLabel : "R$ 1,00",
+    simulated: data.simulated,
+  };
+}
+
+export async function fetchIqUnlockStatus(
+  sessionId: string,
+  opts: { simApprove?: boolean } = {},
+): Promise<{
+  unlocked: boolean;
+  amountCentavos: number;
+  amountLabel: string;
+  paymentId: string | null;
+  order_nsu: string | null;
+  canSimApprove?: boolean;
+  simulated?: boolean;
+  error?: string;
+}> {
+  const qs = new URLSearchParams({ sessionId });
+  if (opts.simApprove) qs.set("simApprove", "1");
+  const res = await fetch(`/api/payment/pix/status?${qs.toString()}`, {
+    method: "GET",
+    cache: "no-store",
+  });
+  const data = (await res.json().catch(() => ({}))) as {
+    unlocked?: boolean;
+    amountCentavos?: number;
+    amountLabel?: string;
+    paymentId?: string | null;
+    order_nsu?: string | null;
+    canSimApprove?: boolean;
+    simulated?: boolean;
+    error?: string;
+  };
+  return {
+    unlocked: Boolean(data.unlocked),
+    amountCentavos:
+      typeof data.amountCentavos === "number" ? data.amountCentavos : 100,
+    amountLabel:
+      typeof data.amountLabel === "string" ? data.amountLabel : "R$ 1,00",
+    paymentId: data.paymentId ?? data.order_nsu ?? null,
+    order_nsu: data.order_nsu ?? data.paymentId ?? null,
+    canSimApprove: Boolean(data.canSimApprove),
+    simulated: Boolean(data.simulated),
+    error: typeof data.error === "string" ? data.error : undefined,
+  };
+}
+
+/** @deprecated Redirect return flow removed — kept for type-safe gradual cleanup. */
+export type IqPaymentReturnParams = {
+  order_nsu: string;
+  transaction_nsu: string | null;
+  slug: string | null;
+  simulated: boolean;
+  session_id: string | null;
+};
+
+export function readIqPaymentReturnParams(
+  _search = typeof window !== "undefined" ? window.location.search : "",
+): IqPaymentReturnParams | null {
+  // InfinitePay redirect return is no longer used for IQ unlock.
+  return null;
 }
 
 export function cleanIqPaymentReturnUrl(): void {
@@ -64,103 +141,4 @@ export function cleanIqPaymentReturnUrl(): void {
   } catch {
     // ignore
   }
-}
-
-export async function fetchIqUnlockStatus(sessionId: string): Promise<{
-  unlocked: boolean;
-  amountCentavos: number;
-  amountLabel: string;
-  order_nsu: string | null;
-  error?: string;
-}> {
-  const res = await fetch(
-    `/api/payment/infinitepay/status?sessionId=${encodeURIComponent(sessionId)}`,
-    { method: "GET", cache: "no-store" },
-  );
-  const data = (await res.json().catch(() => ({}))) as {
-    unlocked?: boolean;
-    amountCentavos?: number;
-    amountLabel?: string;
-    order_nsu?: string | null;
-    error?: string;
-  };
-  return {
-    unlocked: Boolean(data.unlocked),
-    amountCentavos:
-      typeof data.amountCentavos === "number" ? data.amountCentavos : 100,
-    amountLabel:
-      typeof data.amountLabel === "string" ? data.amountLabel : "R$ 1,00",
-    order_nsu: data.order_nsu ?? null,
-    error: typeof data.error === "string" ? data.error : undefined,
-  };
-}
-
-export async function verifyIqPayment(params: {
-  sessionId: string;
-  order_nsu: string;
-  transaction_nsu?: string | null;
-  slug?: string | null;
-  simulated?: boolean;
-}): Promise<{ unlocked: boolean; error?: string; paid?: boolean }> {
-  const res = await fetch("/api/payment/infinitepay/verify", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      sessionId: params.sessionId,
-      order_nsu: params.order_nsu,
-      transaction_nsu: params.transaction_nsu,
-      slug: params.slug,
-      simulated: params.simulated ? "1" : undefined,
-    }),
-  });
-  const data = (await res.json().catch(() => ({}))) as {
-    unlocked?: boolean;
-    paid?: boolean;
-    error?: string;
-    pending?: boolean;
-  };
-  if (!res.ok || (!data.unlocked && !data.paid)) {
-    return {
-      unlocked: false,
-      paid: false,
-      error:
-        data.error ||
-        (data.pending
-          ? "Pagamento ainda não confirmado. Aguarde ou tente de novo."
-          : "Não foi possível confirmar o pagamento. Tente de novo — sua sessão permanece salva."),
-    };
-  }
-  return { unlocked: true, paid: true };
-}
-
-export async function createIqCheckout(sessionId: string): Promise<{
-  url: string;
-  order_nsu: string;
-  amountLabel: string;
-  simulated?: boolean;
-}> {
-  const res = await fetch("/api/payment/infinitepay/create", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ sessionId }),
-  });
-  const data = (await res.json().catch(() => ({}))) as {
-    url?: string;
-    order_nsu?: string;
-    amountLabel?: string;
-    simulated?: boolean;
-    error?: string;
-  };
-  if (!res.ok || !data.url || !data.order_nsu) {
-    throw new Error(
-      data.error ||
-        "Não foi possível abrir o checkout. Tente de novo — sua sessão permanece salva.",
-    );
-  }
-  return {
-    url: data.url,
-    order_nsu: data.order_nsu,
-    amountLabel: data.amountLabel || "R$ 1,00",
-    simulated: data.simulated,
-  };
 }

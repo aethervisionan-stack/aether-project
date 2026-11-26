@@ -368,10 +368,10 @@ export interface QuizPersistedState {
   sessionId: string | null;
   /**
    * Client cache after server confirm. Never grant UI access from this flag
-   * without a successful /api/payment/infinitepay/status|verify response.
+   * without a successful /api/payment/pix/status response.
    */
   resultsUnlocked: boolean;
-  /** Last InfinitePay order_nsu tied to this IQ unlock attempt */
+  /** Last Mercado Pago payment id (or legacy order_nsu) for this IQ unlock */
   unlockOrderNsu: string | null;
 }
 
