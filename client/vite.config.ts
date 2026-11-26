@@ -1,34 +1,42 @@
 import path from "node:path";
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 
 /**
- * Dev proxy:
- *   browser  →  /api/ws/live  (ws)
- *   Vite     →  ws://127.0.0.1:8000/ws/live
- *
- * GeminiLiveService defaults to `ws(s)://<host>/api/ws/live` so the API key
- * stays on the FastAPI side and the path matches production reverse proxies
- * that mount the backend under `/api`.
+ * Port isolation (this project only):
+ *   Preferred HUD: 5174 (avoids default 5173 collisions)
+ *   strictPort: false -> Vite auto-picks next free if preferred is busy
+ *   API proxy target from AETHER_API_ORIGIN / VITE_API_PROXY_TARGET (default :8001)
  */
-export default defineConfig({
-  resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "src"),
-    },
-  },
-  server: {
-    port: 5173,
-    host: "127.0.0.1",
-    proxy: {
-      "/api": {
-        target: "http://127.0.0.1:8000",
-        changeOrigin: true,
-        ws: true,
-        // Disable idle proxy timeouts that silently drop long-lived Live sockets.
-        timeout: 0,
-        proxyTimeout: 0,
-        rewrite: (p) => p.replace(/^\/api/, ""),
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), "");
+  const hudPort = Number(env.AETHER_HUD_PORT || process.env.AETHER_HUD_PORT || 5174);
+  const apiOrigin =
+    env.AETHER_API_ORIGIN ||
+    process.env.AETHER_API_ORIGIN ||
+    env.VITE_API_PROXY_TARGET ||
+    process.env.VITE_API_PROXY_TARGET ||
+    "http://127.0.0.1:8001";
+
+  return {
+    resolve: {
+      alias: {
+        "@": path.resolve(__dirname, "src"),
       },
     },
-  },
+    server: {
+      port: Number.isFinite(hudPort) && hudPort > 0 ? hudPort : 5174,
+      strictPort: false,
+      host: "127.0.0.1",
+      proxy: {
+        "/api": {
+          target: apiOrigin,
+          changeOrigin: true,
+          ws: true,
+          timeout: 0,
+          proxyTimeout: 0,
+          rewrite: (p) => p.replace(/^\/api/, ""),
+        },
+      },
+    },
+  };
 });

@@ -13,7 +13,10 @@ from app.persona.real_life_copilot import REAL_LIFE_COPILOT_INSTRUCTION
 # Always load backend/.env regardless of process cwd.
 _BACKEND_ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
 
+# Dedicated project ports prefer 5174/8001; keep 5173 for legacy local tabs.
 DEFAULT_CORS = (
+    "http://127.0.0.1:5174,"
+    "http://localhost:5174,"
     "http://127.0.0.1:5173,"
     "http://localhost:5173"
 )
@@ -36,7 +39,8 @@ class Settings(BaseSettings):
     # Live WebSocket path is not on the default GenAI API version — use v1beta.
     gemini_api_version: str = Field(default="v1beta", alias="GEMINI_API_VERSION")
     host: str = Field(default="0.0.0.0", alias="HOST")
-    port: int = Field(default=8000, alias="PORT")
+    # Dedicated default 8001 avoids colliding with other projects on :8000.
+    port: int = Field(default=8001, alias="PORT")
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
     cors_origins: str = Field(default=DEFAULT_CORS, alias="CORS_ORIGINS")
 
@@ -46,11 +50,11 @@ class Settings(BaseSettings):
     stripe_webhook_secret: str = Field(default="", alias="STRIPE_WEBHOOK_SECRET")
     stripe_price_id: str = Field(default="", alias="STRIPE_PRICE_ID")
     stripe_success_url: str = Field(
-        default="http://127.0.0.1:5173/?checkout=success&session_id={CHECKOUT_SESSION_ID}",
+        default="http://127.0.0.1:5174/?checkout=success&session_id={CHECKOUT_SESSION_ID}",
         alias="STRIPE_SUCCESS_URL",
     )
     stripe_cancel_url: str = Field(
-        default="http://127.0.0.1:5173/?checkout=cancel",
+        default="http://127.0.0.1:5174/?checkout=cancel",
         alias="STRIPE_CANCEL_URL",
     )
     # --- TEMP TEST price (restore official later) ---
@@ -140,14 +144,22 @@ class Settings(BaseSettings):
         default=False, alias="AETHER_DESKTOP_NOTIFICATIONS_ENABLED"
     )
     aether_mobile_bridge_url: str = Field(
-        default="ws://127.0.0.1:8000/ws/live",
+        default="ws://127.0.0.1:8001/ws/live",
         alias="AETHER_MOBILE_BRIDGE_URL",
     )
 
     @property
     def cors_origin_list(self) -> list[str]:
         raw = {o.strip() for o in self.cors_origins.split(",") if o.strip()}
-        raw.update({"http://127.0.0.1:5173", "http://localhost:5173"})
+        # Always allow dedicated HUD port + legacy Vite default (this project only).
+        raw.update(
+            {
+                "http://127.0.0.1:5174",
+                "http://localhost:5174",
+                "http://127.0.0.1:5173",
+                "http://localhost:5173",
+            }
+        )
         return sorted(raw)
 
     def has_api_key(self) -> bool:
