@@ -58,11 +58,25 @@ export function isRealApiKey(key = infinitepayApiKey()): boolean {
   return true;
 }
 
-/** Simulate local checkout when handle is still the placeholder. */
+/**
+ * Simulate local checkout only when we have no usable InfinitePay credentials.
+ * A real API key wins over a missing/placeholder handle (docs: handle optional with key).
+ * Never simulate on Vercel Production — missing creds must fail loudly instead of
+ * returning a fake on-site URL that looks like "pay did nothing".
+ */
 export function infinitepaySimulateLocal(
   handle = infinitepayHandle(),
 ): boolean {
+  if (process.env.INFINITEPAY_SIMULATE === "1") return true;
+  if (process.env.INFINITEPAY_SIMULATE === "0") return false;
+  if (isRealApiKey()) return false;
+  if (process.env.VERCEL_ENV === "production") return false;
   return isPlaceholderHandle(handle);
+}
+
+/** True when we can call InfinitePay for a real checkout link. */
+export function canCreateRealCheckout(): boolean {
+  return isRealApiKey() || !isPlaceholderHandle();
 }
 
 export function appPublicUrl(): string {

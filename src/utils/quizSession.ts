@@ -454,7 +454,7 @@ export function applyMentorRestore(
   return { ok: true, session: next };
 }
 
-/** Upgrade after result (R$5) or legacy mentor unlock — 30d + restore. */
+/** Upgrade Mentor (R$5) — 30d + restore. Does NOT grant diagnosis by itself. */
 export function unlockMentorPass(
   profile: MentorProfileSnapshot,
   orderNsu?: string | null,
@@ -471,7 +471,8 @@ export function unlockMentorPass(
     ...current,
     completed: true,
     updatedAt: now,
-    resultUnlocked: true,
+    // Preserve prior diagnosis unlock; mentor_upgrade alone does not reveal it.
+    resultUnlocked: Boolean(current.resultUnlocked),
     mentorUnlocked: true,
     paidPlan: "mentor_upgrade",
     mentorUnlockedAt: now,

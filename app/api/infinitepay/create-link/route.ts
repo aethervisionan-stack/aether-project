@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import {
   INFINITEPAY_TIERS,
   appPublicUrl,
+  canCreateRealCheckout,
   infinitepayApiKey,
   infinitepayHandle,
   infinitepaySimulateLocal,
@@ -25,10 +26,38 @@ function buildAuthHeaders(): HeadersInit {
   };
   const key = infinitepayApiKey();
   if (isRealApiKey(key)) {
-    headers.Authorization = `Bearer ${key}`;
+    // Docs: X-Api-Key identifies the merchant; Bearer kept for older gateways.
     headers["X-Api-Key"] = key;
+    headers.Authorization = `Bearer ${key}`;
   }
   return headers;
+}
+
+function extractCheckoutUrl(data: Record<string, unknown>): string | null {
+  const candidates: unknown[] = [
+    data.url,
+    data.checkout_url,
+    data.payment_url,
+    data.link,
+    data.checkout_link,
+  ];
+  const nested = data.data;
+  if (nested && typeof nested === "object") {
+    const d = nested as Record<string, unknown>;
+    candidates.push(
+      d.url,
+      d.checkout_url,
+      d.payment_url,
+      d.link,
+      d.checkout_link,
+    );
+  }
+  for (const c of candidates) {
+    if (typeof c === "string" && /^https?:\/\//i.test(c.trim())) {
+      return c.trim();
+    }
+  }
+  return null;
 }
 
 export async function POST(req: Request) {
@@ -81,14 +110,19 @@ export async function POST(req: Request) {
       });
     }
 
+    if (!canCreateRealCheckout()) {
+      return NextResponse.json(
+        {
+          error:
+            "InfinitePay não configurada. Defina INFINITEPAY_HANDLE ou INFINITEPAY_API_KEY.",
+        },
+        { status: 503 },
+      );
+    }
+
     const payload: Record<string, unknown> = {
       order_nsu,
       redirect_url: redirectUrl,
-      webhook_url: webhookUrl,
-      webhook: {
-        url: webhookUrl,
-        events: ["paid", "refunded", "canceled"],
-      },
       items: [
         {
           quantity: 1,
@@ -98,9 +132,15 @@ export async function POST(req: Request) {
       ],
     };
 
-    // Handle identifies the merchant when API key is absent; with key it is optional.
-    if (handle) {
+    // Handle identifies the merchant when API key is absent; with key it is optional
+    // but safe to send when it belongs to the same account.
+    if (handle && !handle.toUpperCase().includes("COLE_AQUI")) {
       payload.handle = handle;
+    }
+
+    // Advanced options (require API key per InfinitePay docs)
+    if (isRealApiKey()) {
+      payload.webhook_url = webhookUrl;
     }
 
     const res = await fetch("https://api.checkout.infinitepay.io/links", {
@@ -122,11 +162,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: message, details: data }, { status: 502 });
     }
 
-    const url =
-      (typeof data.url === "string" && data.url) ||
-      (typeof data.checkout_url === "string" && data.checkout_url) ||
-      (typeof data.link === "string" && data.link) ||
-      null;
+    const url = extractCheckoutUrl(data);
 
     if (!url) {
       return NextResponse.json(

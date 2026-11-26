@@ -478,15 +478,29 @@ function MentorPassModal({
           sessionId,
         }),
       });
-      const data = (await res.json()) as {
-        url?: string;
-        order_nsu?: string;
-        error?: string;
-      };
-      if (!res.ok || !data.url) {
-        throw new Error(data.error || "Não foi possível abrir o checkout");
+      let data: Record<string, unknown> = {};
+      try {
+        data = (await res.json()) as Record<string, unknown>;
+      } catch {
+        throw new Error("Resposta inválida do servidor de pagamento");
       }
-      window.location.href = data.url;
+      const urlCandidates = [
+        data.url,
+        data.checkout_url,
+        data.payment_url,
+        data.link,
+      ];
+      const url = urlCandidates.find(
+        (u): u is string =>
+          typeof u === "string" && /^https?:\/\//i.test(u.trim()),
+      );
+      if (!res.ok || !url) {
+        throw new Error(
+          (typeof data.error === "string" && data.error) ||
+            "Não foi possível abrir o checkout",
+        );
+      }
+      window.location.assign(url.trim());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao iniciar pagamento");
       setLoading(false);

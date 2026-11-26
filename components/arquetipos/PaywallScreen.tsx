@@ -2,9 +2,10 @@
 
 import { motion, useReducedMotion } from "framer-motion";
 import { Check, Loader2, Lock, Sparkles } from "lucide-react";
+import Image from "next/image";
 import { useMemo, useState } from "react";
-import { buildDiagnosis } from "@/src/data/diagnosis";
 import type { NarrativeResult } from "@/src/data/archetypes";
+import { paywallTeaseFor } from "@/src/data/paywallTeases";
 import {
   isResultUnlocked,
   readQuizSession,
@@ -78,6 +79,22 @@ function sessionClientId(): string {
   }
 }
 
+function pickCheckoutUrl(data: Record<string, unknown>): string | null {
+  const candidates: unknown[] = [
+    data.url,
+    data.checkout_url,
+    data.payment_url,
+    data.link,
+    data.checkout_link,
+  ];
+  for (const c of candidates) {
+    if (typeof c === "string" && /^https?:\/\//i.test(c.trim())) {
+      return c.trim();
+    }
+  }
+  return null;
+}
+
 export function PaywallScreen({
   result,
   onUnlocked: _onUnlocked,
@@ -88,13 +105,18 @@ export function PaywallScreen({
 }: Props) {
   void _onUnlocked;
   const reduce = useReducedMotion();
-  const diagnosis = useMemo(() => buildDiagnosis(result), [result]);
+  const dominant = result.dominants[0]?.profile ?? null;
+  const tease = useMemo(
+    () => (dominant ? paywallTeaseFor(dominant.id) : null),
+    [dominant],
+  );
   const alreadyResult = isResultUnlocked(readQuizSession());
 
   const [selResult, setSelResult] = useState(!alreadyResult);
   const [selMentor, setSelMentor] = useState(alreadyResult);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [simNotice, setSimNotice] = useState<string | null>(null);
 
   const totalCentavos =
     (selResult && !alreadyResult ? 100 : 0) + (selMentor ? 500 : 0);
@@ -128,6 +150,7 @@ export function PaywallScreen({
     if (!tier || loading) return;
     setLoading(true);
     setError(null);
+    setSimNotice(null);
     try {
       const res = await fetch("/api/infinitepay/create-link", {
         method: "POST",
@@ -137,23 +160,41 @@ export function PaywallScreen({
           sessionId: sessionClientId(),
         }),
       });
-      const data = (await res.json()) as {
-        url?: string;
-        order_nsu?: string;
-        error?: string;
-      };
-      if (!res.ok || !data.url) {
-        throw new Error(data.error || "Não foi possível abrir o checkout");
+      let data: Record<string, unknown> = {};
+      try {
+        data = (await res.json()) as Record<string, unknown>;
+      } catch {
+        throw new Error("Resposta inválida do servidor de pagamento");
       }
+      const url = pickCheckoutUrl(data);
+      const errMsg =
+        typeof data.error === "string" ? data.error : null;
+      if (!res.ok || !url) {
+        throw new Error(errMsg || "Não foi possível abrir o checkout");
+      }
+
+      const simulated = data.simulated === true;
+      if (simulated) {
+        setSimNotice(
+          "Modo simulado: InfinitePay ainda usa handle/API placeholder neste ambiente. Vamos liberar localmente após o retorno.",
+        );
+      }
+
       try {
         window.sessionStorage.setItem(
           "infinitepay_pending",
-          JSON.stringify({ tier, order_nsu: data.order_nsu ?? null }),
+          JSON.stringify({
+            tier,
+            order_nsu:
+              typeof data.order_nsu === "string" ? data.order_nsu : null,
+          }),
         );
       } catch {
         // ignore
       }
-      window.location.href = data.url;
+
+      // Same-tab redirect (prefer assign — not window.open).
+      window.location.assign(url);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao iniciar pagamento");
       setLoading(false);
@@ -230,54 +271,73 @@ export function PaywallScreen({
           transition={{ duration: 0.55, ease: EASE, delay: 0.04 }}
           className="cart-display mt-4 text-center text-3xl tracking-wide text-[color:var(--cine-ink)] sm:text-4xl"
         >
-          Sua confluência está pronta
+          O espelho já foi forjado
         </motion.h1>
 
         <motion.div
           initial={reduce ? false : { opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.55, ease: EASE, delay: 0.08 }}
-          className="cart-card mt-8 rounded-sm p-5"
+          className="mx-auto mt-8 flex max-w-md flex-col items-center"
         >
-          <p className="cart-display text-[10px] uppercase tracking-[0.24em] text-[color:var(--cart-copper)]">
-            Arquétipo Dominante & Subarquétipo
-          </p>
-          <p className="mt-3 text-lg leading-snug text-[color:var(--cart-ink)]">
-            <span
-              className="font-semibold"
-              style={{ color: diagnosis.dominant.accent }}
+          {dominant ? (
+            <div
+              className="relative aspect-[2/3] w-full max-w-[220px] overflow-hidden rounded-sm border border-[color:var(--cine-border)] sm:max-w-[260px]"
+              style={{
+                boxShadow: `0 18px 40px rgba(0,0,0,0.45), inset 0 0 0 1px ${dominant.accent}44`,
+              }}
             >
-              {diagnosis.dominant.title}
-            </span>{" "}
-            <span className="text-[color:var(--cart-dim)]">
-              ({diagnosis.dominantPct}%)
-            </span>
-            <span className="text-[color:var(--cart-muted)]"> · </span>
-            <span
-              className="font-semibold"
-              style={{ color: diagnosis.sub.accent }}
-            >
-              {diagnosis.sub.title}
-            </span>{" "}
-            <span className="text-[color:var(--cart-dim)]">
-              ({diagnosis.secondaryPct}%)
-            </span>
+              <Image
+                src={dominant.image}
+                alt="Carta do arquétipo — prévia selada"
+                fill
+                sizes="(max-width: 640px) 60vw, 260px"
+                className="object-cover"
+                priority
+              />
+              <div
+                className="pointer-events-none absolute inset-0"
+                style={{
+                  background: `
+                    linear-gradient(180deg, transparent 55%, rgba(5,6,8,0.75) 88%, rgba(5,6,8,0.92) 100%),
+                    linear-gradient(0deg, transparent 75%, rgba(5,6,8,0.3) 100%)
+                  `,
+                }}
+              />
+              <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-2 p-3">
+                <Lock
+                  size={14}
+                  className="text-[color:var(--cart-copper)]"
+                  aria-hidden
+                />
+                <span className="cart-display text-[10px] uppercase tracking-[0.28em] text-[color:var(--cart-copper)]">
+                  Brasão selado
+                </span>
+              </div>
+            </div>
+          ) : null}
+
+          {tease ? (
+            <p className="mt-6 text-center text-sm leading-relaxed text-[color:var(--cart-muted)]">
+              {tease}
+            </p>
+          ) : null}
+
+          <p className="mt-4 text-center text-sm leading-relaxed text-[color:var(--cart-ink)]">
+            {alreadyResult
+              ? "Diagnóstico já liberado. Com R$ 5,00 você ativa 30 dias de Mentor — ou some o combo quando quiser renovar a jornada."
+              : "Um único pagamento destrava o nome e o diagnóstico completo, e ajuda a manter os servidores deste santuário acesos: R$ 1,00 o dossiê · R$ 5,00 o Mentor 30 dias · R$ 6,00 o combo."}
           </p>
-          <p className="mt-2 text-sm text-[color:var(--cart-muted)]">
-            {diagnosis.confluenceTitle}
-          </p>
-          <p className="mt-3 text-sm leading-relaxed text-[color:var(--cart-muted)]">
-            {diagnosis.confluenceText.slice(0, 180)}
-            {diagnosis.confluenceText.length > 180 ? "…" : ""}
-          </p>
-          <div className="mt-4 flex items-start gap-2 rounded-sm border border-[color:var(--cart-border-soft)] bg-black/20 px-3 py-3 text-xs leading-relaxed text-[color:var(--cart-dim)]">
+
+          <div className="mt-4 flex max-w-md items-start gap-2 rounded-sm border border-[color:var(--cart-border-soft)] bg-black/20 px-3 py-3 text-xs leading-relaxed text-[color:var(--cart-dim)]">
             <Lock
               size={14}
               className="mt-0.5 shrink-0 text-[color:var(--cart-copper)]"
             />
             <span>
-              Escolha uma caixinha, as duas, ou o combo — checkout InfinitePay
-              (Pix ou cartão). Suas 16 respostas ficam neste aparelho.
+              Nome e diagnóstico só aparecem após o pagamento (Diagnóstico ou
+              Combo). Checkout InfinitePay · Pix ou cartão · respostas neste
+              aparelho.
             </span>
           </div>
         </motion.div>
@@ -397,7 +457,14 @@ export function PaywallScreen({
             )}
           </button>
           {error ? (
-            <p className="text-center text-sm text-red-300/90">{error}</p>
+            <p className="max-w-md text-center text-sm text-red-300/90" role="alert">
+              {error}
+            </p>
+          ) : null}
+          {simNotice ? (
+            <p className="max-w-md text-center text-xs text-amber-200/90">
+              {simNotice}
+            </p>
           ) : null}
           <p className="text-center text-[11px] text-[color:var(--cart-dim)]">
             Checkout InfinitePay · redirecionamento seguro
