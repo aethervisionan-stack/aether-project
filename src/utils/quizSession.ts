@@ -241,10 +241,33 @@ export function isMentorPassActive(
   return session.mentorExpiresAt > now;
 }
 
+/** Tiers that grant the full diagnosis (not mentor_upgrade alone). */
+export function isDiagnosisPaidPlan(
+  plan: PaidPlan | null | undefined,
+): boolean {
+  return (
+    plan === "result" ||
+    plan === "combo" ||
+    plan === "basic_3" ||
+    plan === "combo_890"
+  );
+}
+
+/**
+ * Diagnosis unlock: explicit resultUnlocked flag, or a persisted paid
+ * order_nsu for a diagnosis tier (result | combo | legacy equivalents).
+ * mentor_upgrade alone never unlocks the result.
+ */
 export function isResultUnlocked(
   session: QuizSessionPayload | null | undefined,
 ): boolean {
-  return Boolean(session?.resultUnlocked);
+  if (!session) return false;
+  if (session.resultUnlocked) return true;
+  // Persisted paid order for a diagnosis tier (reload after verify)
+  if (session.orderNsu && isDiagnosisPaidPlan(session.paidPlan)) {
+    return true;
+  }
+  return false;
 }
 
 /** result (R$1): diagnóstico only — mentorUnlocked false, 1 free mentor msg. */

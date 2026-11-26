@@ -12,6 +12,8 @@ import { buildMentorProfile } from "@/lib/mentor/profile";
 import {
   applyMentorRestore,
   clearQuizAnswersKeepMentor,
+  clearQuizSession,
+  isDiagnosisPaidPlan,
   isMentorPassActive,
   isResultUnlocked,
   readQuizSession,
@@ -35,6 +37,7 @@ type Stage = "welcome" | "quiz" | "processing" | "paywall" | "result";
 
 const PROCESSING_MS = 1200;
 const ADVANCE_MS = 300;
+const IS_DEV = process.env.NODE_ENV === "development";
 
 type ReturnParams = {
   order_nsu: string | null;
@@ -84,6 +87,12 @@ function cleanReturnUrl() {
   }
 }
 
+/** True only after paid diagnosis verify (or persisted paid diagnosis order). */
+function sessionGrantsResult(): boolean {
+  const session = readQuizSession();
+  return isResultUnlocked(session);
+}
+
 export function ArchetypeQuizApp() {
   const reduce = useReducedMotion();
   const [mounted, setMounted] = useState(false);
@@ -111,12 +120,16 @@ export function ArchetypeQuizApp() {
       completed: boolean,
     ) => {
       const prev = readQuizSession();
+      // Never unlock on finish — only preserve an already-paid diagnosis flag.
+      const paidDiagnosis =
+        Boolean(prev?.resultUnlocked) ||
+        (Boolean(prev?.orderNsu) && isDiagnosisPaidPlan(prev?.paidPlan));
       writeQuizSession({
         answers: nextAnswers,
         customAnswers: nextCustom,
         completed,
         updatedAt: Date.now(),
-        resultUnlocked: prev?.resultUnlocked,
+        resultUnlocked: paidDiagnosis,
         mentorUnlocked: prev?.mentorUnlocked,
         paidPlan: prev?.paidPlan ?? null,
         mentorUnlockedAt: prev?.mentorUnlockedAt ?? null,
@@ -133,16 +146,42 @@ export function ArchetypeQuizApp() {
 
   const applyUnlock = useCallback(
     (tier: InfinitePayTier | string, orderNsu?: string | null) => {
+      const diagnosisTier =
+        tier === "result" ||
+        tier === "combo" ||
+        tier === "basic_3" ||
+        tier === "combo_890";
+      // Diagnosis unlock requires a verified InfinitePay order_nsu (no free unlock).
+      if (diagnosisTier && !orderNsu) {
+        setVerifyError(
+          "Pagamento sem order_nsu — não foi possível liberar o diagnóstico.",
+        );
+        setVerifying(false);
+        setStage("paywall");
+        return;
+      }
+
       persistAnswers(answers, customAnswers, true);
-      unlockByTier(tier, buildMentorProfile(result), orderNsu ?? null);
-      writeIsUnlocked(true);
-      setUnlocked(true);
+      const session = unlockByTier(
+        tier,
+        buildMentorProfile(result),
+        orderNsu ?? null,
+      );
+      // Diagnosis UI only for result | combo (or legacy). mentor_upgrade alone stays blocked.
+      const diagnosisOpen = isResultUnlocked(session);
+      writeIsUnlocked(diagnosisOpen);
+      setUnlocked(diagnosisOpen);
       setVerifying(false);
       setVerifyError(null);
-      setStage("result");
       cleanReturnUrl();
-      playRevealChord();
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      if (diagnosisOpen) {
+        setStage("result");
+        playRevealChord();
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      } else {
+        // Paid mentor-only: keep paywall for sealed diagnosis.
+        setStage("paywall");
+      }
     },
     [answers, customAnswers, persistAnswers, result],
   );
@@ -185,6 +224,23 @@ export function ArchetypeQuizApp() {
     [applyUnlock],
   );
 
+  const handleDevReset = useCallback(() => {
+    if (!IS_DEV) return;
+    clearQuizSession();
+    writeIsUnlocked(false);
+    setUnlocked(false);
+    setAnswers({});
+    setCustomAnswers({});
+    setIndex(0);
+    setVerifying(false);
+    setVerifyError(null);
+    verifyStartedRef.current = false;
+    returnParamsRef.current = null;
+    cleanReturnUrl();
+    setStage("welcome");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, []);
+
   useEffect(() => {
     setMounted(true);
 
@@ -225,28 +281,37 @@ export function ArchetypeQuizApp() {
     returnParamsRef.current = returnParams;
 
     const session = readQuizSession();
-    const isUnlocked =
-      isResultUnlocked(session) || readIsUnlocked();
-    if (isUnlocked && !session?.resultUnlocked) {
+    // Heal stale resultUnlocked from paid diagnosis order_nsu (reload path).
+    let grantsResult = isResultUnlocked(session);
+    if (
+      session &&
+      !session.resultUnlocked &&
+      session.orderNsu &&
+      isDiagnosisPaidPlan(session.paidPlan)
+    ) {
       writeQuizSession({
-        ...(session ?? {
-          answers: {},
-          customAnswers: {},
-          completed: false,
-          updatedAt: Date.now(),
-        }),
+        ...session,
         resultUnlocked: true,
         updatedAt: Date.now(),
       });
+      grantsResult = true;
     }
-    setUnlocked(isUnlocked);
-    if (isUnlocked) writeIsUnlocked(true);
+
+    // Drop legacy localStorage isUnlocked — never grant access from it alone.
+    if (readIsUnlocked() && !grantsResult) {
+      writeIsUnlocked(false);
+    }
+    if (grantsResult) {
+      writeIsUnlocked(true);
+    }
+
+    setUnlocked(grantsResult);
 
     if (session?.answers && Object.keys(session.answers).length > 0) {
       setAnswers(session.answers);
       setCustomAnswers(session.customAnswers ?? {});
       if (session.completed) {
-        setStage(isUnlocked && !returnParams ? "result" : "paywall");
+        setStage(grantsResult && !returnParams ? "result" : "paywall");
       }
     }
 
@@ -265,6 +330,7 @@ export function ArchetypeQuizApp() {
   }, []);
 
   const finishQuiz = useCallback(() => {
+    // Unlock-on-finish removed: always process → paywall unless already paid.
     setStage("processing");
   }, []);
 
@@ -272,7 +338,10 @@ export function ArchetypeQuizApp() {
     if (stage !== "processing") return;
     const t = window.setTimeout(() => {
       persistAnswers(answers, customAnswers, true);
-      if (unlocked) {
+      // Re-read after persist — never unlock just because the quiz finished.
+      const paid = sessionGrantsResult();
+      setUnlocked(paid);
+      if (paid) {
         playRevealChord();
         setStage("result");
       } else {
@@ -280,7 +349,7 @@ export function ArchetypeQuizApp() {
       }
     }, PROCESSING_MS);
     return () => window.clearTimeout(t);
-  }, [stage, unlocked, answers, customAnswers, persistAnswers]);
+  }, [stage, answers, customAnswers, persistAnswers]);
 
   function advanceAfterAnswer() {
     window.setTimeout(() => {
@@ -331,10 +400,13 @@ export function ArchetypeQuizApp() {
     setIndex(0);
     setStage("welcome");
     clearQuizAnswersKeepMentor();
+    // Re-sync unlock from session (paid diagnosis may still be present).
+    setUnlocked(sessionGrantsResult());
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function handleUnlocked(tier: InfinitePayTier) {
+    // Only reachable if a caller forces unlock — still go through tier rules.
     applyUnlock(tier, null);
   }
 
@@ -349,6 +421,16 @@ export function ArchetypeQuizApp() {
     <div className="arquetipo-root min-h-[100dvh]">
       <LandingHeader onStartQuiz={startQuiz} compact={inFlow} />
       <MedievalAudioPlayer />
+
+      {IS_DEV ? (
+        <button
+          type="button"
+          onClick={handleDevReset}
+          className="fixed bottom-3 right-3 z-[80] rounded border border-amber-700/60 bg-black/70 px-2 py-1 text-[10px] uppercase tracking-wider text-amber-200/90 hover:bg-black/90"
+        >
+          Reset session (dev)
+        </button>
+      ) : null}
 
       <AnimatePresence mode="wait">
         {stage === "welcome" && (
@@ -425,7 +507,7 @@ export function ArchetypeQuizApp() {
           </motion.div>
         )}
 
-        {stage === "result" && (
+        {stage === "result" && unlocked ? (
           <motion.div
             key="result"
             initial={fade ? false : { opacity: 0 }}
@@ -436,7 +518,25 @@ export function ArchetypeQuizApp() {
           >
             <QuizResult result={result} onRestart={handleRestart} />
           </motion.div>
-        )}
+        ) : null}
+
+        {stage === "result" && !unlocked ? (
+          <motion.div
+            key="result-blocked"
+            initial={fade ? false : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={fade ? undefined : { opacity: 0 }}
+            transition={{ duration: 0.35 }}
+            className="pt-14 sm:pt-16"
+          >
+            <PaywallScreen
+              result={result}
+              onUnlocked={handleUnlocked}
+              verifying={false}
+              verifyError={null}
+            />
+          </motion.div>
+        ) : null}
       </AnimatePresence>
     </div>
   );
