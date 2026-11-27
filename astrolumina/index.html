@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Astrolumina | Oráculo & Cosmos</title>
-  <meta name="description" content="Descubra seu mapa astral, explore os signos e descubra a compatibilidade amorosa com Astrolumina." />
+  <meta name="description" content="Explore signos em profundidade, decanos, afinidades e compatibilidade estruturada com Astrolumina." />
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -31,193 +31,11 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
-  <style>
-    :root {
-      --midnight: #0B0D17;
-      --indigo-dark: #121629;
-      --indigo-card: #171C36;
-      --gold: #D4AF37;
-      --gold-light: #F3E5AB;
-      --cosmic: #7B2CBF;
-      --cosmic-light: #9D4EDD;
-    }
-
-    html { scroll-behavior: smooth; }
-
-    body {
-      font-family: 'Plus Jakarta Sans', sans-serif;
-      background: var(--midnight);
-      color: #E8E6F0;
-      overflow-x: hidden;
-    }
-
-    .starfield {
-      position: fixed;
-      inset: 0;
-      z-index: 0;
-      pointer-events: none;
-      background:
-        radial-gradient(1.5px 1.5px at 12% 18%, rgba(243, 229, 171, 0.9), transparent),
-        radial-gradient(1px 1px at 28% 62%, rgba(255, 255, 255, 0.7), transparent),
-        radial-gradient(1.5px 1.5px at 48% 28%, rgba(212, 175, 55, 0.8), transparent),
-        radial-gradient(1px 1px at 67% 78%, rgba(255, 255, 255, 0.55), transparent),
-        radial-gradient(2px 2px at 82% 22%, rgba(157, 78, 221, 0.7), transparent),
-        radial-gradient(1px 1px at 91% 54%, rgba(243, 229, 171, 0.6), transparent),
-        radial-gradient(1.5px 1.5px at 8% 88%, rgba(255, 255, 255, 0.5), transparent),
-        radial-gradient(1px 1px at 55% 8%, rgba(212, 175, 55, 0.65), transparent),
-        radial-gradient(ellipse 80% 60% at 50% -10%, rgba(123, 44, 191, 0.28), transparent),
-        radial-gradient(ellipse 50% 40% at 90% 80%, rgba(123, 44, 191, 0.12), transparent),
-        var(--midnight);
-    }
-
-    .gold-text {
-      background: linear-gradient(135deg, #F3E5AB 0%, #D4AF37 45%, #F3E5AB 100%);
-      -webkit-background-clip: text;
-      background-clip: text;
-      color: transparent;
-    }
-
-    .cosmic-gradient {
-      background: linear-gradient(135deg, rgba(123, 44, 191, 0.35), rgba(23, 28, 54, 0.9) 50%, rgba(212, 175, 55, 0.15));
-    }
-
-    .glass-card {
-      background: linear-gradient(160deg, rgba(23, 28, 54, 0.92), rgba(18, 22, 41, 0.88));
-      border: 1px solid rgba(212, 175, 55, 0.18);
-      backdrop-filter: blur(12px);
-    }
-
-    .btn-gold {
-      background: linear-gradient(135deg, #D4AF37, #F3E5AB 50%, #D4AF37);
-      color: #0B0D17;
-      font-weight: 600;
-      transition: transform 0.25s ease, box-shadow 0.25s ease;
-    }
-    .btn-gold:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 8px 28px rgba(212, 175, 55, 0.35);
-    }
-
-    .btn-outline-gold {
-      border: 1px solid rgba(212, 175, 55, 0.55);
-      color: #F3E5AB;
-      transition: background 0.25s ease, border-color 0.25s ease;
-    }
-    .btn-outline-gold:hover {
-      background: rgba(212, 175, 55, 0.1);
-      border-color: #D4AF37;
-    }
-
-    @keyframes spin-slow { to { transform: rotate(360deg); } }
-    @keyframes spin-reverse { to { transform: rotate(-360deg); } }
-    @keyframes float-y {
-      0%, 100% { transform: translateY(0); }
-      50% { transform: translateY(-12px); }
-    }
-    @keyframes pulse-glow {
-      0%, 100% { opacity: 0.55; }
-      50% { opacity: 1; }
-    }
-
-    .animate-spin-slow { animation: spin-slow 48s linear infinite; }
-    .animate-spin-reverse { animation: spin-reverse 64s linear infinite; }
-    .animate-float { animation: float-y 5.5s ease-in-out infinite; }
-    .animate-glow { animation: pulse-glow 3.2s ease-in-out infinite; }
-
-    .nav-link {
-      position: relative;
-      color: rgba(232, 230, 240, 0.75);
-      transition: color 0.2s;
-    }
-    .nav-link:hover, .nav-link.active { color: #F3E5AB; }
-    .nav-link::after {
-      content: '';
-      position: absolute;
-      left: 0; right: 0; bottom: -4px;
-      height: 1px;
-      background: #D4AF37;
-      transform: scaleX(0);
-      transition: transform 0.25s ease;
-    }
-    .nav-link:hover::after, .nav-link.active::after { transform: scaleX(1); }
-
-    input, select {
-      background: rgba(11, 13, 23, 0.65);
-      border: 1px solid rgba(212, 175, 55, 0.22);
-      color: #E8E6F0;
-      border-radius: 0.5rem;
-      padding: 0.75rem 1rem;
-      width: 100%;
-      outline: none;
-      transition: border-color 0.2s;
-    }
-    input:focus, select:focus { border-color: #D4AF37; }
-    input[type="checkbox"] { width: auto; accent-color: #D4AF37; }
-    label { font-size: 0.85rem; color: rgba(243, 229, 171, 0.75); letter-spacing: 0.04em; }
-
-    .element-chip {
-      border: 1px solid rgba(212, 175, 55, 0.28);
-      color: rgba(232, 230, 240, 0.8);
-      padding: 0.4rem 1rem;
-      border-radius: 9999px;
-      font-size: 0.8rem;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      transition: all 0.2s;
-      cursor: pointer;
-      background: transparent;
-    }
-    .element-chip.active, .element-chip:hover {
-      background: rgba(212, 175, 55, 0.15);
-      border-color: #D4AF37;
-      color: #F3E5AB;
-    }
-
-    .sign-card {
-      cursor: pointer;
-      transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
-    }
-    .sign-card:hover {
-      transform: translateY(-4px);
-      border-color: rgba(212, 175, 55, 0.45) !important;
-      box-shadow: 0 12px 32px rgba(123, 44, 191, 0.25);
-    }
-
-    .modal-backdrop {
-      background: rgba(11, 13, 23, 0.82);
-      backdrop-filter: blur(8px);
-    }
-
-    .affinity-ring {
-      background: conic-gradient(#D4AF37 var(--pct, 0%), rgba(23, 28, 54, 0.9) 0);
-    }
-
-    .bar-track {
-      height: 6px;
-      background: rgba(11, 13, 23, 0.7);
-      border-radius: 9999px;
-      overflow: hidden;
-    }
-    .bar-fill {
-      height: 100%;
-      border-radius: 9999px;
-      background: linear-gradient(90deg, #7B2CBF, #D4AF37);
-      transition: width 0.6s ease;
-    }
-
-    #mobile-menu {
-      transform: translateX(100%);
-      transition: transform 0.3s ease;
-    }
-    #mobile-menu.open { transform: translateX(0); }
-
-    .section-pad { position: relative; z-index: 1; }
-  </style>
+  <link rel="stylesheet" href="./css/astrolumina.css" />
 </head>
 <body>
   <div class="starfield" aria-hidden="true"></div>
 
-  <!-- Header -->
   <header class="fixed top-0 inset-x-0 z-50 border-b border-gold/10 bg-midnight/80 backdrop-blur-md">
     <div class="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
       <a href="#inicio" class="font-cinzel text-lg sm:text-xl tracking-[0.2em] gold-text font-semibold">ASTROLUMINA</a>
@@ -234,7 +52,6 @@
     </div>
   </header>
 
-  <!-- Mobile menu -->
   <div id="mobile-menu" class="fixed top-16 right-0 bottom-0 w-72 z-40 bg-indigoDark/95 border-l border-gold/15 backdrop-blur-lg md:hidden p-6 flex flex-col gap-5">
     <a href="#inicio" class="mobile-nav font-cinzel tracking-widest text-goldLight text-sm">Início</a>
     <a href="#mapa" class="mobile-nav font-cinzel tracking-widest text-goldLight text-sm">Mapa Astral</a>
@@ -252,11 +69,11 @@
           <h1 class="font-cinzel text-4xl sm:text-5xl lg:text-6xl font-bold tracking-[0.08em] gold-text leading-none mb-6 whitespace-nowrap">ASTROLUMINA</h1>
           <p class="font-playfair text-xl sm:text-2xl text-goldLight/90 italic mb-4">Leia as estrelas. Ouça o destino.</p>
           <p class="text-base sm:text-lg text-white/65 max-w-md mb-8 leading-relaxed">
-            Calcule sua tríade natal, explore os doze signos e descubra a química cósmica entre duas almas.
+            Tríade natal, signos em profundidade — decanos, eixos, afinidades — e compatibilidade por aspectos angulares reais do círculo.
           </p>
           <div class="flex flex-wrap gap-3">
-            <a href="#mapa" class="btn-gold px-6 py-3 rounded-md text-sm tracking-wide">Revelar meu mapa</a>
-            <a href="#signos" class="btn-outline-gold px-6 py-3 rounded-md text-sm tracking-wide">Explorar signos</a>
+            <a href="#signos" class="btn-gold px-6 py-3 rounded-md text-sm tracking-wide">Descubra seu signo</a>
+            <a href="#sinastria" class="btn-outline-gold px-6 py-3 rounded-md text-sm tracking-wide">Compatibilidades</a>
           </div>
         </div>
         <div class="relative flex justify-center items-center animate-float">
@@ -291,15 +108,14 @@
       </div>
     </section>
 
-    <!-- Natal Chart -->
+    <!-- Natal -->
     <section id="mapa" class="section-pad py-20 sm:py-28">
       <div class="max-w-6xl mx-auto px-4 sm:px-6">
         <div class="text-center mb-12">
           <p class="font-cinzel text-xs tracking-[0.3em] text-cosmicLight uppercase mb-3">Mapa Astral</p>
           <h2 class="font-cinzel text-3xl sm:text-4xl gold-text tracking-widest mb-3">Tríade Natal</h2>
-          <p class="text-white/60 max-w-xl mx-auto">Informe seus dados de nascimento e revele Sol, Lua e Ascendente — a essência do seu céu natal.</p>
+          <p class="text-white/60 max-w-xl mx-auto">Sol por data (preciso). Lua e Ascendente são aproximações determinísticas no cliente — sem efeméride completa.</p>
         </div>
-
         <div class="grid lg:grid-cols-2 gap-8 items-start">
           <form id="natal-form" class="glass-card rounded-2xl p-6 sm:p-8 space-y-5">
             <div>
@@ -347,653 +163,67 @@
       </div>
     </section>
 
-    <!-- Signs -->
+    <!-- Deep sign explorer -->
     <section id="signos" class="section-pad py-20 sm:py-28 cosmic-gradient">
       <div class="max-w-6xl mx-auto px-4 sm:px-6">
         <div class="text-center mb-10">
           <p class="font-cinzel text-xs tracking-[0.3em] text-cosmicLight uppercase mb-3">Zodiaco</p>
-          <h2 class="font-cinzel text-3xl sm:text-4xl gold-text tracking-widest mb-3">Os Doze Signos</h2>
-          <p class="text-white/60 max-w-xl mx-auto">Filtre por elemento e abra o oráculo de cada signo.</p>
+          <h2 class="font-cinzel text-3xl sm:text-4xl gold-text tracking-widest mb-3">Descubra tudo sobre seu signo</h2>
+          <p class="text-white/60 max-w-2xl mx-auto">Identidade essencial, decanos caldeus, psicologia, correspondências clássicas e matriz de afinidades angulares — sem horóscopo semanal vago.</p>
         </div>
-        <div class="flex flex-wrap justify-center gap-2 mb-10" id="element-filters">
-          <button type="button" class="element-chip active" data-element="todos">Todos</button>
-          <button type="button" class="element-chip" data-element="Fogo">Fogo</button>
-          <button type="button" class="element-chip" data-element="Terra">Terra</button>
-          <button type="button" class="element-chip" data-element="Ar">Ar</button>
-          <button type="button" class="element-chip" data-element="Água">Água</button>
+
+        <div class="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between mb-6">
+          <div class="flex flex-wrap gap-2" id="element-filters"></div>
+          <input id="sign-search" type="search" placeholder="Buscar signo, elemento, modalidade…" class="sm:max-w-xs" />
         </div>
-        <div id="zodiac-grid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4"></div>
+
+        <div id="zodiac-grid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 mb-8"></div>
+        <div id="sign-detail" class="glass-card rounded-2xl p-6 sm:p-8"></div>
       </div>
     </section>
 
-    <!-- Synastry -->
+    <!-- Compatibility -->
     <section id="sinastria" class="section-pad py-20 sm:py-28">
-      <div class="max-w-4xl mx-auto px-4 sm:px-6">
+      <div class="max-w-5xl mx-auto px-4 sm:px-6">
         <div class="text-center mb-12">
           <p class="font-cinzel text-xs tracking-[0.3em] text-cosmicLight uppercase mb-3">Sinastria</p>
-          <h2 class="font-cinzel text-3xl sm:text-4xl gold-text tracking-widest mb-3">Compatibilidade Amorosa</h2>
-          <p class="text-white/60 max-w-xl mx-auto">Escolha dois signos e descubra a afinidade cósmica entre eles.</p>
+          <h2 class="font-cinzel text-3xl sm:text-4xl gold-text tracking-widest mb-3">Compatibilidades</h2>
+          <p class="text-white/60 max-w-2xl mx-auto">Motor por distância angular em passos de 30° (conjunção → oposição), com leitura de elemento, modalidade e dimensões relacionais.</p>
         </div>
 
         <div class="glass-card rounded-2xl p-6 sm:p-10">
-          <div class="grid sm:grid-cols-2 gap-5 mb-10">
+          <div class="grid sm:grid-cols-2 gap-5 mb-4">
             <div>
-              <label for="syn-a">Seu signo</label>
+              <label for="syn-a">Primeiro signo</label>
               <select id="syn-a"></select>
             </div>
             <div>
-              <label for="syn-b">Signo do outro</label>
+              <label for="syn-b">Segundo signo</label>
               <select id="syn-b"></select>
             </div>
           </div>
-
-          <div id="syn-result" class="flex flex-col sm:flex-row items-center gap-10">
-            <div class="relative w-40 h-40 shrink-0">
-              <div class="affinity-ring absolute inset-0 rounded-full" id="affinity-ring" style="--pct: 0%"></div>
-              <div class="absolute inset-3 rounded-full bg-indigoDark flex flex-col items-center justify-center">
-                <span id="affinity-pct" class="font-cinzel text-3xl gold-text">0%</span>
-                <span class="text-[10px] tracking-widest text-white/50 uppercase">Afinidade</span>
-              </div>
-            </div>
-            <div class="flex-1 w-full space-y-5">
-              <p id="syn-headline" class="font-playfair text-lg italic text-goldLight text-center sm:text-left">Selecione dois signos</p>
-              <div>
-                <div class="flex justify-between text-xs mb-1"><span class="text-white/60">Amor</span><span id="score-amor" class="text-gold">0</span></div>
-                <div class="bar-track"><div class="bar-fill" id="bar-amor" style="width:0%"></div></div>
-              </div>
-              <div>
-                <div class="flex justify-between text-xs mb-1"><span class="text-white/60">Diálogo</span><span id="score-dialogo" class="text-gold">0</span></div>
-                <div class="bar-track"><div class="bar-fill" id="bar-dialogo" style="width:0%"></div></div>
-              </div>
-              <div>
-                <div class="flex justify-between text-xs mb-1"><span class="text-white/60">Química</span><span id="score-quimica" class="text-gold">0</span></div>
-                <div class="bar-track"><div class="bar-fill" id="bar-quimica" style="width:0%"></div></div>
-              </div>
-              <p id="syn-blurb" class="text-sm text-white/55 leading-relaxed"></p>
-            </div>
+          <div class="mb-6">
+            <label for="syn-search">Atalho — buscar segundo signo</label>
+            <input id="syn-search" type="search" placeholder="Ex: Escorpião, Água, Fixo…" />
           </div>
+          <div id="syn-quick" class="flex flex-wrap gap-2 mb-10"></div>
+          <div id="syn-result"></div>
         </div>
       </div>
     </section>
   </main>
 
-  <!-- Footer -->
   <footer class="section-pad border-t border-gold/10 py-10">
     <div class="max-w-6xl mx-auto px-4 sm:px-6 text-center">
       <p class="font-cinzel tracking-[0.25em] gold-text text-sm mb-3">ASTROLUMINA</p>
       <p class="text-xs text-white/40 max-w-2xl mx-auto leading-relaxed">
-        Este site é destinado exclusivamente a entretenimento e reflexão simbólica.
-        Os cálculos e interpretações não constituem aconselhamento astronômico, psicológico ou profissional.
+        Entretenimento e reflexão simbólica. Análises usam astrologia tropical ocidental (arquétipo, elemento, modalidade, aspectos por signo).
+        Não substituem mapa natal profissional com hora e local, nem aconselhamento médico ou psicológico.
       </p>
       <p class="text-[10px] text-white/25 mt-4 tracking-widest uppercase">✦ Oráculo &amp; Cosmos ✦</p>
     </div>
   </footer>
 
-  <!-- Sign Modal -->
-  <div id="sign-modal" class="fixed inset-0 z-[60] hidden items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="modal-title">
-    <div class="modal-backdrop absolute inset-0" id="modal-backdrop"></div>
-    <div class="relative glass-card rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6 sm:p-8 border border-gold/25">
-      <button id="modal-close" class="absolute top-4 right-4 text-goldLight/70 hover:text-goldLight text-2xl leading-none" aria-label="Fechar">&times;</button>
-      <div class="text-center mb-6">
-        <div id="modal-symbol" class="text-5xl text-gold mb-2"></div>
-        <h3 id="modal-title" class="font-cinzel text-2xl gold-text tracking-widest"></h3>
-        <p id="modal-dates" class="text-sm text-white/50 mt-1"></p>
-        <span id="modal-element" class="inline-block mt-3 text-[10px] tracking-[0.2em] uppercase px-3 py-1 rounded-full border border-gold/30 text-goldLight"></span>
-      </div>
-      <div class="space-y-4 text-sm text-white/70 leading-relaxed">
-        <div>
-          <h4 class="font-cinzel text-xs tracking-widest text-gold mb-1">Sol</h4>
-          <p id="modal-sun"></p>
-        </div>
-        <div>
-          <h4 class="font-cinzel text-xs tracking-widest text-gold mb-1">Lua</h4>
-          <p id="modal-moon"></p>
-        </div>
-        <div>
-          <h4 class="font-cinzel text-xs tracking-widest text-gold mb-1">Ascendente</h4>
-          <p id="modal-asc"></p>
-        </div>
-        <div>
-          <h4 class="font-cinzel text-xs tracking-widest text-gold mb-1">Forças</h4>
-          <p id="modal-strengths"></p>
-        </div>
-        <div>
-          <h4 class="font-cinzel text-xs tracking-widest text-gold mb-1">Desafios</h4>
-          <p id="modal-challenges"></p>
-        </div>
-        <div>
-          <h4 class="font-cinzel text-xs tracking-widest text-gold mb-1">Compatível com</h4>
-          <p id="modal-compat" class="text-goldLight"></p>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <script>
-    const SIGN_ORDER = [
-      'Áries', 'Touro', 'Gêmeos', 'Câncer', 'Leão', 'Virgem',
-      'Libra', 'Escorpião', 'Sagitário', 'Capricórnio', 'Aquário', 'Peixes'
-    ];
-
-    const SYMBOLS = {
-      'Áries': '♈', 'Touro': '♉', 'Gêmeos': '♊', 'Câncer': '♋',
-      'Leão': '♌', 'Virgem': '♍', 'Libra': '♎', 'Escorpião': '♏',
-      'Sagitário': '♐', 'Capricórnio': '♑', 'Aquário': '♒', 'Peixes': '♓'
-    };
-
-    const ELEMENT_COLORS = {
-      Fogo: '#E85D4C',
-      Terra: '#7CB07C',
-      Ar: '#7EB6D9',
-      Água: '#6B8CDB'
-    };
-
-    const ZODIAC_DATA = {
-      'Áries': {
-        dates: '21 mar – 19 abr',
-        element: 'Fogo',
-        modality: 'Cardinal',
-        ruling: 'Marte',
-        sun: 'O Sol em Áries acende uma chama pioneira: coragem, impulsividade e sede de começar. Você lidera com o corpo e decide com o coração em chama.',
-        moon: 'A Lua em Áries sente tudo em alta voltagem. Emoções chegam como relâmpagos — intensas, honestas e rápidas demais para disfarçar.',
-        asc: 'Ascendente em Áries projeta presença assertiva e olhar direto. O mundo te vê como quem chega primeiro e abre caminho.',
-        strengths: 'Iniciativa, bravura, autenticidade, energia vital, capacidade de recomeçar.',
-        challenges: 'Impaciência, competitividade excessiva, dificuldade em esperar o timing alheio.',
-        compatibility: ['Leão', 'Sagitário', 'Gêmeos', 'Aquário']
-      },
-      'Touro': {
-        dates: '20 abr – 20 mai',
-        element: 'Terra',
-        modality: 'Fixo',
-        ruling: 'Vênus',
-        sun: 'O Sol em Touro cultiva beleza, estabilidade e prazer sensorial. Você constrói o que ama com paciência e teimosia sagrada.',
-        moon: 'A Lua em Touro busca conforto, rotina afetuosa e segurança emocional. O carinho passa pelo toque, pela mesa e pelo tempo.',
-        asc: 'Ascendente em Touro emana calma magnetizante. Há algo de jardim antigo na sua presença — firme, sensual e confiável.',
-        strengths: 'Persistência, lealdade, senso estético, resiliência prática.',
-        challenges: 'Teimosia, resistência à mudança, apego ao conforto conhecido.',
-        compatibility: ['Virgem', 'Capricórnio', 'Câncer', 'Peixes']
-      },
-      'Gêmeos': {
-        dates: '21 mai – 20 jun',
-        element: 'Ar',
-        modality: 'Mutável',
-        ruling: 'Mercúrio',
-        sun: 'O Sol em Gêmeos dança entre ideias. Curiosidade, humor e dualidade fazem de você um intérprete do mundo em movimento.',
-        moon: 'A Lua em Gêmeos processa emoções pela conversa. Precisa nomear o sentimento para acalmá-lo — e mudar de assunto quando sufoca.',
-        asc: 'Ascendente em Gêmeos dá olhar vivo, fala ágil e aura de quem já sabe a próxima pergunta.',
-        strengths: 'Versatilidade, inteligência social, comunicação, adaptabilidade.',
-        challenges: 'Dispersão, superficialidade sob pressão, inquietação crônica.',
-        compatibility: ['Libra', 'Aquário', 'Áries', 'Leão']
-      },
-      'Câncer': {
-        dates: '21 jun – 22 jul',
-        element: 'Água',
-        modality: 'Cardinal',
-        ruling: 'Lua',
-        sun: 'O Sol em Câncer habita o ninho emocional. Protege o que ama com força lunar — memória, intuição e pertencimento.',
-        moon: 'A Lua em Câncer é oceano doméstico: marés profundas, empatia visceral e necessidade de refúgio seguro.',
-        asc: 'Ascendente em Câncer envolve o ambiente com calor protetor. Seu rosto conta histórias antes mesmo da fala.',
-        strengths: 'Empatia, memória afetiva, cuidado, intuição emocional.',
-        challenges: 'Hipersensibilidade, apego, dificuldade em soltar o passado.',
-        compatibility: ['Escorpião', 'Peixes', 'Touro', 'Virgem']
-      },
-      'Leão': {
-        dates: '23 jul – 22 ago',
-        element: 'Fogo',
-        modality: 'Fixo',
-        ruling: 'Sol',
-        sun: 'O Sol em Leão brilha para ser visto. Criatividade, generosidade e orgulho nobre moldam uma identidade solar inconfundível.',
-        moon: 'A Lua em Leão precisa de reconhecimento afetuoso. O amor é teatro e ritual — aplauso genuíno alimenta o coração.',
-        asc: 'Ascendente em Leão entra em cena. Presença magnética, postura regente e um brilho difícil de ignorar.',
-        strengths: 'Carisma, lealdade, criatividade, coragem de se expressar.',
-        challenges: 'Orgulho ferido, necessidade excessiva de validação, drama.',
-        compatibility: ['Áries', 'Sagitário', 'Gêmeos', 'Libra']
-      },
-      'Virgem': {
-        dates: '23 ago – 22 set',
-        element: 'Terra',
-        modality: 'Mutável',
-        ruling: 'Mercúrio',
-        sun: 'O Sol em Virgem refine o real. Análise, serviço e precisão transformam o caos em sistema vivo e útil.',
-        moon: 'A Lua em Virgem cuida pelo detalhe. Segurança emocional nasce de ordem, utilidade e gestos práticos de amor.',
-        asc: 'Ascendente em Virgem observa antes de agir. Aparência sóbria, olhar crítico e elegância discreta.',
-        strengths: 'Discernimento, dedicação, humildade útil, melhoria contínua.',
-        challenges: 'Autocrítica, ansiedade perfeccionista, dificuldade em relaxar.',
-        compatibility: ['Touro', 'Capricórnio', 'Câncer', 'Escorpião']
-      },
-      'Libra': {
-        dates: '23 set – 22 out',
-        element: 'Ar',
-        modality: 'Cardinal',
-        ruling: 'Vênus',
-        sun: 'O Sol em Libra busca harmonia e justiça estética. Relacionamentos são o espelho onde sua identidade se equilibra.',
-        moon: 'A Lua em Libra precisa de paz relacional. Conflito aberto dói; diplomacia e beleza restauram o equilíbrio emocional.',
-        asc: 'Ascendente em Libra encanta. Sorriso simétrico, gesto gracioso e talento natural para mediar atmosferas.',
-        strengths: 'Diplomacia, senso estético, justiça, parceria.',
-        challenges: 'Indecisão, dependência de aprovação, evitação de confrontos.',
-        compatibility: ['Gêmeos', 'Aquário', 'Leão', 'Sagitário']
-      },
-      'Escorpião': {
-        dates: '23 out – 21 nov',
-        element: 'Água',
-        modality: 'Fixo',
-        ruling: 'Plutão / Marte',
-        sun: 'O Sol em Escorpião mergulha no invisível. Intensidade, transformação e verdade crua são o seu combustível existencial.',
-        moon: 'A Lua em Escorpião sente em camadas subterrâneas. Confiança é moeda sagrada; traição é terremoto.',
-        asc: 'Ascendente em Escorpião hipnotiza. Olhar penetrante, magnetismo silencioso e aura de mistério controlado.',
-        strengths: 'Profundidade, resiliência, lealdade absoluta, poder de regeneração.',
-        challenges: 'Ciúme, controle, dificuldade em soltar o que já morreu.',
-        compatibility: ['Câncer', 'Peixes', 'Virgem', 'Capricórnio']
-      },
-      'Sagitário': {
-        dates: '22 nov – 21 dez',
-        element: 'Fogo',
-        modality: 'Mutável',
-        ruling: 'Júpiter',
-        sun: 'O Sol em Sagitário busca horizonte. Filosofia, viagem e fé expansiva alimentam uma alma que não cabe em mapas pequenos.',
-        moon: 'A Lua em Sagitário precisa de liberdade emocional. Otimismo, humor e movimento são remédios contra a melancolia.',
-        asc: 'Ascendente em Sagitário chega com vento. Postura aventureira, riso largo e promessa de história boa.',
-        strengths: 'Otimismo, honestidade, visão ampla, generosidade intelectual.',
-        challenges: 'Impaciência, promessas excessivas, fuga do compromisso íntimo.',
-        compatibility: ['Áries', 'Leão', 'Libra', 'Aquário']
-      },
-      'Capricórnio': {
-        dates: '22 dez – 19 jan',
-        element: 'Terra',
-        modality: 'Cardinal',
-        ruling: 'Saturno',
-        sun: 'O Sol em Capricórnio escala montanhas internas. Ambíção disciplinada, responsabilidade e legado definem seu norte.',
-        moon: 'A Lua em Capricórnio guarda emoções em pedra lapidada. Segurança vem de realização, estrutura e respeito conquistado.',
-        asc: 'Ascendente em Capricórnio transmite seriedade elegante. Aparência composta, autoridade quieta e maturidade precoce.',
-        strengths: 'Disciplina, estratégia, resiliência, senso de propósito.',
-        challenges: 'Rigidez, pessimismo, dificuldade em pedir ajuda.',
-        compatibility: ['Touro', 'Virgem', 'Escorpião', 'Peixes']
-      },
-      'Aquário': {
-        dates: '20 jan – 18 fev',
-        element: 'Ar',
-        modality: 'Fixo',
-        ruling: 'Urano / Saturno',
-        sun: 'O Sol em Aquário pensa o futuro. Originalidade, ideais coletivos e independência radical moldam sua identidade.',
-        moon: 'A Lua em Aquário sente à distância lúcida. Precisa de espaço mental mesmo no afeto — intimidade sem claustrofobia.',
-        asc: 'Ascendente em Aquário surpreende. Estilo singular, olhar visionário e presença que não segue o roteiro.',
-        strengths: 'Inovação, humanitarismo, autenticidade, pensamento sistêmico.',
-        challenges: 'Distanciamento emocional, teimosia ideológica, imprevisibilidade.',
-        compatibility: ['Gêmeos', 'Libra', 'Áries', 'Sagitário']
-      },
-      'Peixes': {
-        dates: '19 fev – 20 mar',
-        element: 'Água',
-        modality: 'Mutável',
-        ruling: 'Netuno / Júpiter',
-        sun: 'O Sol em Peixes dissolve fronteiras. Imaginação, compaixão e sensibilidade artística conectam você ao invisível.',
-        moon: 'A Lua em Peixes é oceano sem margem. Empatia total, sonhos vívidos e necessidade de refúgio espiritual.',
-        asc: 'Ascendente em Peixes suaviza o ar. Olhos profundos, presença etérea e um não-dito que convida ao mistério.',
-        strengths: 'Intuição, criatividade, compaixão, flexibilidade espiritual.',
-        challenges: 'Fuga da realidade, confusão de limites, idealização excessiva.',
-        compatibility: ['Câncer', 'Escorpião', 'Touro', 'Capricórnio']
-      }
-    };
-
-    /* ---------- Helpers ---------- */
-    function getSunSign(month, day) {
-      const ranges = [
-        [1, 20, 'Capricórnio', 'Aquário'],
-        [2, 19, 'Aquário', 'Peixes'],
-        [3, 21, 'Peixes', 'Áries'],
-        [4, 20, 'Áries', 'Touro'],
-        [5, 21, 'Touro', 'Gêmeos'],
-        [6, 21, 'Gêmeos', 'Câncer'],
-        [7, 23, 'Câncer', 'Leão'],
-        [8, 23, 'Leão', 'Virgem'],
-        [9, 23, 'Virgem', 'Libra'],
-        [10, 23, 'Libra', 'Escorpião'],
-        [11, 22, 'Escorpião', 'Sagitário'],
-        [12, 22, 'Sagitário', 'Capricórnio']
-      ];
-      const [m, cusp, before, after] = ranges[month - 1];
-      return day < cusp ? before : after;
-    }
-
-    function hashString(str) {
-      let h = 0;
-      for (let i = 0; i < str.length; i++) {
-        h = ((h << 5) - h) + str.charCodeAt(i);
-        h |= 0;
-      }
-      return Math.abs(h);
-    }
-
-    function calculateFullTriad(dateStr, timeStr, unknownTime, name, city) {
-      const [year, month, day] = dateStr.split('-').map(Number);
-      const sun = getSunSign(month, day);
-      const time = unknownTime ? '12:00' : (timeStr || '12:00');
-      const [hh, mm] = time.split(':').map(Number);
-      const seed = hashString(`${dateStr}|${time}|${(name || '').toLowerCase()}|${(city || '').toLowerCase()}`);
-      const sunIdx = SIGN_ORDER.indexOf(sun);
-      const moonIdx = (sunIdx + (seed % 12) + Math.floor(day / 3)) % 12;
-      const hourOffset = Math.floor(((hh + mm / 60) / 2) + (seed % 5));
-      const ascIdx = (sunIdx + hourOffset) % 12;
-      return {
-        sun,
-        moon: SIGN_ORDER[moonIdx],
-        asc: SIGN_ORDER[ascIdx],
-        estimatedTime: unknownTime
-      };
-    }
-
-    function elementalBalance(sun, moon, asc) {
-      const counts = { Fogo: 0, Terra: 0, Ar: 0, Água: 0 };
-      [sun, moon, asc].forEach(s => { counts[ZODIAC_DATA[s].element]++; });
-      const total = 3;
-      return Object.fromEntries(
-        Object.entries(counts).map(([k, v]) => [k, Math.round((v / total) * 100)])
-      );
-    }
-
-    function renderNatalWheelSVG(sun, moon, asc) {
-      const size = 280;
-      const cx = size / 2;
-      const cy = size / 2;
-      const r = 110;
-      let slices = '';
-      SIGN_ORDER.forEach((sign, i) => {
-        const a0 = (i / 12) * Math.PI * 2 - Math.PI / 2;
-        const a1 = ((i + 1) / 12) * Math.PI * 2 - Math.PI / 2;
-        const x0 = cx + r * Math.cos(a0);
-        const y0 = cy + r * Math.sin(a0);
-        const x1 = cx + r * Math.cos(a1);
-        const y1 = cy + r * Math.sin(a1);
-        const el = ZODIAC_DATA[sign].element;
-        const color = ELEMENT_COLORS[el];
-        const mid = (a0 + a1) / 2;
-        const lx = cx + (r - 22) * Math.cos(mid);
-        const ly = cy + (r - 22) * Math.sin(mid);
-        slices += `<path d="M${cx},${cy} L${x0},${y0} A${r},${r} 0 0 1 ${x1},${y1} Z" fill="${color}" fill-opacity="0.18" stroke="rgba(212,175,55,0.35)" stroke-width="0.8"/>`;
-        slices += `<text x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="middle" fill="#F3E5AB" font-size="11">${SYMBOLS[sign]}</text>`;
-      });
-
-      function marker(sign, color, radius) {
-        const idx = SIGN_ORDER.indexOf(sign);
-        const ang = ((idx + 0.5) / 12) * Math.PI * 2 - Math.PI / 2;
-        const x = cx + radius * Math.cos(ang);
-        const y = cy + radius * Math.sin(ang);
-        return `<circle cx="${x}" cy="${y}" r="7" fill="${color}" stroke="#0B0D17" stroke-width="2"/>`;
-      }
-
-      return `
-        <svg viewBox="0 0 ${size} ${size}" class="w-full max-w-[280px]" aria-label="Roda natal">
-          <circle cx="${cx}" cy="${cy}" r="${r + 8}" fill="none" stroke="rgba(212,175,55,0.25)" stroke-width="1"/>
-          ${slices}
-          <circle cx="${cx}" cy="${cy}" r="36" fill="#121629" stroke="#D4AF37" stroke-width="1.2"/>
-          <text x="${cx}" y="${cy - 4}" text-anchor="middle" fill="#F3E5AB" font-family="Cinzel" font-size="10">MAPA</text>
-          <text x="${cx}" y="${cy + 10}" text-anchor="middle" fill="#9D4EDD" font-size="9">✦</text>
-          ${marker(sun, '#D4AF37', 78)}
-          ${marker(moon, '#9D4EDD', 62)}
-          ${marker(asc, '#7EB6D9', 48)}
-          <g font-size="9" fill="#E8E6F0" font-family="Plus Jakarta Sans">
-            <circle cx="24" cy="${size - 36}" r="5" fill="#D4AF37"/><text x="34" y="${size - 32}">Sol</text>
-            <circle cx="24" cy="${size - 20}" r="5" fill="#9D4EDD"/><text x="34" y="${size - 16}">Lua</text>
-            <circle cx="90" cy="${size - 28}" r="5" fill="#7EB6D9"/><text x="100" y="${size - 24}">ASC</text>
-          </g>
-        </svg>`;
-    }
-
-    /* ---------- Synastry ---------- */
-    const ELEMENT_AFFINITY = {
-      Fogo: { Fogo: 85, Ar: 80, Terra: 45, Água: 40 },
-      Terra: { Terra: 85, Água: 80, Fogo: 45, Ar: 50 },
-      Ar: { Ar: 85, Fogo: 80, Terra: 50, Água: 45 },
-      Água: { Água: 85, Terra: 80, Fogo: 40, Ar: 45 }
-    };
-
-    function synastryScores(a, b) {
-      if (!a || !b) return null;
-      const da = ZODIAC_DATA[a];
-      const db = ZODIAC_DATA[b];
-      const elBase = ELEMENT_AFFINITY[da.element][db.element];
-      const sameSign = a === b ? 12 : 0;
-      const listed = da.compatibility.includes(b) ? 18 : 0;
-      const listedBack = db.compatibility.includes(a) ? 10 : 0;
-      const idxDiff = Math.min(
-        Math.abs(SIGN_ORDER.indexOf(a) - SIGN_ORDER.indexOf(b)),
-        12 - Math.abs(SIGN_ORDER.indexOf(a) - SIGN_ORDER.indexOf(b))
-      );
-      const aspectBonus = [0, 6, 14, 8, 16, 5, 10][idxDiff] || 0;
-
-      let amor = Math.min(98, Math.round(elBase * 0.55 + listed + listedBack + sameSign + aspectBonus * 0.4));
-      let dialogo = Math.min(98, Math.round(
-        (da.element === 'Ar' || db.element === 'Ar' ? 72 : 55) +
-        (idxDiff === 2 || idxDiff === 4 ? 18 : 8) +
-        (da.element === db.element ? 10 : 0)
-      ));
-      let quimica = Math.min(98, Math.round(
-        elBase * 0.4 + aspectBonus + (da.element === 'Fogo' || db.element === 'Fogo' ? 14 : 6) + listed * 0.5
-      ));
-
-      const affinity = Math.round((amor + dialogo + quimica) / 3);
-      let blurb;
-      if (affinity >= 80) blurb = `${a} e ${b} formam uma constelação rara: desejo, compreensão e faísca andam juntos.`;
-      else if (affinity >= 65) blurb = `Há química real entre ${a} e ${b}. Com diálogo sincero, a relação floresce.`;
-      else if (affinity >= 50) blurb = `${a} e ${b} pedem paciência e curiosidade mútua — o potencial existe, mas exige trabalho consciente.`;
-      else blurb = `A dança entre ${a} e ${b} é desafiadora. Diferenças elementais pedem maturidade e respeito ao ritmo do outro.`;
-
-      return { amor, dialogo, quimica, affinity, blurb };
-    }
-
-    /* ---------- UI ---------- */
-    function buildHeroMandala() {
-      const ticks = document.getElementById('zodiac-ticks');
-      const stars = document.getElementById('inner-stars');
-      SIGN_ORDER.forEach((sign, i) => {
-        const ang = (i / 12) * Math.PI * 2 - Math.PI / 2;
-        const x1 = 200 + 138 * Math.cos(ang);
-        const y1 = 200 + 138 * Math.sin(ang);
-        const x2 = 200 + 150 * Math.cos(ang);
-        const y2 = 200 + 150 * Math.sin(ang);
-        const tx = 200 + 165 * Math.cos(ang);
-        const ty = 200 + 165 * Math.sin(ang);
-        ticks.innerHTML += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#D4AF37" stroke-width="1" opacity="0.7"/>`;
-        ticks.innerHTML += `<text x="${tx}" y="${ty}" text-anchor="middle" dominant-baseline="middle" fill="#F3E5AB" font-size="12" opacity="0.85">${SYMBOLS[sign]}</text>`;
-      });
-      for (let i = 0; i < 8; i++) {
-        const ang = (i / 8) * Math.PI * 2;
-        const x = 200 + 70 * Math.cos(ang);
-        const y = 200 + 70 * Math.sin(ang);
-        stars.innerHTML += `<circle cx="${x}" cy="${y}" r="2" fill="#9D4EDD" opacity="0.8"/>`;
-      }
-    }
-
-    function renderZodiacGrid(filter = 'todos') {
-      const grid = document.getElementById('zodiac-grid');
-      grid.innerHTML = '';
-      SIGN_ORDER.forEach(sign => {
-        const d = ZODIAC_DATA[sign];
-        if (filter !== 'todos' && d.element !== filter) return;
-        const card = document.createElement('button');
-        card.type = 'button';
-        card.className = 'sign-card glass-card rounded-xl p-4 text-left border border-gold/10 w-full';
-        card.innerHTML = `
-          <div class="text-3xl mb-2" style="color:${ELEMENT_COLORS[d.element]}">${SYMBOLS[sign]}</div>
-          <div class="font-cinzel tracking-widest text-goldLight text-sm">${sign}</div>
-          <div class="text-[11px] text-white/40 mt-1">${d.dates}</div>
-          <div class="text-[10px] tracking-widest uppercase mt-2 text-white/50">${d.element}</div>
-        `;
-        card.addEventListener('click', () => openModal(sign));
-        grid.appendChild(card);
-      });
-    }
-
-    function openModal(sign) {
-      const d = ZODIAC_DATA[sign];
-      document.getElementById('modal-symbol').textContent = SYMBOLS[sign];
-      document.getElementById('modal-title').textContent = sign;
-      document.getElementById('modal-dates').textContent = d.dates;
-      document.getElementById('modal-element').textContent = `${d.element} · ${d.modality} · ${d.ruling}`;
-      document.getElementById('modal-sun').textContent = d.sun;
-      document.getElementById('modal-moon').textContent = d.moon;
-      document.getElementById('modal-asc').textContent = d.asc;
-      document.getElementById('modal-strengths').textContent = d.strengths;
-      document.getElementById('modal-challenges').textContent = d.challenges;
-      document.getElementById('modal-compat').textContent = d.compatibility.join(' · ');
-      const modal = document.getElementById('sign-modal');
-      modal.classList.remove('hidden');
-      modal.classList.add('flex');
-      document.body.style.overflow = 'hidden';
-    }
-
-    function closeModal() {
-      const modal = document.getElementById('sign-modal');
-      modal.classList.add('hidden');
-      modal.classList.remove('flex');
-      document.body.style.overflow = '';
-    }
-
-    function populateSynSelects() {
-      ['syn-a', 'syn-b'].forEach((id, i) => {
-        const sel = document.getElementById(id);
-        sel.innerHTML = SIGN_ORDER.map(s =>
-          `<option value="${s}" ${i === 1 && s === 'Leão' ? 'selected' : ''} ${i === 0 && s === 'Áries' ? 'selected' : ''}>${SYMBOLS[s]} ${s}</option>`
-        ).join('');
-      });
-    }
-
-    function updateSynastry() {
-      const a = document.getElementById('syn-a').value;
-      const b = document.getElementById('syn-b').value;
-      const scores = synastryScores(a, b);
-      if (!scores) return;
-      document.getElementById('affinity-ring').style.setProperty('--pct', scores.affinity + '%');
-      document.getElementById('affinity-pct').textContent = scores.affinity + '%';
-      document.getElementById('syn-headline').textContent = `${a} ✦ ${b}`;
-      document.getElementById('score-amor').textContent = scores.amor;
-      document.getElementById('score-dialogo').textContent = scores.dialogo;
-      document.getElementById('score-quimica').textContent = scores.quimica;
-      document.getElementById('bar-amor').style.width = scores.amor + '%';
-      document.getElementById('bar-dialogo').style.width = scores.dialogo + '%';
-      document.getElementById('bar-quimica').style.width = scores.quimica + '%';
-      document.getElementById('syn-blurb').textContent = scores.blurb;
-    }
-
-    /* ---------- Natal form ---------- */
-    document.getElementById('natal-unknown-time').addEventListener('change', (e) => {
-      const timeInput = document.getElementById('natal-time');
-      timeInput.disabled = e.target.checked;
-      if (e.target.checked) timeInput.value = '12:00';
-    });
-
-    document.getElementById('natal-form').addEventListener('submit', (e) => {
-      e.preventDefault();
-      const name = document.getElementById('natal-name').value.trim();
-      const date = document.getElementById('natal-date').value;
-      const time = document.getElementById('natal-time').value;
-      const unknown = document.getElementById('natal-unknown-time').checked;
-      const city = document.getElementById('natal-city').value.trim();
-      if (!name || !date || !city) return;
-
-      const triad = calculateFullTriad(date, time, unknown, name, city);
-      const balance = elementalBalance(triad.sun, triad.moon, triad.asc);
-
-      document.getElementById('natal-placeholder').classList.add('hidden');
-      const result = document.getElementById('natal-result');
-      result.classList.remove('hidden');
-
-      const est = triad.estimatedTime ? ' (hora estimada ao meio-dia)' : '';
-      document.getElementById('natal-greeting').textContent =
-        `${name}, nascido(a) em ${city}${est} — eis a sua tríade.`;
-
-      const roles = [
-        { key: 'sun', label: 'Sol', sign: triad.sun, hint: 'Essência' },
-        { key: 'moon', label: 'Lua', sign: triad.moon, hint: 'Emoção' },
-        { key: 'asc', label: 'Ascendente', sign: triad.asc, hint: 'Máscara' }
-      ];
-      document.getElementById('triad-cards').innerHTML = roles.map(r => `
-        <div class="rounded-xl border border-gold/15 bg-midnight/40 p-4 text-center">
-          <div class="text-2xl mb-1" style="color:${ELEMENT_COLORS[ZODIAC_DATA[r.sign].element]}">${SYMBOLS[r.sign]}</div>
-          <div class="font-cinzel text-[10px] tracking-widest text-gold uppercase">${r.label}</div>
-          <div class="font-playfair text-lg text-goldLight mt-1">${r.sign}</div>
-          <div class="text-[10px] text-white/40 mt-1">${r.hint} · ${ZODIAC_DATA[r.sign].element}</div>
-        </div>
-      `).join('');
-
-      document.getElementById('element-bars').innerHTML = Object.entries(balance).map(([el, pct]) => `
-        <div>
-          <div class="flex justify-between text-xs mb-1">
-            <span class="text-white/60">${el}</span>
-            <span class="text-gold">${pct}%</span>
-          </div>
-          <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${ELEMENT_COLORS[el]}"></div></div>
-        </div>
-      `).join('');
-
-      document.getElementById('natal-wheel').innerHTML = renderNatalWheelSVG(triad.sun, triad.moon, triad.asc);
-      result.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    });
-
-    /* ---------- Filters & modal ---------- */
-    document.getElementById('element-filters').addEventListener('click', (e) => {
-      const btn = e.target.closest('.element-chip');
-      if (!btn) return;
-      document.querySelectorAll('.element-chip').forEach(c => c.classList.remove('active'));
-      btn.classList.add('active');
-      renderZodiacGrid(btn.dataset.element);
-    });
-
-    document.getElementById('modal-close').addEventListener('click', closeModal);
-    document.getElementById('modal-backdrop').addEventListener('click', closeModal);
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') closeModal();
-    });
-
-    document.getElementById('syn-a').addEventListener('change', updateSynastry);
-    document.getElementById('syn-b').addEventListener('change', updateSynastry);
-
-    /* ---------- Mobile menu ---------- */
-    const menuBtn = document.getElementById('menu-btn');
-    const mobileMenu = document.getElementById('mobile-menu');
-    const menuOverlay = document.getElementById('menu-overlay');
-    const iconOpen = document.getElementById('menu-icon-open');
-    const iconClose = document.getElementById('menu-icon-close');
-
-    function setMenu(open) {
-      mobileMenu.classList.toggle('open', open);
-      menuOverlay.classList.toggle('hidden', !open);
-      iconOpen.classList.toggle('hidden', open);
-      iconClose.classList.toggle('hidden', !open);
-      menuBtn.setAttribute('aria-expanded', String(open));
-      document.body.style.overflow = open ? 'hidden' : '';
-    }
-
-    menuBtn.addEventListener('click', () => setMenu(!mobileMenu.classList.contains('open')));
-    menuOverlay.addEventListener('click', () => setMenu(false));
-    document.querySelectorAll('.mobile-nav').forEach(a => {
-      a.addEventListener('click', () => setMenu(false));
-    });
-
-    /* ---------- Active nav on scroll ---------- */
-    const sections = ['inicio', 'mapa', 'signos', 'sinastria'];
-    const navLinks = document.querySelectorAll('.nav-link');
-    window.addEventListener('scroll', () => {
-      const y = window.scrollY + 120;
-      let current = 'inicio';
-      for (const id of sections) {
-        const el = document.getElementById(id);
-        if (!el) continue;
-        if (y >= el.offsetTop) current = id;
-      }
-      if ((window.innerHeight + window.scrollY) >= document.documentElement.scrollHeight - 40) {
-        current = 'sinastria';
-      }
-      navLinks.forEach(link => {
-        link.classList.toggle('active', link.getAttribute('href') === '#' + current);
-      });
-    });
-
-    /* ---------- Init ---------- */
-    buildHeroMandala();
-    renderZodiacGrid();
-    populateSynSelects();
-    updateSynastry();
-  </script>
+  <script type="module" src="./ui/app.js"></script>
 </body>
 </html>
