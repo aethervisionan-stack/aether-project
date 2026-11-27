@@ -3,7 +3,7 @@
 Gera 5 vídeos TikTok curtos (9:16) — carta + música, SEM voz / SEM TTS.
 
 Fluxo: forças (identificação) → revela nome do arquétipo → CTA quiz.
-Legenda no topo; CTA na base. Nesta série o nome PODE aparecer.
+Toda a legenda no TOPO (forças → nome → CTA / link da bio). Nesta série o nome PODE aparecer.
 
 Uso:
   python scripts/generate-tiktok-positivos-5.py
@@ -76,10 +76,9 @@ DEFAULT_DURATION = 14.0
 
 HOOK_FONT = 48
 REVEAL_FONT = 50
-CTA_FONT = 36
-HOOK_MARGIN_V = 165  # Alignment 8 — topo
-REVEAL_MARGIN_V = 165
-CTA_MARGIN_V = 280
+CTA_FONT = 40
+# Toda a sequência (forças → revelação → CTA) fica no TOPO (Alignment 8)
+TOP_MARGIN_V = 165
 MARGIN_LR = 96
 OUTLINE = 2.3
 SHADOW = 2.5
@@ -271,7 +270,7 @@ def write_positivo_ass(
     text_rgb: tuple[int, int, int],
     accent_rgb: tuple[int, int, int],
 ) -> None:
-    """Forças no TOPO → revelação no TOPO → CTA na base."""
+    """Toda a sequência no TOPO: forças → revelação → CTA (nada na base)."""
     font = pipe.pick_ass_font()
     stroke = pipe.rgb_to_ass((10, 8, 6), alpha=0)
     shadow = pipe.rgb_to_ass((0, 0, 0), alpha=0x55)
@@ -288,12 +287,12 @@ def write_positivo_ass(
     reveal_text = ass_escape(spec.reveal)
     cta_text = ass_escape(spec.cta)
 
-    # Timing: forças → revelação → CTA (curto)
+    # Timing sequencial no topo: forças → revelação → CTA (sem overlap)
     punch_end = min(PUNCH_END_SEC, duration * 0.14)
-    forcas_end = min(7.0, duration * 0.50)
+    forcas_end = min(6.8, duration * 0.48)
     reveal_start = forcas_end
-    reveal_end = min(10.2, duration * 0.74)
-    cta_start = min(9.5, duration * 0.68)
+    reveal_end = min(9.6, duration * 0.68)
+    cta_start = reveal_end  # CTA entra no topo logo após a revelação
 
     stroke_tag = pipe.ass_color_no_alpha((10, 8, 6))
     shadow_tag = pipe.ass_color_no_alpha((0, 0, 0))
@@ -302,6 +301,7 @@ def write_positivo_ass(
         f"\\3c{stroke_tag}\\4c{shadow_tag}}}"
     )
 
+    # Alignment 8 = topo-centro para Punch, Hook, Reveal e CTA
     header = f"""[Script Info]
 Title: {spec.label}
 ScriptType: v4.00+
@@ -313,10 +313,10 @@ YCbCr Matrix: TV.709
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Punch,{font},{HOOK_FONT + 4},{pipe.rgb_to_ass(hook_fill)},{pipe.rgb_to_ass(accent_rgb)},{stroke},{shadow},-1,0,0,0,100,100,0.5,0,1,{OUTLINE},{SHADOW},8,{MARGIN_LR},{MARGIN_LR},{HOOK_MARGIN_V},1
-Style: Hook,{font},{HOOK_FONT},{pipe.rgb_to_ass(hook_fill)},{pipe.rgb_to_ass(accent_rgb)},{stroke},{shadow},-1,0,0,0,100,100,0.55,0,1,{OUTLINE},{SHADOW},8,{MARGIN_LR},{MARGIN_LR},{HOOK_MARGIN_V},1
-Style: Reveal,{font},{REVEAL_FONT},{pipe.rgb_to_ass(reveal_fill)},{pipe.rgb_to_ass(accent_rgb)},{stroke},{shadow},-1,0,0,0,100,100,0.6,0,1,{OUTLINE},{SHADOW},8,{MARGIN_LR},{MARGIN_LR},{REVEAL_MARGIN_V},1
-Style: CTA,{font},{CTA_FONT},{pipe.rgb_to_ass(cta_fill)},{pipe.rgb_to_ass(accent_rgb)},{stroke},{shadow},-1,0,0,0,100,100,0.7,0,1,{OUTLINE},{SHADOW},2,{MARGIN_LR},{MARGIN_LR},{CTA_MARGIN_V},1
+Style: Punch,{font},{HOOK_FONT + 4},{pipe.rgb_to_ass(hook_fill)},{pipe.rgb_to_ass(accent_rgb)},{stroke},{shadow},-1,0,0,0,100,100,0.5,0,1,{OUTLINE},{SHADOW},8,{MARGIN_LR},{MARGIN_LR},{TOP_MARGIN_V},1
+Style: Hook,{font},{HOOK_FONT},{pipe.rgb_to_ass(hook_fill)},{pipe.rgb_to_ass(accent_rgb)},{stroke},{shadow},-1,0,0,0,100,100,0.55,0,1,{OUTLINE},{SHADOW},8,{MARGIN_LR},{MARGIN_LR},{TOP_MARGIN_V},1
+Style: Reveal,{font},{REVEAL_FONT},{pipe.rgb_to_ass(reveal_fill)},{pipe.rgb_to_ass(accent_rgb)},{stroke},{shadow},-1,0,0,0,100,100,0.6,0,1,{OUTLINE},{SHADOW},8,{MARGIN_LR},{MARGIN_LR},{TOP_MARGIN_V},1
+Style: CTA,{font},{CTA_FONT},{pipe.rgb_to_ass(cta_fill)},{pipe.rgb_to_ass(accent_rgb)},{stroke},{shadow},-1,0,0,0,100,100,0.7,0,1,{OUTLINE},{SHADOW},8,{MARGIN_LR},{MARGIN_LR},{TOP_MARGIN_V},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -335,7 +335,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             f"Reveal,,0,0,0,,{tags}{reveal_text}"
         ),
         (
-            f"Dialogue: 1,{pipe.ass_timestamp(cta_start)},{pipe.ass_timestamp(duration)},"
+            f"Dialogue: 0,{pipe.ass_timestamp(cta_start)},{pipe.ass_timestamp(duration)},"
             f"CTA,,0,0,0,,{tags}{cta_text}"
         ),
     ]

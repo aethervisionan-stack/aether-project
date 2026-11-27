@@ -4,9 +4,9 @@
 **Fluxo:** (1) pontos fortes / identificação → (2) revela o nome do arquétipo → (3) CTA quiz  
 **Proibido:** ferida, ponto cego, custo, sombra, medo  
 **Exceção desta série:** **pode revelar** o nome do arquétipo (nomes oficiais do quiz)  
-**Legenda:** topo (punch + forças + revelação); CTA na base  
+**Legenda:** **toda a sequência no TOPO** (punch → forças → revelação → CTA / link da bio) — nada desce para a base  
 **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio  
-**Timing (~14s):** Punch 0–2s → forças 2–7s → revelação 7–10s → CTA ~9.5s→fim · fade ~1.4s  
+**Timing (~14s):** Punch 0–2s → forças 2–7s → revelação 7–10s → CTA ~9.5s→fim (sempre topo) · fade ~1.4s  
 **Saída:** `editado/videos-positivos-5/` (não sobrescreve `videos-carta-musica-30`)
 
 ---
@@ -113,5 +113,5 @@
 - [x] CTA: se identificou → teste completo / link da bio
 - [x] Sem TTS · carta + música
 - [x] Duração curta (~14s)
-- [x] Legenda no topo
+- [x] Legenda **toda** no topo (incluindo CTA / link da bio)
 - [x] Pasta dedicada (não toca `videos-carta-musica-30`)
