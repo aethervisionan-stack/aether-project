@@ -170,7 +170,7 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           error:
-            "Mentor bloqueado: ative o passe (R$ 5) ou o combo (R$ 6) para continuar.",
+            "Mentor bloqueado: ative o passe (R$ 1) ou o combo (R$ 2) para continuar.",
           code: "MENTOR_LOCKED",
         },
         { status: 403 },

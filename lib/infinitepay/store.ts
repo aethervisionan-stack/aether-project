@@ -7,12 +7,6 @@ export type InfinitePayOrderRecord = {
   amountCentavos: number;
   status: "created" | "paid" | "failed";
   url?: string;
-  /** Valid Pix EMV / copia-e-cola when available (never a checkout URL). */
-  pixCopyPaste?: string;
-  /** Which JSON paths / providers supplied the EMV. */
-  emvFieldsUsed?: string[];
-  /** Optional PagBank order used as Pix EMV fallback. */
-  pagbankOrderId?: string;
   simulated?: boolean;
   paidAt?: number;
   transaction_nsu?: string;

@@ -1,21 +1,13 @@
 "use client";
 
 import { motion, useReducedMotion } from "framer-motion";
-import {
-  Check,
-  Copy,
-  Loader2,
-  Lock,
-  Sparkles,
-  X,
-} from "lucide-react";
+import { Check, Loader2, Lock, Sparkles } from "lucide-react";
 import Image from "next/image";
-import { QRCodeSVG } from "qrcode.react";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { isValidPixEmv, pickClientPixEmv } from "@/lib/infinitepay/pixEmv";
+import { useMemo, useState } from "react";
 import type { NarrativeResult } from "@/src/data/archetypes";
 import { pickCartaPreviewForArchetype } from "@/src/data/cartas36";
 import { paywallTeaseFor } from "@/src/data/paywallTeases";
+import { redirectToCheckout } from "@/src/utils/checkoutRedirect";
 import {
   isResultUnlocked,
   readQuizSession,
@@ -34,8 +26,6 @@ type Props = {
 };
 
 const EASE = [0.22, 1, 0.36, 1] as const;
-const POLL_MS = 3000;
-const POLL_MAX_MS = 120_000;
 
 type BoxId = "result" | "mentor_upgrade";
 
@@ -65,8 +55,8 @@ const BOXES: {
   {
     id: "mentor_upgrade",
     title: "Consultoria IA · 30 dias",
-    priceLabel: "R$ 5,00",
-    priceCentavos: 500,
+    priceLabel: "R$ 1,00",
+    priceCentavos: 100,
     badge: "Mentor",
     accent: true,
     persuasive:
@@ -78,15 +68,6 @@ const BOXES: {
     ],
   },
 ];
-
-type CheckoutModal = {
-  order_nsu: string;
-  tier: InfinitePayTier;
-  amountLabel: string;
-  /** Valid Pix EMV only — never a checkout URL. */
-  pixCode: string;
-  expiresAt?: string | null;
-};
 
 function sessionClientId(): string {
   try {
@@ -100,34 +81,24 @@ function sessionClientId(): string {
   }
 }
 
-async function writeClipboard(text: string): Promise<boolean> {
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text);
-      return true;
+function pickCheckoutUrl(data: Record<string, unknown>): string | null {
+  const candidates: unknown[] = [
+    data.url,
+    data.checkout_url,
+    data.payment_url,
+    data.link,
+    data.checkout_link,
+  ];
+  for (const c of candidates) {
+    if (typeof c === "string" && /^https?:\/\//i.test(c.trim())) {
+      return c.trim();
     }
-  } catch {
-    // fall through
   }
-  try {
-    const ta = document.createElement("textarea");
-    ta.value = text;
-    ta.setAttribute("readonly", "");
-    ta.style.position = "fixed";
-    ta.style.left = "-9999px";
-    document.body.appendChild(ta);
-    ta.select();
-    const ok = document.execCommand("copy");
-    document.body.removeChild(ta);
-    return ok;
-  } catch {
-    return false;
-  }
+  return null;
 }
 
 export function PaywallScreen({
   result,
-  onUnlocked,
   verifying = false,
   verifyError = null,
   onRetryVerify,
@@ -160,15 +131,9 @@ export function PaywallScreen({
   const [selMentor, setSelMentor] = useState(alreadyResult);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [modal, setModal] = useState<CheckoutModal | null>(null);
-  const [pollTimedOut, setPollTimedOut] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const pollAbortRef = useRef(false);
-  const onUnlockedRef = useRef(onUnlocked);
-  onUnlockedRef.current = onUnlocked;
 
   const totalCentavos =
-    (selResult && !alreadyResult ? 100 : 0) + (selMentor ? 500 : 0);
+    (selResult && !alreadyResult ? 100 : 0) + (selMentor ? 100 : 0);
 
   const tier: InfinitePayTier | null = (() => {
     const wantResult = selResult && !alreadyResult;
@@ -195,82 +160,10 @@ export function PaywallScreen({
     setSelMentor((v) => !v);
   }
 
-  function closeModal() {
-    pollAbortRef.current = true;
-    setModal(null);
-    setPollTimedOut(false);
-    setCopied(false);
-    setLoading(false);
-  }
-
-  async function copyPixCode(emv: string) {
-    const ok = await writeClipboard(emv);
-    if (ok) {
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
-    }
-  }
-
-  useEffect(() => {
-    if (!modal) return;
-    pollAbortRef.current = false;
-    setPollTimedOut(false);
-    const started = Date.now();
-    let timer: number | undefined;
-
-    async function pollOnce() {
-      if (pollAbortRef.current || !modal) return;
-      try {
-        const res = await fetch("/api/infinitepay/verify", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ order_nsu: modal.order_nsu }),
-        });
-        const data = (await res.json()) as {
-          paid?: boolean;
-          tier?: string;
-          order_nsu?: string;
-        };
-        if (pollAbortRef.current) return;
-        if (data.paid && data.tier) {
-          pollAbortRef.current = true;
-          setModal(null);
-          setLoading(false);
-          onUnlockedRef.current(
-            data.tier as InfinitePayTier,
-            data.order_nsu ?? modal.order_nsu,
-          );
-          return;
-        }
-      } catch {
-        // keep polling
-      }
-
-      if (pollAbortRef.current) return;
-      if (Date.now() - started >= POLL_MAX_MS) {
-        setPollTimedOut(true);
-        return;
-      }
-      timer = window.setTimeout(() => {
-        void pollOnce();
-      }, POLL_MS);
-    }
-
-    timer = window.setTimeout(() => {
-      void pollOnce();
-    }, POLL_MS);
-
-    return () => {
-      pollAbortRef.current = true;
-      if (timer) window.clearTimeout(timer);
-    };
-  }, [modal]);
-
   async function checkout() {
     if (!tier || loading) return;
     setLoading(true);
     setError(null);
-    setPollTimedOut(false);
     try {
       const res = await fetch("/api/infinitepay/create-link", {
         method: "POST",
@@ -286,25 +179,14 @@ export function PaywallScreen({
       } catch {
         throw new Error("Resposta inválida do servidor de pagamento");
       }
+      const url = pickCheckoutUrl(data);
       const errMsg = typeof data.error === "string" ? data.error : null;
       const order_nsu =
         typeof data.order_nsu === "string" ? data.order_nsu : null;
-      const amountLabel =
-        typeof data.amountLabel === "string" && data.amountLabel
-          ? data.amountLabel
-          : totalLabel || "—";
-      const pixRaw =
-        (typeof data.pixCode === "string" && data.pixCode) ||
-        pickClientPixEmv(data);
-      const pixCode =
-        pixRaw && isValidPixEmv(pixRaw) && !/^https?:\/\//i.test(pixRaw)
-          ? pixRaw.trim()
-          : null;
-
-      if (!res.ok || !order_nsu || !pixCode) {
+      if (!res.ok || !url || !order_nsu) {
         throw new Error(
           errMsg ||
-            "Não foi possível gerar o Pix (EMV). Verifique PAGBANK_TOKEN / InfinitePay.",
+            "Não foi possível abrir o checkout InfinitePay. Verifique INFINITEPAY_HANDLE ou INFINITEPAY_API_KEY.",
         );
       }
 
@@ -320,15 +202,8 @@ export function PaywallScreen({
         // ignore
       }
 
-      setModal({
-        order_nsu,
-        tier,
-        amountLabel,
-        pixCode,
-        expiresAt:
-          typeof data.expiresAt === "string" ? data.expiresAt : null,
-      });
-      setLoading(false);
+      // Same-tab InfinitePay Checkout Integrado (hosted Pix / card).
+      redirectToCheckout(url);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao iniciar pagamento");
       setLoading(false);
@@ -377,7 +252,7 @@ export function PaywallScreen({
                 Confirmando pagamento
               </p>
               <p className="mt-3 text-sm text-[color:var(--cart-muted)]">
-                Estamos verificando o pagamento…
+                Estamos verificando com a InfinitePay…
               </p>
             </>
           )}
@@ -470,8 +345,8 @@ export function PaywallScreen({
 
           <p className="mt-4 text-center text-sm leading-relaxed text-[color:var(--cart-ink)]">
             {alreadyResult
-              ? "Diagnóstico já liberado. Com R$ 5,00 você ativa 30 dias de Mentor — ou some o combo quando quiser renovar a jornada."
-              : "Um único pagamento destrava o nome e o diagnóstico completo: R$ 1,00 o dossiê · R$ 5,00 o Mentor 30 dias · R$ 6,00 o combo."}
+              ? "Diagnóstico já liberado. Com R$ 1,00 você ativa 30 dias de Mentor — ou some o combo quando quiser renovar a jornada."
+              : "Um único pagamento destrava o nome e o diagnóstico completo: R$ 1,00 o dossiê · R$ 1,00 o Mentor 30 dias · R$ 2,00 o combo."}
           </p>
 
           <div className="mt-4 flex max-w-md items-start gap-2 rounded-sm border border-[color:var(--cart-border-soft)] bg-black/20 px-3 py-3 text-xs leading-relaxed text-[color:var(--cart-dim)]">
@@ -480,8 +355,8 @@ export function PaywallScreen({
               className="mt-0.5 shrink-0 text-[color:var(--cart-copper)]"
             />
             <span>
-              Sem cadastro. Nome do arquétipo e diagnóstico só após pagamento
-              real (Diagnóstico ou Combo). Pix QR + Copia e Cola nesta página.
+              Sem cadastro antes do pagamento. Nome e diagnóstico só após
+              Diagnóstico ou Combo. Checkout InfinitePay · Pix ou cartão.
             </span>
           </div>
         </motion.div>
@@ -494,7 +369,7 @@ export function PaywallScreen({
         >
           {alreadyResult
             ? "Diagnóstico já liberado. Ative a Consultoria IA 30 dias."
-            : "Monte sua oferta: só o diagnóstico, só o mentor, ou ambos (R$ 6,00)."}
+            : "Monte sua oferta: só o diagnóstico, só o mentor, ou ambos (R$ 2,00)."}
         </motion.p>
 
         <motion.div
@@ -578,7 +453,7 @@ export function PaywallScreen({
 
         {!alreadyResult && selResult && selMentor ? (
           <p className="mt-4 text-center text-xs text-[color:var(--cart-copper)]">
-            Combo · ambos por R$ 6,00
+            Combo · ambos por R$ 2,00
           </p>
         ) : null}
 
@@ -592,7 +467,7 @@ export function PaywallScreen({
             {loading ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Gerando Pix…
+                Abrindo checkout…
               </>
             ) : totalLabel ? (
               `Pagar ${totalLabel}`
@@ -606,82 +481,10 @@ export function PaywallScreen({
             </p>
           ) : null}
           <p className="text-center text-[11px] text-[color:var(--cart-dim)]">
-            Pix QR + Copia e Cola · liberação automática após o pagamento
+            InfinitePay · Pix ou cartão · liberação após o retorno / webhook
           </p>
         </div>
       </div>
-
-      {modal ? (
-        <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/80 p-4 sm:items-center">
-          <div
-            className="relative w-full max-w-md rounded-sm border border-[color:var(--cart-border-soft)] bg-[#0c0d10] p-5 shadow-2xl sm:p-6"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Pagamento Pix"
-          >
-            <button
-              type="button"
-              onClick={closeModal}
-              className="absolute right-3 top-3 rounded p-1 text-[color:var(--cart-dim)] hover:text-[color:var(--cart-copper)]"
-              aria-label="Fechar"
-            >
-              <X size={18} />
-            </button>
-
-            <p className="cart-display text-center text-[10px] uppercase tracking-[0.28em] text-[color:var(--cart-copper)]">
-              Pix
-            </p>
-            <h2 className="cart-display mt-2 text-center text-3xl text-[color:var(--cine-ink)]">
-              {modal.amountLabel}
-            </h2>
-            <p className="mt-2 text-center text-xs leading-relaxed text-[color:var(--cart-muted)]">
-              Escaneie o QR ou cole o código no app do banco e aguarde a
-              liberação automática.
-            </p>
-
-            <div className="mx-auto mt-5 flex w-fit items-center justify-center rounded-sm bg-white p-3">
-              <QRCodeSVG
-                value={modal.pixCode}
-                size={180}
-                level="M"
-                includeMargin
-              />
-            </div>
-
-            <div className="mt-4 rounded-sm border border-[color:var(--cart-border-soft)] bg-black/30 p-3">
-              <p className="cart-display text-[9px] uppercase tracking-[0.2em] text-[color:var(--cart-dim)]">
-                Copia e Cola
-              </p>
-              <p className="mt-2 break-all font-mono text-[11px] leading-relaxed text-[color:var(--cart-muted)]">
-                {modal.pixCode}
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => void copyPixCode(modal.pixCode)}
-              className="cart-cta mt-4 inline-flex w-full items-center justify-center gap-2 rounded-sm px-5 py-3.5 text-sm font-semibold"
-            >
-              <Copy size={16} />
-              {copied ? "Código copiado!" : "Copiar código Pix"}
-            </button>
-
-            <div className="mt-4 flex items-center justify-center gap-2 text-sm text-[color:var(--cart-muted)]">
-              {!pollTimedOut ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin text-[color:var(--cart-copper)]" />
-                  <span>Aguardando confirmação…</span>
-                </>
-              ) : (
-                <span className="text-center text-xs text-amber-200/90">
-                  Ainda não confirmamos. Se já pagou, aguarde ou feche e tente
-                  de novo — o webhook também libera.
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-      ) : null}
     </section>
   );
 }
