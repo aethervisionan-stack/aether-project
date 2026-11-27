@@ -4,11 +4,14 @@ Gera 30 vídeos TikTok (9:16) a partir dos roteiros Dia01-Video1 … Dia10-Video
 
 Reusa o pipeline de generate-tiktok-archetype-videos.py (TTS, ASS, zoom, mix).
 Regra: NÃO mostra nome de arquétipo no título/tela (usa Texto na Tela do roteiro).
+Voz: UMA só — pt-BR-FranciscaNeural (+0% / +1Hz) para os 30 (homogênea, não robótica).
+Legendas: blocos curtos + WordBoundary karaoke.
 
 Uso:
   python scripts/generate-tiktok-10-dias-videos.py
   python scripts/generate-tiktok-10-dias-videos.py --only Dia01-Video1 Dia10-Video3
   python scripts/generate-tiktok-10-dias-videos.py --engine edge
+  set TIKTOK_TEMP=D:\\tiktok-temp  (default no Windows se C: apertado)
 """
 
 from __future__ import annotations
@@ -110,6 +113,17 @@ SAFE_ACCENT_WORDS = [
 ]
 
 
+# Identidade vocal única p/ os 30 (sem misturar Francisca/Thalita/Antonio)
+SINGLE_VOICE = {
+    "edge_voice": "pt-BR-FranciscaNeural",
+    "edge_rate": "+0%",
+    "edge_pitch": "+1Hz",
+    "sapi_rate": 1,
+    "eleven_voice_env": "ELEVENLABS_VOICE_ID_FEMALE",
+    "eleven_voice_default": "EXAVITQu4vr4xnSDxMaL",
+}
+
+
 def load_pipeline():
     spec = importlib.util.spec_from_file_location("tiktok_pipeline", BASE_SCRIPT)
     if spec is None or spec.loader is None:
@@ -119,6 +133,9 @@ def load_pipeline():
     spec.loader.exec_module(mod)
     # Sobrescreve keywords de acento para não destacar nomes de arquétipo
     mod.ACCENT_WORDS = SAFE_ACCENT_WORDS
+    # Uma voz só, rate/pitch fixos — homogeneidade entre os 30
+    for tone in list(mod.VOICE_PROFILES.keys()):
+        mod.VOICE_PROFILES[tone] = dict(SINGLE_VOICE)
     return mod
 
 
@@ -279,6 +296,12 @@ def main() -> None:
             raise SystemExit(f"Slugs não encontrados: {sorted(missing)}")
 
     engine, engine_note = pipe.resolve_engine(args.engine)
+    if engine == "edge":
+        engine_note = (
+            f"edge-tts {SINGLE_VOICE['edge_voice']} "
+            f"rate={SINGLE_VOICE['edge_rate']} pitch={SINGLE_VOICE['edge_pitch']} "
+            "(voz única · 30 vídeos)"
+        )
     rng = random.Random(args.seed)
 
     print(f"Repo:    {pipe.REPO_ROOT}")
