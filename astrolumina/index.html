@@ -249,7 +249,7 @@
       <div class="max-w-6xl mx-auto px-4 sm:px-6 w-full grid lg:grid-cols-2 gap-10 lg:gap-16 items-center py-16 lg:py-0">
         <div class="relative z-10">
           <p class="font-cinzel text-xs sm:text-sm tracking-[0.35em] text-cosmicLight mb-4 uppercase">Oráculo &amp; Cosmos</p>
-          <h1 class="font-cinzel text-5xl sm:text-6xl lg:text-7xl font-bold tracking-[0.12em] gold-text leading-none mb-6">ASTROLUMINA</h1>
+          <h1 class="font-cinzel text-4xl sm:text-5xl lg:text-6xl font-bold tracking-[0.08em] gold-text leading-none mb-6 whitespace-nowrap">ASTROLUMINA</h1>
           <p class="font-playfair text-xl sm:text-2xl text-goldLight/90 italic mb-4">Leia as estrelas. Ouça o destino.</p>
           <p class="text-base sm:text-lg text-white/65 max-w-md mb-8 leading-relaxed">
             Calcule sua tríade natal, explore os doze signos e descubra a química cósmica entre duas almas.
@@ -974,11 +974,16 @@
     const sections = ['inicio', 'mapa', 'signos', 'sinastria'];
     const navLinks = document.querySelectorAll('.nav-link');
     window.addEventListener('scroll', () => {
+      const y = window.scrollY + 120;
       let current = 'inicio';
-      sections.forEach(id => {
+      for (const id of sections) {
         const el = document.getElementById(id);
-        if (el && window.scrollY >= el.offsetTop - 100) current = id;
-      });
+        if (!el) continue;
+        if (y >= el.offsetTop) current = id;
+      }
+      if ((window.innerHeight + window.scrollY) >= document.documentElement.scrollHeight - 40) {
+        current = 'sinastria';
+      }
       navLinks.forEach(link => {
         link.classList.toggle('active', link.getAttribute('href') === '#' + current);
       });
