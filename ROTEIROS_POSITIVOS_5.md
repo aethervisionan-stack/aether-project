@@ -5,6 +5,7 @@
 **Proibido:** ferida, ponto cego, custo, sombra, medo  
 **Exceção desta série:** **pode revelar** o nome do arquétipo (nomes oficiais do quiz)  
 **Legenda:** **toda a sequência no TOPO** (punch → forças → revelação → CTA / link da bio) — nada desce para a base  
+**Tipografia:** Cormorant Garamond (TTF do projeto) · ASS Fontsize Punch/Reveal 64 · Hook 58 · CTA 50 · contorno/sombra fortes  
 **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio  
 **Timing (~14s):** Punch 0–2s → forças 2–7s → revelação 7–10s → CTA ~9.5s→fim (sempre topo) · fade ~1.4s  
 **Saída:** `editado/videos-positivos-5/` (não sobrescreve `videos-carta-musica-30`)

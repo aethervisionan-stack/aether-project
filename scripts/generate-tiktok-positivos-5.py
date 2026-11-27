@@ -74,15 +74,23 @@ MUSIC_VOLUME = 0.14
 FADE_OUT_SEC = 1.4
 DEFAULT_DURATION = 14.0
 
-HOOK_FONT = 48
-REVEAL_FONT = 50
-CTA_FONT = 40
+# Tipografia display — tamanhos maiores p/ leitura no celular
+HOOK_FONT = 58
+REVEAL_FONT = 64
+CTA_FONT = 50
+PUNCH_FONT = 64
 # Toda a sequência (forças → revelação → CTA) fica no TOPO (Alignment 8)
-TOP_MARGIN_V = 165
-MARGIN_LR = 96
-OUTLINE = 2.3
-SHADOW = 2.5
+TOP_MARGIN_V = 150
+MARGIN_LR = 88
+OUTLINE = 3.2
+SHADOW = 3.4
 PUNCH_END_SEC = 1.85
+
+# Serif elegante do projeto (fallback: Georgia Bold do Windows)
+PROJECT_FONT_DIR = REPO_ROOT / "app" / "fonts"
+PROJECT_FONT_FILE = PROJECT_FONT_DIR / "CormorantGaramond-Regular.ttf"
+PROJECT_FONT_NAME = "Cormorant Garamond"
+FALLBACK_FONT_NAME = "Georgia"
 
 # Fallback estático se o MD falhar no parse
 STATIC_SPECS: list[dict[str, object]] = [
@@ -172,6 +180,19 @@ def ass_escape(text: str) -> str:
         .replace("}", "\\}")
         .replace("\n", "\\N")
     )
+
+
+def pick_positivo_font() -> tuple[str, Path | None]:
+    """
+    Prefere Cormorant Garamond (TTF do projeto — serif medieval-elegante).
+    Retorna (nome ASS, fontsdir ou None). Fallback: Georgia (Windows).
+    """
+    if PROJECT_FONT_FILE.is_file():
+        return PROJECT_FONT_NAME, PROJECT_FONT_DIR
+    windir = Path(__import__("os").environ.get("WINDIR", r"C:\Windows"))
+    if (windir / "Fonts" / "georgiab.ttf").is_file():
+        return FALLBACK_FONT_NAME, None
+    return pipe.pick_ass_font(), None
 
 
 def default_reveal(slug: str) -> str:
@@ -269,11 +290,11 @@ def write_positivo_ass(
     duration: float,
     text_rgb: tuple[int, int, int],
     accent_rgb: tuple[int, int, int],
+    font: str,
 ) -> None:
     """Toda a sequência no TOPO: forças → revelação → CTA (nada na base)."""
-    font = pipe.pick_ass_font()
     stroke = pipe.rgb_to_ass((10, 8, 6), alpha=0)
-    shadow = pipe.rgb_to_ass((0, 0, 0), alpha=0x55)
+    shadow = pipe.rgb_to_ass((0, 0, 0), alpha=0x60)
     hook_fill = pipe.lighten_for_text(text_rgb, min_v=0.93)
     reveal_fill = pipe.lighten_for_text(accent_rgb, min_v=0.94)
     if pipe.contrast_ratio(reveal_fill, (18, 16, 14)) < 3.0:
@@ -301,7 +322,7 @@ def write_positivo_ass(
         f"\\3c{stroke_tag}\\4c{shadow_tag}}}"
     )
 
-    # Alignment 8 = topo-centro para Punch, Hook, Reveal e CTA
+    # Alignment 8 = topo-centro; Bold=-1 p/ peso display
     header = f"""[Script Info]
 Title: {spec.label}
 ScriptType: v4.00+
@@ -313,10 +334,10 @@ YCbCr Matrix: TV.709
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Punch,{font},{HOOK_FONT + 4},{pipe.rgb_to_ass(hook_fill)},{pipe.rgb_to_ass(accent_rgb)},{stroke},{shadow},-1,0,0,0,100,100,0.5,0,1,{OUTLINE},{SHADOW},8,{MARGIN_LR},{MARGIN_LR},{TOP_MARGIN_V},1
-Style: Hook,{font},{HOOK_FONT},{pipe.rgb_to_ass(hook_fill)},{pipe.rgb_to_ass(accent_rgb)},{stroke},{shadow},-1,0,0,0,100,100,0.55,0,1,{OUTLINE},{SHADOW},8,{MARGIN_LR},{MARGIN_LR},{TOP_MARGIN_V},1
-Style: Reveal,{font},{REVEAL_FONT},{pipe.rgb_to_ass(reveal_fill)},{pipe.rgb_to_ass(accent_rgb)},{stroke},{shadow},-1,0,0,0,100,100,0.6,0,1,{OUTLINE},{SHADOW},8,{MARGIN_LR},{MARGIN_LR},{TOP_MARGIN_V},1
-Style: CTA,{font},{CTA_FONT},{pipe.rgb_to_ass(cta_fill)},{pipe.rgb_to_ass(accent_rgb)},{stroke},{shadow},-1,0,0,0,100,100,0.7,0,1,{OUTLINE},{SHADOW},8,{MARGIN_LR},{MARGIN_LR},{TOP_MARGIN_V},1
+Style: Punch,{font},{PUNCH_FONT},{pipe.rgb_to_ass(hook_fill)},{pipe.rgb_to_ass(accent_rgb)},{stroke},{shadow},-1,0,0,0,100,100,0.4,0,1,{OUTLINE},{SHADOW},8,{MARGIN_LR},{MARGIN_LR},{TOP_MARGIN_V},1
+Style: Hook,{font},{HOOK_FONT},{pipe.rgb_to_ass(hook_fill)},{pipe.rgb_to_ass(accent_rgb)},{stroke},{shadow},-1,0,0,0,100,100,0.45,0,1,{OUTLINE},{SHADOW},8,{MARGIN_LR},{MARGIN_LR},{TOP_MARGIN_V},1
+Style: Reveal,{font},{REVEAL_FONT},{pipe.rgb_to_ass(reveal_fill)},{pipe.rgb_to_ass(accent_rgb)},{stroke},{shadow},-1,0,0,0,100,100,0.5,0,1,{OUTLINE},{SHADOW},8,{MARGIN_LR},{MARGIN_LR},{TOP_MARGIN_V},1
+Style: CTA,{font},{CTA_FONT},{pipe.rgb_to_ass(cta_fill)},{pipe.rgb_to_ass(accent_rgb)},{stroke},{shadow},-1,0,0,0,100,100,0.55,0,1,{OUTLINE},{SHADOW},8,{MARGIN_LR},{MARGIN_LR},{TOP_MARGIN_V},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -372,21 +393,34 @@ def render_one(
     work = work_root / spec.label
     work.mkdir(parents=True, exist_ok=True)
     ass_path = work / f"{spec.label}.ass"
+    font_name, fonts_dir = pick_positivo_font()
     write_positivo_ass(
         ass_path,
         spec=spec,
         duration=duration,
         text_rgb=palette["text"],
         accent_rgb=palette["accent"],
+        font=font_name,
+    )
+    print(
+        f"  font={font_name!r}  Fontsize Punch={PUNCH_FONT} Hook={HOOK_FONT} "
+        f"Reveal={REVEAL_FONT} CTA={CTA_FONT}  outline={OUTLINE} shadow={SHADOW}"
     )
     ass_escaped = str(ass_path.resolve()).replace("\\", "/").replace(":", "\\:")
+    if fonts_dir is not None:
+        fonts_escaped = (
+            str(fonts_dir.resolve()).replace("\\", "/").replace(":", "\\:")
+        )
+        ass_filter = f"ass='{ass_escaped}':fontsdir='{fonts_escaped}'"
+    else:
+        ass_filter = f"ass='{ass_escaped}'"
     vf = (
         f"scale={WIDTH}:{HEIGHT}:force_original_aspect_ratio=increase,"
         f"crop={WIDTH}:{HEIGHT},"
         f"scale=8000:-1,"
         f"zoompan=z='{zoom_expr}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
         f":d={frames}:s={WIDTH}x{HEIGHT}:fps={FPS},"
-        f"ass='{ass_escaped}'"
+        + ass_filter
     )
     cmd = [
         ffmpeg,
@@ -477,9 +511,15 @@ def main() -> None:
     if out_dir.name.lower() == "videos-carta-musica-30":
         raise SystemExit("Recusado: out-dir não pode ser videos-carta-musica-30")
 
+    font_name, fonts_dir = pick_positivo_font()
     print(f"roteiros={args.roteiros}")
     print(f"out={out_dir}  duration={dur:.1f}s  n={len(specs)}")
     print(f"trilha={AUDIO_PATH.name}  vol={MUSIC_VOLUME}  TTS=off  reveal=ON")
+    print(
+        f"font={font_name!r}  fontsdir={fonts_dir}  "
+        f"Fontsize Punch={PUNCH_FONT} Hook={HOOK_FONT} "
+        f"Reveal={REVEAL_FONT} CTA={CTA_FONT}"
+    )
 
     if args.dry_run:
         for s in specs:
