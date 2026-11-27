@@ -469,8 +469,8 @@ export function IqUnlockCard({
               Você terminou o teste — obrigado pela dedicação. Com{" "}
               {includeAi ? (
                 <>
-                  {payLabel} via Pix você libera o diagnóstico completo e o
-                  assistente de IA no mesmo pagamento.
+                  Com {payLabel} você libera o diagnóstico e já leva o assistente
+                  de IA pra interpretar o seu perfil com você.
                 </>
               ) : (
                 <>
@@ -510,11 +510,11 @@ export function IqUnlockCard({
               />
               <span className="min-w-0">
                 <span className="flex flex-wrap items-center gap-2 text-sm font-medium text-cyan-100">
-                  Incluir assistente de IA (+{aiAmtLabel})
+                  Quero o assistente de IA junto (+{aiAmtLabel})
                 </span>
                 <span className="mt-1 block text-xs leading-relaxed text-zinc-400">
-                  Mesmo Pix: resultado ({resultAmtLabel}) + assistente de IA no
-                  seu perfil. Ou deixe desmarcado e pague só o resultado agora.
+                  Assim que o resultado abrir, você já conversa sobre o que ele
+                  significa pra você — forças, o que treinar e próximos passos.
                 </span>
               </span>
             </label>
