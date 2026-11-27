@@ -43,11 +43,15 @@ FPS = pipe.FPS
 MUSIC_VOLUME = 0.14  # baixo, sem voz
 FADE_OUT_SEC = 1.4
 
-# Gancho (ferida/curiosidade) — sem revelar arquétipo
+# Opções testadas (v2) — vencedor = orgulho/exaustão (confronto 0–2s)
+# A (vencedor): orgulho de aguentar → medo de parar
+# B: "De novo. O mesmo ciclo. / Você já sabia / antes de começar."
+# C: "Você sabota o que mais quer / e chama isso de destino."
+HOOK_PUNCH = "Você se orgulha de aguentar."  # só a 1ª linha, 0–~1.8s
 HOOK_LINES = (
-    "Você sente o peso —",
-    "e chama de virtude.",
-    "A carta já viu o que evita.",
+    "Você se orgulha de aguentar.",
+    "Isso não é força.",
+    "É medo de parar.",
 )
 CTA_LINES = (
     "Puxe sua carta",
@@ -55,13 +59,15 @@ CTA_LINES = (
 )
 
 # Margens ASS — área segura TikTok
-HOOK_FONT = 52
+HOOK_FONT = 54
 CTA_FONT = 48
 HOOK_MARGIN_V = 175  # topo (Alignment 8)
 CTA_MARGIN_V = 420  # base (Alignment 2)
 MARGIN_LR = 96
 OUTLINE = 2.4
 SHADOW = 2.6
+PUNCH_END_SEC = 1.85  # confronto imediato nos primeiros ~2s
+HOOK_FULL_START_SEC = 1.85
 
 
 def ass_escape(text: str) -> str:
@@ -89,15 +95,22 @@ def write_piloto_ass(
     if pipe.contrast_ratio(cta_fill, (18, 16, 14)) < 3.0:
         cta_fill = pipe.lighten_for_text(accent_rgb, min_v=0.94)
 
+    punch_text = ass_escape(HOOK_PUNCH)
     hook_text = ass_escape("\n".join(HOOK_LINES))
     cta_text = ass_escape("\n".join(CTA_LINES))
 
-    # Gancho: quase o vídeo inteiro; CTA entra no meio e fica até o fim
+    # Punch 0–2s → gancho completo; CTA entra no meio
     hook_end = max(duration - 0.35, duration * 0.92)
-    cta_start = min(4.8, duration * 0.35)
+    cta_start = min(5.0, duration * 0.36)
+    punch_end = min(PUNCH_END_SEC, duration * 0.2)
+    hook_full_start = min(HOOK_FULL_START_SEC, punch_end)
 
     stroke_tag = pipe.ass_color_no_alpha((10, 8, 6))
     shadow_tag = pipe.ass_color_no_alpha((0, 0, 0))
+    tags = (
+        f"{{\\bord{OUTLINE}\\shad{SHADOW}"
+        f"\\3c{stroke_tag}\\4c{shadow_tag}}}"
+    )
 
     header = f"""[Script Info]
 Title: piloto-carta-sem-voz
@@ -110,6 +123,7 @@ YCbCr Matrix: TV.709
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Punch,{font},{HOOK_FONT + 4},{pipe.rgb_to_ass(hook_fill)},{pipe.rgb_to_ass(accent_rgb)},{stroke},{shadow},-1,0,0,0,100,100,0.5,0,1,{OUTLINE},{SHADOW},8,{MARGIN_LR},{MARGIN_LR},{HOOK_MARGIN_V},1
 Style: Hook,{font},{HOOK_FONT},{pipe.rgb_to_ass(hook_fill)},{pipe.rgb_to_ass(accent_rgb)},{stroke},{shadow},-1,0,0,0,100,100,0.6,0,1,{OUTLINE},{SHADOW},8,{MARGIN_LR},{MARGIN_LR},{HOOK_MARGIN_V},1
 Style: CTA,{font},{CTA_FONT},{pipe.rgb_to_ass(cta_fill)},{pipe.rgb_to_ass(accent_rgb)},{stroke},{shadow},-1,0,0,0,100,100,0.8,0,1,{OUTLINE},{SHADOW},2,{MARGIN_LR},{MARGIN_LR},{CTA_MARGIN_V},1
 
@@ -118,14 +132,16 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
     events = [
         (
-            f"Dialogue: 0,{pipe.ass_timestamp(0.25)},{pipe.ass_timestamp(hook_end)},"
-            f"Hook,,0,0,0,,{{\\bord{OUTLINE}\\shad{SHADOW}"
-            f"\\3c{stroke_tag}\\4c{shadow_tag}}}{hook_text}"
+            f"Dialogue: 0,{pipe.ass_timestamp(0.05)},{pipe.ass_timestamp(punch_end)},"
+            f"Punch,,0,0,0,,{tags}{punch_text}"
+        ),
+        (
+            f"Dialogue: 0,{pipe.ass_timestamp(hook_full_start)},{pipe.ass_timestamp(hook_end)},"
+            f"Hook,,0,0,0,,{tags}{hook_text}"
         ),
         (
             f"Dialogue: 1,{pipe.ass_timestamp(cta_start)},{pipe.ass_timestamp(duration)},"
-            f"CTA,,0,0,0,,{{\\bord{OUTLINE}\\shad{SHADOW}"
-            f"\\3c{stroke_tag}\\4c{shadow_tag}}}{cta_text}"
+            f"CTA,,0,0,0,,{tags}{cta_text}"
         ),
     ]
     path.write_text(header + "\n".join(events) + "\n", encoding="utf-8")
