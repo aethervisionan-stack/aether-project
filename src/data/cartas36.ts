@@ -849,5 +849,29 @@ export function provocacaoPadraoDoArquétipo(
   return cartaForSituacao(archetypeId, 1)?.provocacaoPreDesbloqueio;
 }
 
+/** Hash estável (djb2) para escolher 1 das 3 cartas sem saltar no re-render. */
+function stableSeedHash(seed: string): number {
+  let h = 5381;
+  for (let i = 0; i < seed.length; i++) {
+    h = ((h << 5) + h + seed.charCodeAt(i)) >>> 0;
+  }
+  return h;
+}
+
+/**
+ * Escolhe 1 das 3 cartas do arquétipo calculado para a prévia bloqueada.
+ * Determinístico por seed (ex.: client sid + archetypeId) — nunca revela o nome.
+ */
+export function pickCartaPreviewForArchetype(
+  archetypeId: ArchetypeId,
+  seed?: string,
+): Carta36 | undefined {
+  const cartas = cartasForArchetype(archetypeId);
+  if (cartas.length === 0) return undefined;
+  const key = seed && seed.length > 0 ? seed : archetypeId;
+  const idx = stableSeedHash(`${key}::${archetypeId}`) % cartas.length;
+  return cartas[idx];
+}
+
 export const TOTAL_CARTAS_36 = 36;
 export const SITUACOES_POR_ARQUETIPO = 3;

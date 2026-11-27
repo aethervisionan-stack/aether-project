@@ -14,6 +14,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { isValidPixEmv, pickClientPixEmv } from "@/lib/infinitepay/pixEmv";
 import type { NarrativeResult } from "@/src/data/archetypes";
+import { pickCartaPreviewForArchetype } from "@/src/data/cartas36";
 import { paywallTeaseFor } from "@/src/data/paywallTeases";
 import {
   isResultUnlocked,
@@ -134,10 +135,25 @@ export function PaywallScreen({
 }: Props) {
   const reduce = useReducedMotion();
   const dominant = result.dominants[0]?.profile ?? null;
-  const tease = useMemo(
-    () => (dominant ? paywallTeaseFor(dominant.id) : null),
-    [dominant],
-  );
+  /** 1 das 3 cartas do arquétipo — título medieval + provocação; nome só pós-unlock. */
+  const previewCarta = useMemo(() => {
+    if (!dominant) return null;
+    let seed: string | undefined;
+    try {
+      const sid =
+        typeof window !== "undefined"
+          ? window.localStorage.getItem("arq_client_sid")
+          : null;
+      if (sid) seed = `${sid}::${dominant.id}`;
+    } catch {
+      // archetype-only seed inside helper
+    }
+    return pickCartaPreviewForArchetype(dominant.id, seed) ?? null;
+  }, [dominant]);
+  const tease = useMemo(() => {
+    if (previewCarta) return previewCarta.provocacaoPreDesbloqueio;
+    return dominant ? paywallTeaseFor(dominant.id) : null;
+  }, [previewCarta, dominant]);
   const alreadyResult = isResultUnlocked(readQuizSession());
 
   const [selResult, setSelResult] = useState(!alreadyResult);
@@ -407,7 +423,11 @@ export function PaywallScreen({
             >
               <Image
                 src={dominant.image}
-                alt="Carta do arquétipo — prévia selada"
+                alt={
+                  previewCarta
+                    ? `Carta medieval — ${previewCarta.tituloMedieval}`
+                    : "Carta do arquétipo — prévia selada"
+                }
                 fill
                 sizes="(max-width: 640px) 60vw, 260px"
                 className="object-cover"
@@ -417,19 +437,26 @@ export function PaywallScreen({
                 className="pointer-events-none absolute inset-0"
                 style={{
                   background: `
-                    linear-gradient(180deg, transparent 55%, rgba(5,6,8,0.75) 88%, rgba(5,6,8,0.92) 100%),
+                    linear-gradient(180deg, transparent 42%, rgba(5,6,8,0.78) 78%, rgba(5,6,8,0.94) 100%),
                     linear-gradient(0deg, transparent 75%, rgba(5,6,8,0.3) 100%)
                   `,
                 }}
               />
-              <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-2 p-3">
-                <Lock
-                  size={14}
-                  className="text-[color:var(--cart-copper)]"
-                  aria-hidden
-                />
-                <span className="cart-display text-[10px] uppercase tracking-[0.28em] text-[color:var(--cart-copper)]">
-                  Brasão selado
+              <div className="absolute inset-x-0 bottom-0 flex flex-col items-center gap-1.5 p-3 text-center">
+                {previewCarta ? (
+                  <p className="cart-display text-sm leading-snug tracking-wide text-[color:var(--cine-ink)] sm:text-base">
+                    {previewCarta.tituloMedieval}
+                  </p>
+                ) : null}
+                <span className="inline-flex items-center justify-center gap-2">
+                  <Lock
+                    size={14}
+                    className="text-[color:var(--cart-copper)]"
+                    aria-hidden
+                  />
+                  <span className="cart-display text-[10px] uppercase tracking-[0.28em] text-[color:var(--cart-copper)]">
+                    Brasão selado
+                  </span>
                 </span>
               </div>
             </div>
