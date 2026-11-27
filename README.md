@@ -17,17 +17,38 @@ Headset mic (PCM 16-bit mono @ 16 kHz)
   → client GaplessPcmPlayer
 ```
 
+## Ports (isolation)
+
+| Service | Preferred (this project) | Classic / legacy |
+| --- | --- | --- |
+| HUD (Vite) | **5174** | 5173 |
+| API (FastAPI) | **8001** | 8000 |
+| Landing (Next) | **3010** | 3000 |
+
+Launchers never kill foreign listeners — if the preferred port is busy they pick the next free. CORS always allows both 5174 and 5173.
+
+Root scripts: `npm run dev:stack` (HUD+API), `npm run dev:api`, `npm run dev` / `dev:landing` (Next with free-port fallback).
+
 ## WebSocket path
 
-- **Browser:** `ws://127.0.0.1:5173/api/ws/live` (same-origin; default in `GeminiLiveService`)
-- **Vite proxy:** `/api` → `http://127.0.0.1:8000` with `ws: true`, rewrite strips `/api`
+- **Browser (preferred):** `ws://127.0.0.1:5174/api/ws/live` (same-origin via Vite proxy)
+- **Vite proxy:** `/api` → `http://127.0.0.1:8001` with `ws: true`, rewrite strips `/api`
 - **FastAPI:** `/ws/live`
 
-Override with `VITE_LIVE_WS_URL` (e.g. `ws://127.0.0.1:8000/ws/live`).
+Override with `VITE_LIVE_WS_URL` (e.g. `ws://127.0.0.1:8001/ws/live`). Classic `:5173` / `:8000` still work when you set `PORT` / `AETHER_*` explicitly.
 
 ## Run locally
 
-### 1. Backend
+### Preferred (isolated stack — no foreign process kills)
+
+```bash
+# from repo root (after backend venv + client npm install)
+npm run dev:stack
+```
+
+Expect printed URLs on **8001** / **5174** (or next free). Landing: `npm run dev` → **3010**.
+
+### 1. Backend (manual)
 
 ```bash
 cd backend
@@ -36,12 +57,13 @@ source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 cp .env.example .env        # set GEMINI_API_KEY + Google OAuth (never commit)
 python scripts/verify_env.py
-uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+uvicorn app.main:app --reload --host 127.0.0.1 --port 8001
+# classic: --port 8000
 ```
 
-Health: [http://127.0.0.1:8000/health](http://127.0.0.1:8000/health)  
-Google login: [http://127.0.0.1:8000/auth/google/login](http://127.0.0.1:8000/auth/google/login)  
-OS Bridge inspector: [http://127.0.0.1:8000/tools/os-bridge/inspector](http://127.0.0.1:8000/tools/os-bridge/inspector)
+Health: [http://127.0.0.1:8001/health](http://127.0.0.1:8001/health)  
+Google login: [http://127.0.0.1:8001/auth/google/login](http://127.0.0.1:8001/auth/google/login)  
+OS Bridge inspector: [http://127.0.0.1:8001/tools/os-bridge/inspector](http://127.0.0.1:8001/tools/os-bridge/inspector)
 
 Windows verify runbook: [docs/verify-integration.md](docs/verify-integration.md).
 
@@ -51,11 +73,11 @@ Windows verify runbook: [docs/verify-integration.md](docs/verify-integration.md)
 ```bash
 cd client
 npm install
-cp .env.example .env        # optional VITE_LIVE_WS_URL
+cp .env.example .env        # optional VITE_LIVE_WS_URL / AETHER_HUD_PORT
 npm run dev
 ```
 
-Open [http://127.0.0.1:5173](http://127.0.0.1:5173), pair a Bluetooth headset as OS default I/O, click **Connect Live**.
+Open [http://127.0.0.1:5174](http://127.0.0.1:5174) (or the port Vite prints), pair a Bluetooth headset as OS default I/O, click **Connect Live**.
 
 ## Modules
 

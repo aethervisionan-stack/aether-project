@@ -120,7 +120,7 @@ class Settings(BaseSettings):
     google_oauth_client_secrets_file: str = Field(default="", alias="GOOGLE_OAUTH_CLIENT_SECRETS_FILE")
     # Canonical: GOOGLE_OAUTH_REDIRECT_URI. Also accepts GOOGLE_REDIRECT_URI.
     google_oauth_redirect_uri: str = Field(
-        default="http://127.0.0.1:8000/auth/google/callback",
+        default="http://127.0.0.1:8001/auth/google/callback",
         validation_alias=AliasChoices(
             "GOOGLE_OAUTH_REDIRECT_URI",
             "GOOGLE_REDIRECT_URI",
