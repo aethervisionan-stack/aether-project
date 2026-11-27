@@ -14,8 +14,7 @@ mobile/
     .../mobile/handsfree/   # Foreground Service, wake, VAD
     .../mobile/sensors/     # GPS + camera sideband
     .../mobile/push/        # FCM
-    .../mobile/osbridge/    # NotificationListener
-    .../bridge/             # OS Bridge AccessibilityService + WS/HTTP IPC
+    .../mobile/osbridge/    # AccessibilityService + BridgeWebSocketClient + NotificationListener
   ios/AetherVision/         # Swift sources (Xcode project bring-up)
     HandsFree/              # BG audio session, wake, VAD
     Sensors/                # BG location + camera frames
