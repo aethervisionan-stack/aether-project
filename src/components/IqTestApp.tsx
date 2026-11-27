@@ -52,6 +52,7 @@ import {
   clearQuizState,
   createInitialState,
   createModeSelectState,
+  findResumableQuizState,
   loadQuizState,
   saveQuizState,
 } from "@/src/lib/quizStorage";
@@ -93,6 +94,7 @@ import {
 import {
   cleanIqPaymentReturnUrl,
   createIqSessionId,
+  ensureIqSessionIdInUrl,
   fetchIqUnlockStatus,
   readIqPaymentReturnParams,
 } from "@/src/lib/iqUnlockClient";
@@ -159,15 +161,68 @@ export function IqTestApp() {
   const rules = useMemo(() => (mode ? getModeRules(mode) : null), [mode]);
 
   useEffect(() => {
-    setHydrated(true);
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined") {
+      setHydrated(true);
+      return;
+    }
+
     setChallengeInvite(parseChallengeInvite(window.location.search));
-    // Do NOT wipe payment_return params here — IqUnlockCard / status reconcile first.
+
+    // CRITICAL: never land on modeSelect after quiz+payment. Restore from
+    // URL session_id / localStorage before first paint of the shell.
+    // Do NOT wipe payment_return params here — status reconcile runs next.
+    const ret = readIqPaymentReturnParams(window.location.search);
+    const urlSessionId = (() => {
+      try {
+        return new URLSearchParams(window.location.search).get("session_id");
+      } catch {
+        return null;
+      }
+    })();
+    const preferSessionId = ret?.session_id || urlSessionId;
+    const paymentReturn = Boolean(ret);
+    const restored = findResumableQuizState({
+      sessionId: preferSessionId,
+      // Payment return OR an explicit session_id → require a real session,
+      // never fall through to landing.
+      requireCompleted: paymentReturn || Boolean(preferSessionId),
+    });
+
+    if (restored) {
+      const next: QuizPersistedState = {
+        ...restored,
+        // Force results view when returning from checkout with a finished quiz.
+        phase:
+          paymentReturn && restored.result
+            ? restored.phase === "review"
+              ? "review"
+              : "results"
+            : restored.phase,
+        sessionId:
+          restored.sessionId ||
+          (preferSessionId?.startsWith("iq_") ? preferSessionId : null) ||
+          null,
+      };
+      setState(next);
+      if (next.sessionId) ensureIqSessionIdInUrl(next.sessionId);
+    } else if (preferSessionId?.startsWith("iq_")) {
+      // Keep session_id visible even if local answers were wiped — unlock
+      // reconcile / support can still key off it; do not invent a landing wipe.
+      ensureIqSessionIdInUrl(preferSessionId);
+    }
+
+    setHydrated(true);
   }, []);
 
   useEffect(() => {
     if (!hydrated) return;
     saveQuizState(state);
+    if (
+      state.sessionId &&
+      (state.phase === "results" || state.phase === "review")
+    ) {
+      ensureIqSessionIdInUrl(state.sessionId);
+    }
   }, [state, hydrated]);
 
   // Mint sessionId for legacy finished sessions that predate the paywall.
@@ -316,6 +371,11 @@ export function IqTestApp() {
       setServerUnlocked(true);
       setUnlockVerifyError(null);
       setState((prev) => {
+        const keepSessionId = prev.sessionId;
+        // Strip return noise but keep session_id for F5 restore.
+        cleanIqPaymentReturnUrl({ keepSessionId });
+        if (keepSessionId) ensureIqSessionIdInUrl(keepSessionId);
+
         if (!prev.result) {
           return {
             ...prev,
@@ -347,7 +407,6 @@ export function IqTestApp() {
           leaderboardEntryId,
         };
       });
-      cleanIqPaymentReturnUrl();
     },
     [],
   );
@@ -590,11 +649,30 @@ export function IqTestApp() {
     setAvatarError(null);
     setFinishWarning(null);
     setReviewIndex(0);
+    setServerUnlocked(false);
+    setServerAiUnlocked(false);
+    setUnlockVerifyError(null);
     setState({
       ...createModeSelectState(),
       participantName: name,
       participantAvatarUrl: avatar,
     });
+    // Explicit reset → drop session_id so hydrate won't bounce back to results.
+    if (typeof window !== "undefined") {
+      try {
+        const url = new URL(window.location.href);
+        if (url.searchParams.has("session_id")) {
+          url.searchParams.delete("session_id");
+          window.history.replaceState(
+            {},
+            "",
+            `${url.pathname}${url.search}${url.hash}`,
+          );
+        }
+      } catch {
+        // ignore
+      }
+    }
   };
 
   if (!hydrated) {

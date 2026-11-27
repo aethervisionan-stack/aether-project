@@ -130,6 +130,97 @@ export function clearQuizState(mode?: AssessmentMode): void {
   activeStore.clear(mode);
 }
 
+const ASSESSMENT_MODES: AssessmentMode[] = ["figures", "questions", "hybrid"];
+
+/** Activity timestamp for resume ranking (finished > started > endsAt). */
+export function quizStateActivityAt(state: QuizPersistedState): number {
+  return (
+    state.finishedAt ??
+    state.startedAt ??
+    state.endsAt ??
+    state.questionStartedAt ??
+    0
+  );
+}
+
+export function listSavedQuizStates(): QuizPersistedState[] {
+  const out: QuizPersistedState[] = [];
+  for (const mode of ASSESSMENT_MODES) {
+    const saved = loadQuizState(mode);
+    if (saved) out.push(saved);
+  }
+  return out;
+}
+
+export function findQuizStateBySessionId(
+  sessionId: string,
+): QuizPersistedState | null {
+  if (!sessionId) return null;
+  const matches = listSavedQuizStates().filter((s) => s.sessionId === sessionId);
+  if (matches.length === 0) return null;
+  matches.sort((a, b) => quizStateActivityAt(b) - quizStateActivityAt(a));
+  return matches[0] ?? null;
+}
+
+export type ResumableQuizLookup = {
+  /** Prefer exact session from payment return / URL. */
+  sessionId?: string | null;
+  /**
+   * When true (payment return / completed sessionId present), only resume
+   * finished results/review — never fall back to landing.
+   */
+  requireCompleted?: boolean;
+};
+
+/**
+ * Pick the quiz session to restore on /teste-qi mount.
+ * Priority: URL sessionId match → newest results/review → newest in-progress.
+ */
+export function findResumableQuizState(
+  opts: ResumableQuizLookup = {},
+): QuizPersistedState | null {
+  const sessionId =
+    typeof opts.sessionId === "string" && opts.sessionId.trim()
+      ? opts.sessionId.trim()
+      : null;
+
+  if (sessionId) {
+    const byId = findQuizStateBySessionId(sessionId);
+    if (byId) {
+      if (
+        opts.requireCompleted &&
+        byId.phase !== "results" &&
+        byId.phase !== "review"
+      ) {
+        // Payment return with sessionId but quiz not finished — still restore
+        // whatever we have so we never dump the user on a blank landing.
+        return byId;
+      }
+      return byId;
+    }
+    if (opts.requireCompleted) return null;
+  }
+
+  const all = listSavedQuizStates().filter(
+    (s) => s.phase !== "modeSelect" && s.phase !== "onboarding",
+  );
+  if (all.length === 0) return null;
+
+  const completed = all.filter(
+    (s) =>
+      (s.phase === "results" || s.phase === "review") && s.result != null,
+  );
+  const pool = opts.requireCompleted
+    ? completed
+    : completed.length > 0
+      ? completed
+      : all;
+  if (pool.length === 0) return null;
+
+  pool.sort((a, b) => quizStateActivityAt(b) - quizStateActivityAt(a));
+  return pool[0] ?? null;
+}
+
 export function createInitialState(
   mode: AssessmentMode,
   totalQuestions = QUIZ_TOTAL_QUESTIONS,

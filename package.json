@@ -14,6 +14,7 @@
     "audit:iq": "tsx scripts/audit-iq-banks.ts",
     "smoke:iq": "tsx scripts/smoke-iq-flow.ts",
     "smoke:iq-unlock": "tsx scripts/smoke-iq-unlock.ts",
+    "smoke:iq-restore": "tsx scripts/smoke-iq-session-restore.ts",
     "test:iq": "tsx scripts/simulate-iq-scoring.ts",
     "simulate:iq": "tsx scripts/simulate-iq-scoring.ts",
     "token:metadata": "tsx scripts/register-vision-metadata.ts",

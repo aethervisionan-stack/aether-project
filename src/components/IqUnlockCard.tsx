@@ -102,7 +102,7 @@ export function IqUnlockCard({
       unlockedRef.current = true;
       stopPoll();
       setAwaiting(false);
-      cleanIqPaymentReturnUrl();
+      cleanIqPaymentReturnUrl({ keepSessionId: sessionId });
       try {
         window.sessionStorage.removeItem("iq_pix_pending");
       } catch {
@@ -110,7 +110,7 @@ export function IqUnlockCard({
       }
       onUnlocked?.(paymentId, flags);
     },
-    [onUnlocked, stopPoll],
+    [onUnlocked, sessionId, stopPoll],
   );
 
   const isStatusUnlocked = useCallback(

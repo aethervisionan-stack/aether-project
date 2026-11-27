@@ -267,17 +267,25 @@ export function readIqPaymentReturnParams(
   }
 }
 
-export function cleanIqPaymentReturnUrl(): void {
+/**
+ * Strip InfinitePay return noise from the URL, but KEEP `session_id` so F5 /
+ * tab return can rehydrate the completed quiz without dumping on landing.
+ */
+export function cleanIqPaymentReturnUrl(opts?: {
+  keepSessionId?: string | null;
+}): void {
   if (typeof window === "undefined") return;
   try {
     const url = new URL(window.location.href);
+    const keepSessionId =
+      (typeof opts?.keepSessionId === "string" && opts.keepSessionId.trim()) ||
+      url.searchParams.get("session_id");
     const keys = [
       "payment_return",
       "order_nsu",
       "transaction_nsu",
       "slug",
       "simulated",
-      "session_id",
       "capture_method",
       "receipt_url",
     ];
@@ -288,10 +296,36 @@ export function cleanIqPaymentReturnUrl(): void {
         changed = true;
       }
     }
+    // Never drop a valid iq_ session id from the address bar.
+    if (keepSessionId && keepSessionId.startsWith("iq_")) {
+      if (url.searchParams.get("session_id") !== keepSessionId) {
+        url.searchParams.set("session_id", keepSessionId);
+        changed = true;
+      }
+    } else if (url.searchParams.has("session_id") && !keepSessionId) {
+      // Stale non-iq ids (e.g. Stripe) — remove only when we have nothing to keep.
+      url.searchParams.delete("session_id");
+      changed = true;
+    }
     if (changed) {
       const next = `${url.pathname}${url.search}${url.hash}`;
       window.history.replaceState({}, "", next);
     }
+  } catch {
+    // ignore
+  }
+}
+
+/** Persist session_id in the URL for safe F5 / payment-return restore. */
+export function ensureIqSessionIdInUrl(sessionId: string | null | undefined): void {
+  if (typeof window === "undefined") return;
+  if (!sessionId || !sessionId.startsWith("iq_")) return;
+  try {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("session_id") === sessionId) return;
+    url.searchParams.set("session_id", sessionId);
+    const next = `${url.pathname}${url.search}${url.hash}`;
+    window.history.replaceState({}, "", next);
   } catch {
     // ignore
   }
