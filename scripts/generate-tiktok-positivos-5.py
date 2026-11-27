@@ -2,8 +2,8 @@
 """
 Gera 5 vídeos TikTok curtos (9:16) — carta + música, SEM voz / SEM TTS.
 
-Copy: somente forças / pontos positivos (sem ferida / ponto cego).
-Legenda no topo; CTA curto na base. Mistério da carta (sem nome de arquétipo).
+Fluxo: forças (identificação) → revela nome do arquétipo → CTA quiz.
+Legenda no topo; CTA na base. Nesta série o nome PODE aparecer.
 
 Uso:
   python scripts/generate-tiktok-positivos-5.py
@@ -40,36 +40,50 @@ DEFAULT_OUT_DIR = Path(
 TEMP_ROOT = Path(r"D:\tiktok-temp")
 
 CTA_SCREEN = (
-    "Descubra se você tira\n"
-    "essa carta no quiz\n"
+    "Se você se identificou\n"
+    "mesmo um pouco —\n"
+    "faça o teste completo\n"
+    "e confirme o arquétipo\n"
     "link da bio"
 )
-CTA_PHRASE = "Descubra se você tira essa carta no quiz link da bio"
+CTA_PHRASE = (
+    "Se você se identificou mesmo um pouco — "
+    "faça o teste completo e confirme o arquétipo"
+)
+
+# Nomes oficiais do quiz (title sem o artigo, para “do Herói”)
+SLUG_TITLE: dict[str, str] = {
+    "heroi": "Herói",
+    "cuidador": "Cuidador",
+    "criador": "Criador",
+    "sabio": "Sábio",
+    "explorador": "Explorador",
+    "inocente": "Inocente",
+    "rebelde": "Rebelde",
+    "mago": "Mago",
+    "pessoa_comum": "Órfão",
+    "amante": "Amante",
+    "bobo_da_corte": "Bobo da Corte",
+    "governante": "Governante",
+}
 
 WIDTH = pipe.WIDTH
 HEIGHT = pipe.HEIGHT
 FPS = pipe.FPS
 MUSIC_VOLUME = 0.14
 FADE_OUT_SEC = 1.4
-DEFAULT_DURATION = 12.0
+DEFAULT_DURATION = 14.0
 
-HOOK_FONT = 50
-CTA_FONT = 40
-HOOK_MARGIN_V = 165  # Alignment 8 — topo (liberado pelo brief)
-CTA_MARGIN_V = 300
+HOOK_FONT = 48
+REVEAL_FONT = 50
+CTA_FONT = 36
+HOOK_MARGIN_V = 165  # Alignment 8 — topo
+REVEAL_MARGIN_V = 165
+CTA_MARGIN_V = 280
 MARGIN_LR = 96
 OUTLINE = 2.3
 SHADOW = 2.5
 PUNCH_END_SEC = 1.85
-
-FORBIDDEN_NAME_RE = re.compile(
-    r"\b("
-    r"Inocente|Órfão|Orfao|Herói|Heroi|Cuidador|Explorador|Rebelde|"
-    r"Amante|Criador|Bobo(?:\s+da\s+Corte)?|Sábio|Sabio|Mago|Governante|"
-    r"pessoa_comum|bobo_da_corte"
-    r")\b",
-    re.IGNORECASE,
-)
 
 # Fallback estático se o MD falhar no parse
 STATIC_SPECS: list[dict[str, object]] = [
@@ -83,6 +97,7 @@ STATIC_SPECS: list[dict[str, object]] = [
             "Disciplina. Foco. Coragem prática.",
             "Isso é a sua marca.",
         ),
+        "reveal": "Isso é o arquétipo do Herói.",
     },
     {
         "index": 2,
@@ -94,6 +109,7 @@ STATIC_SPECS: list[dict[str, object]] = [
             "Generosidade sem teatro.",
             "Paciência que acolhe de verdade.",
         ),
+        "reveal": "Isso é o arquétipo do Cuidador.",
     },
     {
         "index": 3,
@@ -105,6 +121,7 @@ STATIC_SPECS: list[dict[str, object]] = [
             "Imaginação + originalidade.",
             "Beleza com assinatura sua.",
         ),
+        "reveal": "Isso é o arquétipo do Criador.",
     },
     {
         "index": 4,
@@ -116,6 +133,7 @@ STATIC_SPECS: list[dict[str, object]] = [
             "Clareza. Objetividade.",
             "Pensamento que ilumina.",
         ),
+        "reveal": "Isso é o arquétipo do Sábio.",
     },
     {
         "index": 5,
@@ -127,6 +145,7 @@ STATIC_SPECS: list[dict[str, object]] = [
             "Curiosidade viva.",
             "Liberdade com adaptação rápida.",
         ),
+        "reveal": "Isso é o arquétipo do Explorador.",
     },
 ]
 
@@ -138,6 +157,7 @@ class PositivoSpec:
     slug: str
     punch: str
     lines: tuple[str, ...]
+    reveal: str
     cta: str
     out_name: str
 
@@ -153,6 +173,11 @@ def ass_escape(text: str) -> str:
         .replace("}", "\\}")
         .replace("\n", "\\N")
     )
+
+
+def default_reveal(slug: str) -> str:
+    title = SLUG_TITLE.get(slug, slug.replace("_", " ").title())
+    return f"Isso é o arquétipo do {title}."
 
 
 def parse_roteiros(path: Path) -> list[PositivoSpec]:
@@ -180,16 +205,17 @@ def parse_roteiros(path: Path) -> list[PositivoSpec]:
         if len(lines) < 2:
             raise SystemExit(f"Forças curtas demais no vídeo {index}")
 
+        reveal_m = re.search(r"-\s*\*\*Revelação:\*\*\s*`([^`]+)`", body)
+        reveal = (
+            reveal_m.group(1).strip()
+            if reveal_m
+            else default_reveal(slug_from_card)
+        )
+
         cta_m = re.search(r"-\s*\*\*CTA:\*\*\s*(.+)", body)
         cta_raw = cta_m.group(1).strip() if cta_m else CTA_PHRASE
-        if CTA_PHRASE not in cta_raw:
+        if "teste completo" not in cta_raw.lower() and "link da bio" not in cta_raw.lower():
             raise SystemExit(f"CTA fora do padrão no vídeo {index}: {cta_raw[:80]}")
-
-        for field, val in (("punch", punch), ("forcas", " ".join(lines)), ("cta", cta_raw)):
-            if FORBIDDEN_NAME_RE.search(val):
-                raise SystemExit(
-                    f"Nome de arquétipo vazou em positiva-{index:02d}.{field}: {val[:80]}"
-                )
 
         specs.append(
             PositivoSpec(
@@ -198,6 +224,7 @@ def parse_roteiros(path: Path) -> list[PositivoSpec]:
                 slug=slug_from_card,
                 punch=punch,
                 lines=lines,
+                reveal=reveal,
                 cta=CTA_SCREEN,
                 out_name=f"carta-positiva-{index:02d}-{slug_from_card}.mp4",
             )
@@ -220,9 +247,7 @@ def specs_from_static() -> list[PositivoSpec]:
         slug = str(raw["slug"])
         punch = str(raw["punch"])
         lines = tuple(str(x) for x in raw["lines"])  # type: ignore[arg-type]
-        for field, val in (("punch", punch), ("forcas", " ".join(lines))):
-            if FORBIDDEN_NAME_RE.search(val):
-                raise SystemExit(f"Nome vazou no estático {idx}.{field}")
+        reveal = str(raw.get("reveal") or default_reveal(slug))
         out.append(
             PositivoSpec(
                 index=idx,
@@ -230,6 +255,7 @@ def specs_from_static() -> list[PositivoSpec]:
                 slug=slug,
                 punch=punch,
                 lines=lines,
+                reveal=reveal,
                 cta=CTA_SCREEN,
                 out_name=f"carta-positiva-{idx:02d}-{slug}.mp4",
             )
@@ -245,23 +271,29 @@ def write_positivo_ass(
     text_rgb: tuple[int, int, int],
     accent_rgb: tuple[int, int, int],
 ) -> None:
-    """Gancho/forças no TOPO; CTA na base. Sem caixa opaca."""
+    """Forças no TOPO → revelação no TOPO → CTA na base."""
     font = pipe.pick_ass_font()
     stroke = pipe.rgb_to_ass((10, 8, 6), alpha=0)
     shadow = pipe.rgb_to_ass((0, 0, 0), alpha=0x55)
     hook_fill = pipe.lighten_for_text(text_rgb, min_v=0.93)
+    reveal_fill = pipe.lighten_for_text(accent_rgb, min_v=0.94)
+    if pipe.contrast_ratio(reveal_fill, (18, 16, 14)) < 3.0:
+        reveal_fill = pipe.lighten_for_text(accent_rgb, min_v=0.97)
     cta_fill = pipe.lighten_for_text(accent_rgb, min_v=0.88)
     if pipe.contrast_ratio(cta_fill, (18, 16, 14)) < 3.0:
         cta_fill = pipe.lighten_for_text(accent_rgb, min_v=0.94)
 
     punch_text = ass_escape(spec.punch)
     hook_text = ass_escape("\n".join(spec.lines))
+    reveal_text = ass_escape(spec.reveal)
     cta_text = ass_escape(spec.cta)
 
-    punch_end = min(PUNCH_END_SEC, duration * 0.18)
-    hook_full_start = punch_end
-    hook_end = max(duration - 0.3, duration * 0.92)
-    cta_start = min(7.2, duration * 0.58)
+    # Timing: forças → revelação → CTA (curto)
+    punch_end = min(PUNCH_END_SEC, duration * 0.14)
+    forcas_end = min(7.0, duration * 0.50)
+    reveal_start = forcas_end
+    reveal_end = min(10.2, duration * 0.74)
+    cta_start = min(9.5, duration * 0.68)
 
     stroke_tag = pipe.ass_color_no_alpha((10, 8, 6))
     shadow_tag = pipe.ass_color_no_alpha((0, 0, 0))
@@ -283,7 +315,8 @@ YCbCr Matrix: TV.709
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: Punch,{font},{HOOK_FONT + 4},{pipe.rgb_to_ass(hook_fill)},{pipe.rgb_to_ass(accent_rgb)},{stroke},{shadow},-1,0,0,0,100,100,0.5,0,1,{OUTLINE},{SHADOW},8,{MARGIN_LR},{MARGIN_LR},{HOOK_MARGIN_V},1
 Style: Hook,{font},{HOOK_FONT},{pipe.rgb_to_ass(hook_fill)},{pipe.rgb_to_ass(accent_rgb)},{stroke},{shadow},-1,0,0,0,100,100,0.55,0,1,{OUTLINE},{SHADOW},8,{MARGIN_LR},{MARGIN_LR},{HOOK_MARGIN_V},1
-Style: CTA,{font},{CTA_FONT},{pipe.rgb_to_ass(cta_fill)},{pipe.rgb_to_ass(accent_rgb)},{stroke},{shadow},-1,0,0,0,100,100,0.75,0,1,{OUTLINE},{SHADOW},2,{MARGIN_LR},{MARGIN_LR},{CTA_MARGIN_V},1
+Style: Reveal,{font},{REVEAL_FONT},{pipe.rgb_to_ass(reveal_fill)},{pipe.rgb_to_ass(accent_rgb)},{stroke},{shadow},-1,0,0,0,100,100,0.6,0,1,{OUTLINE},{SHADOW},8,{MARGIN_LR},{MARGIN_LR},{REVEAL_MARGIN_V},1
+Style: CTA,{font},{CTA_FONT},{pipe.rgb_to_ass(cta_fill)},{pipe.rgb_to_ass(accent_rgb)},{stroke},{shadow},-1,0,0,0,100,100,0.7,0,1,{OUTLINE},{SHADOW},2,{MARGIN_LR},{MARGIN_LR},{CTA_MARGIN_V},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -294,8 +327,12 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             f"Punch,,0,0,0,,{tags}{punch_text}"
         ),
         (
-            f"Dialogue: 0,{pipe.ass_timestamp(hook_full_start)},{pipe.ass_timestamp(hook_end)},"
+            f"Dialogue: 0,{pipe.ass_timestamp(punch_end)},{pipe.ass_timestamp(forcas_end)},"
             f"Hook,,0,0,0,,{tags}{hook_text}"
+        ),
+        (
+            f"Dialogue: 0,{pipe.ass_timestamp(reveal_start)},{pipe.ass_timestamp(reveal_end)},"
+            f"Reveal,,0,0,0,,{tags}{reveal_text}"
         ),
         (
             f"Dialogue: 1,{pipe.ass_timestamp(cta_start)},{pipe.ass_timestamp(duration)},"
@@ -323,7 +360,7 @@ def render_one(
     palette = pipe.extract_palette(card)
     print(
         f"[{spec.index}/5] {spec.label}  card={spec.card}  "
-        f"accent={palette['accent']}  → {out_path.name}"
+        f"reveal={spec.reveal!r}  → {out_path.name}"
     )
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -390,15 +427,13 @@ def render_one(
     if not out_path.is_file() or out_path.stat().st_size < 10_000:
         raise SystemExit(f"Saída inválida: {out_path}")
     real = pipe.probe_duration(ffprobe, out_path)
-    print(
-        f"  OK {out_path.stat().st_size / 1e6:.2f} MB  {real:.2f}s"
-    )
+    print(f"  OK {out_path.stat().st_size / 1e6:.2f} MB  {real:.2f}s")
     return out_path
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Batch 5 TikTok positivos (carta+música, sem voz)"
+        description="Batch 5 TikTok positivos (forças → revelação → CTA)"
     )
     parser.add_argument(
         "--roteiros",
@@ -416,7 +451,7 @@ def main() -> None:
         "--duration",
         type=float,
         default=DEFAULT_DURATION,
-        help="Duração em segundos (8–15; default 12)",
+        help="Duração em segundos (8–15; default 14)",
     )
     parser.add_argument(
         "--only",
@@ -439,20 +474,20 @@ def main() -> None:
             raise SystemExit(f"--only sem match: {args.only}")
 
     out_dir = args.out_dir.resolve()
-    # Guarda: nunca apontar para a pasta dos 30 ferida
-    forbidden = out_dir.name.lower() == "videos-carta-musica-30"
-    if forbidden:
+    if out_dir.name.lower() == "videos-carta-musica-30":
         raise SystemExit("Recusado: out-dir não pode ser videos-carta-musica-30")
 
     print(f"roteiros={args.roteiros}")
     print(f"out={out_dir}  duration={dur:.1f}s  n={len(specs)}")
-    print(f"trilha={AUDIO_PATH.name}  vol={MUSIC_VOLUME}  TTS=off")
+    print(f"trilha={AUDIO_PATH.name}  vol={MUSIC_VOLUME}  TTS=off  reveal=ON")
 
     if args.dry_run:
         for s in specs:
             print(f"  {s.index}. {s.out_name}  card={s.card}")
             print(f"     punch: {s.punch}")
             print(f"     lines: {' / '.join(s.lines)}")
+            print(f"     reveal: {s.reveal}")
+            print(f"     cta: {CTA_PHRASE} · link da bio")
         return
 
     TEMP_ROOT.mkdir(parents=True, exist_ok=True)
@@ -460,7 +495,6 @@ def main() -> None:
     work_root.mkdir(parents=True, exist_ok=True)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # Cópia dos roteiros na pasta editado (irmão da pasta de saída)
     editado = out_dir.parent
     dest_md = editado / "ROTEIROS_POSITIVOS_5.md"
     src_md = args.roteiros.resolve()
