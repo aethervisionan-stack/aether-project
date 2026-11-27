@@ -21,33 +21,33 @@ import { ESCALA_HELP } from "@/src/lib/skillHelp";
 /** Promessas do hero alinhadas ao painel de resultados. */
 const HERO_PROMISE_PILLS = [
   {
-    t: "Perfil Cognitivo",
-    d: "Equilibrado ou assimétrico — o mapa da sessão",
+    t: "Seu perfil",
+    d: "Equilibrado ou com pontos fortes diferentes — o resumo da sua sessão",
   },
   {
-    t: "Fortes vs Fracos",
-    d: "O que puxa o desempenho e o que limita",
+    t: "Fortes e fracos",
+    d: "O que te ajuda a ir bem e o que ainda puxa o resultado para baixo",
   },
   {
-    t: "Atividade de Maior Destaque",
-    d: "Onde você tenderia a brilhar",
+    t: "Onde você brilha",
+    d: "O tipo de tarefa em que você tende a se sair melhor",
   },
 ] as const;
 
 const TRANSPARENCY = [
   {
-    t: "Base teórica",
-    d: "Estrutura inspirada no modelo CHC de habilidades cognitivas: seis índices (Verbal, Fluido, Espacial, Memória de trabalho, Velocidade de processamento, Tempo de reação) com subtestes próprios. O QI global vem de IRT 3PL — não de conhecimento escolar decorado.",
+    t: "Em que nos baseamos",
+    d: "O teste olha seis áreas: palavras, lógica, visão espacial, memória de curto prazo, velocidade e tempo de reação. Cada uma tem suas perguntas. O QI geral vem do seu desempenho no conjunto — não de decorar matéria da escola.",
     span: "md:col-span-2 md:row-span-1",
   },
   {
-    t: "Arquitetura das questões",
-    d: "Itens progressivos L1–L5 em SVG e/ou texto, com distratores diagnósticos e uma única alternativa correta acompanhada de explicação. Telemetria de tempo e hesitação alimenta consistência e anomalias.",
+    t: "Como as perguntas são feitas",
+    d: "As questões vão do mais fácil ao mais difícil, em figura ou texto. Cada uma tem uma resposta certa, com explicação. Também olhamos tempo e hesitação para ver se o resultado ficou estável.",
     span: "md:col-span-1",
   },
   {
-    t: "Limite deste resultado",
-    d: "Estimativa digital de perfil cognitivo e QI. Não substitui avaliação neuropsicológica clínica presencial nem laudo de profissional habilitado.",
+    t: "O que este resultado não é",
+    d: "É uma estimativa online do seu perfil e do seu QI. Não substitui avaliação com psicólogo presencial nem laudo oficial.",
     span: "md:col-span-3",
   },
 ] as const;
@@ -97,7 +97,7 @@ export function IqLanding({
 
   const onCta = () => {
     if (!pendingMode) {
-      setModeHint("Selecione um modo de avaliação para continuar.");
+      setModeHint("Escolha um tipo de teste para continuar.");
       document.getElementById("iq-mode-cards")?.scrollIntoView({
         behavior: reduce ? "auto" : "smooth",
         block: "nearest",
@@ -117,7 +117,7 @@ export function IqLanding({
       className="space-y-14 sm:space-y-20"
     >
       <nav
-        aria-label="Navegação da avaliação"
+        aria-label="Navegação do teste"
         className="sticky top-3 z-30 mx-auto flex max-w-full items-center justify-between gap-3 overflow-x-auto rounded-2xl border border-white/[0.08] bg-[#0B0D14]/70 px-3 py-2.5 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] backdrop-blur-xl sm:px-4"
       >
         <LivingBrainLogo href="#iniciar" size="sm" />
@@ -125,7 +125,7 @@ export function IqLanding({
           {(
             [
               ["#iniciar", "Iniciar"],
-              ["#metodologia", "Metodologia"],
+              ["#metodologia", "Como funciona"],
               ["#ranking", "Ranking"],
             ] as const
           ).map(([href, label]) => (
@@ -166,18 +166,17 @@ export function IqLanding({
               className="drop-shadow-[0_0_28px_rgba(34,211,238,0.28)]"
             />
             <p className="text-[11px] font-medium uppercase tracking-[0.28em] text-cyan-300/80">
-              Precision Lab · Avaliação psicométrica
+              Teste online · Perfil e QI
             </p>
           </div>
           <OnlinePresenceBadge className="pt-1" />
           <h1 className="font-iq-display max-w-[16ch] text-4xl leading-[1.05] tracking-tight text-zinc-50 sm:text-5xl lg:text-[3.35rem]">
-            Descubra seu perfil cognitivo
+            Descubra como você pensa
           </h1>
           <p className="max-w-lg text-base leading-relaxed text-zinc-400 sm:text-lg">
-            Forças, fraquezas e onde você tenderia a brilhar — análise
-            estratégica, resolução complexa, memória multitask, espacial-visual
-            ou decisões ágeis. Quiz com ranking local: estimativa clara, sem
-            milagre.
+            Veja seus pontos fortes, o que ainda trava e onde você tende a
+            brilhar — lógica, memória, visão espacial ou decisões rápidas. Quiz
+            com ranking neste aparelho: resultado claro, sem milagre.
           </p>
           <ul className="grid max-w-xl grid-cols-1 gap-2 pt-1 sm:grid-cols-3">
             {HERO_PROMISE_PILLS.map((pill) => (
@@ -213,10 +212,11 @@ export function IqLanding({
             <div className="relative space-y-5">
               <div>
                 <h2 className="font-iq-display text-lg tracking-tight text-zinc-50">
-                  Configurar sessão
+                  Começar o teste
                 </h2>
                 <p className="mt-1 text-sm text-zinc-500">
-                  Identidade opcional + protocolo. Progresso isolado por modo.
+                  Nome opcional e escolha do tipo. Cada tipo guarda o progresso
+                  separado.
                 </p>
               </div>
 
@@ -225,7 +225,7 @@ export function IqLanding({
                   htmlFor="iq-landing-participant-name"
                   className="block text-sm font-medium text-zinc-200"
                 >
-                  Nome / Apelido
+                  Nome ou apelido
                 </label>
                 <input
                   id="iq-landing-participant-name"
@@ -238,8 +238,9 @@ export function IqLanding({
                   className="w-full rounded-xl border border-white/[0.08] bg-[#06070A]/80 px-3 py-2.5 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:border-cyan-400/40 focus:ring-1 focus:ring-cyan-400/25"
                 />
                 <p className="text-xs leading-relaxed text-zinc-500">
-                  Use um nome real para figurar com clareza no ranking local.
-                  Campo vazio registra como {ANONYMOUS_PARTICIPANT_NAME}.
+                  Use um nome real se quiser aparecer com clareza no ranking
+                  deste aparelho. Se deixar em branco, fica como{" "}
+                  {ANONYMOUS_PARTICIPANT_NAME}.
                 </p>
                 {nameError ? (
                   <p className="text-xs text-amber-400" role="alert">
@@ -262,7 +263,7 @@ export function IqLanding({
 
               <div id="iq-mode-cards" className="space-y-2.5 scroll-mt-28">
                 <p className="text-xs font-medium uppercase tracking-[0.18em] text-zinc-500">
-                  Modo
+                  Tipo de teste
                 </p>
                 <div className="grid gap-2">
                   {(Object.keys(MODE_META) as AssessmentMode[]).map((m) => {
@@ -286,7 +287,7 @@ export function IqLanding({
                         }`}
                       >
                         <p className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">
-                          Protocolo
+                          Opção
                         </p>
                         <h3 className="mt-0.5 font-iq-display text-base tracking-tight text-zinc-50">
                           {meta.label}
@@ -304,8 +305,7 @@ export function IqLanding({
                   </p>
                 ) : (
                   <p className="text-[11px] text-zinc-600">
-                    Clique em um modo para abrir a preparação (tutorial +
-                    regras).
+                    Clique em um tipo para ver o tutorial e as regras.
                   </p>
                 )}
               </div>
@@ -324,7 +324,7 @@ export function IqLanding({
                 onClick={onCta}
                 className="relative w-full overflow-hidden rounded-xl bg-gradient-to-r from-emerald-400 via-cyan-400 to-indigo-400 px-6 py-3.5 text-sm font-semibold text-[#06070A] shadow-[0_0_28px_-6px_rgba(52,211,153,0.55)] transition"
               >
-                Continuar para preparação
+                Ir para a preparação
               </motion.button>
             </div>
           </div>
@@ -339,21 +339,21 @@ export function IqLanding({
       >
         <div className="space-y-2">
           <p className="text-[11px] font-medium uppercase tracking-[0.24em] text-indigo-300/80">
-            Metodologia
+            Como funciona
           </p>
           <h2
             id="iq-transparency-heading"
             className="font-iq-display text-2xl tracking-tight text-zinc-50 sm:text-3xl"
           >
-            Transparência da avaliação
+            Tudo com transparência
           </h2>
           <p className="max-w-2xl text-sm text-zinc-500 sm:text-base">
-            Base teórica, construção dos itens e limite do resultado — com
-            transparência.
+            Em que o teste se baseia, como as perguntas são feitas e o que o
+            resultado significa — em linguagem clara.
           </p>
           <p className="inline-flex items-center gap-1.5 text-xs font-medium text-zinc-400">
-            Escala 100/15
-            <SkillHelpTip label="Escala 100/15" help={ESCALA_HELP} />
+            Pontuação: média 100
+            <SkillHelpTip label="Pontuação: média 100" help={ESCALA_HELP} />
           </p>
         </div>
         <div className="grid gap-3 md:grid-cols-3">
@@ -409,7 +409,7 @@ export function PsychometricTransparencyBlock({
           id="iq-transparency-heading-compact"
           className="font-iq-display text-sm tracking-tight text-zinc-100 sm:text-base"
         >
-          Transparência da avaliação
+          Tudo com transparência
         </h2>
         <p
           className={
@@ -418,12 +418,12 @@ export function PsychometricTransparencyBlock({
               : "text-sm text-zinc-500"
           }
         >
-          Base teórica, construção dos itens e limite do resultado — com
-          transparência.
+          Em que o teste se baseia, como as perguntas são feitas e o que o
+          resultado significa — em linguagem clara.
         </p>
         <p className="inline-flex items-center gap-1.5 pt-1 text-xs font-medium text-zinc-400">
-          Escala 100/15
-          <SkillHelpTip label="Escala 100/15" help={ESCALA_HELP} />
+          Pontuação: média 100
+          <SkillHelpTip label="Pontuação: média 100" help={ESCALA_HELP} />
         </p>
       </div>
       <div className="grid gap-3 sm:grid-cols-3">

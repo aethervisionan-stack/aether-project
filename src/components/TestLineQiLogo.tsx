@@ -79,8 +79,8 @@ export function TestLineQiFooter({
       <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
         <LivingBrainLogo href="/teste-qi" size="sm" />
         <p className="max-w-md text-xs leading-relaxed text-zinc-500">
-          TestLineQi — avaliação cognitiva digital com rigor metodológico e
-          leitura clara do seu perfil.
+          TestLineQi — um teste online feito com cuidado, para você entender
+          seu perfil com clareza e confiança.
         </p>
       </div>
     </footer>

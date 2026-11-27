@@ -430,19 +430,19 @@ export const MODE_META: Record<
     label: "Figuras Geométricas",
     short: "Figuras",
     blurb:
-      "Matrizes 3×3 com carga em raciocínio fluido e espacial — multi-regras, até 8 opções e distratores diagnósticos.",
+      "Quebra-cabeças de figuras 3×3: lógica e visão espacial. Até 8 opções por questão.",
   },
   questions: {
     label: "Perguntas",
     short: "Perguntas",
     blurb:
-      "Bateria objetiva nos seis índices: Verbal, Fluido, Espacial, Memória de trabalho, Velocidade e Tempo de reação.",
+      "Perguntas de texto nas seis áreas: palavras, lógica, espaço, memória, velocidade e reação.",
   },
   hybrid: {
     label: "Completo / Híbrido",
     short: "Híbrido",
     blurb:
-      "Matrizes SVG + itens textuais intercalados por nível, cobrindo o perfil cognitivo completo.",
+      "Figuras e perguntas misturadas, do fácil ao difícil — o perfil mais completo.",
   },
 };
 

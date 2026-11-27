@@ -20,7 +20,7 @@ export function OnlinePresenceBadge({
       className={`inline-flex items-center gap-2 text-zinc-400 ${
         compact ? "text-[11px]" : "text-xs sm:text-sm"
       } ${className}`}
-      title="Indicador estimativo de atividade no quiz"
+      title="Estimativa de quantas pessoas estão no quiz agora"
     >
       <span className="relative flex h-2 w-2 shrink-0" aria-hidden>
         <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400/40 opacity-75" />

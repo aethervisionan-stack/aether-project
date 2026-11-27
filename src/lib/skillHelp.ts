@@ -9,7 +9,7 @@ import {
  * Shown next to Escala / μ 100 · σ 15 chips via SkillHelpTip.
  */
 export const ESCALA_HELP =
-  "Escala padronizada de QI: média 100 e desvio padrão 15. O percentil indica a % de pessoas com pontuação igual ou inferior à sua.";
+  "No QI, a média das pessoas é 100. A cada 15 pontos acima ou abaixo, você se afasta um pouco da média. O percentil diz quantas pessoas ficam iguais ou abaixo de você.";
 
 /** Short PT-BR glosses for each sub-skill shown on results. */
 export const COMPETENCE_HELP: Record<keyof CompetenceScores, string> = {
