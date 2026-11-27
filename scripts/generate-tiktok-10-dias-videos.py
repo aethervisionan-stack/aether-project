@@ -4,7 +4,8 @@ Gera 30 vídeos TikTok (9:16) a partir dos roteiros Dia01-Video1 … Dia10-Video
 
 Reusa o pipeline de generate-tiktok-archetype-videos.py (TTS, ASS, zoom, mix).
 Regra: NÃO mostra nome de arquétipo no título/tela (usa Texto na Tela do roteiro).
-Voz: UMA só — pt-BR-FranciscaNeural (+0% / +1Hz) para os 30 (homogênea, não robótica).
+Voz: UMA só — pt-BR-ThalitaMultilingualNeural (-10% / +0Hz) p/ os 30 (A/B anti-robô).
+  (Francisca +0% soava robótica; SSML edge-tts 7.x lê tags — pausas via gaps + pontuação)
 Legendas: blocos curtos + WordBoundary karaoke.
 
 Uso:
@@ -113,12 +114,12 @@ SAFE_ACCENT_WORDS = [
 ]
 
 
-# Identidade vocal única p/ os 30 (sem misturar Francisca/Thalita/Antonio)
+# Identidade vocal única p/ os 30 — vencedora A/B (Thalita -10% > Francisca +0%)
 SINGLE_VOICE = {
-    "edge_voice": "pt-BR-FranciscaNeural",
-    "edge_rate": "+0%",
-    "edge_pitch": "+1Hz",
-    "sapi_rate": 1,
+    "edge_voice": "pt-BR-ThalitaMultilingualNeural",
+    "edge_rate": "-10%",
+    "edge_pitch": "+0Hz",
+    "sapi_rate": 0,
     "eleven_voice_env": "ELEVENLABS_VOICE_ID_FEMALE",
     "eleven_voice_default": "EXAVITQu4vr4xnSDxMaL",
 }
@@ -200,7 +201,43 @@ def parse_roteiro(path: Path) -> dict:
     }
 
 
-def split_caption_lines(text: str, max_chars: int = 28) -> list[str]:
+def humanize_spoken(text: str) -> str:
+    """
+    Leve reescrita para soar falada (não lida de teleprompter).
+    Mantém ferida → carta → quiz; sem nome de arquétipo.
+    """
+    if not text:
+        return text
+    t = text.strip()
+    # Conectores de texto escrito → fala
+    t = re.sub(r"\bEssa carta carrega\b", "Essa carta... ela carrega", t)
+    t = re.sub(r"\bEsta carta carrega\b", "Essa carta... ela carrega", t)
+    t = re.sub(r"\bO dossiê não te julga\.", "O dossiê não te julga.", t)
+    t = re.sub(
+        r"\bEle nomeia o padrão, a luz, a sombra, e o limiar que você evita\.",
+        "Ele nomeia o padrão. A luz. A sombra. E o limiar que você evita.",
+        t,
+    )
+    t = re.sub(
+        r"\bResponde os 16 dilemas com as suas palavras\.",
+        "Responde os dezesseis dilemas... com as suas palavras.",
+        t,
+    )
+    t = re.sub(r"\bLink na bio\.", "O link está na bio.", t)
+    t = re.sub(r"\bPuxa a sua carta\.", "Puxa a sua carta.", t)
+    # Listas com vírgula → respiração com ponto (menos “leitura”)
+    t = re.sub(
+        r",\s+(a luz|a sombra|o limiar|a ferida|o padrão)\b",
+        r". \1",
+        t,
+        flags=re.IGNORECASE,
+    )
+    # Frases longas coladas com "e" após vírgula
+    t = re.sub(r"([a-zà-ú]{6,}), e ", r"\1. E ", t, flags=re.IGNORECASE)
+    return re.sub(r"\s{2,}", " ", t).strip()
+
+
+def split_caption_lines(text: str, max_chars: int = 26) -> list[str]:
     """Quebra narração em frases curtas (respiração TTS + sync de legenda)."""
     text = re.sub(r"\s+", " ", text).strip()
     if not text:
@@ -229,7 +266,7 @@ def split_caption_lines(text: str, max_chars: int = 28) -> list[str]:
     # Não fundir demais — frases curtas soam mais humanas no edge-tts
     merged: list[str] = []
     for c in chunks:
-        if merged and len(c) < 8 and len(merged[-1]) + 1 + len(c) <= max_chars:
+        if merged and len(c) < 7 and len(merged[-1]) + 1 + len(c) <= max_chars:
             merged[-1] = f"{merged[-1]} {c}"
         else:
             merged.append(c)
@@ -237,16 +274,22 @@ def split_caption_lines(text: str, max_chars: int = 28) -> list[str]:
 
 
 def build_lines(script: dict) -> list[str]:
-    """Gancho + desenvolvimento + CTA → frases curtas (karaoke WordBoundary no pipeline)."""
+    """Gancho + desenvolvimento + CTA → falado + frases curtas (WordBoundary)."""
     parts: list[str] = []
     if script["gancho"]:
-        parts.extend(split_caption_lines(script["gancho"], max_chars=30))
+        parts.extend(
+            split_caption_lines(humanize_spoken(script["gancho"]), max_chars=28)
+        )
     if script["desenvolvimento"]:
-        parts.extend(split_caption_lines(script["desenvolvimento"], max_chars=28))
+        parts.extend(
+            split_caption_lines(
+                humanize_spoken(script["desenvolvimento"]), max_chars=24
+            )
+        )
     if script["cta"]:
-        parts.extend(split_caption_lines(script["cta"], max_chars=30))
+        parts.extend(split_caption_lines(humanize_spoken(script["cta"]), max_chars=28))
     if not parts:
-        parts = [script["title"], "Link na bio. Faça o quiz."]
+        parts = [script["title"], "O link está na bio. Faz o quiz."]
     return parts
 
 

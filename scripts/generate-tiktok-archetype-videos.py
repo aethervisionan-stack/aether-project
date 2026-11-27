@@ -9,7 +9,7 @@ stroke escuro fino + sombra suave; título no topo com acento da carta.
 Narração PT-BR fluida:
   - texto limpo para TTS (— / ... → vírgulas); legendas mantêm pontuação visual
   - ElevenLabs se ELEVENLABS_API_KEY (eleven_multilingual_v2)
-  - senão edge-tts pt-BR Francisca / Thalita / Antonio @ rate ~0–3% (mais humano)
+  - senão edge-tts pt-BR ThalitaMultilingual @ rate -10% (anti-robô; A/B vs Francisca)
   - sync via WordBoundary karaoke (2–4 palavras) ou duração real + proporção
   - timings persistidos em <out>/.caption-timings/<slug>.json
 
@@ -86,10 +86,12 @@ MIN_PHRASE_SEC = 1.25
 MAX_PHRASE_SEC = 4.2
 LEAD_IN_SEC = 0.35
 TAIL_HOLD_SEC = 0.55
-# Pausas entre falas (edge: SSML-like via silêncio no concat)
-GAP_MIN_SEC = 0.150
-GAP_MAX_SEC = 0.220
-GAP_AFTER_HOOK_SEC = 0.300
+# Pausas entre falas (edge-tts 7.x lê SSML como texto → silêncio no concat)
+# Gaps mais longos/variáveis = menos cadência de teleprompter
+GAP_MIN_SEC = 0.260
+GAP_MAX_SEC = 0.520
+GAP_AFTER_HOOK_SEC = 0.480
+GAP_AFTER_QUESTION_SEC = 0.420
 # Legado (paleta); legendas atuais são flutuantes (sem painel/caixa)
 PANEL_ALPHA_ASS = 0x47
 PANEL_OPACITY = 0.72
@@ -118,29 +120,30 @@ ELEVEN_SIMILARITY = 0.78
 ELEVEN_STYLE = 0.35
 ELEVEN_MODEL = "eleven_multilingual_v2"
 
-# Voz mais fluida/humana: rate perto de 0, pitch leve, frases curtas + pausas.
-# Francisca = PT-BR natural conversacional; Thalita = multilíngue intensa; Antonio = firme.
+# Voz anti-robótica (A/B 2026-11): ThalitaMultilingual > Francisca+0% (robótica).
+# Rate lento (-8..-12%) cola melhor; -15% arrasta. Sem SSML (edge lê tags).
+# Brenda / Azure / ElevenLabs: indisponíveis neste PC (sem chave .env).
 VOICE_PROFILES = {
     TONE_FIRME: {
-        "edge_voice": "pt-BR-AntonioNeural",
-        "edge_rate": "+2%",
-        "edge_pitch": "-2Hz",
+        "edge_voice": "pt-BR-ThalitaMultilingualNeural",
+        "edge_rate": "-10%",
+        "edge_pitch": "+0Hz",
         "sapi_rate": -1,
-        "eleven_voice_env": "ELEVENLABS_VOICE_ID_MALE",
-        "eleven_voice_default": "pNInz6obpgDQGcFmaJgB",  # Adam-ish
+        "eleven_voice_env": "ELEVENLABS_VOICE_ID_FEMALE",
+        "eleven_voice_default": "EXAVITQu4vr4xnSDxMaL",
     },
     TONE_LEVE: {
-        "edge_voice": "pt-BR-FranciscaNeural",
-        "edge_rate": "+0%",
-        "edge_pitch": "+1Hz",
-        "sapi_rate": 1,
+        "edge_voice": "pt-BR-ThalitaMultilingualNeural",
+        "edge_rate": "-10%",
+        "edge_pitch": "+0Hz",
+        "sapi_rate": 0,
         "eleven_voice_env": "ELEVENLABS_VOICE_ID_FEMALE",
-        "eleven_voice_default": "EXAVITQu4vr4xnSDxMaL",  # Rachel-ish
+        "eleven_voice_default": "EXAVITQu4vr4xnSDxMaL",
     },
     TONE_INTENSO: {
         "edge_voice": "pt-BR-ThalitaMultilingualNeural",
-        "edge_rate": "+3%",
-        "edge_pitch": "-1Hz",
+        "edge_rate": "-10%",
+        "edge_pitch": "+0Hz",
         "sapi_rate": 0,
         "eleven_voice_env": "ELEVENLABS_VOICE_ID_FEMALE",
         "eleven_voice_default": "EXAVITQu4vr4xnSDxMaL",
@@ -698,6 +701,13 @@ def clean_tts_text(text: str) -> str:
     t = t.replace("…", "... ")
     # Mantém "..." como micro-pausa (edge-tts respira melhor que vírgula seca)
     t = re.sub(r"\.{4,}", "...", t)
+    # Números por extenso soam menos "OCR/teleprompter"
+    t = re.sub(r"\b16\b", "dezesseis", t)
+    t = re.sub(r"\bR\$\s*1(?:,00)?\b", "um real", t)
+    t = re.sub(r"\bR\$\s*5(?:,00)?\b", "cinco reais", t)
+    t = re.sub(r"\bR\$\s*6(?:,00)?\b", "seis reais", t)
+    # Loanwords: artigo + contexto reduz rigidez
+    t = re.sub(r"\bLink na bio\b", "O link está na bio", t, flags=re.IGNORECASE)
     t = re.sub(r"\s*,\s*", ", ", t)
     t = re.sub(r"\s{2,}", " ", t)
     t = re.sub(r"\s+([?!.])", r"\1", t)
@@ -753,9 +763,15 @@ def build_timeline_estimated(
 
 
 def gap_after_utterance(index: int, utterance_lines: list[str], rng: random.Random) -> float:
+    """Pausas irregulares (anti-metrônomo) entre falas."""
     joined = " ".join(utterance_lines)
-    if index == 0 and "?" in joined:
-        return GAP_AFTER_HOOK_SEC
+    if index == 0:
+        return GAP_AFTER_HOOK_SEC + rng.uniform(-0.04, 0.08)
+    if "?" in joined:
+        return GAP_AFTER_QUESTION_SEC + rng.uniform(-0.06, 0.10)
+    if joined.rstrip().endswith("!"):
+        return rng.uniform(0.34, 0.55)
+    # Respiração variável — evita gaps idênticos frase a frase
     return rng.uniform(GAP_MIN_SEC, GAP_MAX_SEC)
 
 
@@ -1124,7 +1140,7 @@ def resolve_engine(requested: str | None) -> tuple[str, str]:
         try:
             import edge_tts  # noqa: F401
 
-            return "edge", "edge-tts (Francisca / Thalita / Antonio · rate ~0–3%)"
+            return "edge", "edge-tts (ThalitaMultilingual · rate -10% · anti-robô)"
         except ImportError:
             print("AVISO: edge-tts não instalado.")
             if eleven_key:
@@ -1142,7 +1158,7 @@ def resolve_engine(requested: str | None) -> tuple[str, str]:
         try:
             import edge_tts  # noqa: F401
 
-            return "edge", "edge-tts (Francisca / Thalita / Antonio · rate ~0–3%)"
+            return "edge", "edge-tts (ThalitaMultilingual · rate -10% · anti-robô)"
         except ImportError:
             print("AVISO: edge-tts não instalado; tentando SAPI.")
             return "sapi", "Windows SAPI (fallback)"
@@ -1433,6 +1449,42 @@ def synthesize_sapi_utterances(
     return paths, empty_bounds
 
 
+def humanize_voice_track(ffmpeg: str, src: Path, dst: Path) -> None:
+    """
+    Normalize loudness + leve compressão para “colar” a fala (anti-robô flat).
+    Fallback: copia se o filtro falhar.
+    """
+    try:
+        run(
+            [
+                ffmpeg,
+                "-y",
+                "-i",
+                str(src),
+                "-af",
+                (
+                    "loudnorm=I=-16:TP=-1.5:LRA=11,"
+                    "acompressor=threshold=-20dB:ratio=2.2:attack=12:release=140:makeup=1.5:knee=4,"
+                    "alimiter=limit=0.95"
+                ),
+                "-ar",
+                "24000",
+                "-ac",
+                "1",
+                "-c:a",
+                "pcm_s16le",
+                str(dst),
+            ]
+        )
+        if dst.is_file() and dst.stat().st_size > 1000:
+            return
+    except Exception as exc:  # noqa: BLE001
+        print(f"AVISO: pós-áudio voz falhou ({exc}); usando raw.")
+    # Fallback copy
+    if src.resolve() != dst.resolve():
+        dst.write_bytes(src.read_bytes())
+
+
 def make_silence_wav(ffmpeg: str, path: Path, duration: float, sr: int = 24000) -> None:
     run(
         [
@@ -1591,7 +1643,7 @@ def synthesize_narration(
             segments, duration = build_timeline_estimated(lines)
             return None, segments, duration, f"engine desconhecido ({engine})"
 
-        voice_path = work_dir / "voice_track.wav"
+        voice_raw = work_dir / "voice_track_raw.wav"
         segments, duration = concat_voice_track_utterances(
             ffmpeg,
             ffprobe,
@@ -1599,9 +1651,12 @@ def synthesize_narration(
             utterances,
             bounds,
             work_dir,
-            voice_path,
+            voice_raw,
             rng,
         )
+        voice_path = work_dir / "voice_track.wav"
+        # Pós-áudio leve: loudness + micro-compressão (cola na fala humana, sem distorcer)
+        humanize_voice_track(ffmpeg, voice_raw, voice_path)
         real = probe_duration(ffprobe, voice_path)
         duration = max(duration, real)
         return voice_path, segments, duration, detail
