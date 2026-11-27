@@ -1603,7 +1603,7 @@ function ResultsDashboard({
             compact
           />
           <p className="text-center text-xs text-zinc-600">
-            O assistente Gemini fica disponível depois deste complemento — seu
+            O assistente de IA fica disponível depois deste complemento — seu
             resultado e o Hall of Fame já estão liberados.
           </p>
         </div>

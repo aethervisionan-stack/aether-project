@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
-import { Check, Copy, Loader2, Lock, Sparkles } from "lucide-react";
+import { Check, Copy, Loader2, Lock, MessageCircle } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import {
   createIqPixPayment,
@@ -40,7 +40,7 @@ const RESULT_BENEFITS = [
 ] as const;
 
 const AI_BENEFITS = [
-  "Assistente Gemini focado só no seu IqResult",
+  "Assistente de IA focado só no seu resultado",
   "Perguntas sobre forças, fraquezas e próximos passos",
   "Conversas em português, com base nesta sessão",
 ] as const;
@@ -430,7 +430,7 @@ export function IqUnlockCard({
           aria-hidden
         >
           {isAi ? (
-            <Sparkles className="h-6 w-6 text-cyan-300" strokeWidth={2.5} />
+            <MessageCircle className="h-6 w-6 text-cyan-300" strokeWidth={2.5} />
           ) : pix ? (
             <Lock className="h-6 w-6 text-emerald-300" strokeWidth={2.5} />
           ) : (
@@ -461,7 +461,7 @@ export function IqUnlockCard({
           {isAi ? (
             <>
               Seu perfil já está liberado. Por mais {amountLabel} via Pix você
-              abre o assistente Gemini especializado no seu IqResult — forças,
+              abre o assistente de IA especializado no seu resultado — forças,
               o que treinar e dúvidas desta sessão.
             </>
           ) : (
@@ -470,7 +470,7 @@ export function IqUnlockCard({
               {includeAi ? (
                 <>
                   {payLabel} via Pix você libera o diagnóstico completo e o
-                  assistente Gemini no mesmo pagamento.
+                  assistente de IA no mesmo pagamento.
                 </>
               ) : (
                 <>
@@ -510,12 +510,11 @@ export function IqUnlockCard({
               />
               <span className="min-w-0">
                 <span className="flex flex-wrap items-center gap-2 text-sm font-medium text-cyan-100">
-                  <Sparkles className="h-3.5 w-3.5 text-cyan-300" aria-hidden />
-                  Incluir assistente IA (+{aiAmtLabel})
+                  Incluir assistente de IA (+{aiAmtLabel})
                 </span>
                 <span className="mt-1 block text-xs leading-relaxed text-zinc-400">
-                  Mesmo Pix: resultado ({resultAmtLabel}) + Gemini no seu
-                  perfil. Ou deixe desmarcado e pague só o resultado agora.
+                  Mesmo Pix: resultado ({resultAmtLabel}) + assistente de IA no
+                  seu perfil. Ou deixe desmarcado e pague só o resultado agora.
                 </span>
               </span>
             </label>

@@ -113,7 +113,7 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           error:
-            "Desbloqueie o resultado primeiro (R$1). Depois você pode liberar o assistente Gemini (+R$1).",
+            "Desbloqueie o resultado primeiro (R$1). Depois você pode liberar o assistente de IA (+R$1).",
           code: "RESULT_REQUIRED",
           resultUnlocked: false,
           aiUnlocked: false,

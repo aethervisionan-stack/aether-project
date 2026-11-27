@@ -87,10 +87,10 @@ export const IQ_UNLOCK_DESCRIPTION =
   "Desbloqueio do resultado do Teste de QI — perfil, ranking e revisão";
 
 export const IQ_AI_UPSELL_DESCRIPTION =
-  "Assistente Gemini especializado no seu resultado do Teste de QI";
+  "Assistente de IA especializado no seu resultado do Teste de QI";
 
 export const IQ_COMBO_DESCRIPTION =
-  "Resultado do Teste de QI + assistente Gemini (combo)";
+  "Resultado do Teste de QI + assistente de IA (combo)";
 
 export function iqDescriptionForItemType(
   itemType: IqUnlockItemType,

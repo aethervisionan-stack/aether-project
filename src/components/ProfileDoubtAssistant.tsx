@@ -154,7 +154,7 @@ export function ProfileDoubtAssistant({
         {
           role: "assistant",
           content:
-            "Sem rede no momento. Assim que a conexão voltar, pergunte de novo — eu uso Gemini com o IqResult completo desta sessão.",
+            "Sem rede no momento. Assim que a conexão voltar, pergunte de novo — o assistente de IA usa o resultado completo desta sessão.",
           at: Date.now(),
           source: "local",
         },
@@ -199,8 +199,8 @@ export function ProfileDoubtAssistant({
             Dúvidas sobre o perfil
           </h2>
           <p className="mt-1 text-sm leading-relaxed text-zinc-500">
-            Chat com Gemini grounded no seu IqResult e no histórico desta
-            conversa.
+            Converse com o assistente de IA sobre o seu resultado e o histórico
+            desta conversa.
           </p>
         </div>
       </div>
