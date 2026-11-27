@@ -11,7 +11,7 @@ function bar(label, value, id) {
 
 function renderResult(container, analysis) {
   if (!analysis) {
-    container.innerHTML = `<p class="text-white/50 text-center">Selecione dois signos</p>`;
+    container.innerHTML = `<p class="text-white/50 text-center">Escolha dois signos</p>`;
     return;
   }
   const { aspect, element, modality, dimensions, scores, affinity, signA, signB, rulers, precisionNote } = analysis;
@@ -37,8 +37,8 @@ function renderResult(container, analysis) {
         </div>
         <div class="w-full space-y-3 mt-2">
           ${bar('Química / atração', scores.chemistry, 'sc-chem')}
-          ${bar('Comunicação / mente', scores.communication, 'sc-comm')}
-          ${bar('Afeto / coabitação', scores.affection, 'sc-aff')}
+          ${bar('Conversa / mente', scores.communication, 'sc-comm')}
+          ${bar('Afeto / morar junto', scores.affection, 'sc-aff')}
         </div>
       </div>
 
@@ -51,7 +51,7 @@ function renderResult(container, analysis) {
         </div>
 
         <div class="rounded-xl border border-gold/15 bg-midnight/40 p-4">
-          <h4 class="font-cinzel text-xs tracking-widest text-gold mb-2">Dinâmica central — ${aspect.name}</h4>
+          <h4 class="font-cinzel text-xs tracking-widest text-gold mb-2">Como funciona o par — ${aspect.name}</h4>
           <p>${dimensions.dynamic}</p>
         </div>
 
@@ -62,7 +62,7 @@ function renderResult(container, analysis) {
             <p class="text-[11px] text-white/45">Clima mental: ${element.mind} · Casa: ${element.home}</p>
           </div>
           <div class="rounded-xl border border-gold/15 bg-midnight/40 p-4">
-            <h4 class="font-cinzel text-xs tracking-widest text-gold mb-2">Modalidades — ${modality.label}</h4>
+            <h4 class="font-cinzel text-xs tracking-widest text-gold mb-2">Ritmo — ${modality.label}</h4>
             <p class="mb-2">${modality.summary}</p>
             <p class="text-[11px] text-white/45">${modality.tip}</p>
           </div>
@@ -73,24 +73,24 @@ function renderResult(container, analysis) {
           <p>${dimensions.chemistry}</p>
         </div>
         <div>
-          <h4 class="font-cinzel text-xs tracking-widest text-gold mb-2">Comunicação e mente</h4>
+          <h4 class="font-cinzel text-xs tracking-widest text-gold mb-2">Conversa e mente</h4>
           <p>${dimensions.communication}</p>
         </div>
         <div>
-          <h4 class="font-cinzel text-xs tracking-widest text-gold mb-2">Afeto e coabitação</h4>
+          <h4 class="font-cinzel text-xs tracking-widest text-gold mb-2">Afeto e morar junto</h4>
           <p>${dimensions.affection}</p>
         </div>
         <div class="rounded-xl border border-cosmic/30 bg-cosmic/10 p-4">
           <h4 class="font-cinzel text-xs tracking-widest text-cosmicLight mb-2">Desafio principal</h4>
           <p class="mb-3">${dimensions.challenge}</p>
-          <h4 class="font-cinzel text-xs tracking-widest text-gold mb-2">Equilíbrios práticos</h4>
+          <h4 class="font-cinzel text-xs tracking-widest text-gold mb-2">Dicas práticas</h4>
           <ul class="list-disc pl-5 space-y-1 text-white/70">
             ${dimensions.tips.map((t) => `<li>${t}</li>`).join('')}
           </ul>
         </div>
 
         <p class="text-[11px] text-white/40">
-          Regentes em jogo: ${signA} (${rulers.a.classical}${rulers.a.modern !== rulers.a.classical ? ` / ${rulers.a.modern}` : ''})
+          Planetas em jogo: ${signA} (${rulers.a.classical}${rulers.a.modern !== rulers.a.classical ? ` / ${rulers.a.modern}` : ''})
           · ${signB} (${rulers.b.classical}${rulers.b.modern !== rulers.b.classical ? ` / ${rulers.b.modern}` : ''}).
         </p>
         <p class="text-[11px] text-white/35 border-t border-gold/10 pt-3">* ${precisionNote}</p>
@@ -138,7 +138,6 @@ export function mountCompatibilityUI(root) {
     });
   }
 
-  // Quick chips
   const quick = root.querySelector('#syn-quick');
   if (quick) {
     quick.innerHTML = SIGN_ORDER.map(

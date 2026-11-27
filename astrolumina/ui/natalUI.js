@@ -29,12 +29,12 @@ export function mountNatalUI(root) {
 
     const est = triad.estimatedTime ? ' (hora estimada ao meio-dia)' : '';
     root.querySelector('#natal-greeting').textContent =
-      `${name}, nascido(a) em ${city}${est} — eis a sua tríade.`;
+      `${name}, nascido(a) em ${city}${est} — aqui estão seus três signos básicos.`;
 
     const roles = [
-      { label: 'Sol', sign: triad.sun, hint: 'Essência', note: triad.precision.sun },
-      { label: 'Lua', sign: triad.moon, hint: 'Emoção', note: triad.precision.moon },
-      { label: 'Ascendente', sign: triad.asc, hint: 'Máscara', note: triad.precision.asc },
+      { label: 'Sol', sign: triad.sun, hint: 'Quem você é', note: triad.precision.sun },
+      { label: 'Lua', sign: triad.moon, hint: 'Como você sente', note: triad.precision.moon },
+      { label: 'Ascendente', sign: triad.asc, hint: 'Como você aparece', note: triad.precision.asc },
     ];
     root.querySelector('#triad-cards').innerHTML = roles
       .map(

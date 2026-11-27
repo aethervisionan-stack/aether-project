@@ -1,6 +1,6 @@
 /**
- * Análise romântica entre duas tríades natais (Sol / Lua / ASC).
- * Reutiliza analyzePair do motor angular; Lua/ASC são aproximações do natalEngine.
+ * Análise romântica entre duas tríades (Sol / Lua / ASC).
+ * Reutiliza analyzePair; Lua/ASC são estimativas do natalEngine.
  */
 import { ZODIAC_DATA } from '../data/zodiacData.js';
 import { calculateFullTriad } from './natalEngine.js';
@@ -25,35 +25,35 @@ const CHANNELS = [
     id: 'asc_asc',
     weight: 0.85,
     label: 'Asc–Asc',
-    role: 'Estilo de chegada e primeira impressão',
+    role: 'Como cada um aparece e a primeira impressão',
     loveFocus: 'Como se apresentam ao mundo e o ritmo social do casal.',
   },
   {
     id: 'sun_a_moon_b',
     weight: 1.2,
     label: 'Sol A → Lua B',
-    role: 'Vitalidade de A nutre (ou pressiona) o coração de B',
+    role: 'A vitalidade de A nutre (ou pressiona) o coração de B',
     loveFocus: 'Se a identidade de A aquece a necessidade emocional de B.',
   },
   {
     id: 'sun_b_moon_a',
     weight: 1.2,
     label: 'Sol B → Lua A',
-    role: 'Vitalidade de B nutre (ou pressiona) o coração de A',
+    role: 'A vitalidade de B nutre (ou pressiona) o coração de A',
     loveFocus: 'Se a identidade de B acolhe a vulnerabilidade de A.',
   },
   {
     id: 'moon_a_sun_b',
     weight: 0.95,
     label: 'Lua A → Sol B',
-    role: 'Cuidado de A encontra o ego solar de B',
+    role: 'O cuidado de A encontra o ego solar de B',
     loveFocus: 'Se o afeto de A valida ou sufoca a expressão de B.',
   },
   {
     id: 'moon_b_sun_a',
     weight: 0.95,
     label: 'Lua B → Sol A',
-    role: 'Cuidado de B encontra o ego solar de A',
+    role: 'O cuidado de B encontra o ego solar de A',
     loveFocus: 'Se o afeto de B fortalece ou amarra a identidade de A.',
   },
 ];
@@ -115,15 +115,15 @@ function buildChannel(personA, personB, meta) {
 
 function verdictHeadline(overall, harmonicCount, tenseCount) {
   if (overall >= 78 && tenseCount <= 1) {
-    return 'Sinastria com forte corrente de apoio — o vínculo tende a fluir quando ambos escolhem presença.';
+    return 'Combinação com forte corrente de apoio — o vínculo tende a fluir quando os dois escolhem estar presentes.';
   }
   if (overall >= 65) {
     return 'Há química e terreno comum suficientes; os pontos de atrito pedem método, não fuga.';
   }
   if (overall >= 52) {
-    return 'Dinâmica mista: o casal pode prosperar se transformar tensão em acordo explícito.';
+    return 'Dinâmica mista: o casal pode ir bem se transformar tensão em acordo explícito.';
   }
-  return 'O mapa mostra fricção relevante — ainda assim dá para construir se houver maturidade e rituais claros.';
+  return 'O mapa mostra atrito relevante — ainda assim dá para construir se houver maturidade e rituais claros.';
 }
 
 function collectStrengths(channels, nameA, nameB) {
@@ -133,7 +133,7 @@ function collectStrengths(channels, nameA, nameB) {
 
   const strengths = harmonic.slice(0, 4).map((c) => {
     if (c.id === 'moon_moon') {
-      return `Clima lunar (${c.signA}–${c.signB}, ${c.analysis.aspect.name}): ${nameA} e ${nameB} tendem a entender o “clima” um do outro sem longas explicações — base de cuidado mútuo.`;
+      return `Clima da Lua (${c.signA}–${c.signB}, ${c.analysis.aspect.name}): ${nameA} e ${nameB} tendem a entender o “clima” um do outro sem longas explicações — base de cuidado mútuo.`;
     }
     if (c.id.startsWith('sun_') && c.id.includes('moon')) {
       return `${c.label} (${c.signA}→${c.signB}): a vitalidade de um encontra acolhida no coração do outro — combustível clássico de romance.`;
@@ -210,7 +210,6 @@ function navigationSystem(channels, nameA, nameB, overall) {
     );
   }
 
-  // Pull practical tips from the two hardest channels
   tense
     .sort((a, b) => a.score - b.score)
     .slice(0, 2)
@@ -222,11 +221,10 @@ function navigationSystem(channels, nameA, nameB, overall) {
 
   if (overall < 60) {
     tips.push(
-      'Tratem a tensão como currículo compartilhado: terapia de casal ou mentoria relacional ajuda a traduzir o mapa em hábitos — o aspecto sozinho não resolve.'
+      'Tratem a tensão como currículo compartilhado: terapia de casal ou mentoria relacional ajuda a traduzir o mapa em hábitos — o ângulo sozinho não resolve.'
     );
   }
 
-  // unique
   return [...new Set(tips)].slice(0, 6);
 }
 
@@ -309,7 +307,7 @@ export function analyzeDualRelationship(inputA, inputB) {
     weaknesses,
     navigation,
     precisionNote:
-      'Sol por data tropical é preciso nas faixas usuais. Lua e Ascendente são aproximações determinísticas no cliente (sem efeméride real nem latitude). A sinastria usa aspectos por passos de 30° entre esses signos — útil para reflexão, não substitui mapa com hora e local conferidos.',
+      'O Sol pela data tropical costuma estar certo nas faixas usuais. Lua e Ascendente (como você aparece) são estimativas no navegador (sem tabela astronômica real nem latitude). A combinação usa ângulos de 30° em 30° entre esses signos — útil para refletir, não substitui mapa com hora e local conferidos.',
   };
 }
 

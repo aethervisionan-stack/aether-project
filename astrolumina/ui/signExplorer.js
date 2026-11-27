@@ -9,11 +9,11 @@ import {
 import { affinityMatrixFor } from '../utils/compatibilityEngine.js';
 
 const TABS = [
-  { id: 'identidade', label: 'Identidade' },
-  { id: 'decanos', label: 'Decanos' },
-  { id: 'psicologia', label: 'Psicologia' },
-  { id: 'correspondencias', label: 'Correspondências' },
-  { id: 'afinidades', label: 'Afinidades' },
+  { id: 'identidade', label: 'Quem é' },
+  { id: 'decanos', label: 'Faixas (decanos)' },
+  { id: 'psicologia', label: 'Jeito de ser' },
+  { id: 'correspondencias', label: 'Símbolos' },
+  { id: 'afinidades', label: 'Com quem combina' },
 ];
 
 let state = {
@@ -70,25 +70,25 @@ function renderIdentity(d, sign) {
         ${badge(`Casa ${d.naturalHouse}`)}
         ${badge(`Eixo ${d.axis}`)}
       </div>
-      <p><span class="text-gold font-cinzel text-xs tracking-widest">DATAS SOLARES</span><br>${d.dates} <span class="text-white/40">(aprox. tropical)</span></p>
+      <p><span class="text-gold font-cinzel text-xs tracking-widest">DATAS DO SOL</span><br>${d.dates} <span class="text-white/40">(aprox. no calendário tropical)</span></p>
       <div class="grid sm:grid-cols-2 gap-4">
         <div class="rounded-xl border border-gold/15 bg-midnight/40 p-4">
-          <h4 class="font-cinzel text-xs tracking-widest text-gold mb-2">Regente clássico — ${d.rulers.classical.name}</h4>
+          <h4 class="font-cinzel text-xs tracking-widest text-gold mb-2">Planeta clássico — ${d.rulers.classical.name}</h4>
           <p>${d.rulers.classical.meaning}</p>
         </div>
         <div class="rounded-xl border border-gold/15 bg-midnight/40 p-4">
-          <h4 class="font-cinzel text-xs tracking-widest text-gold mb-2">Regente moderno — ${d.rulers.modern.name}</h4>
+          <h4 class="font-cinzel text-xs tracking-widest text-gold mb-2">Planeta moderno — ${d.rulers.modern.name}</h4>
           <p>${d.rulers.modern.meaning}</p>
         </div>
       </div>
       <div>
-        <h4 class="font-cinzel text-xs tracking-widest text-gold mb-2">Sol · Lua · Ascendente (arquétipo)</h4>
-        <p class="mb-2"><strong class="text-goldLight">Sol:</strong> ${d.sun}</p>
-        <p class="mb-2"><strong class="text-goldLight">Lua:</strong> ${d.moon}</p>
-        <p><strong class="text-goldLight">Ascendente:</strong> ${d.asc}</p>
+        <h4 class="font-cinzel text-xs tracking-widest text-gold mb-2">Sol · Lua · Ascendente neste signo</h4>
+        <p class="mb-2"><strong class="text-goldLight">Sol (quem você é):</strong> ${d.sun}</p>
+        <p class="mb-2"><strong class="text-goldLight">Lua (como você sente):</strong> ${d.moon}</p>
+        <p><strong class="text-goldLight">Ascendente (como você aparece):</strong> ${d.asc}</p>
       </div>
       <p class="text-[11px] text-white/40 border-t border-gold/10 pt-3">
-        Transparência: o Sol por data é preciso nas faixas tropicais. Interpretações de Lua/ASC aqui são arquetípicas do signo — posição real exige hora e local.
+        Transparência: o Sol pela data costuma estar certo nas faixas acima. Lua e Ascendente aqui descrevem o “jeito” do signo — a posição real no céu precisa de hora e local.
       </p>
     </div>`;
 }
@@ -97,7 +97,7 @@ function renderDecans(d, sign) {
   const decan = decanForDegree(sign, state.degree);
   return `
     <div class="space-y-5 text-sm text-white/75 leading-relaxed">
-      <p>Os decanos dividem cada signo em três faixas de 10°. Usamos a tradição <strong class="text-goldLight">caldeia</strong> de sub-regência planetária para matizar a expressão.</p>
+      <p>Cada signo tem 30°. Dividimos em três faixas de 10° (decanos). Usamos a tradição <strong class="text-goldLight">caldeia</strong> (antiga) de planetas “ajudantes” para matizar o jeito do signo.</p>
       <div>
         <label class="block mb-2" for="decan-degree">Grau aproximado no signo: <span class="text-gold" id="decan-degree-label">${state.degree.toFixed(1)}°</span></label>
         <input id="decan-degree" type="range" min="0" max="29.9" step="0.1" value="${state.degree}" class="w-full accent-gold" />
@@ -118,7 +118,7 @@ function renderDecans(d, sign) {
           .map(
             (dc) => `
           <div class="rounded-xl border p-4 ${decan && decan.index === dc.index ? 'border-gold/50 bg-gold/10' : 'border-gold/15 bg-midnight/40'}">
-            <div class="font-cinzel text-xs tracking-widest text-gold mb-1">Decanato ${dc.index}</div>
+            <div class="font-cinzel text-xs tracking-widest text-gold mb-1">Faixa ${dc.index}</div>
             <div class="text-goldLight text-sm mb-1">${dc.range} · ${dc.ruler}</div>
             <p class="text-xs text-white/65">${dc.nuance}</p>
           </div>`
@@ -127,7 +127,7 @@ function renderDecans(d, sign) {
       </div>
       ${
         decan
-          ? `<p class="font-playfair italic text-goldLight">No grau ${state.degree.toFixed(1)}°, ressoa o decanato ${decan.index} (sub-regente ${decan.ruler}): ${decan.nuance}</p>`
+          ? `<p class="font-playfair italic text-goldLight">No grau ${state.degree.toFixed(1)}°, você cai na faixa ${decan.index} (planeta ajudante: ${decan.ruler}): ${decan.nuance}</p>`
           : ''
       }
     </div>`;
@@ -136,11 +136,11 @@ function renderDecans(d, sign) {
 function renderPsychology(d) {
   return `
     <div class="space-y-4 text-sm text-white/75 leading-relaxed">
-      <div><h4 class="font-cinzel text-xs tracking-widest text-gold mb-1">Essência / impulso central</h4><p>${d.psychology.essence}</p></div>
-      <div><h4 class="font-cinzel text-xs tracking-widest text-gold mb-1">Dons e poderes</h4><p>${d.psychology.gifts}</p></div>
-      <div><h4 class="font-cinzel text-xs tracking-widest text-gold mb-1">Sombras e pontos cegos</h4><p>${d.psychology.shadows}</p></div>
-      <div><h4 class="font-cinzel text-xs tracking-widest text-gold mb-1">Necessidade emocional</h4><p>${d.psychology.emotionalNeed}</p></div>
-      <div><h4 class="font-cinzel text-xs tracking-widest text-gold mb-1">Linguagem relacional</h4><p>${d.psychology.relationalLanguage}</p></div>
+      <div><h4 class="font-cinzel text-xs tracking-widest text-gold mb-1">No fundo, o que move</h4><p>${d.psychology.essence}</p></div>
+      <div><h4 class="font-cinzel text-xs tracking-widest text-gold mb-1">Pontos fortes</h4><p>${d.psychology.gifts}</p></div>
+      <div><h4 class="font-cinzel text-xs tracking-widest text-gold mb-1">Armadilhas comuns</h4><p>${d.psychology.shadows}</p></div>
+      <div><h4 class="font-cinzel text-xs tracking-widest text-gold mb-1">O que precisa no afeto</h4><p>${d.psychology.emotionalNeed}</p></div>
+      <div><h4 class="font-cinzel text-xs tracking-widest text-gold mb-1">Como demonstra amor</h4><p>${d.psychology.relationalLanguage}</p></div>
     </div>`;
 }
 
@@ -152,7 +152,7 @@ function renderCorrespondences(d) {
         <div class="flex flex-wrap gap-2">${d.correspondences.keywords.map((k) => badge(k)).join('')}</div>
       </div>
       <div>
-        <h4 class="font-cinzel text-xs tracking-widest text-gold mb-2">Pedras / cristais tradicionais</h4>
+        <h4 class="font-cinzel text-xs tracking-widest text-gold mb-2">Pedras / cristais (tradição)</h4>
         <p>${d.correspondences.stones.join(' · ')}</p>
       </div>
       <div>
@@ -160,9 +160,9 @@ function renderCorrespondences(d) {
         <p>${d.correspondences.colors.join(' · ')}</p>
       </div>
       <div>
-        <h4 class="font-cinzel text-xs tracking-widest text-gold mb-2">Correspondência corporal (astrologia médica tradicional)</h4>
+        <h4 class="font-cinzel text-xs tracking-widest text-gold mb-2">Corpo na tradição antiga</h4>
         <p>${d.correspondences.bodyParts}</p>
-        <p class="text-[11px] text-white/40 mt-2">Informação simbólica/histórica apenas — não constitui aconselhamento médico.</p>
+        <p class="text-[11px] text-white/40 mt-2">Só simbólico/histórico — não é conselho médico.</p>
       </div>
     </div>`;
 }
@@ -170,15 +170,15 @@ function renderCorrespondences(d) {
 function renderAffinities(sign) {
   const matrix = affinityMatrixFor(sign);
   const sections = [
-    { key: 'fluidez', title: 'Fluidez (trígono / sextil)', hint: 'Facilidade e cooperação elemental' },
-    { key: 'magnetismo', title: 'Magnetismo / espelho (oposição)', hint: 'Polos que se atraem e completam' },
-    { key: 'atrito', title: 'Atrito construtivo (quadratura / quincúncio)', hint: 'Fricção que pede crescimento' },
-    { key: 'fusão', title: 'Fusão (conjunção)', hint: 'Mesma frequência arquetípica' },
-    { key: 'ajuste', title: 'Ajuste fino (semissextil)', hint: 'Vizinhos que pedem cortesia' },
+    { key: 'fluidez', title: 'Flui fácil (trígono / sextil)', hint: 'Mesma “temperatura” — costuma cooperar' },
+    { key: 'magnetismo', title: 'Puxa e completa (oposição)', hint: 'Polos que se atraem e se espelham' },
+    { key: 'atrito', title: 'Atrito que ensina (quadratura / quincúncio)', hint: 'Atrito que pede crescimento' },
+    { key: 'fusão', title: 'Mesma frequência (conjunção)', hint: 'Mesmo signo — se reconhecem na hora' },
+    { key: 'ajuste', title: 'Vizinhos (semissextil)', hint: 'Perto no mapa, pedem paciência no detalhe' },
   ];
   return `
     <div class="space-y-5 text-sm text-white/75">
-      <p>Matriz angular a partir de <strong class="text-goldLight">${sign}</strong>. Clique um signo para abrir a análise completa do par.</p>
+      <p>Combinações a partir de <strong class="text-goldLight">${sign}</strong>. Clique um signo para ver a análise completa do par.</p>
       ${sections
         .map((sec) => {
           const items = matrix[sec.key] || [];

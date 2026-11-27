@@ -10,10 +10,10 @@ const TONE_CLASS = {
 };
 
 const TONE_LABEL = {
-  harmonioso: 'Harmonioso',
-  fusão: 'Fusão',
-  magnético: 'Magnético',
-  ajuste: 'Ajuste',
+  harmonioso: 'Flui',
+  fusão: 'Mesma frequência',
+  magnético: 'Puxa / espelha',
+  ajuste: 'Ajuste fino',
   tenso: 'Tenso',
 };
 
@@ -34,7 +34,7 @@ function personFields(prefix, title) {
         <input id="${prefix}-time" type="time" value="12:00" />
         <label class="mt-2 flex items-center gap-2 cursor-pointer text-white/70">
           <input id="${prefix}-unknown" type="checkbox" />
-          <span>Não sei a hora (estimativa ao meio-dia)</span>
+          <span>Não sei a hora (usamos meio-dia como chute)</span>
         </label>
       </div>
       <div>
@@ -77,7 +77,7 @@ function triadCard(person, label) {
           .join('')}
       </div>
       <p class="text-[10px] text-white/35 mt-3 leading-snug">
-        Sol: preciso por data · Lua/ASC: ${person.estimatedTime ? 'hora estimada · ' : ''}aproximação
+        Sol: certo pela data · Lua/ASC: ${person.estimatedTime ? 'hora estimada · ' : ''}estimativa
       </p>
     </div>`;
 }
@@ -120,17 +120,17 @@ function renderResult(container, result) {
           <div class="affinity-ring absolute inset-0 rounded-full" style="--pct:${overall}%"></div>
           <div class="absolute inset-3 rounded-full bg-indigoDark flex flex-col items-center justify-center">
             <span class="font-cinzel text-3xl gold-text">${overall}%</span>
-            <span class="text-[9px] tracking-widest text-white/50 uppercase">Síntese*</span>
+            <span class="text-[9px] tracking-widest text-white/50 uppercase">Resumo*</span>
           </div>
         </div>
         <div class="flex-1">
           <p class="font-playfair text-xl sm:text-2xl italic text-goldLight mb-3">${personA.name} ✦ ${personB.name}</p>
-          <p class="font-cinzel text-xs tracking-widest text-cosmicLight mb-2">VEREDITO RELACIONAL</p>
+          <p class="font-cinzel text-xs tracking-widest text-cosmicLight mb-2">O QUE O MAPA DIZ</p>
           <p class="text-white/80 leading-relaxed mb-2">${verdict.headline}</p>
           <p class="text-sm text-white/60 leading-relaxed">${verdict.summary}</p>
           <div class="flex flex-wrap gap-2 mt-4">
-            <span class="aspect-badge">${counts.harmonic} harmônicos</span>
-            <span class="aspect-badge aspect-badge--soft">${counts.magnetic} magnéticos</span>
+            <span class="aspect-badge">${counts.harmonic} que fluem</span>
+            <span class="aspect-badge aspect-badge--soft">${counts.magnetic} que puxam</span>
             <span class="tone-pill tone-tense-pill">${counts.tense} tensos / ajuste</span>
           </div>
         </div>
@@ -142,7 +142,7 @@ function renderResult(container, result) {
       </div>
 
       <div>
-        <h3 class="font-cinzel text-sm tracking-widest text-gold mb-3">Canais de amor — harmoniosos</h3>
+        <h3 class="font-cinzel text-sm tracking-widest text-gold mb-3">Canais de amor que fluem</h3>
         <div class="space-y-3">
           ${harmonious.length ? harmonious.map(channelRow).join('') : '<p class="text-sm text-white/50">Nenhum canal claramente fluido — o crescimento virá do método nos pontos tensos.</p>'}
         </div>
@@ -160,7 +160,7 @@ function renderResult(container, result) {
       <div>
         <h3 class="font-cinzel text-sm tracking-widest text-gold mb-3">Canais tensos ou de ajuste</h3>
         <div class="space-y-3">
-          ${tense.length ? tense.map(channelRow).join('') : '<p class="text-sm text-white/50">Pouca fricção angular nos canais principais — cuidem para não evitar conversas necessárias.</p>'}
+          ${tense.length ? tense.map(channelRow).join('') : '<p class="text-sm text-white/50">Pouca fricção nos canais principais — cuidem para não evitar conversas necessárias.</p>'}
         </div>
       </div>
 
@@ -180,8 +180,8 @@ function renderResult(container, result) {
       </div>
 
       <div class="rounded-xl border border-gold/20 bg-midnight/50 p-5 sm:p-6">
-        <h3 class="font-cinzel text-xs tracking-widest text-gold mb-2">Como navegar bem juntos</h3>
-        <p class="text-sm text-white/60 mb-4">Mesmo com dinâmica tensa, o casal pode construir um sistema relacional claro:</p>
+        <h3 class="font-cinzel text-xs tracking-widest text-gold mb-2">Como caminhar bem juntos</h3>
+        <p class="text-sm text-white/60 mb-4">Mesmo com dinâmica tensa, o casal pode montar um sistema claro:</p>
         <ol class="space-y-2 text-sm text-white/75 list-decimal pl-5">
           ${navigation.map((t) => `<li>${t}</li>`).join('')}
         </ol>
@@ -201,7 +201,7 @@ export function mountDualCompatUI(root) {
         ${personFields('dual-a', 'Pessoa A')}
         ${personFields('dual-b', 'Pessoa B')}
       </div>
-      <button type="submit" class="btn-gold w-full sm:w-auto px-8 py-3 rounded-md text-sm tracking-wide">Analisar compatibilidade a dois</button>
+      <button type="submit" class="btn-gold w-full sm:w-auto px-8 py-3 rounded-md text-sm tracking-wide">Ver combinação do casal</button>
     </form>`;
 
   ['dual-a', 'dual-b'].forEach((prefix) => {

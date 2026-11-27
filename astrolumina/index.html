@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Astrolumina | Oráculo & Cosmos</title>
-  <meta name="description" content="Explore signos em profundidade, decanos, afinidades e compatibilidade estruturada com Astrolumina." />
+  <title>Astrolumina | Estrelas em linguagem simples</title>
+  <meta name="description" content="Conheça seu signo, seu mapa básico e a combinação entre duas pessoas — em português claro, sem enrolação." />
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -78,15 +78,15 @@
       <div class="panel-scroll">
         <div class="max-w-6xl mx-auto px-4 sm:px-6 w-full grid lg:grid-cols-2 gap-10 lg:gap-16 items-center py-10 lg:py-0 min-h-full">
           <div class="relative z-10">
-            <p class="font-cinzel text-xs sm:text-sm tracking-[0.35em] text-cosmicLight mb-4 uppercase">Oráculo &amp; Cosmos</p>
+            <p class="font-cinzel text-xs sm:text-sm tracking-[0.35em] text-cosmicLight mb-4 uppercase">Estrelas em português claro</p>
             <h1 id="hero-title" class="font-cinzel text-4xl sm:text-5xl lg:text-6xl font-bold tracking-[0.08em] gold-text leading-none mb-6 whitespace-nowrap">ASTROLUMINA</h1>
-            <p class="font-playfair text-xl sm:text-2xl text-goldLight/90 italic mb-4">Leia as estrelas. Ouça o destino.</p>
+            <p class="font-playfair text-xl sm:text-2xl text-goldLight/90 italic mb-4">Entenda o mapa — sem misterioso demais.</p>
             <p class="text-base sm:text-lg text-white/65 max-w-md mb-8 leading-relaxed">
-              Tríade natal, signos em profundidade — decanos, eixos, afinidades — e compatibilidade por aspectos angulares reais do círculo.
+              Sol, Lua e Ascendente (como você aparece para os outros), cada signo explicado de verdade, e como dois signos ou duas pessoas se combinam — com números e limites claros.
             </p>
             <div class="flex flex-wrap gap-3">
-              <a href="#casal" class="btn-gold px-6 py-3 rounded-md text-sm tracking-wide">Compatibilidade a dois</a>
-              <a href="#signos" class="btn-outline-gold px-6 py-3 rounded-md text-sm tracking-wide">Descubra seu signo</a>
+              <a href="#casal" class="btn-gold px-6 py-3 rounded-md text-sm tracking-wide">Ver combinação do casal</a>
+              <a href="#signos" class="btn-outline-gold px-6 py-3 rounded-md text-sm tracking-wide">Conhecer meu signo</a>
             </div>
           </div>
           <div class="relative flex justify-center items-center animate-float">
@@ -128,8 +128,8 @@
         <div class="max-w-6xl mx-auto px-4 sm:px-6 py-10 sm:py-14">
           <div class="text-center mb-12">
             <p class="font-cinzel text-xs tracking-[0.3em] text-cosmicLight uppercase mb-3">Mapa Astral</p>
-            <h2 id="mapa-title" class="font-cinzel text-3xl sm:text-4xl gold-text tracking-widest mb-3">Tríade Natal</h2>
-            <p class="text-white/60 max-w-xl mx-auto">Sol por data (preciso). Lua e Ascendente são aproximações determinísticas no cliente — sem efeméride completa.</p>
+            <h2 id="mapa-title" class="font-cinzel text-3xl sm:text-4xl gold-text tracking-widest mb-3">Seus três signos básicos</h2>
+            <p class="text-white/60 max-w-xl mx-auto">O Sol (quem você é) sai certo pela data. A Lua (como você sente) e o Ascendente (como você aparece para os outros) são estimativas no navegador — sem tabela astronômica completa.</p>
           </div>
           <div class="grid lg:grid-cols-2 gap-8 items-start">
             <form id="natal-form" class="glass-card rounded-2xl p-6 sm:p-8 space-y-5">
@@ -146,32 +146,32 @@
                 <input id="natal-time" name="time" type="time" value="12:00" />
                 <label class="mt-2 flex items-center gap-2 cursor-pointer text-white/70">
                   <input id="natal-unknown-time" type="checkbox" />
-                  <span>Não sei a hora (estimativa ao meio-dia)</span>
+                  <span>Não sei a hora (usamos meio-dia como chute)</span>
                 </label>
               </div>
               <div>
                 <label for="natal-city">Cidade de nascimento</label>
                 <input id="natal-city" name="city" type="text" placeholder="Ex: São Paulo" required />
               </div>
-              <button type="submit" class="btn-gold w-full py-3 rounded-md text-sm tracking-wide">Calcular mapa astral</button>
+              <button type="submit" class="btn-gold w-full py-3 rounded-md text-sm tracking-wide">Calcular meu mapa</button>
             </form>
 
             <div id="natal-result" class="glass-card rounded-2xl p-6 sm:p-8 hidden">
               <p id="natal-greeting" class="font-playfair text-xl italic text-goldLight mb-6"></p>
               <div class="grid sm:grid-cols-3 gap-4 mb-8" id="triad-cards"></div>
               <div class="mb-8">
-                <h3 class="font-cinzel text-sm tracking-widest text-gold mb-4">Equilíbrio Elemental</h3>
+                <h3 class="font-cinzel text-sm tracking-widest text-gold mb-4">Mistura dos elementos</h3>
                 <div id="element-bars" class="space-y-3"></div>
               </div>
               <div>
-                <h3 class="font-cinzel text-sm tracking-widest text-gold mb-4">Roda Natal</h3>
+                <h3 class="font-cinzel text-sm tracking-widest text-gold mb-4">Roda do mapa</h3>
                 <div id="natal-wheel" class="flex justify-center"></div>
               </div>
             </div>
 
             <div id="natal-placeholder" class="glass-card rounded-2xl p-6 sm:p-8 flex flex-col items-center justify-center min-h-[320px] text-center lg:col-start-2 lg:row-start-1">
               <div class="text-4xl text-gold/40 mb-4">☽</div>
-              <p class="font-playfair text-lg text-white/50 italic">Seu mapa aguarda ser revelado</p>
+              <p class="font-playfair text-lg text-white/50 italic">Seu mapa ainda não apareceu</p>
               <p class="text-sm text-white/35 mt-2">Preencha o formulário ao lado</p>
             </div>
           </div>
@@ -184,14 +184,14 @@
       <div class="panel-scroll">
         <div class="max-w-6xl mx-auto px-4 sm:px-6 py-10 sm:py-14">
           <div class="text-center mb-10">
-            <p class="font-cinzel text-xs tracking-[0.3em] text-cosmicLight uppercase mb-3">Zodiaco</p>
-            <h2 id="signos-title" class="font-cinzel text-3xl sm:text-4xl gold-text tracking-widest mb-3">Descubra tudo sobre seu signo</h2>
-            <p class="text-white/60 max-w-2xl mx-auto">Identidade essencial, decanos caldeus, psicologia, correspondências clássicas e matriz de afinidades angulares — sem horóscopo semanal vago.</p>
+            <p class="font-cinzel text-xs tracking-[0.3em] text-cosmicLight uppercase mb-3">Os 12 signos</p>
+            <h2 id="signos-title" class="font-cinzel text-3xl sm:text-4xl gold-text tracking-widest mb-3">Conheça seu signo de verdade</h2>
+            <p class="text-white/60 max-w-2xl mx-auto">Quem você é no signo, faixas de 10° (decanos), jeito de sentir e se relacionar, símbolos clássicos e com quem combina melhor — sem “horóscopo da semana” genérico.</p>
           </div>
 
           <div class="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between mb-6">
             <div class="flex flex-wrap gap-2" id="element-filters"></div>
-            <input id="sign-search" type="search" placeholder="Buscar signo, elemento, modalidade…" class="sm:max-w-xs" />
+            <input id="sign-search" type="search" placeholder="Buscar signo, elemento, ritmo…" class="sm:max-w-xs" />
           </div>
 
           <div id="zodiac-grid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 mb-8"></div>
@@ -205,9 +205,9 @@
       <div class="panel-scroll">
         <div class="max-w-5xl mx-auto px-4 sm:px-6 py-10 sm:py-14">
           <div class="text-center mb-12">
-            <p class="font-cinzel text-xs tracking-[0.3em] text-cosmicLight uppercase mb-3">Sinastria por signos</p>
-            <h2 id="compat-title" class="font-cinzel text-3xl sm:text-4xl gold-text tracking-widest mb-3">Compatibilidade signo × signo</h2>
-            <p class="text-white/60 max-w-2xl mx-auto">Motor por distância angular em passos de 30° (conjunção → oposição), com leitura de elemento, modalidade e dimensões relacionais.</p>
+            <p class="font-cinzel text-xs tracking-[0.3em] text-cosmicLight uppercase mb-3">Combinação por signos</p>
+            <h2 id="compat-title" class="font-cinzel text-3xl sm:text-4xl gold-text tracking-widest mb-3">Como dois signos se encaixam</h2>
+            <p class="text-white/60 max-w-2xl mx-auto">Medimos a distância no círculo do zodíaco (de 0° a 180°, de 30 em 30). Depois lemos elemento, ritmo (cardeal/fixo/mutável) e o dia a dia do casal.</p>
           </div>
 
           <div class="glass-card rounded-2xl p-6 sm:p-10">
@@ -222,7 +222,7 @@
               </div>
             </div>
             <div class="mb-6">
-              <label for="syn-search">Atalho — buscar segundo signo</label>
+              <label for="syn-search">Atalho — buscar o segundo signo</label>
               <input id="syn-search" type="search" placeholder="Ex: Escorpião, Água, Fixo…" />
             </div>
             <div id="syn-quick" class="flex flex-wrap gap-2 mb-10"></div>
@@ -237,11 +237,11 @@
       <div class="panel-scroll">
         <div class="max-w-5xl mx-auto px-4 sm:px-6 py-10 sm:py-14">
           <div class="text-center mb-12">
-            <p class="font-cinzel text-xs tracking-[0.3em] text-cosmicLight uppercase mb-3">Sinastria natal</p>
-            <h2 id="casal-title" class="font-cinzel text-3xl sm:text-4xl gold-text tracking-widest mb-3">Compatibilidade a dois</h2>
+            <p class="font-cinzel text-xs tracking-[0.3em] text-cosmicLight uppercase mb-3">Casal com data de nascimento</p>
+            <h2 id="casal-title" class="font-cinzel text-3xl sm:text-4xl gold-text tracking-widest mb-3">Combinação entre duas pessoas</h2>
             <p class="text-white/60 max-w-2xl mx-auto">
-              Informe os dados de Pessoa A e Pessoa B. Analisamos Sol–Sol, Lua–Lua, Asc–Asc e cruzamentos Sol↔Lua —
-              com veredito, pontos fortes/fracos e um sistema prático para navegar tensões.
+              Coloque os dados das duas pessoas. Comparamos Sol com Sol, Lua com Lua, Ascendente com Ascendente e os cruzamentos Sol↔Lua —
+              com um resumo claro, o que ajuda, o que puxa e dicas práticas para o dia a dia.
             </p>
           </div>
           <div id="dual-form-wrap" class="mb-8"></div>
@@ -256,10 +256,10 @@
         <div class="max-w-3xl mx-auto px-4 sm:px-6 py-16 sm:py-24 text-center">
           <p class="font-cinzel tracking-[0.25em] gold-text text-sm mb-4">ASTROLUMINA</p>
           <h2 id="sobre-title" class="font-cinzel text-3xl sm:text-4xl gold-text tracking-widest mb-6">Sobre</h2>
-          <p class="font-playfair text-xl text-goldLight/90 italic mb-8">Oráculo &amp; Cosmos</p>
+          <p class="font-playfair text-xl text-goldLight/90 italic mb-8">Estrelas em português claro</p>
           <p class="text-sm sm:text-base text-white/55 leading-relaxed mb-8">
-            Entretenimento e reflexão simbólica. Análises usam astrologia tropical ocidental (arquétipo, elemento, modalidade, aspectos por signo).
-            Não substituem mapa natal profissional com hora e local, nem aconselhamento médico ou psicológico.
+            É para refletir e se divertir, não para decidir a vida. Usamos a astrologia ocidental tropical (signo, elemento, ritmo e ângulos entre signos).
+            Isso não substitui um mapa feito por profissional com hora e local certos, nem ajuda médica ou psicológica.
           </p>
           <div class="flex flex-wrap justify-center gap-3">
             <a href="#mapa-astral" class="btn-outline-gold px-5 py-2.5 rounded-md text-sm">Mapa Astral</a>
@@ -267,7 +267,7 @@
             <a href="#compatibilidade" class="btn-outline-gold px-5 py-2.5 rounded-md text-sm">Compatibilidade</a>
             <a href="#casal" class="btn-gold px-5 py-2.5 rounded-md text-sm">Casal</a>
           </div>
-          <p class="text-[10px] text-white/25 mt-12 tracking-widest uppercase">✦ Oráculo &amp; Cosmos ✦</p>
+          <p class="text-[10px] text-white/25 mt-12 tracking-widest uppercase">✦ Estrelas em português claro ✦</p>
         </div>
       </div>
     </section>

@@ -1,7 +1,7 @@
 /**
- * Tríade natal determinística (cliente).
- * Preciso: Sol por faixa de datas tropicais.
- * Aproximado: Lua e Ascendente sem hora/latitude reais (hash determinístico + meio-dia se hora desconhecida).
+ * Três signos básicos no cliente.
+ * Preciso: Sol pela faixa de datas tropicais.
+ * Estimado: Lua e Ascendente sem hora/latitude reais (cálculo fixo + meio-dia se a hora for desconhecida).
  */
 import { SIGN_ORDER, ZODIAC_DATA, getSunSign, ELEMENT_COLORS } from '../data/zodiacData.js';
 
@@ -30,9 +30,9 @@ export function calculateFullTriad(dateStr, timeStr, unknownTime, name, city) {
     asc: SIGN_ORDER[ascIdx],
     estimatedTime: !!unknownTime,
     precision: {
-      sun: 'preciso (faixa solar tropical por data)',
-      moon: 'aproximação determinística — sem efeméride lunar real',
-      asc: 'aproximação — Ascendente real exige hora e latitude',
+      sun: 'certo pela data (faixa do Sol no zodíaco tropical)',
+      moon: 'estimativa no navegador — não é a Lua real do céu naquele dia',
+      asc: 'estimativa — Ascendente de verdade precisa de hora e lugar de nascimento',
     },
   };
 }
@@ -78,7 +78,7 @@ export function renderNatalWheelSVG(sun, moon, asc) {
   }
 
   return `
-    <svg viewBox="0 0 ${size} ${size}" class="w-full max-w-[280px]" aria-label="Roda natal">
+    <svg viewBox="0 0 ${size} ${size}" class="w-full max-w-[280px]" aria-label="Roda do mapa">
       <circle cx="${cx}" cy="${cy}" r="${r + 8}" fill="none" stroke="rgba(212,175,55,0.25)" stroke-width="1"/>
       ${slices}
       <circle cx="${cx}" cy="${cy}" r="36" fill="#121629" stroke="#D4AF37" stroke-width="1.2"/>
