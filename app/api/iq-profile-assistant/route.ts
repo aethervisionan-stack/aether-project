@@ -6,7 +6,7 @@ import {
   type ProfileAssistantContext,
   type ProfileChatMessage,
 } from "@/src/lib/iqProfileAssistant";
-import { isIqSessionUnlocked } from "@/lib/iq-payment/sessionUnlock";
+import { isIqSessionAiUnlocked } from "@/lib/iq-payment/sessionUnlock";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -221,12 +221,14 @@ export async function POST(req: Request) {
 
     const sessionId =
       typeof body.sessionId === "string" ? body.sessionId.trim() : "";
-    if (!sessionId || !(await isIqSessionUnlocked(sessionId))) {
+    // Gemini assistant requires stage-2 aiUnlocked — result unlock alone is not enough.
+    if (!sessionId || !(await isIqSessionAiUnlocked(sessionId))) {
       return NextResponse.json(
         {
           error:
-            "Sessão bloqueada. Confirme o pagamento Pix (R$1) para usar o assistente Gemini com o IqResult.",
-          code: "LOCKED",
+            "Assistente bloqueado. Liberação do resultado não inclui a IA — confirme o Pix extra (+R$1) para o Gemini especializado no seu IqResult.",
+          code: "AI_LOCKED",
+          aiUnlocked: false,
         },
         { status: 402 },
       );

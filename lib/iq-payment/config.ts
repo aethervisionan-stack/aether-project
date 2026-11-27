@@ -1,6 +1,10 @@
 /**
  * IQ post-test unlock via InfinitePay Pix — amount and helpers.
- * Amount is env-driven (centavos); never hardcode the charge in routes.
+ * Amounts are env-driven (centavos); never hardcode the charge in routes.
+ *
+ * Two tiers on the same sessionId:
+ * - result (IQ_UNLOCK_AMOUNT_CENTAVOS) → resultUnlocked
+ * - ai_upsell (IQ_AI_UPSELL_AMOUNT_CENTAVOS) → aiUnlocked
  */
 
 import {
@@ -25,16 +29,41 @@ export {
   normalizeHandle,
 };
 
-const DEFAULT_UNLOCK_CENTAVOS = 100;
+export type IqUnlockItemType = "result" | "ai_upsell";
 
-/** Unlock price in centavos — from IQ_UNLOCK_AMOUNT_CENTAVOS (fallback 100 = R$1,00). */
+const DEFAULT_UNLOCK_CENTAVOS = 100;
+const DEFAULT_AI_UPSELL_CENTAVOS = 100;
+
+function parseCentavosEnv(raw: string, fallback: number): number {
+  const trimmed = raw.trim();
+  if (!trimmed) return fallback;
+  const n = Number.parseInt(trimmed, 10);
+  if (Number.isFinite(n) && n > 0 && n <= 1_000_000) return n;
+  return fallback;
+}
+
+/** Stage-1 result unlock in centavos — IQ_UNLOCK_AMOUNT_CENTAVOS (fallback 100 = R$1,00). */
 export function iqUnlockAmountCentavos(): number {
-  const raw = (process.env.IQ_UNLOCK_AMOUNT_CENTAVOS ?? "").trim();
-  if (raw) {
-    const n = Number.parseInt(raw, 10);
-    if (Number.isFinite(n) && n > 0 && n <= 1_000_000) return n;
-  }
-  return DEFAULT_UNLOCK_CENTAVOS;
+  return parseCentavosEnv(
+    process.env.IQ_UNLOCK_AMOUNT_CENTAVOS ?? "",
+    DEFAULT_UNLOCK_CENTAVOS,
+  );
+}
+
+/** Stage-2 AI upsell in centavos — IQ_AI_UPSELL_AMOUNT_CENTAVOS (fallback 100 = R$1,00). */
+export function iqAiUpsellAmountCentavos(): number {
+  return parseCentavosEnv(
+    process.env.IQ_AI_UPSELL_AMOUNT_CENTAVOS ?? "",
+    DEFAULT_AI_UPSELL_CENTAVOS,
+  );
+}
+
+export function iqAmountCentavosForItemType(
+  itemType: IqUnlockItemType,
+): number {
+  return itemType === "ai_upsell"
+    ? iqAiUpsellAmountCentavos()
+    : iqUnlockAmountCentavos();
 }
 
 export function iqUnlockAmountLabel(centavos = iqUnlockAmountCentavos()): string {
@@ -44,8 +73,32 @@ export function iqUnlockAmountLabel(centavos = iqUnlockAmountCentavos()): string
   });
 }
 
+export function parseIqUnlockItemType(
+  raw: unknown,
+): IqUnlockItemType | null {
+  if (raw === "result" || raw === "ai_upsell") return raw;
+  return null;
+}
+
 export const IQ_UNLOCK_DESCRIPTION =
-  "Desbloqueio completo do Teste de QI — resultados, ranking, revisão e assistente";
+  "Desbloqueio do resultado do Teste de QI — perfil, ranking e revisão";
+
+export const IQ_AI_UPSELL_DESCRIPTION =
+  "Assistente Gemini especializado no seu resultado do Teste de QI";
+
+export function iqDescriptionForItemType(
+  itemType: IqUnlockItemType,
+): string {
+  return itemType === "ai_upsell"
+    ? IQ_AI_UPSELL_DESCRIPTION
+    : IQ_UNLOCK_DESCRIPTION;
+}
+
+export function iqInfinitePayTierForItemType(
+  itemType: IqUnlockItemType,
+): string {
+  return itemType === "ai_upsell" ? "iq_unlock_ai" : "iq_unlock_result";
+}
 
 /**
  * Dev simulation only on loopback hosts (or explicit INFINITEPAY_SIMULATE=1).

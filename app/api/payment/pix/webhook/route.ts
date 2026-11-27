@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import { iqUnlockAmountCentavos } from "@/lib/iq-payment/config";
+import { iqAmountCentavosForItemType } from "@/lib/iq-payment/config";
 import { isInfinitePayPaidStatus } from "@/lib/iq-payment/infinitepay-pix";
 import {
+  extractItemTypeFromOrderNsu,
   extractSessionIdFromOrderNsu,
   getIqUnlockByOrderNsu,
   getIqUnlockByPaymentId,
@@ -85,14 +86,17 @@ export async function POST(req: Request) {
         extractSessionIdFromOrderNsu(order_nsu) ??
         order_nsu.split("__")[1] ??
         "webhook";
+      const guessedItem =
+        extractItemTypeFromOrderNsu(order_nsu) ?? "result";
       await putInfinitePayOrderAsync({
         order_nsu,
-        tier: "iq_unlock",
+        tier:
+          guessedItem === "ai_upsell" ? "iq_unlock_ai" : "iq_unlock_result",
         sessionId: sessionGuess,
         amountCentavos:
           typeof body.amount === "number"
             ? body.amount
-            : iqUnlockAmountCentavos(),
+            : iqAmountCentavosForItemType(guessedItem),
         status: "paid",
         paidAt: Date.now(),
         transaction_nsu: transaction_nsu ?? undefined,
@@ -113,12 +117,18 @@ export async function POST(req: Request) {
         ok: true,
         order_nsu,
         unlocked: false,
+        resultUnlocked: false,
+        aiUnlocked: false,
         reason: "session_not_found",
       });
     }
 
     const unlockRow = await getIqUnlockSession(sessionId);
-    await markIqSessionPaid(sessionId, {
+    const itemType =
+      extractItemTypeFromOrderNsu(order_nsu) ??
+      unlockRow?.itemType ??
+      "result";
+    const paid = await markIqSessionPaid(sessionId, {
       paymentId: order_nsu,
       order_nsu,
       transaction_nsu: transaction_nsu ?? undefined,
@@ -126,15 +136,20 @@ export async function POST(req: Request) {
       amountCentavos:
         typeof body.amount === "number"
           ? body.amount
-          : unlockRow?.amountCentavos ?? iqUnlockAmountCentavos(),
+          : unlockRow?.amountCentavos ??
+            iqAmountCentavosForItemType(itemType),
       simulated: false,
+      itemType,
     });
 
     return NextResponse.json({
       ok: true,
       order_nsu,
       sessionId,
-      unlocked: true,
+      itemType,
+      unlocked: Boolean(paid.resultUnlocked),
+      resultUnlocked: Boolean(paid.resultUnlocked),
+      aiUnlocked: Boolean(paid.aiUnlocked),
     });
   } catch (err) {
     console.error("[iq-pix-webhook]", err);

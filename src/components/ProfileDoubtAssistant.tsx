@@ -96,10 +96,14 @@ export function ProfileDoubtAssistant({
         code?: string;
       };
 
-      if (res.status === 402 || data.code === "LOCKED") {
+      if (
+        res.status === 402 ||
+        data.code === "LOCKED" ||
+        data.code === "AI_LOCKED"
+      ) {
         setError(
           data.error ||
-            "Resultados ainda bloqueados. Confirme o pagamento Pix para usar o assistente.",
+            "Assistente ainda bloqueado. Liberação do resultado não inclui a IA — confirme o Pix extra (+R$1).",
         );
         setSending(false);
         return;

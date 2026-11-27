@@ -1,12 +1,25 @@
 /**
  * Server-side IQ unlock registry keyed by sessionId.
  * Client localStorage / query alone cannot unlock — only paid/verified rows here.
+ *
+ * Two-tier flags on the same session:
+ * - resultUnlocked (legacy `unlocked`) — full results, Hall of Fame, share
+ * - aiUnlocked — Gemini profile assistant
  */
+
+import type { IqUnlockItemType } from "@/lib/iq-payment/config";
+
+export type { IqUnlockItemType };
 
 export type IqUnlockRecord = {
   sessionId: string;
+  /** Legacy alias of resultUnlocked — kept for older clients/rows. */
   unlocked: boolean;
-  /** InfinitePay order_nsu / payment id (or sim_… locally). */
+  resultUnlocked: boolean;
+  aiUnlocked: boolean;
+  /** Item type of the latest pending/active checkout on this session. */
+  itemType?: IqUnlockItemType;
+  /** InfinitePay order_nsu / payment id (or sim_… locally) for latest checkout. */
   paymentId?: string;
   order_nsu?: string;
   amountCentavos: number;
@@ -20,6 +33,10 @@ export type IqUnlockRecord = {
   expiresAt?: string;
   createdAt: number;
   updatedAt: number;
+  resultPaymentId?: string;
+  resultOrderNsu?: string;
+  aiPaymentId?: string;
+  aiOrderNsu?: string;
 };
 
 type GlobalStore = typeof globalThis & {
@@ -93,11 +110,52 @@ async function ensureTable(): Promise<void> {
   g.__iqUnlockTableReady = true;
 }
 
+/** Normalize legacy rows that only had `unlocked`. */
+export function normalizeIqUnlockRecord(
+  raw: Partial<IqUnlockRecord> & { sessionId: string },
+): IqUnlockRecord {
+  const resultUnlocked = Boolean(
+    raw.resultUnlocked ?? raw.unlocked ?? false,
+  );
+  const aiUnlocked = Boolean(raw.aiUnlocked ?? false);
+  const itemType: IqUnlockItemType =
+    raw.itemType === "ai_upsell" || raw.itemType === "result"
+      ? raw.itemType
+      : "result";
+  return {
+    sessionId: raw.sessionId,
+    unlocked: resultUnlocked,
+    resultUnlocked,
+    aiUnlocked,
+    itemType,
+    paymentId: raw.paymentId,
+    order_nsu: raw.order_nsu,
+    amountCentavos:
+      typeof raw.amountCentavos === "number" ? raw.amountCentavos : 0,
+    status: raw.status === "paid" || raw.status === "failed" ? raw.status : "pending",
+    simulated: raw.simulated,
+    paidAt: raw.paidAt,
+    transaction_nsu: raw.transaction_nsu,
+    slug: raw.slug,
+    qrCode: raw.qrCode,
+    qrCodeBase64: raw.qrCodeBase64,
+    expiresAt: raw.expiresAt,
+    createdAt: raw.createdAt ?? Date.now(),
+    updatedAt: raw.updatedAt ?? Date.now(),
+    resultPaymentId: raw.resultPaymentId,
+    resultOrderNsu: raw.resultOrderNsu,
+    aiPaymentId: raw.aiPaymentId,
+    aiOrderNsu: raw.aiOrderNsu,
+  };
+}
+
 function fromPayload(raw: unknown): IqUnlockRecord | null {
   if (!raw || typeof raw !== "object") return null;
   const p = raw as Record<string, unknown>;
   if (typeof p.sessionId !== "string") return null;
-  return p as unknown as IqUnlockRecord;
+  return normalizeIqUnlockRecord(
+    p as unknown as Partial<IqUnlockRecord> & { sessionId: string },
+  );
 }
 
 async function persist(record: IqUnlockRecord): Promise<void> {
@@ -113,30 +171,35 @@ async function persist(record: IqUnlockRecord): Promise<void> {
 }
 
 export async function putIqUnlockSession(
-  record: IqUnlockRecord,
+  record: IqUnlockRecord | (Partial<IqUnlockRecord> & { sessionId: string }),
 ): Promise<void> {
+  let next = normalizeIqUnlockRecord(record);
   // Keep order_nsu aligned with paymentId for legacy callers / Hall of Fame keys.
-  if (record.paymentId && !record.order_nsu) {
-    record = { ...record, order_nsu: record.paymentId };
+  if (next.paymentId && !next.order_nsu) {
+    next = { ...next, order_nsu: next.paymentId };
   }
-  if (record.order_nsu && !record.paymentId) {
-    record = { ...record, paymentId: record.order_nsu };
+  if (next.order_nsu && !next.paymentId) {
+    next = { ...next, paymentId: next.order_nsu };
   }
-  sessions().set(record.sessionId, record);
-  if (record.order_nsu) {
-    byOrder().set(record.order_nsu, record.sessionId);
+  sessions().set(next.sessionId, next);
+  if (next.order_nsu) {
+    byOrder().set(next.order_nsu, next.sessionId);
   }
-  if (record.paymentId) {
-    byPayment().set(record.paymentId, record.sessionId);
+  if (next.paymentId) {
+    byPayment().set(next.paymentId, next.sessionId);
   }
-  await persist(record);
+  if (next.resultOrderNsu) byOrder().set(next.resultOrderNsu, next.sessionId);
+  if (next.aiOrderNsu) byOrder().set(next.aiOrderNsu, next.sessionId);
+  if (next.resultPaymentId) byPayment().set(next.resultPaymentId, next.sessionId);
+  if (next.aiPaymentId) byPayment().set(next.aiPaymentId, next.sessionId);
+  await persist(next);
 }
 
 export async function getIqUnlockSession(
   sessionId: string,
 ): Promise<IqUnlockRecord | undefined> {
   const mem = sessions().get(sessionId);
-  if (mem) return mem;
+  if (mem) return normalizeIqUnlockRecord(mem);
   if (!postgresUrl()) return undefined;
   await ensureTable();
   const rows = await pgQuery<{ payload: unknown }>(
@@ -159,13 +222,24 @@ export async function getIqUnlockByPaymentId(
   const sid = byPayment().get(paymentId);
   if (sid) return getIqUnlockSession(sid);
   for (const rec of sessions().values()) {
-    if (rec.paymentId === paymentId || rec.order_nsu === paymentId) return rec;
+    if (
+      rec.paymentId === paymentId ||
+      rec.order_nsu === paymentId ||
+      rec.resultPaymentId === paymentId ||
+      rec.resultOrderNsu === paymentId ||
+      rec.aiPaymentId === paymentId ||
+      rec.aiOrderNsu === paymentId
+    ) {
+      return normalizeIqUnlockRecord(rec);
+    }
   }
   if (!postgresUrl()) return undefined;
   await ensureTable();
   const rows = await pgQuery<{ payload: unknown }>(
     `SELECT payload FROM iq_unlock_sessions
      WHERE payload->>'paymentId' = $1 OR payload->>'order_nsu' = $1
+        OR payload->>'resultPaymentId' = $1 OR payload->>'resultOrderNsu' = $1
+        OR payload->>'aiPaymentId' = $1 OR payload->>'aiOrderNsu' = $1
      LIMIT 1`,
     [paymentId],
   );
@@ -184,15 +258,22 @@ export async function getIqUnlockByOrderNsu(
 ): Promise<IqUnlockRecord | undefined> {
   const sid = byOrder().get(orderNsu);
   if (sid) return getIqUnlockSession(sid);
-  // Scan memory
   for (const rec of sessions().values()) {
-    if (rec.order_nsu === orderNsu || rec.paymentId === orderNsu) return rec;
+    if (
+      rec.order_nsu === orderNsu ||
+      rec.paymentId === orderNsu ||
+      rec.resultOrderNsu === orderNsu ||
+      rec.aiOrderNsu === orderNsu
+    ) {
+      return normalizeIqUnlockRecord(rec);
+    }
   }
   if (!postgresUrl()) return undefined;
   await ensureTable();
   const rows = await pgQuery<{ payload: unknown }>(
     `SELECT payload FROM iq_unlock_sessions
      WHERE payload->>'order_nsu' = $1 OR payload->>'paymentId' = $1
+        OR payload->>'resultOrderNsu' = $1 OR payload->>'aiOrderNsu' = $1
      LIMIT 1`,
     [orderNsu],
   );
@@ -206,10 +287,27 @@ export async function getIqUnlockByOrderNsu(
   return undefined;
 }
 
-export async function isIqSessionUnlocked(sessionId: string): Promise<boolean> {
+/** Stage-1: full results / Hall / share. */
+export async function isIqSessionResultUnlocked(
+  sessionId: string,
+): Promise<boolean> {
   if (!sessionId.trim()) return false;
   const rec = await getIqUnlockSession(sessionId.trim());
-  return Boolean(rec?.unlocked && rec.status === "paid");
+  return Boolean(rec?.resultUnlocked);
+}
+
+/** @deprecated Prefer isIqSessionResultUnlocked — same meaning. */
+export async function isIqSessionUnlocked(sessionId: string): Promise<boolean> {
+  return isIqSessionResultUnlocked(sessionId);
+}
+
+/** Stage-2: Gemini assistant. */
+export async function isIqSessionAiUnlocked(
+  sessionId: string,
+): Promise<boolean> {
+  if (!sessionId.trim()) return false;
+  const rec = await getIqUnlockSession(sessionId.trim());
+  return Boolean(rec?.aiUnlocked);
 }
 
 export async function markIqSessionPaid(
@@ -221,21 +319,39 @@ export async function markIqSessionPaid(
     slug?: string;
     simulated?: boolean;
     amountCentavos?: number;
+    itemType?: IqUnlockItemType;
   },
 ): Promise<IqUnlockRecord> {
   const now = Date.now();
   const existing = await getIqUnlockSession(sessionId);
+  const orderHint = extras?.order_nsu ?? extras?.paymentId ?? existing?.order_nsu;
+  const itemType: IqUnlockItemType =
+    extras?.itemType ??
+    (orderHint ? extractItemTypeFromOrderNsu(orderHint) : null) ??
+    existing?.itemType ??
+    "result";
+
   const paymentId =
     extras?.paymentId ??
     extras?.order_nsu ??
     existing?.paymentId ??
     existing?.order_nsu;
-  const next: IqUnlockRecord = {
+  const order_nsu = extras?.order_nsu ?? paymentId ?? existing?.order_nsu;
+
+  const resultUnlocked =
+    itemType === "result" ? true : Boolean(existing?.resultUnlocked);
+  const aiUnlocked =
+    itemType === "ai_upsell" ? true : Boolean(existing?.aiUnlocked);
+
+  const next = normalizeIqUnlockRecord({
     sessionId,
-    unlocked: true,
+    unlocked: resultUnlocked,
+    resultUnlocked,
+    aiUnlocked,
+    itemType,
     status: "paid",
     paymentId,
-    order_nsu: extras?.order_nsu ?? paymentId ?? existing?.order_nsu,
+    order_nsu,
     amountCentavos:
       extras?.amountCentavos ?? existing?.amountCentavos ?? 0,
     simulated: extras?.simulated ?? existing?.simulated,
@@ -248,7 +364,76 @@ export async function markIqSessionPaid(
     expiresAt: existing?.expiresAt,
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
-  };
+    resultPaymentId:
+      itemType === "result"
+        ? paymentId
+        : existing?.resultPaymentId,
+    resultOrderNsu:
+      itemType === "result"
+        ? order_nsu
+        : existing?.resultOrderNsu,
+    aiPaymentId:
+      itemType === "ai_upsell"
+        ? paymentId
+        : existing?.aiPaymentId,
+    aiOrderNsu:
+      itemType === "ai_upsell"
+        ? order_nsu
+        : existing?.aiOrderNsu,
+  });
+  await putIqUnlockSession(next);
+  return next;
+}
+
+/**
+ * Start / refresh a pending checkout without wiping existing unlock flags.
+ */
+export async function beginIqUnlockCheckout(
+  input: {
+    sessionId: string;
+    itemType: IqUnlockItemType;
+    paymentId: string;
+    order_nsu: string;
+    amountCentavos: number;
+    simulated?: boolean;
+    qrCode?: string;
+    qrCodeBase64?: string;
+    expiresAt?: string;
+  },
+): Promise<IqUnlockRecord> {
+  const now = Date.now();
+  const existing = await getIqUnlockSession(input.sessionId);
+  const resultUnlocked = Boolean(existing?.resultUnlocked);
+  const aiUnlocked = Boolean(existing?.aiUnlocked);
+  const next = normalizeIqUnlockRecord({
+    sessionId: input.sessionId,
+    unlocked: resultUnlocked,
+    resultUnlocked,
+    aiUnlocked,
+    itemType: input.itemType,
+    paymentId: input.paymentId,
+    order_nsu: input.order_nsu,
+    amountCentavos: input.amountCentavos,
+    status:
+      resultUnlocked || aiUnlocked
+        ? existing?.status === "paid"
+          ? "paid"
+          : "pending"
+        : "pending",
+    simulated: input.simulated,
+    paidAt: existing?.paidAt,
+    transaction_nsu: existing?.transaction_nsu,
+    slug: existing?.slug,
+    qrCode: input.qrCode,
+    qrCodeBase64: input.qrCodeBase64,
+    expiresAt: input.expiresAt,
+    createdAt: existing?.createdAt ?? now,
+    updatedAt: now,
+    resultPaymentId: existing?.resultPaymentId,
+    resultOrderNsu: existing?.resultOrderNsu,
+    aiPaymentId: existing?.aiPaymentId,
+    aiOrderNsu: existing?.aiOrderNsu,
+  });
   await putIqUnlockSession(next);
   return next;
 }
@@ -257,7 +442,9 @@ export function extractSessionIdFromOrderNsu(
   orderNsu: string | null | undefined,
 ): string | null {
   if (!orderNsu || typeof orderNsu !== "string") return null;
-  // Format: iq__${sessionId}__${timestamp}
+  // Formats:
+  //   iq__${sessionId}__${timestamp}
+  //   iq__${sessionId}__${itemType}__${timestamp}
   const parts = orderNsu.split("__");
   if (parts.length >= 3 && parts[0] === "iq") {
     return parts[1] || null;
@@ -265,4 +452,25 @@ export function extractSessionIdFromOrderNsu(
   // Fallback: first segment if it looks like an iq session id
   if (parts[0]?.startsWith("iq_")) return parts[0];
   return null;
+}
+
+export function extractItemTypeFromOrderNsu(
+  orderNsu: string | null | undefined,
+): IqUnlockItemType | null {
+  if (!orderNsu || typeof orderNsu !== "string") return null;
+  const parts = orderNsu.split("__");
+  if (parts.length >= 4 && parts[0] === "iq") {
+    if (parts[2] === "result" || parts[2] === "ai_upsell") return parts[2];
+  }
+  // Legacy orders without itemType → result unlock
+  if (parts.length >= 3 && parts[0] === "iq") return "result";
+  return null;
+}
+
+export function buildIqOrderNsu(
+  sessionId: string,
+  itemType: IqUnlockItemType,
+  now = Date.now(),
+): string {
+  return `iq__${sessionId}__${itemType}__${now}`;
 }

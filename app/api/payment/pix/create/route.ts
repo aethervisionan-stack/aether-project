@@ -1,21 +1,27 @@
 import { NextResponse } from "next/server";
 import {
   canCreateRealPix,
+  iqAmountCentavosForItemType,
   iqPaymentSimulateLocal,
-  iqUnlockAmountCentavos,
   iqUnlockAmountLabel,
+  parseIqUnlockItemType,
+  type IqUnlockItemType,
 } from "@/lib/iq-payment/config";
 import {
   createInfinitePayPixPayment,
   createSimulatedInfinitePayPix,
 } from "@/lib/iq-payment/infinitepay-pix";
-import { putIqUnlockSession } from "@/lib/iq-payment/sessionUnlock";
+import {
+  beginIqUnlockCheckout,
+  getIqUnlockSession,
+} from "@/lib/iq-payment/sessionUnlock";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type Body = {
   sessionId?: unknown;
+  itemType?: unknown;
 };
 
 function sanitizeSessionId(raw: unknown): string | null {
@@ -46,10 +52,58 @@ export async function POST(req: Request) {
       );
     }
 
-    const amountCentavos = iqUnlockAmountCentavos();
+    const itemType: IqUnlockItemType =
+      parseIqUnlockItemType(body.itemType) ?? "result";
+
+    const existing = await getIqUnlockSession(sessionId);
+    if (itemType === "result" && existing?.resultUnlocked) {
+      return NextResponse.json({
+        alreadyUnlocked: true,
+        itemType,
+        resultUnlocked: true,
+        aiUnlocked: Boolean(existing.aiUnlocked),
+        unlocked: true,
+        sessionId,
+        amountCentavos: iqAmountCentavosForItemType("result"),
+        amountLabel: iqUnlockAmountLabel(
+          iqAmountCentavosForItemType("result"),
+        ),
+        paymentId: existing.resultPaymentId ?? existing.paymentId ?? null,
+        order_nsu: existing.resultOrderNsu ?? existing.order_nsu ?? null,
+      });
+    }
+    if (itemType === "ai_upsell" && existing?.aiUnlocked) {
+      return NextResponse.json({
+        alreadyUnlocked: true,
+        itemType,
+        resultUnlocked: Boolean(existing.resultUnlocked),
+        aiUnlocked: true,
+        unlocked: Boolean(existing.resultUnlocked),
+        sessionId,
+        amountCentavos: iqAmountCentavosForItemType("ai_upsell"),
+        amountLabel: iqUnlockAmountLabel(
+          iqAmountCentavosForItemType("ai_upsell"),
+        ),
+        paymentId: existing.aiPaymentId ?? existing.paymentId ?? null,
+        order_nsu: existing.aiOrderNsu ?? existing.order_nsu ?? null,
+      });
+    }
+    if (itemType === "ai_upsell" && !existing?.resultUnlocked) {
+      return NextResponse.json(
+        {
+          error:
+            "Desbloqueie o resultado primeiro (R$1). Depois você pode liberar o assistente Gemini (+R$1).",
+          code: "RESULT_REQUIRED",
+          resultUnlocked: false,
+          aiUnlocked: false,
+        },
+        { status: 409 },
+      );
+    }
+
+    const amountCentavos = iqAmountCentavosForItemType(itemType);
     const amountLabel = iqUnlockAmountLabel(amountCentavos);
     const reqUrl = req.url;
-    const now = Date.now();
 
     const useSim = iqPaymentSimulateLocal(reqUrl);
     const hasRealCreds = canCreateRealPix();
@@ -69,26 +123,25 @@ export async function POST(req: Request) {
       ? await createSimulatedInfinitePayPix({
           sessionId,
           amountCentavos,
+          itemType,
           reason: hasRealCreds ? "forced_simulate" : "missing_credentials",
         })
       : await createInfinitePayPixPayment({
           sessionId,
           amountCentavos,
+          itemType,
         });
 
-    await putIqUnlockSession({
+    const rec = await beginIqUnlockCheckout({
       sessionId,
-      unlocked: false,
+      itemType,
       paymentId: pix.paymentId,
       order_nsu: pix.order_nsu,
       amountCentavos,
-      status: "pending",
       simulated: useSim,
       qrCode: pix.qrCode || undefined,
       qrCodeBase64: pix.qrCodeBase64 || undefined,
       expiresAt: pix.expiresAt,
-      createdAt: now,
-      updatedAt: Date.now(),
     });
 
     return NextResponse.json({
@@ -98,6 +151,7 @@ export async function POST(req: Request) {
       qrCodeBase64: pix.qrCodeBase64 || "",
       expiresAt: pix.expiresAt,
       sessionId,
+      itemType,
       amountCentavos,
       amountLabel,
       simulated: useSim,
@@ -107,6 +161,9 @@ export async function POST(req: Request) {
       code: pix.code ?? (useSim ? "SIMULATED" : undefined),
       notice: pix.notice ?? null,
       canSimApprove: useSim,
+      resultUnlocked: Boolean(rec.resultUnlocked),
+      aiUnlocked: Boolean(rec.aiUnlocked),
+      unlocked: Boolean(rec.resultUnlocked),
     });
   } catch (err) {
     const message =

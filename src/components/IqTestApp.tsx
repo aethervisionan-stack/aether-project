@@ -131,7 +131,9 @@ export function IqTestApp() {
     useState<ChallengeInvite | null>(null);
   const [finishWarning, setFinishWarning] = useState<string | null>(null);
   const [serverUnlocked, setServerUnlocked] = useState(false);
+  const [serverAiUnlocked, setServerAiUnlocked] = useState(false);
   const [unlockAmountLabel, setUnlockAmountLabel] = useState("R$ 1,00");
+  const [aiUpsellAmountLabel, setAiUpsellAmountLabel] = useState("R$ 1,00");
   const [unlockChecking, setUnlockChecking] = useState(false);
   const [unlockVerifyError, setUnlockVerifyError] = useState<string | null>(
     null,
@@ -199,8 +201,16 @@ export function IqTestApp() {
       try {
         const status = await fetchIqUnlockStatus(sessionId);
         if (cancelled) return;
-        setUnlockAmountLabel(status.amountLabel);
-        if (status.unlocked) {
+        if (status.resultAmountLabel) {
+          setUnlockAmountLabel(status.resultAmountLabel);
+        } else if (status.amountLabel) {
+          setUnlockAmountLabel(status.amountLabel);
+        }
+        if (status.aiAmountLabel) {
+          setAiUpsellAmountLabel(status.aiAmountLabel);
+        }
+        setServerAiUnlocked(Boolean(status.aiUnlocked));
+        if (status.resultUnlocked || status.unlocked) {
           applyServerUnlock(status.paymentId ?? status.order_nsu);
         } else {
           setServerUnlocked(false);
@@ -212,6 +222,7 @@ export function IqTestApp() {
       } catch {
         if (!cancelled) {
           setServerUnlocked(false);
+          setServerAiUnlocked(false);
           setUnlockVerifyError(
             "Não foi possível verificar o desbloqueio no servidor. Tente de novo — sua sessão permanece salva.",
           );
@@ -849,6 +860,7 @@ export function IqTestApp() {
               <div className="mx-auto grid max-w-6xl gap-6 lg:grid-cols-2 lg:items-start">
                 <IqUnlockCard
                   sessionId={state.sessionId}
+                  itemType="result"
                   amountLabel={unlockAmountLabel}
                   onAmountLabel={setUnlockAmountLabel}
                   onUnlocked={(paymentId) => {
@@ -898,6 +910,10 @@ export function IqTestApp() {
               leaderboardEntryId={state.leaderboardEntryId}
               leaderboardTick={leaderboardTick}
               sessionId={state.sessionId}
+              aiUnlocked={serverAiUnlocked}
+              aiUpsellAmountLabel={aiUpsellAmountLabel}
+              onAiAmountLabel={setAiUpsellAmountLabel}
+              onAiUnlocked={() => setServerAiUnlocked(true)}
               onOpenReview={() => {
                 setReviewIndex(0);
                 setState((p) => ({ ...p, phase: "review" }));
@@ -1161,6 +1177,10 @@ function ResultsDashboard({
   leaderboardEntryId,
   leaderboardTick,
   sessionId,
+  aiUnlocked,
+  aiUpsellAmountLabel,
+  onAiAmountLabel,
+  onAiUnlocked,
   onOpenReview,
   onBackFromReview,
   onResetSameName,
@@ -1177,6 +1197,10 @@ function ResultsDashboard({
   leaderboardEntryId: string | null;
   leaderboardTick: number;
   sessionId: string | null;
+  aiUnlocked: boolean;
+  aiUpsellAmountLabel: string;
+  onAiAmountLabel: (label: string) => void;
+  onAiUnlocked: () => void;
   onOpenReview: () => void;
   onBackFromReview: () => void;
   onResetSameName: () => void;
@@ -1533,13 +1557,30 @@ function ResultsDashboard({
         </section>
       ) : null}
 
-      <ProfileDoubtAssistant
-        result={result}
-        participantName={participantName}
-        rank={userRank}
-        rankTotal={allRanked.length}
-        sessionId={sessionId}
-      />
+      {aiUnlocked ? (
+        <ProfileDoubtAssistant
+          result={result}
+          participantName={participantName}
+          rank={userRank}
+          rankTotal={allRanked.length}
+          sessionId={sessionId}
+        />
+      ) : sessionId ? (
+        <div className="space-y-3">
+          <IqUnlockCard
+            sessionId={sessionId}
+            itemType="ai_upsell"
+            amountLabel={aiUpsellAmountLabel}
+            onAmountLabel={onAiAmountLabel}
+            onUnlocked={() => onAiUnlocked()}
+            compact
+          />
+          <p className="text-center text-xs text-zinc-600">
+            O assistente Gemini fica disponível depois deste complemento — seu
+            resultado e o Hall of Fame já estão liberados.
+          </p>
+        </div>
+      ) : null}
 
       {result.activeCompetences.length > 0 ? (
         <details className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">

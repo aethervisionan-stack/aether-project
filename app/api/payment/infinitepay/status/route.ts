@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
-import { iqUnlockAmountCentavos, iqUnlockAmountLabel } from "@/lib/iq-payment/config";
+import {
+  iqAiUpsellAmountCentavos,
+  iqUnlockAmountCentavos,
+  iqUnlockAmountLabel,
+} from "@/lib/iq-payment/config";
 import {
   getIqUnlockSession,
+  isIqSessionAiUnlocked,
   isIqSessionUnlocked,
 } from "@/lib/iq-payment/sessionUnlock";
 
@@ -26,16 +31,23 @@ export async function GET(req: Request) {
   }
 
   const unlocked = await isIqSessionUnlocked(sessionId);
+  const aiUnlocked = await isIqSessionAiUnlocked(sessionId);
   const rec = await getIqUnlockSession(sessionId);
   return NextResponse.json({
     unlocked,
+    resultUnlocked: unlocked,
+    aiUnlocked,
     sessionId,
-    status: rec?.status ?? (unlocked ? "paid" : "unknown"),
+    status: rec?.status ?? (unlocked || aiUnlocked ? "paid" : "unknown"),
     order_nsu: rec?.order_nsu ?? null,
     amountCentavos: rec?.amountCentavos ?? iqUnlockAmountCentavos(),
     amountLabel: iqUnlockAmountLabel(
       rec?.amountCentavos ?? iqUnlockAmountCentavos(),
     ),
+    resultAmountCentavos: iqUnlockAmountCentavos(),
+    resultAmountLabel: iqUnlockAmountLabel(iqUnlockAmountCentavos()),
+    aiAmountCentavos: iqAiUpsellAmountCentavos(),
+    aiAmountLabel: iqUnlockAmountLabel(iqAiUpsellAmountCentavos()),
     paidAt: rec?.paidAt ?? null,
   });
 }
@@ -58,22 +70,31 @@ export async function POST(req: Request) {
       );
     }
     const unlocked = await isIqSessionUnlocked(sessionId);
+    const aiUnlocked = await isIqSessionAiUnlocked(sessionId);
     const rec = await getIqUnlockSession(sessionId);
     return NextResponse.json({
       unlocked,
+      resultUnlocked: unlocked,
+      aiUnlocked,
       sessionId,
-      status: rec?.status ?? (unlocked ? "paid" : "unknown"),
+      status: rec?.status ?? (unlocked || aiUnlocked ? "paid" : "unknown"),
       order_nsu: rec?.order_nsu ?? null,
       amountCentavos: rec?.amountCentavos ?? iqUnlockAmountCentavos(),
       amountLabel: iqUnlockAmountLabel(
         rec?.amountCentavos ?? iqUnlockAmountCentavos(),
       ),
+      resultAmountCentavos: iqUnlockAmountCentavos(),
+      resultAmountLabel: iqUnlockAmountLabel(iqUnlockAmountCentavos()),
+      aiAmountCentavos: iqAiUpsellAmountCentavos(),
+      aiAmountLabel: iqUnlockAmountLabel(iqAiUpsellAmountCentavos()),
       paidAt: rec?.paidAt ?? null,
     });
   } catch (err) {
     return NextResponse.json(
       {
         unlocked: false,
+        resultUnlocked: false,
+        aiUnlocked: false,
         error: err instanceof Error ? err.message : "Erro de status",
         code: "SERVER_ERROR",
       },

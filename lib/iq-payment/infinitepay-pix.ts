@@ -9,16 +9,19 @@ import { resolveInfinitePayPixEmv } from "@/lib/infinitepay/fetchPixEmv";
 import { isValidPixEmv } from "@/lib/infinitepay/pixEmv";
 import { putInfinitePayOrderAsync } from "@/lib/infinitepay/store";
 import {
-  IQ_UNLOCK_DESCRIPTION,
+  type IqUnlockItemType,
   appPublicUrl,
   canCreateRealCheckout,
   infinitepayApiKey,
   infinitepayHandle,
+  iqAmountCentavosForItemType,
+  iqDescriptionForItemType,
+  iqInfinitePayTierForItemType,
   iqPaymentRedirectUrl,
   iqPaymentWebhookUrl,
-  iqUnlockAmountCentavos,
   isRealApiKey,
 } from "@/lib/iq-payment/config";
+import { buildIqOrderNsu } from "@/lib/iq-payment/sessionUnlock";
 
 export type InfinitePayPixCreateResult = {
   paymentId: string;
@@ -108,11 +111,14 @@ export function defaultPixExpiresAt(minutes = 30): string {
 export async function createSimulatedInfinitePayPix(input: {
   sessionId: string;
   amountCentavos?: number;
+  itemType?: IqUnlockItemType;
   reason?: "missing_credentials" | "forced_simulate";
 }): Promise<InfinitePayPixCreateResult> {
-  const amountCentavos = input.amountCentavos ?? iqUnlockAmountCentavos();
-  const order_nsu = `iq__${input.sessionId}__${Date.now()}`;
-  const paymentId = `sim_${input.sessionId}_${Date.now()}`;
+  const itemType: IqUnlockItemType = input.itemType ?? "result";
+  const amountCentavos =
+    input.amountCentavos ?? iqAmountCentavosForItemType(itemType);
+  const order_nsu = buildIqOrderNsu(input.sessionId, itemType);
+  const paymentId = `sim_${input.sessionId}_${itemType}_${Date.now()}`;
   const appUrl = appPublicUrl();
   const checkoutUrl = `${appUrl}/teste-qi?payment_return=1&session_id=${encodeURIComponent(input.sessionId)}&order_nsu=${encodeURIComponent(order_nsu)}&transaction_nsu=SIM_${Date.now()}&slug=sim-iq-local&capture_method=pix&simulated=1`;
 
@@ -124,7 +130,7 @@ export async function createSimulatedInfinitePayPix(input: {
 
   await putInfinitePayOrderAsync({
     order_nsu,
-    tier: "iq_unlock",
+    tier: iqInfinitePayTierForItemType(itemType),
     sessionId: input.sessionId,
     amountCentavos,
     status: "created",
@@ -151,6 +157,7 @@ export async function createInfinitePayPixPayment(input: {
   sessionId: string;
   amountCentavos?: number;
   description?: string;
+  itemType?: IqUnlockItemType;
 }): Promise<InfinitePayPixCreateResult> {
   if (!canCreateRealCheckout()) {
     throw new Error(
@@ -158,8 +165,10 @@ export async function createInfinitePayPixPayment(input: {
     );
   }
 
-  const amountCentavos = input.amountCentavos ?? iqUnlockAmountCentavos();
-  const order_nsu = `iq__${input.sessionId}__${Date.now()}`;
+  const itemType: IqUnlockItemType = input.itemType ?? "result";
+  const amountCentavos =
+    input.amountCentavos ?? iqAmountCentavosForItemType(itemType);
+  const order_nsu = buildIqOrderNsu(input.sessionId, itemType);
   const handle = infinitepayHandle();
   const redirectUrl = iqPaymentRedirectUrl(input.sessionId);
   const webhookUrl = iqPaymentWebhookUrl();
@@ -172,7 +181,8 @@ export async function createInfinitePayPixPayment(input: {
       {
         quantity: 1,
         price: amountCentavos,
-        description: input.description ?? IQ_UNLOCK_DESCRIPTION,
+        description:
+          input.description ?? iqDescriptionForItemType(itemType),
       },
     ],
   };
@@ -233,7 +243,7 @@ export async function createInfinitePayPixPayment(input: {
 
   await putInfinitePayOrderAsync({
     order_nsu,
-    tier: "iq_unlock",
+    tier: iqInfinitePayTierForItemType(itemType),
     sessionId: input.sessionId,
     amountCentavos,
     status: "created",
