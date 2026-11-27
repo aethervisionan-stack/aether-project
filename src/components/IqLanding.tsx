@@ -13,10 +13,8 @@ import { LeaderboardPanel } from "@/src/components/LeaderboardPanel";
 import { OnlinePresenceBadge } from "@/src/components/OnlinePresenceBadge";
 import { AvatarPicker } from "@/src/components/ParticipantAvatar";
 import { SkillHelpTip } from "@/src/components/SkillHelpTip";
-import {
-  TestLineQiFooter,
-  TestLineQiLogo,
-} from "@/src/components/TestLineQiLogo";
+import { LivingBrainLogo } from "@/src/components/LivingBrainLogo";
+import { TestLineQiFooter } from "@/src/components/TestLineQiLogo";
 import type { ChallengeInvite } from "@/src/lib/challengeInvite";
 import { ESCALA_HELP } from "@/src/lib/skillHelp";
 
@@ -131,7 +129,7 @@ export function IqLanding({
         aria-label="Navegação da avaliação"
         className="sticky top-3 z-30 mx-auto flex max-w-full items-center justify-between gap-3 overflow-x-auto rounded-2xl border border-white/[0.08] bg-[#0B0D14]/70 px-3 py-2.5 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] backdrop-blur-xl sm:px-4"
       >
-        <TestLineQiLogo href="#iniciar" priority />
+        <LivingBrainLogo href="#iniciar" size="sm" />
         <div className="flex items-center gap-1 sm:gap-2">
           {(
             [
@@ -169,9 +167,17 @@ export function IqLanding({
           {...fadeUp(0.08)}
           className="space-y-6 lg:col-span-6 xl:col-span-7"
         >
-          <p className="text-[11px] font-medium uppercase tracking-[0.28em] text-cyan-300/80">
-            Precision Lab · Avaliação psicométrica
-          </p>
+          <div className="space-y-3">
+            <LivingBrainLogo
+              href={null}
+              size="lg"
+              showWordmark
+              className="drop-shadow-[0_0_28px_rgba(34,211,238,0.28)]"
+            />
+            <p className="text-[11px] font-medium uppercase tracking-[0.28em] text-cyan-300/80">
+              Precision Lab · Avaliação psicométrica
+            </p>
+          </div>
           <OnlinePresenceBadge className="pt-1" />
           <h1 className="font-iq-display max-w-[16ch] text-4xl leading-[1.05] tracking-tight text-zinc-50 sm:text-5xl lg:text-[3.35rem]">
             Descubra seu perfil cognitivo

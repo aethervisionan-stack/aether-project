@@ -1,16 +1,17 @@
 "use client";
 
 import Image from "next/image";
+import { LivingBrainLogo } from "@/src/components/LivingBrainLogo";
 
-type Variant = "full" | "icon";
+type Variant = "full" | "icon" | "living";
 
-const SRC: Record<Variant, string> = {
-  full: "/testlineqi-logo.png",
+const SRC = {
+  full: "/testlineqi-brain-logo.png",
   icon: "/logo-tiktok-perfil.png",
-};
+} as const;
 
 export function TestLineQiLogo({
-  variant = "full",
+  variant = "living",
   className = "",
   priority = false,
   href = "/teste-qi",
@@ -20,6 +21,18 @@ export function TestLineQiLogo({
   priority?: boolean;
   href?: string | null;
 }) {
+  if (variant === "living") {
+    return (
+      <LivingBrainLogo
+        size="sm"
+        showWordmark
+        href={href}
+        className={className}
+        animate
+      />
+    );
+  }
+
   const img =
     variant === "icon" ? (
       <Image
@@ -64,7 +77,7 @@ export function TestLineQiFooter({
       className={`mt-10 border-t border-white/[0.08] pt-8 ${className}`}
     >
       <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
-        <TestLineQiLogo href="/teste-qi" />
+        <LivingBrainLogo href="/teste-qi" size="sm" />
         <p className="max-w-md text-xs leading-relaxed text-zinc-500">
           TestLineQi — avaliação cognitiva digital. Não substitui avaliação
           neuropsicológica presencial.
