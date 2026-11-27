@@ -168,15 +168,22 @@ function mapStatusPayload(data: {
   const resultUnlocked = Boolean(
     data.resultUnlocked ?? data.unlocked ?? false,
   );
+  const amountCentavos =
+    typeof data.amountCentavos === "number" && data.amountCentavos > 0
+      ? data.amountCentavos
+      : 100;
+  const rawLabel =
+    typeof data.amountLabel === "string" ? data.amountLabel.trim() : "";
+  // Never adopt a R$0,00 label from a snapshot-only server row.
+  const amountLabel =
+    rawLabel && !/R\$\s*0([.,]0+)?/.test(rawLabel) ? rawLabel : "R$ 1,00";
   return {
     unlocked: resultUnlocked,
     resultUnlocked,
     aiUnlocked: Boolean(data.aiUnlocked),
     itemType: data.itemType,
-    amountCentavos:
-      typeof data.amountCentavos === "number" ? data.amountCentavos : 100,
-    amountLabel:
-      typeof data.amountLabel === "string" ? data.amountLabel : "R$ 1,00",
+    amountCentavos,
+    amountLabel,
     resultAmountCentavos: data.resultAmountCentavos,
     resultAmountLabel: data.resultAmountLabel,
     aiAmountCentavos: data.aiAmountCentavos,

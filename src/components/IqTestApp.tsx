@@ -528,17 +528,37 @@ export function IqTestApp() {
     setNameError(null);
     setAvatarError(null);
     setReviewIndex(0);
+    setFinishWarning(null);
+    // Start / mode pick must never reopen a completed unlock paywall.
+    setServerUnlocked(false);
+    setServerAiUnlocked(false);
+    setUnlockVerifyError(null);
+    setUnlockChecking(false);
+    setUnlockAmountLabel("R$ 1,00");
+    setAiUpsellAmountLabel("R$ 1,00");
     const keepName = state.participantName ?? "";
     const keepAvatar = state.participantAvatarUrl ?? null;
-    if (saved && saved.phase !== "onboarding" && saved.phase !== "modeSelect") {
+
+    // Resume mid-test only. Completed results/review are stale for "Começar".
+    if (saved?.phase === "test") {
       setState({
         ...saved,
         participantName: saved.participantName || keepName,
         participantAvatarUrl:
           saved.participantAvatarUrl ?? keepAvatar ?? null,
+        resultsUnlocked: false,
       });
       return;
     }
+
+    // Drop completed unlock UI from localStorage so Start → clean onboarding.
+    if (
+      saved &&
+      (saved.phase === "results" || saved.phase === "review")
+    ) {
+      clearQuizState(m);
+    }
+
     setState({
       ...createInitialState(
         m,
@@ -549,6 +569,11 @@ export function IqTestApp() {
       participantName: saved?.participantName || keepName,
       participantAvatarUrl:
         saved?.participantAvatarUrl ?? keepAvatar ?? null,
+      resultsUnlocked: false,
+      sessionId: null,
+      unlockOrderNsu: null,
+      result: null,
+      finishedAt: null,
     });
   };
 
@@ -564,6 +589,13 @@ export function IqTestApp() {
     }
     setNameError(null);
     setAvatarError(null);
+    setServerUnlocked(false);
+    setServerAiUnlocked(false);
+    setUnlockVerifyError(null);
+    setUnlockAmountLabel("R$ 1,00");
+    setAiUpsellAmountLabel("R$ 1,00");
+    // Clear any stale completed snapshot for this mode before the official run.
+    clearQuizState(mode);
     const name = raw.trim();
     const avatarUrl = state.participantAvatarUrl ?? null;
     const now = Date.now();
@@ -578,6 +610,11 @@ export function IqTestApp() {
       participantName: name,
       participantAvatarUrl: avatarUrl,
       sessionSeed,
+      sessionId: null,
+      resultsUnlocked: false,
+      unlockOrderNsu: null,
+      result: null,
+      finishedAt: null,
     });
   };
 

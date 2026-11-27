@@ -14,6 +14,7 @@ import {
   putIqUnlockSession,
 } from "../lib/iq-payment/sessionUnlock";
 import {
+  coercePositiveCentavos,
   iqAiUpsellAmountCentavos,
   iqAmountCentavosForItemType,
   iqPaymentSimulateLocal,
@@ -33,6 +34,12 @@ async function main() {
   assert(aiAmount === 100 || aiAmount > 0, `ai amount centavos ${aiAmount}`);
   const label100 = iqUnlockAmountLabel(100);
   assert(/R\$\s*1,00/.test(label100), `label R$1 got ${JSON.stringify(label100)}`);
+  assert(
+    /R\$\s*1,00/.test(iqUnlockAmountLabel(0)),
+    "label coerces 0 centavos → R$1",
+  );
+  assert(coercePositiveCentavos(0, 100) === 100, "coerce 0 → fallback");
+  assert(coercePositiveCentavos(100, 200) === 100, "coerce keeps positive");
   assert(
     iqAmountCentavosForItemType("result") === amount,
     "result amount helper",

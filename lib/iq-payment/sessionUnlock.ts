@@ -7,7 +7,10 @@
  * - aiUnlocked — Gemini profile assistant
  */
 
-import type { IqUnlockItemType } from "@/lib/iq-payment/config";
+import {
+  iqUnlockAmountCentavos,
+  type IqUnlockItemType,
+} from "@/lib/iq-payment/config";
 
 export type { IqUnlockItemType };
 
@@ -476,7 +479,11 @@ export async function saveIqQuizSnapshot(
     itemType: existing?.itemType ?? "result",
     paymentId: existing?.paymentId,
     order_nsu: existing?.order_nsu,
-    amountCentavos: existing?.amountCentavos ?? 0,
+    amountCentavos:
+      typeof existing?.amountCentavos === "number" &&
+      existing.amountCentavos > 0
+        ? existing.amountCentavos
+        : iqUnlockAmountCentavos(),
     status: existing?.status ?? "pending",
     simulated: existing?.simulated,
     paidAt: existing?.paidAt,

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import {
+  coercePositiveCentavos,
   infinitepayApiKey,
   infinitepayHandle,
   iqAmountCentavosForItemType,
@@ -287,6 +288,11 @@ async function resolveStatus(
   aiUnlocked = aiUnlocked || (await isIqSessionAiUnlocked(sessionId));
 
   const amountForFocus = iqAmountCentavosForItemType(focusItem);
+  // Snapshot-only rows often store amountCentavos=0 — never surface R$0,00.
+  const amountCentavos = coercePositiveCentavos(
+    fresh?.amountCentavos,
+    amountForFocus,
+  );
   const freshFocusUnlocked =
     focusItem === "ai_upsell"
       ? aiUnlocked
@@ -303,10 +309,8 @@ async function resolveStatus(
     status: fresh?.status ?? (resultUnlocked || aiUnlocked ? "paid" : "unknown"),
     paymentId: fresh?.paymentId ?? fresh?.order_nsu ?? null,
     order_nsu: fresh?.order_nsu ?? fresh?.paymentId ?? null,
-    amountCentavos: fresh?.amountCentavos ?? amountForFocus,
-    amountLabel: iqUnlockAmountLabel(
-      fresh?.amountCentavos ?? amountForFocus,
-    ),
+    amountCentavos,
+    amountLabel: iqUnlockAmountLabel(amountCentavos),
     resultAmountCentavos: iqAmountCentavosForItemType("result"),
     resultAmountLabel: iqUnlockAmountLabel(
       iqAmountCentavosForItemType("result"),

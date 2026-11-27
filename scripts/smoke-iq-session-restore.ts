@@ -158,6 +158,17 @@ function main() {
   const bare = findResumableQuizState({});
   assert(bare === null, "bare /teste-qi ignores completed results");
 
+  // Mode-select / Start must treat completed as stale (cleared by IqTestApp.selectMode).
+  // Helper contract: requireCompleted=false never returns results/review.
+  assert(
+    findResumableQuizState({ sessionId: sid })?.phase === "results",
+    "exact sessionId still finds completed when asked",
+  );
+  assert(
+    findResumableQuizState({}) === null,
+    "start/bare path ignores completed (no mid-test)",
+  );
+
   // Mid-test on bare URL still resumes.
   const mid = createInitialState("hybrid", 30, "Mid", null, 7);
   const midSid = createIqSessionId();

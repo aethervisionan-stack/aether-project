@@ -70,10 +70,29 @@ export function iqAmountCentavosForItemType(
 }
 
 export function iqUnlockAmountLabel(centavos = iqUnlockAmountCentavos()): string {
-  return (centavos / 100).toLocaleString("pt-BR", {
+  const safe =
+    typeof centavos === "number" && Number.isFinite(centavos) && centavos > 0
+      ? centavos
+      : iqUnlockAmountCentavos();
+  return (safe / 100).toLocaleString("pt-BR", {
     style: "currency",
     currency: "BRL",
   });
+}
+
+/** Prefer a positive stored amount; never treat 0 as a real Pix price. */
+export function coercePositiveCentavos(
+  raw: unknown,
+  fallback: number,
+): number {
+  if (typeof raw === "number" && Number.isFinite(raw) && raw > 0) {
+    return Math.floor(raw);
+  }
+  if (typeof raw === "string" && raw.trim()) {
+    const n = Number.parseInt(raw.trim(), 10);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  return fallback > 0 ? fallback : iqUnlockAmountCentavos();
 }
 
 export function parseIqUnlockItemType(

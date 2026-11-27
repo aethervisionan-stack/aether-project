@@ -68,7 +68,11 @@ export function IqUnlockCard({
   const [canSimApprove, setCanSimApprove] = useState(false);
   const [simBusy, setSimBusy] = useState(false);
   const [includeAi, setIncludeAi] = useState(false);
-  const [resultAmtLabel, setResultAmtLabel] = useState(amountLabel);
+  const [resultAmtLabel, setResultAmtLabel] = useState(() =>
+    amountLabel && !/R\$\s*0([.,]0+)?/.test(amountLabel.trim())
+      ? amountLabel
+      : "R$ 1,00",
+  );
   const [aiAmtLabel, setAiAmtLabel] = useState(aiAmountLabel);
   const [comboAmtLabel, setComboAmtLabel] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -265,7 +269,11 @@ export function IqUnlockCard({
 
   // Keep labels in sync with props when parent updates from status.
   useEffect(() => {
-    setResultAmtLabel(amountLabel);
+    setResultAmtLabel(
+      amountLabel && !/R\$\s*0([.,]0+)?/.test(amountLabel.trim())
+        ? amountLabel
+        : "R$ 1,00",
+    );
   }, [amountLabel]);
   useEffect(() => {
     setAiAmtLabel(aiAmountLabel);
