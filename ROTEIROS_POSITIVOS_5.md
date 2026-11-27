@@ -1,13 +1,13 @@
-# Roteiros Positivos — 5 vídeos curtos (forças → revelação → CTA)
+# Roteiros Positivos — 5 vídeos curtos (forças concretas → revelação → CTA)
 
-**Formato:** carta + música landing · SEM TTS · ~8–15s · 1080×1920  
-**Fluxo:** (1) pontos fortes / identificação → (2) revela o nome do arquétipo → (3) CTA quiz  
-**Proibido:** ferida, ponto cego, custo, sombra, medo  
+**Formato:** carta + música landing · SEM TTS · ~12–16s · 1080×1920  
+**Fluxo:** (1) pontos fortes concretos / dia a dia → (2) revela o nome do arquétipo → (3) CTA quiz  
+**Proibido:** ferida, ponto cego, custo, sombra, medo · genéricos (“você é especial”)  
 **Exceção desta série:** **pode revelar** o nome do arquétipo (nomes oficiais do quiz)  
-**Legenda:** **toda a sequência no TOPO** (punch → forças → revelação → CTA / link da bio) — nada desce para a base  
-**Tipografia:** Cormorant Garamond (TTF do projeto) · ASS Fontsize Punch/Reveal 64 · Hook 58 · CTA 50 · contorno/sombra fortes  
+**Legenda:** **toda a sequência no TOPO** (punch → forças → revelação → CTA / link da bio)  
+**Tipografia:** Cormorant Garamond (TTF do projeto, Regular) · ASS Fontsize Punch/Reveal **68** · Hook **62** · CTA **52** · outline 3.2 / shadow 3.4  
 **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio  
-**Timing (~14s):** Punch 0–2s → forças 2–7s → revelação 7–10s → CTA ~9.5s→fim (sempre topo) · fade ~1.4s  
+**Timing (~14s):** Punch 0–2s → forças 2–7s → revelação 7–10s → CTA ~9.6s→fim (sempre topo) · fade ~1.4s  
 **Saída:** `editado/videos-positivos-5/` (não sobrescreve `videos-carta-musica-30`)
 
 ---
@@ -18,14 +18,14 @@
 **Forças (quiz):** Disciplina, determinação, foco, justiça
 
 ### Tela
-- **Punch:** `Você segura a linha quando outros param.`
-- **Forças:** Você segura a linha quando outros param. / Disciplina. Foco. Coragem prática. / Isso é a sua marca.
+- **Punch:** `Quando o prazo aperta, você não some.`
+- **Forças:** Quando o prazo aperta, você não some. / Fecha a tarefa. Mantém o foco. Divide o que é justo. / Disciplina em ação — não discurso.
 - **Revelação:** `Isso é o arquétipo do Herói.`
 - **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
 ### Roteiro (~14s)
-**[0–2s]** Você segura a linha quando outros param.  
-**[2–7s]** Disciplina. Foco. Coragem prática. Isso é a sua marca.  
+**[0–2s]** Quando o prazo aperta, você não some.  
+**[2–7s]** Fecha a tarefa. Mantém o foco. Divide o que é justo. Disciplina em ação — não discurso.  
 **[7–10s]** Isso é o arquétipo do Herói.  
 **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
@@ -37,14 +37,14 @@
 **Forças (quiz):** Generosidade, compaixão, paciência
 
 ### Tela
-- **Punch:** `Você vê quem precisa — e chega.`
-- **Forças:** Você vê quem precisa — e chega. / Generosidade sem teatro. / Paciência que acolhe de verdade.
+- **Punch:** `Você é quem liga de volta quando o outro desaba.`
+- **Forças:** Você é quem liga de volta quando o outro desaba. / Espera o tempo da pessoa. Divide o que tem. / Paciência de quem realmente cuida.
 - **Revelação:** `Isso é o arquétipo do Cuidador.`
 - **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
 ### Roteiro (~14s)
-**[0–2s]** Você vê quem precisa — e chega.  
-**[2–7s]** Generosidade sem teatro. Paciência que acolhe de verdade.  
+**[0–2s]** Você é quem liga de volta quando o outro desaba.  
+**[2–7s]** Espera o tempo da pessoa. Divide o que tem. Paciência de quem realmente cuida.  
 **[7–10s]** Isso é o arquétipo do Cuidador.  
 **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
@@ -56,14 +56,14 @@
 **Forças (quiz):** Imaginação, originalidade, senso estético
 
 ### Tela
-- **Punch:** `Você enxerga o que ainda não existe.`
-- **Forças:** Você enxerga o que ainda não existe. / Imaginação + originalidade. / Beleza com assinatura sua.
+- **Punch:** `Você muda o layout, o plano, a frase — até ficar seu.`
+- **Forças:** Você muda o layout, o plano, a frase — até ficar seu. / Não copia o óbvio. Inventa o caminho. / Olho fino pro que soa falso.
 - **Revelação:** `Isso é o arquétipo do Criador.`
 - **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
 ### Roteiro (~14s)
-**[0–2s]** Você enxerga o que ainda não existe.  
-**[2–7s]** Imaginação + originalidade. Beleza com assinatura sua.  
+**[0–2s]** Você muda o layout, o plano, a frase — até ficar seu.  
+**[2–7s]** Não copia o óbvio. Inventa o caminho. Olho fino pro que soa falso.  
 **[7–10s]** Isso é o arquétipo do Criador.  
 **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
@@ -75,14 +75,14 @@
 **Forças (quiz):** Pensamento crítico, objetividade, clareza
 
 ### Tela
-- **Punch:** `Você corta o ruído e acha o essencial.`
-- **Forças:** Você corta o ruído e acha o essencial. / Clareza. Objetividade. / Pensamento que ilumina.
+- **Punch:** `Na reunião confusa, você pergunta o que ninguém perguntou.`
+- **Forças:** Na reunião confusa, você pergunta o que ninguém perguntou. / Separa fato de opinião. Corta o ruído. / Clareza antes de decidir.
 - **Revelação:** `Isso é o arquétipo do Sábio.`
 - **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
 ### Roteiro (~14s)
-**[0–2s]** Você corta o ruído e acha o essencial.  
-**[2–7s]** Clareza. Objetividade. Pensamento que ilumina.  
+**[0–2s]** Na reunião confusa, você pergunta o que ninguém perguntou.  
+**[2–7s]** Separa fato de opinião. Corta o ruído. Clareza antes de decidir.  
 **[7–10s]** Isso é o arquétipo do Sábio.  
 **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
@@ -94,14 +94,14 @@
 **Forças (quiz):** Autonomia, curiosidade, adaptabilidade
 
 ### Tela
-- **Punch:** `Você abre caminho onde outros repetem.`
-- **Forças:** Você abre caminho onde outros repetem. / Curiosidade viva. / Liberdade com adaptação rápida.
+- **Punch:** `Mudou o plano? Você já está no caminho B.`
+- **Forças:** Mudou o plano? Você já está no caminho B. / Aprende rápido. Não espera manual. / Curiosidade que move — sozinho se precisar.
 - **Revelação:** `Isso é o arquétipo do Explorador.`
 - **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
 ### Roteiro (~14s)
-**[0–2s]** Você abre caminho onde outros repetem.  
-**[2–7s]** Curiosidade viva. Liberdade com adaptação rápida.  
+**[0–2s]** Mudou o plano? Você já está no caminho B.  
+**[2–7s]** Aprende rápido. Não espera manual. Curiosidade que move — sozinho se precisar.  
 **[7–10s]** Isso é o arquétipo do Explorador.  
 **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
@@ -109,7 +109,8 @@
 
 ## Checklist
 - [x] 5 cartas distintas (artes reais)
-- [x] Pontos fortes mantidos (identificação)
+- [x] Pontos fortes concretos / dia a dia (não genéricos)
+- [x] Alinhados às forças do quiz (`archetypes.ts`)
 - [x] Revela nome oficial do arquétipo depois das forças
 - [x] CTA: se identificou → teste completo / link da bio
 - [x] Sem TTS · carta + música

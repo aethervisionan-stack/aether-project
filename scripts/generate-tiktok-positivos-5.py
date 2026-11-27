@@ -74,11 +74,11 @@ MUSIC_VOLUME = 0.14
 FADE_OUT_SEC = 1.4
 DEFAULT_DURATION = 14.0
 
-# Tipografia display — tamanhos maiores p/ leitura no celular
-HOOK_FONT = 58
-REVEAL_FONT = 64
-CTA_FONT = 50
-PUNCH_FONT = 64
+# Tipografia display — um pouco maior ainda (Regular Cormorant sem fake-bold)
+HOOK_FONT = 62
+REVEAL_FONT = 68
+CTA_FONT = 52
+PUNCH_FONT = 68
 # Toda a sequência (forças → revelação → CTA) fica no TOPO (Alignment 8)
 TOP_MARGIN_V = 150
 MARGIN_LR = 88
@@ -86,11 +86,11 @@ OUTLINE = 3.2
 SHADOW = 3.4
 PUNCH_END_SEC = 1.85
 
-# Serif elegante do projeto (fallback: Georgia Bold do Windows)
-PROJECT_FONT_DIR = REPO_ROOT / "app" / "fonts"
-PROJECT_FONT_FILE = PROJECT_FONT_DIR / "CormorantGaramond-Regular.ttf"
+# Serif elegante do projeto (fontsdir isolado — só Cormorant, sem Karla)
+PROJECT_FONT_FILE = REPO_ROOT / "app" / "fonts" / "CormorantGaramond-Regular.ttf"
 PROJECT_FONT_NAME = "Cormorant Garamond"
 FALLBACK_FONT_NAME = "Georgia"
+# Bold=0: Regular puro (Bold=-1 fazia DirectWrite cair em sans)
 
 # Fallback estático se o MD falhar no parse
 STATIC_SPECS: list[dict[str, object]] = [
@@ -98,11 +98,11 @@ STATIC_SPECS: list[dict[str, object]] = [
         "index": 1,
         "card": "heroi.jpg",
         "slug": "heroi",
-        "punch": "Você segura a linha quando outros param.",
+        "punch": "Quando o prazo aperta, você não some.",
         "lines": (
-            "Você segura a linha quando outros param.",
-            "Disciplina. Foco. Coragem prática.",
-            "Isso é a sua marca.",
+            "Quando o prazo aperta, você não some.",
+            "Fecha a tarefa. Mantém o foco. Divide o que é justo.",
+            "Disciplina em ação — não discurso.",
         ),
         "reveal": "Isso é o arquétipo do Herói.",
     },
@@ -110,11 +110,11 @@ STATIC_SPECS: list[dict[str, object]] = [
         "index": 2,
         "card": "cuidador.jpg",
         "slug": "cuidador",
-        "punch": "Você vê quem precisa — e chega.",
+        "punch": "Você é quem liga de volta quando o outro desaba.",
         "lines": (
-            "Você vê quem precisa — e chega.",
-            "Generosidade sem teatro.",
-            "Paciência que acolhe de verdade.",
+            "Você é quem liga de volta quando o outro desaba.",
+            "Espera o tempo da pessoa. Divide o que tem.",
+            "Paciência de quem realmente cuida.",
         ),
         "reveal": "Isso é o arquétipo do Cuidador.",
     },
@@ -122,11 +122,11 @@ STATIC_SPECS: list[dict[str, object]] = [
         "index": 3,
         "card": "criador.jpg",
         "slug": "criador",
-        "punch": "Você enxerga o que ainda não existe.",
+        "punch": "Você muda o layout, o plano, a frase — até ficar seu.",
         "lines": (
-            "Você enxerga o que ainda não existe.",
-            "Imaginação + originalidade.",
-            "Beleza com assinatura sua.",
+            "Você muda o layout, o plano, a frase — até ficar seu.",
+            "Não copia o óbvio. Inventa o caminho.",
+            "Olho fino pro que soa falso.",
         ),
         "reveal": "Isso é o arquétipo do Criador.",
     },
@@ -134,11 +134,11 @@ STATIC_SPECS: list[dict[str, object]] = [
         "index": 4,
         "card": "sabio.jpg",
         "slug": "sabio",
-        "punch": "Você corta o ruído e acha o essencial.",
+        "punch": "Na reunião confusa, você pergunta o que ninguém perguntou.",
         "lines": (
-            "Você corta o ruído e acha o essencial.",
-            "Clareza. Objetividade.",
-            "Pensamento que ilumina.",
+            "Na reunião confusa, você pergunta o que ninguém perguntou.",
+            "Separa fato de opinião. Corta o ruído.",
+            "Clareza antes de decidir.",
         ),
         "reveal": "Isso é o arquétipo do Sábio.",
     },
@@ -146,11 +146,11 @@ STATIC_SPECS: list[dict[str, object]] = [
         "index": 5,
         "card": "explorador.jpg",
         "slug": "explorador",
-        "punch": "Você abre caminho onde outros repetem.",
+        "punch": "Mudou o plano? Você já está no caminho B.",
         "lines": (
-            "Você abre caminho onde outros repetem.",
-            "Curiosidade viva.",
-            "Liberdade com adaptação rápida.",
+            "Mudou o plano? Você já está no caminho B.",
+            "Aprende rápido. Não espera manual.",
+            "Curiosidade que move — sozinho se precisar.",
         ),
         "reveal": "Isso é o arquétipo do Explorador.",
     },
@@ -182,13 +182,20 @@ def ass_escape(text: str) -> str:
     )
 
 
-def pick_positivo_font() -> tuple[str, Path | None]:
+def pick_positivo_font(*, work_root: Path | None = None) -> tuple[str, Path | None]:
     """
     Prefere Cormorant Garamond (TTF do projeto — serif medieval-elegante).
+    Copia para um fontsdir isolado (só esse TTF) p/ libass não preferir Karla.
     Retorna (nome ASS, fontsdir ou None). Fallback: Georgia (Windows).
     """
     if PROJECT_FONT_FILE.is_file():
-        return PROJECT_FONT_NAME, PROJECT_FONT_DIR
+        root = work_root or (TEMP_ROOT / "positivos-5")
+        iso = root / "fonts-cormorant"
+        iso.mkdir(parents=True, exist_ok=True)
+        dest = iso / PROJECT_FONT_FILE.name
+        if not dest.is_file() or dest.stat().st_size != PROJECT_FONT_FILE.stat().st_size:
+            dest.write_bytes(PROJECT_FONT_FILE.read_bytes())
+        return PROJECT_FONT_NAME, iso
     windir = Path(__import__("os").environ.get("WINDIR", r"C:\Windows"))
     if (windir / "Fonts" / "georgiab.ttf").is_file():
         return FALLBACK_FONT_NAME, None
@@ -334,10 +341,10 @@ YCbCr Matrix: TV.709
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Punch,{font},{PUNCH_FONT},{pipe.rgb_to_ass(hook_fill)},{pipe.rgb_to_ass(accent_rgb)},{stroke},{shadow},-1,0,0,0,100,100,0.4,0,1,{OUTLINE},{SHADOW},8,{MARGIN_LR},{MARGIN_LR},{TOP_MARGIN_V},1
-Style: Hook,{font},{HOOK_FONT},{pipe.rgb_to_ass(hook_fill)},{pipe.rgb_to_ass(accent_rgb)},{stroke},{shadow},-1,0,0,0,100,100,0.45,0,1,{OUTLINE},{SHADOW},8,{MARGIN_LR},{MARGIN_LR},{TOP_MARGIN_V},1
-Style: Reveal,{font},{REVEAL_FONT},{pipe.rgb_to_ass(reveal_fill)},{pipe.rgb_to_ass(accent_rgb)},{stroke},{shadow},-1,0,0,0,100,100,0.5,0,1,{OUTLINE},{SHADOW},8,{MARGIN_LR},{MARGIN_LR},{TOP_MARGIN_V},1
-Style: CTA,{font},{CTA_FONT},{pipe.rgb_to_ass(cta_fill)},{pipe.rgb_to_ass(accent_rgb)},{stroke},{shadow},-1,0,0,0,100,100,0.55,0,1,{OUTLINE},{SHADOW},8,{MARGIN_LR},{MARGIN_LR},{TOP_MARGIN_V},1
+Style: Punch,{font},{PUNCH_FONT},{pipe.rgb_to_ass(hook_fill)},{pipe.rgb_to_ass(accent_rgb)},{stroke},{shadow},0,0,0,0,100,100,0.6,0,1,{OUTLINE},{SHADOW},8,{MARGIN_LR},{MARGIN_LR},{TOP_MARGIN_V},1
+Style: Hook,{font},{HOOK_FONT},{pipe.rgb_to_ass(hook_fill)},{pipe.rgb_to_ass(accent_rgb)},{stroke},{shadow},0,0,0,0,100,100,0.65,0,1,{OUTLINE},{SHADOW},8,{MARGIN_LR},{MARGIN_LR},{TOP_MARGIN_V},1
+Style: Reveal,{font},{REVEAL_FONT},{pipe.rgb_to_ass(reveal_fill)},{pipe.rgb_to_ass(accent_rgb)},{stroke},{shadow},0,0,0,0,100,100,0.7,0,1,{OUTLINE},{SHADOW},8,{MARGIN_LR},{MARGIN_LR},{TOP_MARGIN_V},1
+Style: CTA,{font},{CTA_FONT},{pipe.rgb_to_ass(cta_fill)},{pipe.rgb_to_ass(accent_rgb)},{stroke},{shadow},0,0,0,0,100,100,0.75,0,1,{OUTLINE},{SHADOW},8,{MARGIN_LR},{MARGIN_LR},{TOP_MARGIN_V},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -393,7 +400,7 @@ def render_one(
     work = work_root / spec.label
     work.mkdir(parents=True, exist_ok=True)
     ass_path = work / f"{spec.label}.ass"
-    font_name, fonts_dir = pick_positivo_font()
+    font_name, fonts_dir = pick_positivo_font(work_root=work_root)
     write_positivo_ass(
         ass_path,
         spec=spec,
