@@ -9,8 +9,8 @@
 **Tipografia:** Cormorant Garamond · Punch/Reveal **68** · Hook **62** · CTA **52** · outline 3.2 / shadow 3.4  
 **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio  
 **Timing (~14s):** Punch 0–2s → forças 2–7s → revelação 7–10s → CTA ~9.6s→fim  
-**Fonte:** `src/data/cartas36.ts` + `CARTAS_36_ARQUETIPOS.md` + mapa 3 situações/arquétipo  
-**Ângulo:** cada V1/V2/V3 = situação/carta 01–36, copy no **estilo positivo** (forças na situação)  
+**Fonte:** 36 situações exatas do usuário (`internal/roteiros-36-situacoes-usuario.md`) — copy estilo positivos  
+**Ângulo:** cada V1/V2/V3 = 1 situação do usuário, condensada pra tela (forças na cena)  
 **Saída:** `editado/videos-36-positivos-12dias/` · `Dia01-Inocente-V1.mp4` … `Dia12-Governante-V3.mp4`  
 **Pipeline:** `scripts/generate-tiktok-positivos-36.py` (base: `generate-tiktok-positivos-5.py`)
 
@@ -19,7 +19,7 @@
 | Dia | Arquétipo | Cartas | Arquivos |
 |-----|-----------|--------|----------|
 | 01 | Inocente | 01–03 | `Dia01-Inocente-V1`…`V3` |
-| 02 | Órfão | 04–06 | `Dia02-Orfao-V1`…`V3` |
+| 02 | Órfão / Cara Comum | 04–06 | `Dia02-Orfao-V1`…`V3` |
 | 03 | Herói | 07–09 | `Dia03-Heroi-V1`…`V3` |
 | 04 | Cuidador | 10–12 | `Dia04-Cuidador-V1`…`V3` |
 | 05 | Explorador | 13–15 | `Dia05-Explorador-V1`…`V3` |
@@ -41,14 +41,14 @@
 **Forças (quiz):** Leveza, esperança, fé, recomeçar
 
 ### Tela
-- **Punch:** `No meio da indireta, você pergunta limpo.`
-- **Forças:** No meio da indireta, você pergunta limpo. / Sem maldade. Sem ironia. / E o clima pesado cai.
+- **Punch:** `No meio da treta, você pergunta limpo.`
+- **Forças:** No meio da treta, você pergunta limpo. / Sem maldade. Sem indireta. / E o clima pesado desmonta.
 - **Revelação:** `Isso é o arquétipo do Inocente.`
 - **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
 ### Roteiro (~14s)
-**[0–2s]** No meio da indireta, você pergunta limpo.  
-**[2–7s]** Sem maldade. Sem ironia. E o clima pesado cai.  
+**[0–2s]** No meio da treta, você pergunta limpo.  
+**[2–7s]** Sem maldade. Sem indireta. E o clima pesado desmonta.  
 **[7–10s]** Isso é o arquétipo do Inocente.  
 **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
@@ -62,14 +62,14 @@
 **Forças (quiz):** Leveza, esperança, fé, recomeçar
 
 ### Tela
-- **Punch:** `Todo mundo desistiu. Você levanta.`
-- **Forças:** Todo mundo desistiu. Você levanta. / Acredita de verdade que dá pra recomeçar. / E puxa os outros junto.
+- **Punch:** `Grupo desacreditado. Você levanta.`
+- **Forças:** Grupo desacreditado. Você levanta. / Cabeça erguida. / Acredita de verdade que dá pra recomeçar do zero.
 - **Revelação:** `Isso é o arquétipo do Inocente.`
 - **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
 ### Roteiro (~14s)
-**[0–2s]** Todo mundo desistiu. Você levanta.  
-**[2–7s]** Acredita de verdade que dá pra recomeçar. E puxa os outros junto.  
+**[0–2s]** Grupo desacreditado. Você levanta.  
+**[2–7s]** Cabeça erguida. Acredita de verdade que dá pra recomeçar do zero.  
 **[7–10s]** Isso é o arquétipo do Inocente.  
 **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
@@ -83,14 +83,14 @@
 **Forças (quiz):** Leveza, esperança, fé, recomeçar
 
 ### Tela
-- **Punch:** `Você não joga com segunda intenção.`
-- **Forças:** Você não joga com segunda intenção. / Mãos à vista. Papo reto. / A sala baixa a guarda.
+- **Punch:** `Você é transparente. Sem segunda intenção.`
+- **Forças:** Você é transparente. Sem segunda intenção. / Sem segredo escondido. / O ambiente baixa a guarda.
 - **Revelação:** `Isso é o arquétipo do Inocente.`
 - **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
 ### Roteiro (~14s)
-**[0–2s]** Você não joga com segunda intenção.  
-**[2–7s]** Mãos à vista. Papo reto. A sala baixa a guarda.  
+**[0–2s]** Você é transparente. Sem segunda intenção.  
+**[2–7s]** Sem segredo escondido. O ambiente baixa a guarda.  
 **[7–10s]** Isso é o arquétipo do Inocente.  
 **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
@@ -100,18 +100,18 @@
 
 **Dia / arquivo:** Dia02 · `Dia02-Orfao-V1.mp4`  
 **Carta:** 04 · Situação 1/3 — *Quando alguém chega se achando demais*  
-**Nome na tela:** O Órfão  
+**Nome na tela:** O Órfão / Cara Comum  
 **Forças (quiz):** Empatia, autenticidade, pragmatismo, vínculo
 
 ### Tela
 - **Punch:** `Enquanto outros se acham, você fala o óbvio.`
-- **Forças:** Enquanto outros se acham, você fala o óbvio. / Simples. Sem pose. / E a sala ri de alívio.
+- **Forças:** Enquanto outros se acham, você fala o óbvio. / Simples. Sem falar difícil. / Todo mundo ri e relaxa.
 - **Revelação:** `Isso é o arquétipo do Órfão.`
 - **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
 ### Roteiro (~14s)
 **[0–2s]** Enquanto outros se acham, você fala o óbvio.  
-**[2–7s]** Simples. Sem pose. E a sala ri de alívio.  
+**[2–7s]** Simples. Sem falar difícil. Todo mundo ri e relaxa.  
 **[7–10s]** Isso é o arquétipo do Órfão.  
 **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
@@ -121,18 +121,18 @@
 
 **Dia / arquivo:** Dia02 · `Dia02-Orfao-V2.mp4`  
 **Carta:** 05 · Situação 2/3 — *Na hora de quebrar o gelo com gente nova*  
-**Nome na tela:** O Órfão  
+**Nome na tela:** O Órfão / Cara Comum  
 **Forças (quiz):** Empatia, autenticidade, pragmatismo, vínculo
 
 ### Tela
 - **Punch:** `Você puxa papo de igual pra igual.`
-- **Forças:** Você puxa papo de igual pra igual. / Sem hierarquia. Sem teatro. / Em minutos o grupo se liga.
+- **Forças:** Você puxa papo de igual pra igual. / Sem pose. / Em poucos minutos o grupo se conecta.
 - **Revelação:** `Isso é o arquétipo do Órfão.`
 - **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
 ### Roteiro (~14s)
 **[0–2s]** Você puxa papo de igual pra igual.  
-**[2–7s]** Sem hierarquia. Sem teatro. Em minutos o grupo se liga.  
+**[2–7s]** Sem pose. Em poucos minutos o grupo se conecta.  
 **[7–10s]** Isso é o arquétipo do Órfão.  
 **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
@@ -142,18 +142,18 @@
 
 **Dia / arquivo:** Dia02 · `Dia02-Orfao-V3.mp4`  
 **Carta:** 06 · Situação 3/3 — *Quando o plano bonito falha na prática*  
-**Nome na tela:** O Órfão  
+**Nome na tela:** O Órfão / Cara Comum  
 **Forças (quiz):** Empatia, autenticidade, pragmatismo, vínculo
 
 ### Tela
 - **Punch:** `O plano bonito falhou. Você já sabia o jeito simples.`
-- **Forças:** O plano bonito falhou. Você já sabia o jeito simples. / Pé no chão. Resolve o que tá na frente. / Sem defender discurso.
+- **Forças:** O plano bonito falhou. Você já sabia o jeito simples. / Pé no chão. / Resolve o que tá na frente.
 - **Revelação:** `Isso é o arquétipo do Órfão.`
 - **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
 ### Roteiro (~14s)
 **[0–2s]** O plano bonito falhou. Você já sabia o jeito simples.  
-**[2–7s]** Pé no chão. Resolve o que tá na frente. Sem defender discurso.  
+**[2–7s]** Pé no chão. Resolve o que tá na frente.  
 **[7–10s]** Isso é o arquétipo do Órfão.  
 **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
@@ -168,13 +168,13 @@
 
 ### Tela
 - **Punch:** `Todo mundo travou. Você dá o passo.`
-- **Forças:** Todo mundo travou. Você dá o passo. / Encara a bronca de peito aberto. / Transforma intenção em ação.
+- **Forças:** Todo mundo travou. Você dá o passo. / Encara a bronca de peito aberto. / Assume o risco.
 - **Revelação:** `Isso é o arquétipo do Herói.`
 - **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
 ### Roteiro (~14s)
 **[0–2s]** Todo mundo travou. Você dá o passo.  
-**[2–7s]** Encara a bronca de peito aberto. Transforma intenção em ação.  
+**[2–7s]** Encara a bronca de peito aberto. Assume o risco.  
 **[7–10s]** Isso é o arquétipo do Herói.  
 **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
@@ -188,14 +188,14 @@
 **Forças (quiz):** Disciplina, determinação, foco, justiça
 
 ### Tela
-- **Punch:** `Corda no pescoço? Você não solta.`
-- **Forças:** Corda no pescoço? Você não solta. / Mantém a firmeza. / Empurra até o fim.
+- **Punch:** `Corda no pescoço. Você mantém a firmeza.`
+- **Forças:** Corda no pescoço. Você mantém a firmeza. / Relógio correndo. / Empurra a execução até o fim.
 - **Revelação:** `Isso é o arquétipo do Herói.`
 - **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
 ### Roteiro (~14s)
-**[0–2s]** Corda no pescoço? Você não solta.  
-**[2–7s]** Mantém a firmeza. Empurra até o fim.  
+**[0–2s]** Corda no pescoço. Você mantém a firmeza.  
+**[2–7s]** Relógio correndo. Empurra a execução até o fim.  
 **[7–10s]** Isso é o arquétipo do Herói.  
 **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
@@ -209,14 +209,14 @@
 **Forças (quiz):** Disciplina, determinação, foco, justiça
 
 ### Tela
-- **Punch:** `Obstáculo na frente? Você entra.`
-- **Forças:** Obstáculo na frente? Você entra. / Não orbitar o medo. / Resolve na raça.
+- **Punch:** `Obstáculo que ninguém quer. Você entra.`
+- **Forças:** Obstáculo que ninguém quer. Você entra. / Confronto direto. / Resolve na raça e na coragem.
 - **Revelação:** `Isso é o arquétipo do Herói.`
 - **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
 ### Roteiro (~14s)
-**[0–2s]** Obstáculo na frente? Você entra.  
-**[2–7s]** Não orbitar o medo. Resolve na raça.  
+**[0–2s]** Obstáculo que ninguém quer. Você entra.  
+**[2–7s]** Confronto direto. Resolve na raça e na coragem.  
 **[7–10s]** Isso é o arquétipo do Herói.  
 **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
@@ -231,13 +231,13 @@
 
 ### Tela
 - **Punch:** `Alguém desabou? Você chega perto.`
-- **Forças:** Alguém desabou? Você chega perto. / Escuta de verdade. / Ajuda a resolver o que pesa.
+- **Forças:** Alguém desabou? Você chega perto. / Escuta de verdade. / Ajuda a resolver o que tá pesando.
 - **Revelação:** `Isso é o arquétipo do Cuidador.`
 - **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
 ### Roteiro (~14s)
 **[0–2s]** Alguém desabou? Você chega perto.  
-**[2–7s]** Escuta de verdade. Ajuda a resolver o que pesa.  
+**[2–7s]** Escuta de verdade. Ajuda a resolver o que tá pesando.  
 **[7–10s]** Isso é o arquétipo do Cuidador.  
 **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
@@ -251,14 +251,14 @@
 **Forças (quiz):** Generosidade, compaixão, paciência
 
 ### Tela
-- **Punch:** `Grupo rachado? Você segura a união.`
-- **Forças:** Grupo rachado? Você segura a união. / Acalma os ânimos. / Não deixa ninguém virar inimigo.
+- **Punch:** `Grupo rachado? Você acalma os ânimos.`
+- **Forças:** Grupo rachado? Você acalma os ânimos. / Presença acolhedora. / Segura a união.
 - **Revelação:** `Isso é o arquétipo do Cuidador.`
 - **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
 ### Roteiro (~14s)
-**[0–2s]** Grupo rachado? Você segura a união.  
-**[2–7s]** Acalma os ânimos. Não deixa ninguém virar inimigo.  
+**[0–2s]** Grupo rachado? Você acalma os ânimos.  
+**[2–7s]** Presença acolhedora. Segura a união.  
 **[7–10s]** Isso é o arquétipo do Cuidador.  
 **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
@@ -294,13 +294,13 @@
 
 ### Tela
 - **Punch:** `Ambiente fechado? Você aponta outra porta.`
-- **Forças:** Ambiente fechado? Você aponta outra porta. / Sai da caixa. / Abre caminho novo.
+- **Forças:** Ambiente fechado? Você aponta outra porta. / Sai da rotina. / Abre um caminho novo.
 - **Revelação:** `Isso é o arquétipo do Explorador.`
 - **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
 ### Roteiro (~14s)
 **[0–2s]** Ambiente fechado? Você aponta outra porta.  
-**[2–7s]** Sai da caixa. Abre caminho novo.  
+**[2–7s]** Sai da rotina. Abre um caminho novo.  
 **[7–10s]** Isso é o arquétipo do Explorador.  
 **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
@@ -314,14 +314,14 @@
 **Forças (quiz):** Autonomia, curiosidade, adaptabilidade
 
 ### Tela
-- **Punch:** `Desconhecido assusta os outros. Você testa.`
-- **Forças:** Desconhecido assusta os outros. Você testa. / Avança com curiosidade. / Não espera mapa pronto.
+- **Punch:** `Desconhecido assusta os outros. Você avança.`
+- **Forças:** Desconhecido assusta os outros. Você avança. / Com curiosidade. / Testa o terreno sem medo.
 - **Revelação:** `Isso é o arquétipo do Explorador.`
 - **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
 ### Roteiro (~14s)
-**[0–2s]** Desconhecido assusta os outros. Você testa.  
-**[2–7s]** Avança com curiosidade. Não espera mapa pronto.  
+**[0–2s]** Desconhecido assusta os outros. Você avança.  
+**[2–7s]** Com curiosidade. Testa o terreno sem medo.  
 **[7–10s]** Isso é o arquétipo do Explorador.  
 **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
@@ -336,13 +336,13 @@
 
 ### Tela
 - **Punch:** `Plano antigo emperrou. Você já vê outra rota.`
-- **Forças:** Plano antigo emperrou. Você já vê outra rota. / Fora da caixa. / Liberdade prática.
+- **Forças:** Plano antigo emperrou. Você já vê outra rota. / Fora da caixa. / Novos horizontes.
 - **Revelação:** `Isso é o arquétipo do Explorador.`
 - **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
 ### Roteiro (~14s)
 **[0–2s]** Plano antigo emperrou. Você já vê outra rota.  
-**[2–7s]** Fora da caixa. Liberdade prática.  
+**[2–7s]** Fora da caixa. Novos horizontes.  
 **[7–10s]** Isso é o arquétipo do Explorador.  
 **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
@@ -377,14 +377,14 @@
 **Forças (quiz):** Ruptura, autenticidade, visão crítica
 
 ### Tela
-- **Punch:** `Ambiente morno? Você sacode.`
-- **Forças:** Ambiente morno? Você sacode. / Sem filtro. / Força mudança real.
+- **Punch:** `Ambiente acomodado? Você sacode.`
+- **Forças:** Ambiente acomodado? Você sacode. / Sem filtro. / Provoca mudança real.
 - **Revelação:** `Isso é o arquétipo do Rebelde.`
 - **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
 ### Roteiro (~14s)
-**[0–2s]** Ambiente morno? Você sacode.  
-**[2–7s]** Sem filtro. Força mudança real.  
+**[0–2s]** Ambiente acomodado? Você sacode.  
+**[2–7s]** Sem filtro. Provoca mudança real.  
 **[7–10s]** Isso é o arquétipo do Rebelde.  
 **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
@@ -419,14 +419,14 @@
 **Forças (quiz):** Sensibilidade, paixão, intimidade, beleza
 
 ### Tela
-- **Punch:** `Clima frio? Você coloca alma.`
-- **Forças:** Clima frio? Você coloca alma. / Atenção de verdade. / Muda a energia da sala.
+- **Punch:** `Clima frio e mecânico? Você coloca alma.`
+- **Forças:** Clima frio e mecânico? Você coloca alma. / Atenção e presença real. / Muda a energia da sala.
 - **Revelação:** `Isso é o arquétipo do Amante.`
 - **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
 ### Roteiro (~14s)
-**[0–2s]** Clima frio? Você coloca alma.  
-**[2–7s]** Atenção de verdade. Muda a energia da sala.  
+**[0–2s]** Clima frio e mecânico? Você coloca alma.  
+**[2–7s]** Atenção e presença real. Muda a energia da sala.  
 **[7–10s]** Isso é o arquétipo do Amante.  
 **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
@@ -441,13 +441,13 @@
 
 ### Tela
 - **Punch:** `Você não faz de qualquer jeito.`
-- **Forças:** Você não faz de qualquer jeito. / Capricho. Entrega. / Todo mundo sente a diferença.
+- **Forças:** Você não faz de qualquer jeito. / Capricho e entrega. / Todo mundo sente a diferença.
 - **Revelação:** `Isso é o arquétipo do Amante.`
 - **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
 ### Roteiro (~14s)
 **[0–2s]** Você não faz de qualquer jeito.  
-**[2–7s]** Capricho. Entrega. Todo mundo sente a diferença.  
+**[2–7s]** Capricho e entrega. Todo mundo sente a diferença.  
 **[7–10s]** Isso é o arquétipo do Amante.  
 **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
@@ -462,13 +462,13 @@
 
 ### Tela
 - **Punch:** `Conversa travada? Você abre com calor.`
-- **Forças:** Conversa travada? Você abre com calor. / Sinceridade sem armadura. / Gera conexão real.
+- **Forças:** Conversa travada? Você abre com calor. / Sinceridade. / Espaço pra conexão verdadeira.
 - **Revelação:** `Isso é o arquétipo do Amante.`
 - **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
 ### Roteiro (~14s)
 **[0–2s]** Conversa travada? Você abre com calor.  
-**[2–7s]** Sinceridade sem armadura. Gera conexão real.  
+**[2–7s]** Sinceridade. Espaço pra conexão verdadeira.  
 **[7–10s]** Isso é o arquétipo do Amante.  
 **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
@@ -483,13 +483,13 @@
 
 ### Tela
 - **Punch:** `Folha em branco? Você tira ideia do zero.`
-- **Forças:** Folha em branco? Você tira ideia do zero. / Dá forma ao vago. / Com a sua cara.
+- **Forças:** Folha em branco? Você tira ideia do zero. / Ideia original. / Dá forma ao que parecia vago.
 - **Revelação:** `Isso é o arquétipo do Criador.`
 - **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
 ### Roteiro (~14s)
 **[0–2s]** Folha em branco? Você tira ideia do zero.  
-**[2–7s]** Dá forma ao vago. Com a sua cara.  
+**[2–7s]** Ideia original. Dá forma ao que parecia vago.  
 **[7–10s]** Isso é o arquétipo do Criador.  
 **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
@@ -503,14 +503,14 @@
 **Forças (quiz):** Imaginação, originalidade, senso estético
 
 ### Tela
-- **Punch:** `Projeto sem identidade? Você dá rosto.`
-- **Forças:** Projeto sem identidade? Você dá rosto. / Junta as peças. / Originalidade que cola.
+- **Punch:** `Projeto sem identidade? Você dá cara própria.`
+- **Forças:** Projeto sem identidade? Você dá cara própria. / Junta as peças soltas. / Originalidade e direção.
 - **Revelação:** `Isso é o arquétipo do Criador.`
 - **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
 ### Roteiro (~14s)
-**[0–2s]** Projeto sem identidade? Você dá rosto.  
-**[2–7s]** Junta as peças. Originalidade que cola.  
+**[0–2s]** Projeto sem identidade? Você dá cara própria.  
+**[2–7s]** Junta as peças soltas. Originalidade e direção.  
 **[7–10s]** Isso é o arquétipo do Criador.  
 **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
@@ -525,13 +525,13 @@
 
 ### Tela
 - **Punch:** `Faltou recurso? Você inventa o jeito.`
-- **Forças:** Faltou recurso? Você inventa o jeito. / Improvisa sem perder a visão. / Faz o inviável virar obra.
+- **Forças:** Faltou recurso? Você inventa o jeito. / Improvisa. / Constrói o que parecia inviável.
 - **Revelação:** `Isso é o arquétipo do Criador.`
 - **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
 ### Roteiro (~14s)
 **[0–2s]** Faltou recurso? Você inventa o jeito.  
-**[2–7s]** Improvisa sem perder a visão. Faz o inviável virar obra.  
+**[2–7s]** Improvisa. Constrói o que parecia inviável.  
 **[7–10s]** Isso é o arquétipo do Criador.  
 **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
@@ -566,14 +566,14 @@
 **Forças (quiz):** Humor, sagacidade, leveza, timing
 
 ### Tela
-- **Punch:** `Drama demais? Você corta o exagero.`
-- **Forças:** Drama demais? Você corta o exagero. / Tirada esperta. / Sem perder a graça.
+- **Punch:** `Sério demais na bobagem? Você corta.`
+- **Forças:** Sério demais na bobagem? Você corta. / Tirada esperta. / Expõe o exagero sem perder a graça.
 - **Revelação:** `Isso é o arquétipo do Bobo da Corte.`
 - **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
 ### Roteiro (~14s)
-**[0–2s]** Drama demais? Você corta o exagero.  
-**[2–7s]** Tirada esperta. Sem perder a graça.  
+**[0–2s]** Sério demais na bobagem? Você corta.  
+**[2–7s]** Tirada esperta. Expõe o exagero sem perder a graça.  
 **[7–10s]** Isso é o arquétipo do Bobo da Corte.  
 **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
@@ -588,13 +588,13 @@
 
 ### Tela
 - **Punch:** `Conversa morreu? Você reacende.`
-- **Forças:** Conversa morreu? Você reacende. / Timing. Humor. / Atenção de volta.
+- **Forças:** Conversa morreu? Você reacende. / Jogo de cintura. Humor rápido. / Atenção de volta.
 - **Revelação:** `Isso é o arquétipo do Bobo da Corte.`
 - **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
 ### Roteiro (~14s)
 **[0–2s]** Conversa morreu? Você reacende.  
-**[2–7s]** Timing. Humor. Atenção de volta.  
+**[2–7s]** Jogo de cintura. Humor rápido. Atenção de volta.  
 **[7–10s]** Isso é o arquétipo do Bobo da Corte.  
 **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
@@ -629,14 +629,14 @@
 **Forças (quiz):** Pensamento crítico, objetividade, clareza
 
 ### Tela
-- **Punch:** `Antes do salto, você lê o risco.`
-- **Forças:** Antes do salto, você lê o risco. / Cabeça fria. / Aponta o detalhe que ninguém viu.
+- **Punch:** `Antes da decisão, você lê frio.`
+- **Forças:** Antes da decisão, você lê frio. / Leitura lúcida. / Aponta o detalhe que ninguém enxergou.
 - **Revelação:** `Isso é o arquétipo do Sábio.`
 - **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
 ### Roteiro (~14s)
-**[0–2s]** Antes do salto, você lê o risco.  
-**[2–7s]** Cabeça fria. Aponta o detalhe que ninguém viu.  
+**[0–2s]** Antes da decisão, você lê frio.  
+**[2–7s]** Leitura lúcida. Aponta o detalhe que ninguém enxergou.  
 **[7–10s]** Isso é o arquétipo do Sábio.  
 **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
@@ -651,13 +651,13 @@
 
 ### Tela
 - **Punch:** `Nó sem fim? Você organiza o cenário.`
-- **Forças:** Nó sem fim? Você organiza o cenário. / Sem drama. / Mostra o caminho lógico.
+- **Forças:** Nó sem fim? Você organiza o cenário. / Clareza no meio do barulho. / Mostra o caminho lógico.
 - **Revelação:** `Isso é o arquétipo do Sábio.`
 - **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
 ### Roteiro (~14s)
 **[0–2s]** Nó sem fim? Você organiza o cenário.  
-**[2–7s]** Sem drama. Mostra o caminho lógico.  
+**[2–7s]** Clareza no meio do barulho. Mostra o caminho lógico.  
 **[7–10s]** Isso é o arquétipo do Sábio.  
 **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
@@ -672,13 +672,13 @@
 
 ### Tela
 - **Punch:** `Jogo virado contra? Você enxerga a brecha.`
-- **Forças:** Jogo virado contra? Você enxerga a brecha. / Vira o rumo. / No momento certo.
+- **Forças:** Jogo virado contra? Você enxerga a brecha. / Muda o rumo. / Virada no momento certo.
 - **Revelação:** `Isso é o arquétipo do Mago.`
 - **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
 ### Roteiro (~14s)
 **[0–2s]** Jogo virado contra? Você enxerga a brecha.  
-**[2–7s]** Vira o rumo. No momento certo.  
+**[2–7s]** Muda o rumo. Virada no momento certo.  
 **[7–10s]** Isso é o arquétipo do Mago.  
 **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
@@ -692,14 +692,14 @@
 **Forças (quiz):** Transformação, síntese, oportunidade
 
 ### Tela
-- **Punch:** `Crise profunda? Você transforma em movimento.`
-- **Forças:** Crise profunda? Você transforma em movimento. / Tensão vira oportunidade. / Ambiente muda de marcha.
+- **Punch:** `Crise profunda? Você transforma a tensão.`
+- **Forças:** Crise profunda? Você transforma a tensão. / Vira oportunidade. / O ambiente muda de marcha.
 - **Revelação:** `Isso é o arquétipo do Mago.`
 - **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
 ### Roteiro (~14s)
-**[0–2s]** Crise profunda? Você transforma em movimento.  
-**[2–7s]** Tensão vira oportunidade. Ambiente muda de marcha.  
+**[0–2s]** Crise profunda? Você transforma a tensão.  
+**[2–7s]** Vira oportunidade. O ambiente muda de marcha.  
 **[7–10s]** Isso é o arquétipo do Mago.  
 **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
@@ -735,13 +735,13 @@
 
 ### Tela
 - **Punch:** `Bagunça sem comando? Você assume o leme.`
-- **Forças:** Bagunça sem comando? Você assume o leme. / Organiza prioridades. / Coloca ordem.
+- **Forças:** Bagunça sem comando? Você assume o leme. / Organiza as prioridades. / Coloca ordem.
 - **Revelação:** `Isso é o arquétipo do Governante.`
 - **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
 ### Roteiro (~14s)
 **[0–2s]** Bagunça sem comando? Você assume o leme.  
-**[2–7s]** Organiza prioridades. Coloca ordem.  
+**[2–7s]** Organiza as prioridades. Coloca ordem.  
 **[7–10s]** Isso é o arquétipo do Governante.  
 **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
@@ -756,13 +756,13 @@
 
 ### Tela
 - **Punch:** `Projeto precisa de alguém até o fim. Você fica.`
-- **Forças:** Projeto precisa de alguém até o fim. Você fica. / Compromisso. / Mantém a estrutura de pé.
+- **Forças:** Projeto precisa de alguém até o fim. Você fica. / Comando e compromisso. / Mantém a estrutura de pé.
 - **Revelação:** `Isso é o arquétipo do Governante.`
 - **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
 ### Roteiro (~14s)
 **[0–2s]** Projeto precisa de alguém até o fim. Você fica.  
-**[2–7s]** Compromisso. Mantém a estrutura de pé.  
+**[2–7s]** Comando e compromisso. Mantém a estrutura de pé.  
 **[7–10s]** Isso é o arquétipo do Governante.  
 **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
@@ -777,22 +777,23 @@
 
 ### Tela
 - **Punch:** `Disputa e desordem? Você define o rumo.`
-- **Forças:** Disputa e desordem? Você define o rumo. / Autoridade justa. / Sem grito desnecessário.
+- **Forças:** Disputa e desordem? Você define o rumo. / Autoridade tranquila e justa. / Acalma o grupo.
 - **Revelação:** `Isso é o arquétipo do Governante.`
 - **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
 ### Roteiro (~14s)
 **[0–2s]** Disputa e desordem? Você define o rumo.  
-**[2–7s]** Autoridade justa. Sem grito desnecessário.  
+**[2–7s]** Autoridade tranquila e justa. Acalma o grupo.  
 **[7–10s]** Isso é o arquétipo do Governante.  
 **CTA:** Se você se identificou mesmo um pouco — faça o teste completo e confirme o arquétipo · link da bio
 
 ---
 
 ## Checklist
-- [x] 36 roteiros = 12 arquétipos × 3 situações/cartas
-- [x] Linguagem comum / dia a dia · forças concretas
+- [x] 36 roteiros = 12 arquétipos × 3 situações exatas do usuário
+- [x] Linguagem comum / dia a dia · forças concretas na cena
 - [x] Estilo alinhado à amostra positivos-5 / `amostra-estilo-anterior.mp4`
 - [x] Revela nome → CTA teste completo · link da bio
 - [x] Cormorant · tudo no topo · sem TTS
 - [x] Nomes de saída Dia01…Dia12 · V1–V3
+- [x] Sem tom de ferida · sem situações inventadas
