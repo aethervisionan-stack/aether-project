@@ -1,9 +1,22 @@
 # Aether Vision — Live modular stack
 
-Monorepo root keeps the existing Next.js landing. This document covers the **Gemini Live** scaffold:
+Monorepo root keeps the existing Next.js landing. This document covers the **Gemini Live** scaffold.
+
+## Chama — social prototype
+
+Local full-stack social app (créditos, VIP dual, verificação facial simulada):
+
+```bash
+cd social-app
+npm install
+npm run dev
+```
+
+Open **http://localhost:3001** — details in [`social-app/README.md`](social-app/README.md).
 
 | Path | Role |
 | --- | --- |
+| `social-app/` | Next.js App Router social prototype (JSON persistence) |
 | `backend/` | FastAPI + official `google-genai` Live session |
 | `client/` | Vite 6 + TypeScript Vanilla (PCM mic / playback + telemetry) |
 

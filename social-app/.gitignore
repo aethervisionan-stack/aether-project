@@ -1,0 +1,9 @@
+node_modules
+.next
+out
+.data
+data/db.json
+*.log
+.DS_Store
+.env*.local
+tsconfig.tsbuildinfo
