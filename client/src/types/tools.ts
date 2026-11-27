@@ -441,6 +441,7 @@ export const TOOL_SCHEMAS: readonly ToolSchema[] = [
       additionalProperties: false,
     },
   },
+  {
     name: "deep_research_tool",
     description:
       "Deep Research: topic → sub-questions → parallel search → trusted sources → Markdown report.",
@@ -478,13 +479,6 @@ export const TOOL_SCHEMAS: readonly ToolSchema[] = [
       additionalProperties: false,
     },
   },
-] as const;
-
-export interface ToolResultEvent {
-  type: "tool_result";
-  name: string;
-  ok: boolean;
-  result: Record<string, unknown>;
 ] as const;
 
 export interface ToolResultEvent {
