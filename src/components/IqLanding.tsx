@@ -45,11 +45,6 @@ const TRANSPARENCY = [
     d: "As questões vão do mais fácil ao mais difícil, em figura ou texto. Cada uma tem uma resposta certa, com explicação. Também olhamos tempo e hesitação para ver se o resultado ficou estável.",
     span: "md:col-span-1",
   },
-  {
-    t: "O que este resultado não é",
-    d: "É uma estimativa online do seu perfil e do seu QI. Não substitui avaliação com psicólogo presencial nem laudo oficial.",
-    span: "md:col-span-3",
-  },
 ] as const;
 
 const ease = [0.22, 1, 0.36, 1] as const;
