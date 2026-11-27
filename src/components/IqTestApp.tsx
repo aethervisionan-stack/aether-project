@@ -173,9 +173,10 @@ export function IqTestApp() {
     let cancelled = false;
     setChallengeInvite(parseChallengeInvite(window.location.search));
 
-    // CRITICAL: never land on modeSelect after quiz+payment.
-    // 1) localStorage  2) server quizSnapshot (InfinitePay return tab / wipe)
-    // Stay on "Carregando" until this finishes — do NOT flash landing.
+    // Resume policy:
+    // - payment_return / session_id → restore completed (local, then server snap)
+    // - bare /teste-qi → mid-test only; never auto-open finished unlocked results
+    // Stay on "Carregando" until this finishes — do NOT flash landing on payment.
     // Do NOT wipe payment_return params here — status reconcile runs next.
     void (async () => {
       const ret = readIqPaymentReturnParams(window.location.search);
@@ -191,10 +192,13 @@ export function IqTestApp() {
         (urlSessionId?.startsWith("iq_") ? urlSessionId : null) ||
         orderSessionId;
       const paymentReturn = Boolean(ret);
+      const allowCompletedRestore =
+        paymentReturn || Boolean(preferSessionId);
 
       console.info("[iq-restore] hydrate start", {
         paymentReturn,
         preferSessionId,
+        allowCompletedRestore,
         order_nsu: ret?.order_nsu ?? params.get("order_nsu"),
         transaction_nsu: ret?.transaction_nsu,
         search: window.location.search,
@@ -202,7 +206,7 @@ export function IqTestApp() {
 
       let restored = findResumableQuizState({
         sessionId: preferSessionId,
-        requireCompleted: paymentReturn || Boolean(preferSessionId),
+        requireCompleted: allowCompletedRestore,
       });
       let fromServer = false;
       let serverAi = false;

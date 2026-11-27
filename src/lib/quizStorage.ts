@@ -166,15 +166,20 @@ export type ResumableQuizLookup = {
   /** Prefer exact session from payment return / URL. */
   sessionId?: string | null;
   /**
-   * When true (payment return / completed sessionId present), only resume
-   * finished results/review — never fall back to landing.
+   * When true (payment_return and/or session_id present), resume finished
+   * results/review — never dump to landing if a completed quiz exists.
+   * When false (bare /teste-qi), only restore mid-test — never auto-open
+   * completed unlocked results.
    */
   requireCompleted?: boolean;
 };
 
 /**
  * Pick the quiz session to restore on /teste-qi mount.
- * Priority: URL sessionId match → newest results/review → newest in-progress.
+ *
+ * - sessionId match → that session (any phase)
+ * - requireCompleted (payment_return / session_id return) → newest completed
+ * - bare /teste-qi → mid-test (`phase === "test"`) only; never results/review
  */
 export function findResumableQuizState(
   opts: ResumableQuizLookup = {},
@@ -187,12 +192,15 @@ export function findResumableQuizState(
   if (sessionId) {
     const byId = findQuizStateBySessionId(sessionId);
     if (byId) {
-      // Payment return with sessionId but quiz not finished — still restore
-      // whatever we have so we never dump the user on a blank landing.
+      // Payment / session return with sessionId but quiz not finished — still
+      // restore whatever we have so we never dump the user on a blank landing.
       return byId;
     }
-    // Fall through: payment return may have a stale session_id while a
+    // Fall through only for payment/session return: stale session_id while a
     // completed quiz still sits under another key — prefer that over landing.
+    if (!opts.requireCompleted) {
+      return null;
+    }
   }
 
   const all = listSavedQuizStates().filter(
@@ -204,15 +212,19 @@ export function findResumableQuizState(
     (s) =>
       (s.phase === "results" || s.phase === "review") && s.result != null,
   );
-  const pool = opts.requireCompleted
-    ? completed
-    : completed.length > 0
-      ? completed
-      : all;
-  if (pool.length === 0) return null;
+  const inProgress = all.filter((s) => s.phase === "test");
 
-  pool.sort((a, b) => quizStateActivityAt(b) - quizStateActivityAt(a));
-  return pool[0] ?? null;
+  // Payment / session_id return: completed results only.
+  if (opts.requireCompleted) {
+    if (completed.length === 0) return null;
+    completed.sort((a, b) => quizStateActivityAt(b) - quizStateActivityAt(a));
+    return completed[0] ?? null;
+  }
+
+  // Bare /teste-qi: mid-test only — do NOT auto-open finished results.
+  if (inProgress.length === 0) return null;
+  inProgress.sort((a, b) => quizStateActivityAt(b) - quizStateActivityAt(a));
+  return inProgress[0] ?? null;
 }
 
 /** Validate / coerce a server quiz snapshot into persisted state. */

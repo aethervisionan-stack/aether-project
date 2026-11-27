@@ -154,10 +154,27 @@ function main() {
   assert(paymentRestore?.phase === "results", "payment return → results");
   assert(paymentRestore?.mode === "figures", "payment return mode");
 
-  // F5 without URL session_id still prefers newest completed — never modeSelect.
-  const f5 = findResumableQuizState({});
-  assert(f5?.sessionId === sid, "F5 restores newest completed");
-  assert(f5?.phase !== "modeSelect", "F5 never landing");
+  // Bare /teste-qi must NOT auto-open completed results — clean landing.
+  const bare = findResumableQuizState({});
+  assert(bare === null, "bare /teste-qi ignores completed results");
+
+  // Mid-test on bare URL still resumes.
+  const mid = createInitialState("hybrid", 30, "Mid", null, 7);
+  const midSid = createIqSessionId();
+  const midState: QuizPersistedState = {
+    ...mid,
+    phase: "test",
+    startedAt: 3_000,
+    endsAt: 3_000 + 1_800_000,
+    questionStartedAt: 3_000,
+    sessionId: midSid,
+    answers: Array(30).fill(null).map((v, i) => (i < 3 ? 0 : null)),
+  };
+  saveQuizState(midState);
+  const bareMid = findResumableQuizState({});
+  assert(bareMid?.sessionId === midSid, "bare /teste-qi restores mid-test");
+  assert(bareMid?.phase === "test", "bare mid-test phase");
+  clearQuizState("hybrid");
 
   // Unknown session_id must NOT dump to landing when a completed quiz exists.
   const missing = findResumableQuizState({
@@ -251,13 +268,19 @@ function main() {
   assert(ipRet?.session_id === sid, "infinitepay transaction_id return");
   assert(ipRet?.transaction_nsu === "abc", "maps transaction_id");
 
+  // Bare again after mid cleared — still no completed auto-open.
+  assert(
+    findResumableQuizState({}) === null,
+    "bare stays landing when only completed exist",
+  );
+
   console.log(
     JSON.stringify(
       {
         ok: true,
         sessionId: sid,
         restoredMode: paymentRestore?.mode,
-        f5SessionId: f5?.sessionId,
+        bareIgnoresCompleted: true,
         fallthroughSessionId: fallthrough?.sessionId,
         orderSid,
         urlAfterClean: window.location.search,

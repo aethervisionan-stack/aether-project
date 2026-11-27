@@ -9,6 +9,7 @@
     <p>Limpando dados locais do Teste de QI…</p>
     <script>
       (function () {
+        var CLEAN_URL = "http://localhost:3010/teste-qi";
         var explicit = [
           "professional-iq-test-v4-figures",
           "professional-iq-test-v4-questions",
@@ -24,60 +25,108 @@
           "isUnlocked",
           "archetypeQuizSession_v3",
           "archetypeQuizSession_v2",
+          "iq_pix_pending",
+          "iq_infinitepay_pending",
         ];
-        var removed = [];
+
+        function isIqKey(k) {
+          if (!k) return false;
+          var lower = k.toLowerCase();
+          return (
+            k.indexOf("professional-iq") === 0 ||
+            k === "isUnlocked" ||
+            k.indexOf("archetypeQuizSession") === 0 ||
+            lower.indexOf("unlock") !== -1 ||
+            k.indexOf("iq-test") !== -1 ||
+            k.indexOf("iq_") !== -1 ||
+            lower.indexOf("iq") !== -1 ||
+            lower.indexOf("infinitepay") !== -1
+          );
+        }
+
+        function wipeStore(store) {
+          var removed = [];
+          try {
+            var keys = [];
+            for (var i = 0; i < store.length; i++) {
+              var k = store.key(i);
+              if (k) keys.push(k);
+            }
+            keys.forEach(function (k) {
+              if (isIqKey(k)) {
+                store.removeItem(k);
+                removed.push(k);
+              }
+            });
+            explicit.forEach(function (k) {
+              if (store.getItem(k) != null) {
+                store.removeItem(k);
+                if (removed.indexOf(k) === -1) removed.push(k);
+              }
+            });
+          } catch (e) {
+            /* ignore */
+          }
+          return removed;
+        }
+
+        function remainingIqKeys(store) {
+          var left = [];
+          try {
+            for (var i = 0; i < store.length; i++) {
+              var k = store.key(i);
+              if (isIqKey(k)) left.push(k);
+            }
+          } catch (e) {
+            /* ignore */
+          }
+          return left;
+        }
+
         try {
-          var keys = [];
-          for (var i = 0; i < localStorage.length; i++) {
-            var k = localStorage.key(i);
-            if (k) keys.push(k);
+          var removedLs = wipeStore(localStorage);
+          wipeStore(localStorage); // second pass
+          var removedSs = wipeStore(sessionStorage);
+          wipeStore(sessionStorage);
+          try {
+            sessionStorage.removeItem("iq_pix_pending");
+            sessionStorage.removeItem("iq_infinitepay_pending");
+          } catch (e2) {
+            /* ignore */
           }
-          keys.forEach(function (k) {
-            if (
-              k.indexOf("professional-iq") === 0 ||
-              k === "isUnlocked" ||
-              k.indexOf("archetypeQuizSession") === 0 ||
-              k.toLowerCase().indexOf("unlock") !== -1 ||
-              k.indexOf("iq-test") !== -1 ||
-              k.indexOf("iq_") !== -1
-            ) {
+
+          var leftLs = remainingIqKeys(localStorage);
+          var leftSs = remainingIqKeys(sessionStorage);
+          if (leftLs.length || leftSs.length) {
+            leftLs.forEach(function (k) {
               localStorage.removeItem(k);
-              removed.push(k);
-            }
-          });
-          explicit.forEach(function (k) {
-            if (localStorage.getItem(k) != null) {
-              localStorage.removeItem(k);
-              if (removed.indexOf(k) === -1) removed.push(k);
-            }
-          });
-          sessionStorage.removeItem("iq_infinitepay_pending");
-          var ss = [];
-          for (var j = 0; j < sessionStorage.length; j++) {
-            var sk = sessionStorage.key(j);
-            if (sk) ss.push(sk);
-          }
-          ss.forEach(function (k) {
-            if (
-              k.indexOf("iq") !== -1 ||
-              k.indexOf("unlock") !== -1 ||
-              k.indexOf("infinitepay") !== -1
-            ) {
+            });
+            leftSs.forEach(function (k) {
               sessionStorage.removeItem(k);
-            }
-          });
+            });
+            leftLs = remainingIqKeys(localStorage);
+            leftSs = remainingIqKeys(sessionStorage);
+          }
+
+          document.body.innerHTML =
+            "<p>OK — localStorage removidas: " +
+            removedLs.length +
+            "; sessionStorage: " +
+            removedSs.length +
+            ".</p><p>Restantes IQ: ls=" +
+            leftLs.length +
+            " ss=" +
+            leftSs.length +
+            "</p><p>Abrindo landing limpa…</p>";
+
+          // Exact clean URL — no session_id / transaction / reset query.
+          setTimeout(function () {
+            location.replace(CLEAN_URL);
+          }, 250);
         } catch (e) {
           document.body.innerHTML =
             "<p>Falha ao limpar: " + String(e) + "</p>";
-          return;
         }
-        document.body.innerHTML =
-          "<p>OK — removidas " +
-          removed.length +
-          " chaves.</p><p>Redirecionando para landing limpa…</p>";
-        setTimeout(function () {
-          location.replace("/teste-qi?reset=1");
-        }, 400);
       })();
     </script>
   </body>
