@@ -2,6 +2,7 @@ import { SIGN_ORDER, ZODIAC_DATA } from '../data/zodiacData.js';
 import { mountSignExplorer } from './signExplorer.js';
 import { mountCompatibilityUI } from './compatibilityUI.js';
 import { mountNatalUI } from './natalUI.js';
+import { mountDualCompatUI } from './dualCompatUI.js';
 
 function buildHeroMandala() {
   const ticks = document.getElementById('zodiac-ticks');
@@ -48,7 +49,7 @@ function setupMobileMenu() {
 }
 
 function setupNavSpy() {
-  const sections = ['inicio', 'mapa', 'signos', 'sinastria'];
+  const sections = ['inicio', 'mapa', 'signos', 'casal', 'sinastria'];
   const navLinks = document.querySelectorAll('.nav-link');
   window.addEventListener('scroll', () => {
     const y = window.scrollY + 120;
@@ -72,6 +73,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupMobileMenu();
   setupNavSpy();
   mountNatalUI(document.getElementById('mapa'));
+  mountDualCompatUI(document.getElementById('casal'));
 
   const compat = mountCompatibilityUI(document.getElementById('sinastria'));
   mountSignExplorer(document.getElementById('signos'), {

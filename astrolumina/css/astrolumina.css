@@ -210,3 +210,38 @@ label { font-size: 0.85rem; color: rgba(243, 229, 171, 0.75); letter-spacing: 0.
 #mobile-menu.open { transform: translateX(0); }
 
 .section-pad { position: relative; z-index: 1; }
+
+.tone-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.3rem 0.7rem;
+  border-radius: 9999px;
+  font-size: 0.65rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  border: 1px solid rgba(212, 175, 55, 0.35);
+  color: #F3E5AB;
+}
+.tone-harmonious { border-color: rgba(124, 176, 124, 0.35); }
+.tone-harmonious .tone-pill {
+  border-color: rgba(124, 176, 124, 0.55);
+  color: #A8D4A8;
+  background: rgba(124, 176, 124, 0.12);
+}
+.tone-magnetic .tone-pill {
+  border-color: rgba(157, 78, 221, 0.55);
+  color: #D4B5F0;
+  background: rgba(123, 44, 191, 0.18);
+}
+.tone-adjust .tone-pill {
+  border-color: rgba(212, 175, 55, 0.45);
+  color: #F3E5AB;
+  background: rgba(212, 175, 55, 0.1);
+}
+.tone-tense { border-color: rgba(232, 93, 76, 0.28); }
+.tone-tense .tone-pill,
+.tone-tense-pill {
+  border-color: rgba(232, 93, 76, 0.5);
+  color: #F0A090;
+  background: rgba(232, 93, 76, 0.12);
+}

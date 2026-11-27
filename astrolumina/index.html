@@ -39,11 +39,12 @@
   <header class="fixed top-0 inset-x-0 z-50 border-b border-gold/10 bg-midnight/80 backdrop-blur-md">
     <div class="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
       <a href="#inicio" class="font-cinzel text-lg sm:text-xl tracking-[0.2em] gold-text font-semibold">ASTROLUMINA</a>
-      <nav class="hidden md:flex items-center gap-8 font-jakarta text-sm tracking-wide">
+      <nav class="hidden md:flex items-center gap-6 lg:gap-8 font-jakarta text-sm tracking-wide">
         <a href="#inicio" class="nav-link active">Início</a>
         <a href="#mapa" class="nav-link">Mapa Astral</a>
         <a href="#signos" class="nav-link">Signos</a>
-        <a href="#sinastria" class="nav-link">Compatibilidade</a>
+        <a href="#casal" class="nav-link">Casal</a>
+        <a href="#sinastria" class="nav-link">Signos×Signos</a>
       </nav>
       <button id="menu-btn" class="md:hidden p-2 text-goldLight" aria-label="Abrir menu" aria-expanded="false">
         <svg id="menu-icon-open" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 7h16M4 12h16M4 17h16"/></svg>
@@ -56,7 +57,8 @@
     <a href="#inicio" class="mobile-nav font-cinzel tracking-widest text-goldLight text-sm">Início</a>
     <a href="#mapa" class="mobile-nav font-cinzel tracking-widest text-goldLight text-sm">Mapa Astral</a>
     <a href="#signos" class="mobile-nav font-cinzel tracking-widest text-goldLight text-sm">Signos</a>
-    <a href="#sinastria" class="mobile-nav font-cinzel tracking-widest text-goldLight text-sm">Compatibilidade</a>
+    <a href="#casal" class="mobile-nav font-cinzel tracking-widest text-goldLight text-sm">Casal</a>
+    <a href="#sinastria" class="mobile-nav font-cinzel tracking-widest text-goldLight text-sm">Signos×Signos</a>
   </div>
   <div id="menu-overlay" class="fixed inset-0 z-30 bg-black/50 hidden md:hidden"></div>
 
@@ -72,8 +74,8 @@
             Tríade natal, signos em profundidade — decanos, eixos, afinidades — e compatibilidade por aspectos angulares reais do círculo.
           </p>
           <div class="flex flex-wrap gap-3">
-            <a href="#signos" class="btn-gold px-6 py-3 rounded-md text-sm tracking-wide">Descubra seu signo</a>
-            <a href="#sinastria" class="btn-outline-gold px-6 py-3 rounded-md text-sm tracking-wide">Compatibilidades</a>
+            <a href="#casal" class="btn-gold px-6 py-3 rounded-md text-sm tracking-wide">Compatibilidade a dois</a>
+            <a href="#signos" class="btn-outline-gold px-6 py-3 rounded-md text-sm tracking-wide">Descubra seu signo</a>
           </div>
         </div>
         <div class="relative flex justify-center items-center animate-float">
@@ -182,12 +184,28 @@
       </div>
     </section>
 
-    <!-- Compatibility -->
-    <section id="sinastria" class="section-pad py-20 sm:py-28">
+    <!-- Dual romantic compatibility -->
+    <section id="casal" class="section-pad py-20 sm:py-28">
       <div class="max-w-5xl mx-auto px-4 sm:px-6">
         <div class="text-center mb-12">
-          <p class="font-cinzel text-xs tracking-[0.3em] text-cosmicLight uppercase mb-3">Sinastria</p>
-          <h2 class="font-cinzel text-3xl sm:text-4xl gold-text tracking-widest mb-3">Compatibilidades</h2>
+          <p class="font-cinzel text-xs tracking-[0.3em] text-cosmicLight uppercase mb-3">Sinastria natal</p>
+          <h2 class="font-cinzel text-3xl sm:text-4xl gold-text tracking-widest mb-3">Compatibilidade a dois</h2>
+          <p class="text-white/60 max-w-2xl mx-auto">
+            Informe os dados de Pessoa A e Pessoa B. Analisamos Sol–Sol, Lua–Lua, Asc–Asc e cruzamentos Sol↔Lua —
+            com veredito, pontos fortes/fracos e um sistema prático para navegar tensões.
+          </p>
+        </div>
+        <div id="dual-form-wrap" class="mb-8"></div>
+        <div id="dual-result" class="glass-card rounded-2xl p-6 sm:p-10 hidden"></div>
+      </div>
+    </section>
+
+    <!-- Sign-to-sign Compatibility -->
+    <section id="sinastria" class="section-pad py-20 sm:py-28 cosmic-gradient">
+      <div class="max-w-5xl mx-auto px-4 sm:px-6">
+        <div class="text-center mb-12">
+          <p class="font-cinzel text-xs tracking-[0.3em] text-cosmicLight uppercase mb-3">Sinastria por signos</p>
+          <h2 class="font-cinzel text-3xl sm:text-4xl gold-text tracking-widest mb-3">Compatibilidade signo × signo</h2>
           <p class="text-white/60 max-w-2xl mx-auto">Motor por distância angular em passos de 30° (conjunção → oposição), com leitura de elemento, modalidade e dimensões relacionais.</p>
         </div>
 
