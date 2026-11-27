@@ -171,7 +171,7 @@ export function IqLanding({
           <p className="max-w-lg text-base leading-relaxed text-zinc-400 sm:text-lg">
             Veja seus pontos fortes, o que ainda trava e onde você tende a
             brilhar — lógica, memória, visão espacial ou decisões rápidas. Quiz
-            com ranking neste aparelho: resultado claro, sem milagre.
+            com ranking neste aparelho.
           </p>
           <ul className="grid max-w-xl grid-cols-1 gap-2 pt-1 sm:grid-cols-3">
             {HERO_PROMISE_PILLS.map((pill) => (
