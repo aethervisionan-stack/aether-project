@@ -15,7 +15,7 @@ type Props = {
   participantName: string;
   rank: number | null;
   rankTotal: number;
-  /** Server unlock session — required for Gemini; localStorage alone is not enough. */
+  /** Server unlock session — required for AI assistant; localStorage alone is not enough. */
   sessionId?: string | null;
 };
 
