@@ -1,6 +1,6 @@
 import { HomePage } from "@/components/HomePage";
 
-/** Previous Aether Vision landing (presale / hardware). */
+/** Aether Vision (`aether-vision`) — hardware / $VISION presale landing. */
 export default function AetherPage() {
   return <HomePage />;
 }

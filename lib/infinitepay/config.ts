@@ -1,4 +1,8 @@
-/** InfinitePay Checkout Integrado — oferta arquetipos */
+/**
+ * InfinitePay Checkout Integrado — Quiz Medieval (`quiz-medieval` / ARCANUM).
+ * Used by `/api/infinitepay/*` and `components/arquetipos` paywall/mentor.
+ * TestLineQi Pix unlock uses `lib/iq-payment` + `/api/payment/*` instead.
+ */
 
 export type InfinitePayTier = "result" | "mentor_upgrade" | "combo";
 

@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { IqTestApp } from "@/src/components/IqTestApp";
 
+/** TestLineQi (`testlineqi`) — IQ assessment at `/teste-qi`. Do not break payment/IA/logo. */
+
 export const metadata: Metadata = {
   title: "Teste de QI Profissional",
   description:

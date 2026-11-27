@@ -2,6 +2,8 @@ import { Cinzel, Lora } from "next/font/google";
 import type { Metadata, Viewport } from "next";
 import { ArchetypeQuizApp } from "@/components/arquetipos/ArchetypeQuizApp";
 
+/** Quiz Medieval (`quiz-medieval`) — brand ARCANUM • XII. Canonical route `/`. */
+
 const display = Cinzel({
   subsets: ["latin"],
   variable: "--font-arq-display",

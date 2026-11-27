@@ -1,3 +1,9 @@
+/**
+ * Aether Vision (`aether-vision`) site constants — used by `/aether` and as
+ * the shared root-layout defaults on this multi-product host.
+ * Quiz Medieval (`/`) and TestLineQi (`/teste-qi`) set their own page metadata.
+ * See `lib/products.ts`.
+ */
 function resolveSiteUrl(): string {
   const explicit = process.env.NEXT_PUBLIC_SITE_URL?.trim();
   if (explicit) return explicit.replace(/\/$/, "");

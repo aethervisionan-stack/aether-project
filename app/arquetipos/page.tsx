@@ -1,6 +1,9 @@
 import { redirect } from "next/navigation";
 
-/** Legacy path — quiz now lives at `/`. */
+/**
+ * Quiz Medieval legacy path (`/arquetipos`).
+ * Canonical product route is `/` (ARCANUM • XII). Keep this redirect forever.
+ */
 export default function ArquetiposRedirectPage() {
   redirect("/");
 }

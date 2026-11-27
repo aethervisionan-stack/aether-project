@@ -8,6 +8,13 @@ import {
 } from "@/lib/site";
 import "./globals.css";
 
+/**
+ * Shared root layout for the multi-product host (Vercel project `aether-project`):
+ * - `/` Quiz Medieval (ARCANUM) — page metadata overrides below
+ * - `/teste-qi` TestLineQi
+ * - `/aether` Aether Vision (SITE_* defaults here match that brand)
+ */
+
 export const viewport: Viewport = {
   themeColor: "#030305",
   width: "device-width",

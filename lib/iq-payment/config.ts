@@ -1,10 +1,14 @@
 /**
- * IQ post-test unlock via InfinitePay Pix — amount and helpers.
+ * TestLineQi (`testlineqi`) post-test unlock via InfinitePay Pix.
  * Amounts are env-driven (centavos); never hardcode the charge in routes.
+ * Public route: `/teste-qi` — keep payment / IA / logo intact.
  *
  * Two tiers on the same sessionId:
  * - result (IQ_UNLOCK_AMOUNT_CENTAVOS) → resultUnlocked
  * - ai_upsell (IQ_AI_UPSELL_AMOUNT_CENTAVOS) → aiUnlocked
+ *
+ * Shares InfinitePay credentials with Quiz Medieval (`lib/infinitepay/config`)
+ * but uses separate APIs under `/api/payment/*` and `/api/iq-*`.
  */
 
 import {
