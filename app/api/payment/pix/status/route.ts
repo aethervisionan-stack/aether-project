@@ -109,9 +109,45 @@ async function tryMarkFromStore(
   return true;
 }
 
+function focusOrderForItem(
+  rec: Awaited<ReturnType<typeof getIqUnlockSession>>,
+  focus: IqUnlockItemType,
+): string | null {
+  if (!rec) return null;
+  if (focus === "ai_upsell") {
+    return rec.aiOrderNsu || (rec.itemType === "ai_upsell" ? rec.order_nsu : null) || null;
+  }
+  if (focus === "combo") {
+    return (
+      (rec.itemType === "combo" ? rec.order_nsu : null) ||
+      rec.order_nsu ||
+      rec.resultOrderNsu ||
+      null
+    );
+  }
+  return (
+    rec.resultOrderNsu ||
+    (rec.itemType === "result" || rec.itemType === "combo"
+      ? rec.order_nsu
+      : null) ||
+    null
+  );
+}
+
+function tierSatisfied(
+  focus: IqUnlockItemType,
+  resultUnlocked: boolean,
+  aiUnlocked: boolean,
+): boolean {
+  if (focus === "ai_upsell") return aiUnlocked;
+  if (focus === "combo") return resultUnlocked && aiUnlocked;
+  return resultUnlocked;
+}
+
 /**
  * Reconcile InfinitePay redirect return (order_nsu + transaction_nsu + slug)
- * or a pending store row so resultUnlocked applies ASAP after checkout.
+ * or a pending store row. Must mark the *focus* tier (ai_upsell after result)
+ * — never short-circuit on an already-paid result order while AI is still locked.
  */
 async function reconcileReturnHints(
   sessionId: string,
@@ -119,44 +155,64 @@ async function reconcileReturnHints(
   opts: ResolveOpts,
 ): Promise<boolean> {
   const rec = await getIqUnlockSession(sessionId);
+  const focusItem: IqUnlockItemType =
+    opts.itemType ??
+    (opts.order_nsu ? extractItemTypeFromOrderNsu(opts.order_nsu) : null) ??
+    rec?.itemType ??
+    "result";
+
   // Prefer caller hint only when it belongs to this session (anti-forge).
   const hintedOrder =
     opts.order_nsu && (await orderBelongsToIqSession(sessionId, opts.order_nsu))
       ? opts.order_nsu
       : null;
+  const focusOrder = focusOrderForItem(rec, focusItem);
   const order_nsu =
     hintedOrder ||
+    focusOrder ||
     rec?.order_nsu ||
-    rec?.resultOrderNsu ||
     rec?.aiOrderNsu ||
+    rec?.resultOrderNsu ||
     null;
   if (!order_nsu) return false;
   if (!(await orderBelongsToIqSession(sessionId, order_nsu))) return false;
 
-  if (await tryMarkFromStore(sessionId, order_nsu)) return true;
-  if (await tryMarkFromStore(sessionId, rec?.resultOrderNsu)) return true;
-  if (await tryMarkFromStore(sessionId, rec?.aiOrderNsu)) return true;
+  let marked = false;
+  // Only treat store-paid as done for THIS order / focus — do not return early
+  // just because the sibling result order is already paid.
+  if (await tryMarkFromStore(sessionId, order_nsu)) marked = true;
+  if (focusItem === "ai_upsell" || focusItem === "combo") {
+    if (await tryMarkFromStore(sessionId, rec?.aiOrderNsu)) marked = true;
+  }
+  if (focusItem === "result" || focusItem === "combo") {
+    if (await tryMarkFromStore(sessionId, rec?.resultOrderNsu)) marked = true;
+  }
+
+  const resultUnlocked = await isIqSessionResultUnlocked(sessionId);
+  const aiUnlocked = await isIqSessionAiUnlocked(sessionId);
+  if (tierSatisfied(focusItem, resultUnlocked, aiUnlocked)) {
+    return true;
+  }
 
   const transaction_nsu = opts.transaction_nsu;
-  const slug = opts.slug;
   const localOrder = await getInfinitePayOrderAsync(order_nsu);
   if (localOrder?.sessionId && localOrder.sessionId !== sessionId) {
     return false;
   }
-  const itemType =
+  const itemType: IqUnlockItemType =
     extractItemTypeFromOrderNsu(order_nsu) ??
     opts.itemType ??
     rec?.itemType ??
-    "result";
+    focusItem;
   const amountCentavos =
     localOrder?.amountCentavos ??
     rec?.amountCentavos ??
     iqAmountCentavosForItemType(itemType);
+  // InfinitePay often returns only transaction_id — reuse slug saved at create.
+  const slug = opts.slug || localOrder?.slug || rec?.slug || null;
 
   // Dev-only sim return: never honor SIM_/simulated hints for real checkouts
   // or non-loopback hosts (prevents forged payment_return unlocks).
-  // Also require a known local pending order (or simulate gate) — bare URL
-  // forgeries with fabricated order_nsu must not unlock.
   const orderWasSimulated =
     Boolean(localOrder?.simulated) || Boolean(rec?.simulated);
   const allowSimReturn =
@@ -187,7 +243,8 @@ async function reconcileReturnHints(
     return true;
   }
 
-  // Real checkout return: ask InfinitePay payment_check when we have full hints.
+  // Real checkout return: ask InfinitePay payment_check when we have hints.
+  // Slug may come from create-time checkout URL if the return query omitted it.
   if (transaction_nsu && slug && isRealApiKey()) {
     try {
       const handle = infinitepayHandle();
@@ -229,7 +286,7 @@ async function reconcileReturnHints(
     }
   }
 
-  return false;
+  return marked;
 }
 
 async function resolveStatus(

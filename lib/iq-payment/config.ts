@@ -211,12 +211,24 @@ export function iqPixWebhookUrl(): string {
   return `${appPublicUrl()}/api/payment/pix/webhook`;
 }
 
-export function iqPaymentRedirectUrl(sessionId: string): string {
+export function iqPaymentRedirectUrl(
+  sessionId: string,
+  orderNsu?: string | null,
+  itemType?: IqUnlockItemType | null,
+): string {
   const base = appPublicUrl();
   const params = new URLSearchParams({
     payment_return: "1",
     session_id: sessionId,
   });
+  // Keep order_nsu so AI upsell return can mark the right tier (not the
+  // already-paid result order) even when InfinitePay drops other params.
+  if (orderNsu && orderNsu.trim()) {
+    params.set("order_nsu", orderNsu.trim());
+  }
+  if (itemType === "ai_upsell" || itemType === "combo" || itemType === "result") {
+    params.set("itemType", itemType);
+  }
   return `${base}/teste-qi?${params.toString()}`;
 }
 

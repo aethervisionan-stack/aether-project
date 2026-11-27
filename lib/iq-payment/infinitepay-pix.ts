@@ -6,7 +6,7 @@
  */
 
 import { resolveInfinitePayPixEmv } from "@/lib/infinitepay/fetchPixEmv";
-import { isValidPixEmv } from "@/lib/infinitepay/pixEmv";
+import { isValidPixEmv, parseCheckoutHandleSlug } from "@/lib/infinitepay/pixEmv";
 import { putInfinitePayOrderAsync } from "@/lib/infinitepay/store";
 import {
   type IqUnlockItemType,
@@ -119,8 +119,7 @@ export async function createSimulatedInfinitePayPix(input: {
     input.amountCentavos ?? iqAmountCentavosForItemType(itemType);
   const order_nsu = buildIqOrderNsu(input.sessionId, itemType);
   const paymentId = `sim_${input.sessionId}_${itemType}_${Date.now()}`;
-  const appUrl = appPublicUrl();
-  const checkoutUrl = `${appUrl}/teste-qi?payment_return=1&session_id=${encodeURIComponent(input.sessionId)}&order_nsu=${encodeURIComponent(order_nsu)}&transaction_nsu=SIM_${Date.now()}&slug=sim-iq-local&capture_method=pix&simulated=1`;
+  const checkoutUrl = `${iqPaymentRedirectUrl(input.sessionId, order_nsu, itemType)}&transaction_nsu=SIM_${Date.now()}&slug=sim-iq-local&capture_method=pix&simulated=1`;
 
   const reason = input.reason ?? "missing_credentials";
   const notice =
@@ -170,7 +169,11 @@ export async function createInfinitePayPixPayment(input: {
     input.amountCentavos ?? iqAmountCentavosForItemType(itemType);
   const order_nsu = buildIqOrderNsu(input.sessionId, itemType);
   const handle = infinitepayHandle();
-  const redirectUrl = iqPaymentRedirectUrl(input.sessionId);
+  const redirectUrl = iqPaymentRedirectUrl(
+    input.sessionId,
+    order_nsu,
+    itemType,
+  );
   const webhookUrl = iqPaymentWebhookUrl();
 
   const items = iqCheckoutItemsForItemType(itemType);
@@ -239,6 +242,7 @@ export async function createInfinitePayPixPayment(input: {
   const qrCode = emv ?? "";
   const qrCodeBase64 = emv ? await qrCodeToBase64Png(emv) : "";
 
+  const checkoutSlug = parseCheckoutHandleSlug(checkoutUrl)?.slug;
   await putInfinitePayOrderAsync({
     order_nsu,
     tier: iqInfinitePayTierForItemType(itemType),
@@ -248,6 +252,7 @@ export async function createInfinitePayPixPayment(input: {
     url: checkoutUrl,
     pixCopyPaste: emv ?? undefined,
     emvFieldsUsed: emvResult.fieldsUsed,
+    slug: checkoutSlug,
     createdAt: Date.now(),
   });
 

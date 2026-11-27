@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
-import { iqUnlockAmountCentavos } from "@/lib/iq-payment/config";
 import {
+  iqAmountCentavosForItemType,
+  iqUnlockAmountCentavos,
+} from "@/lib/iq-payment/config";
+import {
+  extractItemTypeFromOrderNsu,
   extractSessionIdFromOrderNsu,
   getIqUnlockByOrderNsu,
   markIqSessionPaid,
@@ -95,6 +99,10 @@ export async function POST(req: Request) {
         null;
 
       if (sessionId) {
+        const itemType =
+          extractItemTypeFromOrderNsu(order_nsu) ??
+          unlockRow?.itemType ??
+          "result";
         await markIqSessionPaid(sessionId, {
           order_nsu,
           transaction_nsu: transaction_nsu ?? undefined,
@@ -102,7 +110,9 @@ export async function POST(req: Request) {
           amountCentavos:
             typeof body.amount === "number"
               ? body.amount
-              : unlockRow?.amountCentavos ?? iqUnlockAmountCentavos(),
+              : unlockRow?.amountCentavos ??
+                iqAmountCentavosForItemType(itemType),
+          itemType,
         });
       }
     }

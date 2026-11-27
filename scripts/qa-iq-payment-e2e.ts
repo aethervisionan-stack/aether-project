@@ -278,6 +278,38 @@ async function main() {
       "AI unlock independent of result",
     );
 
+    // Regression: after result paid, AI return must mark aiUnlocked even when
+    // the result order is already paid in the store (no short-circuit).
+    const aiRetSid = createIqSessionId();
+    const r1 = await jsonFetch("/api/payment/pix/create", {
+      method: "POST",
+      body: JSON.stringify({ sessionId: aiRetSid, itemType: "result" }),
+    });
+    await jsonFetch("/api/payment/pix/status", {
+      method: "POST",
+      body: JSON.stringify({
+        sessionId: aiRetSid,
+        itemType: "result",
+        simApprove: true,
+        order_nsu: r1.data.order_nsu,
+        simulated: true,
+      }),
+    });
+    const a1 = await jsonFetch("/api/payment/pix/create", {
+      method: "POST",
+      body: JSON.stringify({ sessionId: aiRetSid, itemType: "ai_upsell" }),
+    });
+    const aiOrderNsu = String(a1.data.order_nsu ?? "");
+    const aiReturn = await jsonFetch(
+      `/api/payment/pix/status?sessionId=${encodeURIComponent(aiRetSid)}&itemType=ai_upsell&order_nsu=${encodeURIComponent(aiOrderNsu)}&transaction_nsu=SIM_ai_ret&slug=sim-iq-local&simulated=1`,
+    );
+    assert(
+      aiReturn.data.resultUnlocked === true &&
+        aiReturn.data.aiUnlocked === true,
+      "AI payment_return unlocks aiUnlocked (not stuck on result order)",
+      `ai=${aiReturn.data.aiUnlocked} result=${aiReturn.data.resultUnlocked}`,
+    );
+
     // Combo happy path on fresh session
     const comboSid = createIqSessionId();
     const combo = await jsonFetch("/api/payment/pix/create", {

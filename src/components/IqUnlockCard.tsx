@@ -8,6 +8,7 @@ import {
   createIqPixPayment,
   fetchIqUnlockStatus,
   readIqPaymentReturnParams,
+  readIqPendingCheckout,
   cleanIqPaymentReturnUrl,
   type IqPixCreateResult,
   type IqUnlockItemType,
@@ -193,42 +194,49 @@ export function IqUnlockCard({
   useEffect(() => {
     if (!sessionId || unlockedRef.current) return;
 
-    try {
-      const raw = window.sessionStorage.getItem("iq_pix_pending");
-      if (raw) {
-        const parsed = JSON.parse(raw) as {
-          sessionId?: string;
-          paymentId?: string;
-          order_nsu?: string;
-          itemType?: IqUnlockItemType;
-        };
-        if (parsed.sessionId === sessionId) {
-          pendingRef.current = {
-            paymentId: parsed.paymentId,
-            order_nsu: parsed.order_nsu ?? parsed.paymentId,
-            itemType: parsed.itemType ?? checkoutItemType,
-          };
-          if (!pix) setAwaiting(true);
-          startPoll(true);
-        }
-      }
-    } catch {
-      // ignore
+    const pendingSaved = readIqPendingCheckout(sessionId);
+    // Only resume pending when it matches this card's tier (result vs AI).
+    if (
+      pendingSaved &&
+      (pendingSaved.itemType === checkoutItemType ||
+        (isAi && pendingSaved.itemType === "ai_upsell") ||
+        (!isAi &&
+          (pendingSaved.itemType === "result" ||
+            pendingSaved.itemType === "combo")))
+    ) {
+      pendingRef.current = {
+        paymentId: pendingSaved.paymentId,
+        order_nsu: pendingSaved.order_nsu ?? pendingSaved.paymentId,
+        itemType: pendingSaved.itemType,
+      };
+      if (!pix) setAwaiting(true);
+      startPoll(true);
     }
 
     const returnParams = readIqPaymentReturnParams();
     if (returnParams && !returnHandledRef.current) {
       returnHandledRef.current = true;
+      const returnFocus =
+        returnParams.itemType ||
+        pendingSaved?.itemType ||
+        checkoutItemType;
+      // Result card must not swallow an AI-upsell return (and vice versa).
+      const returnForThisCard = isAi
+        ? returnFocus === "ai_upsell"
+        : returnFocus === "result" || returnFocus === "combo";
       if (
-        !returnParams.session_id ||
-        returnParams.session_id === sessionId
+        returnForThisCard &&
+        (!returnParams.session_id || returnParams.session_id === sessionId)
       ) {
         setAwaiting(true);
         void (async () => {
           try {
             const status = await fetchIqUnlockStatus(sessionId, {
-              itemType: checkoutItemType,
-              order_nsu: returnParams.order_nsu,
+              itemType: returnFocus,
+              order_nsu:
+                returnParams.order_nsu ||
+                pendingSaved?.order_nsu ||
+                pendingSaved?.paymentId,
               transaction_nsu: returnParams.transaction_nsu,
               slug: returnParams.slug,
               simulated: returnParams.simulated,

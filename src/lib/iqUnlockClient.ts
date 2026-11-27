@@ -247,6 +247,7 @@ export type IqPaymentReturnParams = {
   slug: string | null;
   simulated: boolean;
   session_id: string | null;
+  itemType: IqUnlockItemType | null;
 };
 
 /** Parse InfinitePay redirect return query on /teste-qi. */
@@ -266,6 +267,11 @@ export function readIqPaymentReturnParams(
       params.has("transaction_id") ||
       params.has("receipt_url");
     if (!paymentReturn) return null;
+    const rawType = params.get("itemType");
+    const itemType: IqUnlockItemType | null =
+      rawType === "ai_upsell" || rawType === "combo" || rawType === "result"
+        ? rawType
+        : null;
     return {
       order_nsu: params.get("order_nsu"),
       transaction_nsu,
@@ -274,6 +280,43 @@ export function readIqPaymentReturnParams(
         params.get("simulated") === "1" ||
         Boolean(transaction_nsu?.startsWith("SIM_")),
       session_id: params.get("session_id"),
+      itemType,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Pending Pix checkout saved before same-tab InfinitePay redirect. */
+export function readIqPendingCheckout(sessionId?: string | null): {
+  sessionId: string;
+  paymentId?: string;
+  order_nsu?: string;
+  itemType: IqUnlockItemType;
+} | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem("iq_pix_pending");
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as {
+      sessionId?: string;
+      paymentId?: string;
+      order_nsu?: string;
+      itemType?: IqUnlockItemType;
+    };
+    if (!parsed.sessionId?.startsWith("iq_")) return null;
+    if (sessionId && parsed.sessionId !== sessionId) return null;
+    const itemType: IqUnlockItemType =
+      parsed.itemType === "ai_upsell" ||
+      parsed.itemType === "combo" ||
+      parsed.itemType === "result"
+        ? parsed.itemType
+        : "result";
+    return {
+      sessionId: parsed.sessionId,
+      paymentId: parsed.paymentId,
+      order_nsu: parsed.order_nsu ?? parsed.paymentId,
+      itemType,
     };
   } catch {
     return null;
@@ -302,6 +345,7 @@ export function cleanIqPaymentReturnUrl(opts?: {
       "simulated",
       "capture_method",
       "receipt_url",
+      "itemType",
     ];
     let changed = false;
     for (const k of keys) {

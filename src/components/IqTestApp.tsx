@@ -101,6 +101,7 @@ import {
   fetchIqUnlockStatus,
   persistIqQuizSnapshot,
   readIqPaymentReturnParams,
+  readIqPendingCheckout,
 } from "@/src/lib/iqUnlockClient";
 
 function formatTime(ms: number): string {
@@ -344,8 +345,13 @@ export function IqTestApp() {
       if (opts.showSpinner) setUnlockChecking(true);
       try {
         const ret = readIqPaymentReturnParams();
+        const pending = readIqPendingCheckout(sessionId);
+        // After AI upsell checkout, prefer pending/return itemType so status
+        // marks aiUnlocked instead of short-circuiting on paid result.
+        const focusItem = ret?.itemType || pending?.itemType;
         const status = await fetchIqUnlockStatus(sessionId, {
-          order_nsu: ret?.order_nsu,
+          itemType: focusItem,
+          order_nsu: ret?.order_nsu || pending?.order_nsu || pending?.paymentId,
           transaction_nsu: ret?.transaction_nsu,
           slug: ret?.slug,
           simulated: ret?.simulated,
@@ -1800,7 +1806,9 @@ function ResultsDashboard({
             itemType="ai_upsell"
             amountLabel={aiUpsellAmountLabel}
             onAmountLabel={onAiAmountLabel}
-            onUnlocked={() => onAiUnlocked()}
+            onUnlocked={(_paymentId, flags) => {
+              if (flags?.aiUnlocked) onAiUnlocked();
+            }}
             compact
           />
           <p className="text-center text-xs text-zinc-600">
