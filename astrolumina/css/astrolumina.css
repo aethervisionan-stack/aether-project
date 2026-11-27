@@ -17,6 +17,19 @@ body {
   overflow-x: hidden;
 }
 
+body.app-shell {
+  height: 100dvh;
+  overflow: hidden;
+  --header-base: 4rem;
+  --tabs-h: 0px;
+}
+
+@media (max-width: 767px) {
+  body.app-shell {
+    --tabs-h: 2.75rem;
+  }
+}
+
 /* Fallback static field if canvas JS fails to mount */
 .starfield {
   position: fixed;
@@ -64,6 +77,77 @@ main,
 footer {
   position: relative;
   z-index: 1;
+}
+
+/* —— SPA section shell —— */
+.section-tabs {
+  display: flex;
+  gap: 0.25rem;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding: 0 0.75rem 0.55rem;
+  border-top: 1px solid rgba(212, 175, 55, 0.08);
+  background: rgba(11, 13, 23, 0.55);
+}
+.section-tabs::-webkit-scrollbar { display: none; }
+
+.section-tab {
+  flex: 0 0 auto;
+  padding: 0.45rem 0.85rem;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(232, 230, 240, 0.6);
+  border: 1px solid transparent;
+  border-radius: 9999px;
+  transition: color 0.2s, border-color 0.2s, background 0.2s;
+  white-space: nowrap;
+}
+.section-tab:hover,
+.section-tab.active {
+  color: #F3E5AB;
+  border-color: rgba(212, 175, 55, 0.4);
+  background: rgba(212, 175, 55, 0.1);
+}
+
+.app-panels {
+  position: relative;
+  z-index: 1;
+  height: 100dvh;
+  padding-top: calc(var(--header-base, 4rem) + var(--tabs-h, 0px));
+  overflow: hidden;
+}
+
+.app-panel {
+  display: none;
+  height: 100%;
+  overflow: hidden;
+}
+.app-panel.is-active {
+  display: block;
+  animation: panel-in 0.35s ease;
+}
+.app-panel[hidden] {
+  display: none !important;
+}
+
+.panel-scroll {
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+@keyframes panel-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+#mobile-menu {
+  top: calc(var(--header-base, 4rem) + var(--tabs-h, 0px));
 }
 
 .gold-text {
@@ -238,6 +322,11 @@ label { font-size: 0.85rem; color: rgba(243, 229, 171, 0.75); letter-spacing: 0.
   transition: transform 0.3s ease;
 }
 #mobile-menu.open { transform: translateX(0); }
+
+@media (prefers-reduced-motion: reduce) {
+  .app-panel.is-active { animation: none; }
+  html { scroll-behavior: auto; }
+}
 
 .section-pad { position: relative; z-index: 1; }
 

@@ -5,6 +5,16 @@ import { mountNatalUI } from './natalUI.js';
 import { mountDualCompatUI } from './dualCompatUI.js';
 import { mountUniverseBackground } from './universeBackground.js';
 
+const SECTIONS = ['inicio', 'mapa-astral', 'signos', 'compatibilidade', 'casal', 'sobre'];
+
+/** Legacy hashes from the long-scroll landing */
+const HASH_ALIASES = {
+  mapa: 'mapa-astral',
+  sinastria: 'compatibilidade',
+  about: 'sobre',
+  footer: 'sobre',
+};
+
 function buildHeroMandala() {
   const ticks = document.getElementById('zodiac-ticks');
   const stars = document.getElementById('inner-stars');
@@ -47,38 +57,90 @@ function setupMobileMenu() {
   menuBtn.addEventListener('click', () => setMenu(!mobileMenu.classList.contains('open')));
   menuOverlay.addEventListener('click', () => setMenu(false));
   document.querySelectorAll('.mobile-nav').forEach((a) => a.addEventListener('click', () => setMenu(false)));
+
+  return { close: () => setMenu(false) };
 }
 
-function setupNavSpy() {
-  const sections = ['inicio', 'mapa', 'signos', 'casal', 'sinastria'];
-  const navLinks = document.querySelectorAll('.nav-link');
-  window.addEventListener('scroll', () => {
-    const y = window.scrollY + 120;
-    let current = 'inicio';
-    for (const id of sections) {
-      const el = document.getElementById(id);
-      if (!el) continue;
-      if (y >= el.offsetTop) current = id;
+function normalizeSection(raw) {
+  const key = (raw || '').replace(/^#/, '').trim().toLowerCase();
+  if (!key) return 'inicio';
+  const aliased = HASH_ALIASES[key] || key;
+  return SECTIONS.includes(aliased) ? aliased : 'inicio';
+}
+
+function showSection(sectionId, { updateHash = true } = {}) {
+  const id = normalizeSection(sectionId);
+
+  document.querySelectorAll('.app-panel').forEach((panel) => {
+    const active = panel.dataset.panel === id;
+    panel.classList.toggle('is-active', active);
+    if (active) {
+      panel.removeAttribute('hidden');
+      const scroller = panel.querySelector('.panel-scroll');
+      if (scroller) scroller.scrollTop = 0;
+    } else {
+      panel.setAttribute('hidden', '');
     }
-    if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 40) {
-      current = 'sinastria';
-    }
-    navLinks.forEach((link) => {
-      link.classList.toggle('active', link.getAttribute('href') === '#' + current);
-    });
   });
+
+  document.querySelectorAll('.nav-link, .section-tab, .mobile-nav').forEach((link) => {
+    const target = normalizeSection(link.getAttribute('href') || link.dataset.section || '');
+    link.classList.toggle('active', target === id);
+  });
+
+  if (updateHash) {
+    const next = '#' + id;
+    if (location.hash !== next) {
+      history.replaceState(null, '', next);
+    }
+  }
+
+  return id;
+}
+
+function setupSectionRouter() {
+  const applyFromHash = () => {
+    const raw = location.hash.slice(1);
+    const id = normalizeSection(raw);
+    // Rewrite legacy aliases in the address bar
+    if (raw && HASH_ALIASES[raw.toLowerCase()]) {
+      history.replaceState(null, '', '#' + id);
+    }
+    showSection(id, { updateHash: false });
+  };
+
+  window.addEventListener('hashchange', applyFromHash);
+
+  document.addEventListener('click', (e) => {
+    const link = e.target.closest('a[href^="#"]');
+    if (!link) return;
+    const href = link.getAttribute('href');
+    if (!href || href === '#') return;
+    const id = normalizeSection(href);
+    if (!SECTIONS.includes(id) && !HASH_ALIASES[href.slice(1).toLowerCase()]) return;
+    e.preventDefault();
+    showSection(id, { updateHash: true });
+  });
+
+  applyFromHash();
+
+  return { showSection, normalizeSection };
 }
 
 document.addEventListener('DOMContentLoaded', () => {
   mountUniverseBackground(document.body);
   buildHeroMandala();
   setupMobileMenu();
-  setupNavSpy();
-  mountNatalUI(document.getElementById('mapa'));
+  const router = setupSectionRouter();
+
+  mountNatalUI(document.getElementById('mapa-astral'));
   mountDualCompatUI(document.getElementById('casal'));
 
-  const compat = mountCompatibilityUI(document.getElementById('sinastria'));
+  const compat = mountCompatibilityUI(document.getElementById('compatibilidade'));
   mountSignExplorer(document.getElementById('signos'), {
-    onOpenPair: (a, b) => compat.setPair(a, b),
+    onOpenPair: (a, b) => {
+      compat.setPair(a, b);
+      router.showSection('compatibilidade');
+    },
   });
 });

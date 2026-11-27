@@ -160,7 +160,8 @@ export function mountCompatibilityUI(root) {
       if (ZODIAC_DATA[a]) selA.value = a;
       if (ZODIAC_DATA[b]) selB.value = b;
       update();
-      root.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const scroller = root.querySelector('.panel-scroll') || root.closest('.app-panel')?.querySelector('.panel-scroll');
+      if (scroller) scroller.scrollTop = 0;
     },
   };
 }
