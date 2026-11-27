@@ -2,11 +2,13 @@
 
 One Next.js host (Vercel project **`aether-project`**) serves three products. Internal slugs, public brands, and routes:
 
-| Slug | Brand | Canonical route | Legacy |
-| --- | --- | --- | --- |
-| `quiz-medieval` | ARCANUM • XII | `/` | `/arquetipos` → `/` |
-| `testlineqi` | TestLineQi | `/teste-qi` | — (keep 100% intact) |
-| `aether-vision` | Aether Vision | `/aether` | formerly occupied `/` |
+| Slug | Brand | Canonical route | App Router group | Legacy |
+| --- | --- | --- | --- | --- |
+| `quiz-medieval` | ARCANUM • XII | `/` | `app/(medieval)/` | `/arquetipos` → `/` |
+| `testlineqi` | TestLineQi | `/teste-qi` | `app/(teste-qi)/teste-qi/` | — (keep 100% intact) |
+| `aether-vision` | Aether Vision | `/aether` | `app/(aether)/aether/` | formerly occupied `/` |
+
+**URL conflict:** intent sometimes wants Aether Vision at `/`. Today `/` is Quiz Medieval (live links + `/arquetipos` → `/`), so Aether stays at `/aether` with route-group isolation. Move Medieval only with an explicit redirect plan.
 
 Code constants: `lib/products.ts` in the repo worktree.
 
@@ -25,9 +27,10 @@ Local defaults: port **3010** (`npm run dev` / `npm start`).
 
 | Path | File | Notes |
 | --- | --- | --- |
-| `/` | `app/page.tsx` | Canonical ARCANUM landing + quiz |
-| `/arquetipos` | `app/arquetipos/page.tsx` | Permanent redirect → `/` |
-| (layout) | `app/arquetipos/layout.tsx` | Legacy segment layout |
+| `/` | `app/(medieval)/page.tsx` | Canonical ARCANUM landing + quiz (lazy `ArchetypeQuizApp`) |
+| `/arquetipos` | `app/(medieval)/arquetipos/page.tsx` | Permanent redirect → `/` |
+| (layout) | `app/(medieval)/layout.tsx` | Fonts, OG, favicon, `medieval.css` |
+| (legacy layout) | `app/(medieval)/arquetipos/layout.tsx` | Legacy segment layout |
 
 **UI**
 
@@ -63,8 +66,8 @@ Local defaults: port **3010** (`npm run dev` / `npm start`).
 
 | Path | File | Notes |
 | --- | --- | --- |
-| `/teste-qi` | `app/teste-qi/page.tsx` | IQ assessment app (`robots: noindex`) |
-| (layout) | `app/teste-qi/layout.tsx` | IBM Plex + Outfit shell |
+| `/teste-qi` | `app/(teste-qi)/teste-qi/page.tsx` | IQ assessment app (lazy `IqTestApp`) |
+| (layout) | `app/(teste-qi)/teste-qi/layout.tsx` | Exclusive OG + icons; IBM Plex + Outfit; `teste-qi.css` |
 
 **UI** (`src/components/`)
 
@@ -106,8 +109,8 @@ Local defaults: port **3010** (`npm run dev` / `npm start`).
 
 | Path | File | Notes |
 | --- | --- | --- |
-| `/aether` | `app/aether/page.tsx` | Presale / hardware landing (`HomePage`) |
-| (layout) | `app/aether/layout.tsx` + `providers.tsx` | Wallet providers; `SITE_*` metadata |
+| `/aether` | `app/(aether)/aether/page.tsx` | Presale / hardware landing (lazy `HomePage`) |
+| (layout) | `app/(aether)/aether/layout.tsx` + `providers.tsx` | i18n + wallet; `SITE_*` metadata; `aether.css` |
 
 **UI** (root `components/`, excluding `arquetipos/`)
 
@@ -146,11 +149,12 @@ Local defaults: port **3010** (`npm run dev` / `npm start`).
 
 | Path | Role |
 | --- | --- |
-| `app/layout.tsx` | Root layout; default metadata = Aether Vision (`SITE_*`); child pages override |
-| `app/globals.css` | Global CSS |
-| `app/og/route.tsx` | OG image |
+| `app/layout.tsx` | Minimal root: `metadataBase`, brand-neutral title template |
+| `app/globals.css` | Tailwind + shared `@theme` tokens only (no product chrome) |
+| `app/og/route.tsx` | Aether Vision OG image (`/og`) |
 | `app/sitemap.ts` | Indexes `/` + `/aether` only (`/teste-qi` omitted = noindex) |
 | `app/robots.ts` | Robots |
+| `app/not-found.tsx` | Neutral 404 with links to all three products |
 | `vercel.json` | Next framework; `npm run build` / `npm install` |
 | `next.config.ts` | Port notes, Solana wallet transpile, Neon external |
 | `.vercel/project.json` | Linked project `aether-project` (`prj_jnsyI45VHy76sNbWy7V9Xy0w7y1z`) |

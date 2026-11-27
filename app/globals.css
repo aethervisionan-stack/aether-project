@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+/**
+ * Shared host tokens only. Product look & feel lives in route-group CSS:
+ * - `(aether)/aether/aether.css`
+ * - `(teste-qi)/teste-qi/teste-qi.css`
+ * - `(medieval)` uses page/layout fonts + Tailwind utilities
+ */
 @theme {
   --color-onyx: #030305;
   --color-surface: #121216;
@@ -23,159 +29,12 @@ html {
 }
 
 body {
-  background: #030305;
-  color: var(--color-ink);
-  font-family: var(--font-sans);
-  font-feature-settings: "ss01" on, "kern" on;
-}
-
-::selection {
-  background: rgba(6, 182, 212, 0.28);
-  color: #f4f4f5;
-}
-
-.tabular {
-  font-variant-numeric: tabular-nums;
-}
-
-.grid-aether {
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.028) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.028) 1px, transparent 1px);
-  background-size: 64px 64px;
-}
-
-.glass {
-  background: linear-gradient(
-    180deg,
-    rgba(18, 18, 22, 0.72) 0%,
-    rgba(8, 8, 12, 0.58) 100%
-  );
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.glow-cta {
-  box-shadow:
-    0 0 0 1px rgba(34, 211, 238, 0.28),
-    0 12px 40px rgba(6, 182, 212, 0.18);
-}
-
-@keyframes cta-pulse {
-  0%,
-  100% {
-    box-shadow:
-      0 0 0 1px rgba(34, 211, 238, 0.28),
-      0 12px 40px rgba(6, 182, 212, 0.18);
-  }
-  50% {
-    box-shadow:
-      0 0 0 1px rgba(34, 211, 238, 0.55),
-      0 18px 52px rgba(6, 182, 212, 0.34);
-  }
-}
-
-.cta-pulse {
-  animation: cta-pulse 2.8s ease-in-out infinite;
-}
-
-.wallet-adapter-modal-wrapper {
-  z-index: 10050 !important;
-}
-
-input[type="range"].sol-slider {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 100%;
-  height: 4px;
-  border-radius: 999px;
-  background: linear-gradient(
-    90deg,
-    #06b6d4 var(--sol-pct, 10%),
-    rgba(255, 255, 255, 0.08) var(--sol-pct, 10%)
-  );
-  outline: none;
-}
-
-input[type="range"].sol-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 18px;
-  height: 18px;
-  border-radius: 999px;
-  background: #f4f4f5;
-  border: 2px solid #06b6d4;
-  box-shadow: 0 0 16px rgba(6, 182, 212, 0.45);
-  cursor: pointer;
-}
-
-input[type="range"].sol-slider::-moz-range-thumb {
-  width: 18px;
-  height: 18px;
-  border-radius: 999px;
-  background: #f4f4f5;
-  border: 2px solid #06b6d4;
-  box-shadow: 0 0 16px rgba(6, 182, 212, 0.45);
-  cursor: pointer;
-}
-
-/* Living neural-brain logo — fluid pulses along mesh paths */
-@keyframes living-brain-pulse-race {
-  0% {
-    stroke-dasharray: 12 88;
-    stroke-dashoffset: 100;
-    opacity: 0.15;
-  }
-  12% {
-    opacity: 0.95;
-  }
-  55% {
-    opacity: 0.85;
-  }
-  100% {
-    stroke-dasharray: 12 88;
-    stroke-dashoffset: -100;
-    opacity: 0.1;
-  }
-}
-
-@keyframes living-brain-node-breathe {
-  0%,
-  100% {
-    opacity: 0.55;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 1;
-    transform: scale(1.35);
-  }
-}
-
-.living-brain-mark--live .living-brain-pulse {
-  stroke-dasharray: 12 88;
-  animation-name: living-brain-pulse-race;
-  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-  animation-iteration-count: infinite;
-}
-
-.living-brain-mark--live .living-brain-node {
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: living-brain-node-breathe 2.8s ease-in-out infinite;
+  margin: 0;
+  min-height: 100%;
 }
 
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
-  }
-
-  .cta-pulse {
-    animation: none;
-  }
-
-  .living-brain-mark--live .living-brain-pulse,
-  .living-brain-mark--live .living-brain-node {
-    animation: none !important;
   }
 }

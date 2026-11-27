@@ -8,6 +8,15 @@
  * - `quiz-medieval` → brand ARCANUM • XII → `/` (legacy `/arquetipos` → `/`)
  * - `testlineqi`    → brand TestLineQi    → `/teste-qi` (keep 100% intact)
  * - `aether-vision` → brand Aether Vision → `/aether`
+ *
+ * App Router isolation uses route groups (URL-neutral):
+ * - `app/(medieval)/` → `/` + `/arquetipos`
+ * - `app/(teste-qi)/teste-qi/` → `/teste-qi`
+ * - `app/(aether)/aether/` → `/aether`
+ *
+ * Conflict note: user intent sometimes wants Aether at `/`. Today `/` is
+ * Quiz Medieval with live links + `/arquetipos` → `/`. Aether stays at
+ * `/aether` until a deliberate redirect plan moves Medieval.
  */
 
 export const PRODUCT_IDS = {
@@ -38,8 +47,7 @@ export const PRODUCT_BRANDS = {
 /** Folder / package conventions (code ownership, not URL paths). */
 export const PRODUCT_CODE_ROOTS = {
   quizMedieval: [
-    "app/page.tsx",
-    "app/arquetipos/",
+    "app/(medieval)/",
     "components/arquetipos/",
     "lib/infinitepay/",
     "lib/mentor/",
@@ -50,7 +58,7 @@ export const PRODUCT_CODE_ROOTS = {
     "public/audio/",
   ],
   testlineqi: [
-    "app/teste-qi/",
+    "app/(teste-qi)/teste-qi/",
     "src/components/",
     "src/lib/",
     "src/data/{assessmentBank,chc*,textQuestions}.ts",
@@ -59,7 +67,8 @@ export const PRODUCT_CODE_ROOTS = {
     "public/logo-tiktok-perfil.*",
   ],
   aetherVision: [
-    "app/aether/",
+    "app/(aether)/aether/",
+    "app/og/",
     "components/{HomePage,Header,Footer,HardwareShowcase,PresaleCheckout,...}.tsx",
     "lib/{site,orders,pix,solana,fulfill-vision,vision-pricing,...}.ts",
     "locales/",

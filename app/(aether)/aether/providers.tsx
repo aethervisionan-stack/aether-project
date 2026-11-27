@@ -7,6 +7,7 @@ import {
   WalletProvider,
 } from "@solana/wallet-adapter-react";
 import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
+import { I18nProvider } from "@/lib/i18n";
 import {
   getClientRpcEndpoint,
   PRIMARY_SOLANA_RPC,
@@ -16,7 +17,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import "@solana/wallet-adapter-react-ui/styles.css";
 
-/** Wallet stack only for the Aether Vision presale pages. */
+/** i18n + wallet stack only for the Aether Vision presale pages. */
 export function AetherProviders({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
 
@@ -38,10 +39,12 @@ export function AetherProviders({ children }: { children: ReactNode }) {
   );
 
   return (
-    <ConnectionProvider endpoint={endpoint} config={SOLANA_CONNECTION_CONFIG}>
-      <WalletProvider wallets={wallets} autoConnect={ready}>
-        <WalletModalProvider>{children}</WalletModalProvider>
-      </WalletProvider>
-    </ConnectionProvider>
+    <I18nProvider>
+      <ConnectionProvider endpoint={endpoint} config={SOLANA_CONNECTION_CONFIG}>
+        <WalletProvider wallets={wallets} autoConnect={ready}>
+          <WalletModalProvider>{children}</WalletModalProvider>
+        </WalletProvider>
+      </ConnectionProvider>
+    </I18nProvider>
   );
 }

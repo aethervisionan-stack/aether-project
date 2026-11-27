@@ -1,0 +1,52 @@
+/* TestLineQi scope — imported only by `(teste-qi)/teste-qi/layout`. */
+
+@keyframes living-brain-pulse-race {
+  0% {
+    stroke-dasharray: 12 88;
+    stroke-dashoffset: 100;
+    opacity: 0.15;
+  }
+  12% {
+    opacity: 0.95;
+  }
+  55% {
+    opacity: 0.85;
+  }
+  100% {
+    stroke-dasharray: 12 88;
+    stroke-dashoffset: -100;
+    opacity: 0.1;
+  }
+}
+
+@keyframes living-brain-node-breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.35);
+  }
+}
+
+.living-brain-mark--live .living-brain-pulse {
+  stroke-dasharray: 12 88;
+  animation-name: living-brain-pulse-race;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  animation-iteration-count: infinite;
+}
+
+.living-brain-mark--live .living-brain-node {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: living-brain-node-breathe 2.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .living-brain-mark--live .living-brain-pulse,
+  .living-brain-mark--live .living-brain-node {
+    animation: none !important;
+  }
+}

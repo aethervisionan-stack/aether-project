@@ -1,26 +1,56 @@
-import { SITE_NAME } from "@/lib/site";
 import Link from "next/link";
+import { PRODUCT_BRANDS, PRODUCT_ROUTES } from "@/lib/products";
 
 export default function NotFound() {
   return (
-    <main className="grid-aether relative flex min-h-[70vh] items-center justify-center px-5">
-      <div className="max-w-md text-center">
-        <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-cyan">
+    <main
+      style={{
+        minHeight: "70vh",
+        display: "grid",
+        placeItems: "center",
+        padding: "1.25rem",
+        fontFamily:
+          "ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif",
+        background: "#050608",
+        color: "#e8e6e3",
+      }}
+    >
+      <div style={{ maxWidth: "28rem", textAlign: "center" }}>
+        <p
+          style={{
+            fontSize: "11px",
+            letterSpacing: "0.22em",
+            textTransform: "uppercase",
+            opacity: 0.7,
+          }}
+        >
           404
         </p>
-        <h1 className="mt-4 font-display text-3xl tracking-tight">
-          Page not found
+        <h1 style={{ marginTop: "1rem", fontSize: "1.75rem" }}>
+          Página não encontrada
         </h1>
-        <p className="mt-3 text-sm leading-relaxed text-muted">
-          This route does not exist on {SITE_NAME}. Return to the presale
-          landing.
+        <p style={{ marginTop: "0.75rem", fontSize: "0.875rem", opacity: 0.75 }}>
+          Esta rota não existe neste host multi-produto.
         </p>
-        <Link
-          href="/"
-          className="glow-cta mt-8 inline-flex rounded-full bg-gradient-to-r from-cyan to-neon px-6 py-3 text-sm font-medium text-onyx"
+        <nav
+          style={{
+            marginTop: "2rem",
+            display: "flex",
+            flexDirection: "column",
+            gap: "0.75rem",
+            alignItems: "center",
+          }}
         >
-          Back to Aether Vision
-        </Link>
+          <Link href={PRODUCT_ROUTES.quizMedieval}>
+            {PRODUCT_BRANDS.quizMedieval}
+          </Link>
+          <Link href={PRODUCT_ROUTES.testlineqi}>
+            {PRODUCT_BRANDS.testlineqi}
+          </Link>
+          <Link href={PRODUCT_ROUTES.aetherVision}>
+            {PRODUCT_BRANDS.aetherVision}
+          </Link>
+        </nav>
       </div>
     </main>
   );

@@ -1,0 +1,13 @@
+/* Quiz Medieval (ARCANUM) scope — imported only by `(medieval)/layout`. */
+
+.medieval-shell {
+  min-height: 100vh;
+  color-scheme: dark;
+  background: #050608;
+  color: #e8e6e3;
+}
+
+.medieval-shell ::selection {
+  background: rgba(196, 162, 101, 0.35);
+  color: #faf7f0;
+}
