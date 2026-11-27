@@ -79,6 +79,7 @@ export function IqUnlockCard({
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const unlockedRef = useRef(false);
   const returnHandledRef = useRef(false);
+  const [unlockedCommitted, setUnlockedCommitted] = useState(false);
   const pendingRef = useRef<{
     paymentId?: string;
     order_nsu?: string | null;
@@ -108,16 +109,24 @@ export function IqUnlockCard({
       unlockedRef.current = true;
       stopPoll();
       setAwaiting(false);
-      cleanIqPaymentReturnUrl({ keepSessionId: sessionId });
+      // Do NOT history.replaceState here — URL cleanup runs in useEffect
+      // after commit (and parent IqTestApp focus-tier effect).
       try {
         window.sessionStorage.removeItem("iq_pix_pending");
       } catch {
         // ignore
       }
+      setUnlockedCommitted(true);
       onUnlocked?.(paymentId, flags);
     },
-    [onUnlocked, sessionId, stopPoll],
+    [onUnlocked, stopPoll],
   );
+
+  // AFTER COMMIT: strip payment return noise for this card's unlock.
+  useEffect(() => {
+    if (!unlockedCommitted || !sessionId) return;
+    cleanIqPaymentReturnUrl({ keepSessionId: sessionId });
+  }, [unlockedCommitted, sessionId]);
 
   const isStatusUnlocked = useCallback(
     (status: {

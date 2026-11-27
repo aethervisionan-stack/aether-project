@@ -378,13 +378,7 @@ export function IqTestApp() {
             setState((prev) => ({ ...prev, resultsUnlocked: false }));
           }
         }
-        // Defer URL cleanup until the return's focus tier is satisfied
-        // (keeps order_nsu/transaction_id for AI upsell reconcile).
-        maybeCleanPaymentReturnUrl({
-          resultUnlocked: resultOk,
-          aiUnlocked: aiOk,
-          focusItem: focusItem ?? status.itemType ?? "result",
-        });
+        // URL cleanup is NOT done here — dedicated useEffect after commit.
       } catch {
         if (!cancelled) {
           setUnlockVerifyError(
@@ -469,15 +463,11 @@ export function IqTestApp() {
 
   const applyServerUnlock = useCallback(
     (orderNsu?: string | null) => {
+      // State only — NEVER history.replaceState / cleanIqPaymentReturnUrl here
+      // (sync setState path; URL work belongs in useEffect after commit).
       setServerUnlocked(true);
       setUnlockVerifyError(null);
       setState((prev) => {
-        const keepSessionId = prev.sessionId;
-        // Keep session_id for F5 — do NOT strip payment_return params here.
-        // Cleaning too early wipes AI upsell return hints while result is
-        // already unlocked. URL cleanup runs only after focus-tier unlock.
-        if (keepSessionId) ensureIqSessionIdInUrl(keepSessionId);
-
         if (!prev.result) {
           return {
             ...prev,
@@ -513,27 +503,38 @@ export function IqTestApp() {
     [],
   );
 
-  /** Strip InfinitePay return query only after the focus tier is unlocked. */
-  const maybeCleanPaymentReturnUrl = useCallback(
-    (opts: {
-      resultUnlocked: boolean;
-      aiUnlocked: boolean;
-      focusItem?: string | null;
-    }) => {
-      const focus = opts.focusItem;
-      const focusDone =
-        focus === "ai_upsell"
-          ? opts.aiUnlocked
-          : focus === "combo"
-            ? opts.resultUnlocked && opts.aiUnlocked
-            : opts.resultUnlocked;
-      if (!focusDone) return;
-      const keepSessionId = state.sessionId;
-      cleanIqPaymentReturnUrl({ keepSessionId });
-      if (keepSessionId) ensureIqSessionIdInUrl(keepSessionId);
-    },
-    [state.sessionId],
-  );
+  /**
+   * AFTER COMMIT only: strip InfinitePay return query once the focus tier
+   * is unlocked. Never call cleanIqPaymentReturnUrl from applyServerUnlock.
+   */
+  useEffect(() => {
+    if (!hydrated) return;
+    if (state.phase !== "results" && state.phase !== "review") return;
+    const sessionId = state.sessionId;
+    if (!sessionId) return;
+
+    const ret = readIqPaymentReturnParams();
+    if (!ret) return; // nothing to strip
+
+    const pending = readIqPendingCheckout(sessionId);
+    const focus = ret.itemType || pending?.itemType || "result";
+    const focusDone =
+      focus === "ai_upsell"
+        ? serverAiUnlocked
+        : focus === "combo"
+          ? serverUnlocked && serverAiUnlocked
+          : serverUnlocked;
+    if (!focusDone) return;
+
+    cleanIqPaymentReturnUrl({ keepSessionId: sessionId });
+    ensureIqSessionIdInUrl(sessionId);
+  }, [
+    hydrated,
+    state.phase,
+    state.sessionId,
+    serverUnlocked,
+    serverAiUnlocked,
+  ]);
 
   useEffect(() => {
     if (state.phase === "results" && state.leaderboardEntryId) {

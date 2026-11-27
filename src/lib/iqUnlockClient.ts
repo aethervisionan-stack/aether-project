@@ -326,6 +326,10 @@ export function readIqPendingCheckout(sessionId?: string | null): {
 /**
  * Strip InfinitePay return noise from the URL, but KEEP `session_id` so F5 /
  * tab return can rehydrate the completed quiz without dumping on landing.
+ *
+ * MUST be called only from a React useEffect (after commit) — never from
+ * render, setState updaters, or applyServerUnlock / other sync unlock paths.
+ * Uses history.replaceState.
  */
 export function cleanIqPaymentReturnUrl(opts?: {
   keepSessionId?: string | null;
@@ -374,7 +378,11 @@ export function cleanIqPaymentReturnUrl(opts?: {
   }
 }
 
-/** Persist session_id in the URL for safe F5 / payment-return restore. */
+/**
+ * Persist session_id in the URL for safe F5 / payment-return restore.
+ * MUST be called only from a React useEffect (after commit) — never from
+ * render or setState updaters. Uses history.replaceState.
+ */
 export function ensureIqSessionIdInUrl(sessionId: string | null | undefined): void {
   if (typeof window === "undefined") return;
   if (!sessionId || !sessionId.startsWith("iq_")) return;
