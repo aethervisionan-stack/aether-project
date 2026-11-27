@@ -17,8 +17,19 @@ import {
 } from "../services/BillingService";
 import { AdvancedAudioVisualizer } from "../audio/AdvancedAudioVisualizer";
 import { idleLatencyLine, LatencyMonitor } from "../audio/LatencyMonitor";
+import { AudioReactiveAIOrbit } from "../components/AudioReactiveAIOrbit";
 import { AetherVisualCoreHost } from "../components/aether-visual/AetherVisualCoreHost";
 import { envDevUnlock, isFeatureUnlock } from "../dev/unlock";
+
+/** Default stays AudioReactiveAIOrbit; opt-in R3F via VITE_VISUAL_CORE=r3f or ?visual=r3f. */
+function createOrbitHost(): AudioReactiveAIOrbit | AetherVisualCoreHost {
+  const env = (import.meta.env.VITE_VISUAL_CORE as string | undefined)?.trim().toLowerCase();
+  const q = new URLSearchParams(window.location.search).get("visual")?.trim().toLowerCase();
+  if (env === "r3f" || q === "r3f") {
+    return new AetherVisualCoreHost();
+  }
+  return new AudioReactiveAIOrbit();
+}
 import { classifyPace } from "../hardware/NotificationPriority";
 import { initI18n, msg, onLocaleChange, t } from "../i18n";
 import { GeoNavigation } from "../mobility/GeoNavigation";
@@ -87,7 +98,7 @@ export class ControlApp {
   private orbitHost!: HTMLElement;
   private latencyEl!: HTMLElement;
   private visualizer: AdvancedAudioVisualizer | null = null;
-  private orbit: AetherVisualCoreHost | null = null;
+  private orbit: AudioReactiveAIOrbit | AetherVisualCoreHost | null = null;
   private latencyMonitor: LatencyMonitor | null = null;
   private treasury: TreasuryWidget | null = null;
   private transcript: TranscriptFeed | null = null;
@@ -193,7 +204,7 @@ export class ControlApp {
     const mobilityMount = this.root.querySelector<HTMLElement>("[data-role=mobility]")!;
     const devtoolsMount = this.root.querySelector<HTMLElement>("[data-role=devtools]")!;
 
-    this.orbit = new AetherVisualCoreHost();
+    this.orbit = createOrbitHost();
     this.orbit.mount(this.orbitHost);
     this.orbit.start(() => this.readOrbitDrive());
 
