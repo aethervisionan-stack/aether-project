@@ -91,7 +91,11 @@ export async function POST(req: Request) {
       await putInfinitePayOrderAsync({
         order_nsu,
         tier:
-          guessedItem === "ai_upsell" ? "iq_unlock_ai" : "iq_unlock_result",
+          guessedItem === "ai_upsell"
+            ? "iq_unlock_ai"
+            : guessedItem === "combo"
+              ? "iq_unlock_combo"
+              : "iq_unlock_result",
         sessionId: sessionGuess,
         amountCentavos:
           typeof body.amount === "number"

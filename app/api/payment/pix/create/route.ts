@@ -22,6 +22,8 @@ export const dynamic = "force-dynamic";
 type Body = {
   sessionId?: unknown;
   itemType?: unknown;
+  /** Stage-1 checkbox: result + AI in one Pix (alias for itemType=combo). */
+  includeAi?: unknown;
 };
 
 function sanitizeSessionId(raw: unknown): string | null {
@@ -52,25 +54,44 @@ export async function POST(req: Request) {
       );
     }
 
-    const itemType: IqUnlockItemType =
+    const includeAi =
+      body.includeAi === true ||
+      body.includeAi === "1" ||
+      body.includeAi === 1;
+    let itemType: IqUnlockItemType =
       parseIqUnlockItemType(body.itemType) ?? "result";
+    if (includeAi && (itemType === "result" || !body.itemType)) {
+      itemType = "combo";
+    }
 
     const existing = await getIqUnlockSession(sessionId);
-    if (itemType === "result" && existing?.resultUnlocked) {
-      return NextResponse.json({
-        alreadyUnlocked: true,
-        itemType,
-        resultUnlocked: true,
-        aiUnlocked: Boolean(existing.aiUnlocked),
-        unlocked: true,
-        sessionId,
-        amountCentavos: iqAmountCentavosForItemType("result"),
-        amountLabel: iqUnlockAmountLabel(
-          iqAmountCentavosForItemType("result"),
-        ),
-        paymentId: existing.resultPaymentId ?? existing.paymentId ?? null,
-        order_nsu: existing.resultOrderNsu ?? existing.order_nsu ?? null,
-      });
+    if (
+      (itemType === "result" || itemType === "combo") &&
+      existing?.resultUnlocked
+    ) {
+      // Already have result: combo checkbox alone is not a new result charge.
+      if (itemType === "combo" && !existing.aiUnlocked) {
+        itemType = "ai_upsell";
+      } else if (itemType === "result" || existing.aiUnlocked) {
+        return NextResponse.json({
+          alreadyUnlocked: true,
+          itemType: existing.aiUnlocked ? "combo" : "result",
+          resultUnlocked: true,
+          aiUnlocked: Boolean(existing.aiUnlocked),
+          unlocked: true,
+          sessionId,
+          amountCentavos: iqAmountCentavosForItemType(
+            existing.aiUnlocked ? "combo" : "result",
+          ),
+          amountLabel: iqUnlockAmountLabel(
+            iqAmountCentavosForItemType(
+              existing.aiUnlocked ? "combo" : "result",
+            ),
+          ),
+          paymentId: existing.resultPaymentId ?? existing.paymentId ?? null,
+          order_nsu: existing.resultOrderNsu ?? existing.order_nsu ?? null,
+        });
+      }
     }
     if (itemType === "ai_upsell" && existing?.aiUnlocked) {
       return NextResponse.json({

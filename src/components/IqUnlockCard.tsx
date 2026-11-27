@@ -7,17 +7,27 @@ import { QRCodeSVG } from "qrcode.react";
 import {
   createIqPixPayment,
   fetchIqUnlockStatus,
+  readIqPaymentReturnParams,
+  cleanIqPaymentReturnUrl,
   type IqPixCreateResult,
   type IqUnlockItemType,
 } from "@/src/lib/iqUnlockClient";
 import { OnlinePresenceBadge } from "@/src/components/OnlinePresenceBadge";
 
+type UnlockFlags = {
+  resultUnlocked: boolean;
+  aiUnlocked: boolean;
+};
+
 type Props = {
   sessionId: string;
   amountLabel: string;
-  /** Stage-1 result unlock (default) or stage-2 AI upsell. */
+  /** Stage-1 result unlock (default), combo, or stage-2 AI upsell. */
   itemType?: IqUnlockItemType;
-  onUnlocked?: (paymentId: string | null) => void;
+  /** Stage-1 only: show +R$ AI checkbox (ignored for ai_upsell). */
+  offerAiAddon?: boolean;
+  aiAmountLabel?: string;
+  onUnlocked?: (paymentId: string | null, flags?: UnlockFlags) => void;
   onAmountLabel?: (label: string) => void;
   compact?: boolean;
 };
@@ -35,12 +45,15 @@ const AI_BENEFITS = [
   "Conversas em português, com base nesta sessão",
 ] as const;
 
+const POLL_FAST_MS = 1200;
 const POLL_MS = 2500;
 
 export function IqUnlockCard({
   sessionId,
   amountLabel,
   itemType = "result",
+  offerAiAddon = itemType === "result",
+  aiAmountLabel = "R$ 1,00",
   onUnlocked,
   onAmountLabel,
   compact = false,
@@ -53,9 +66,28 @@ export function IqUnlockCard({
   const [awaiting, setAwaiting] = useState(false);
   const [canSimApprove, setCanSimApprove] = useState(false);
   const [simBusy, setSimBusy] = useState(false);
+  const [includeAi, setIncludeAi] = useState(false);
+  const [resultAmtLabel, setResultAmtLabel] = useState(amountLabel);
+  const [aiAmtLabel, setAiAmtLabel] = useState(aiAmountLabel);
+  const [comboAmtLabel, setComboAmtLabel] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const unlockedRef = useRef(false);
+  const returnHandledRef = useRef(false);
+  const pendingRef = useRef<{
+    paymentId?: string;
+    order_nsu?: string | null;
+    itemType: IqUnlockItemType;
+  } | null>(null);
+
   const isAi = itemType === "ai_upsell";
+  const stageOffersAddon = offerAiAddon && !isAi;
+  const checkoutItemType: IqUnlockItemType = isAi
+    ? "ai_upsell"
+    : includeAi
+      ? "combo"
+      : itemType === "combo"
+        ? "combo"
+        : "result";
 
   const stopPoll = useCallback(() => {
     if (pollRef.current) {
@@ -65,46 +97,178 @@ export function IqUnlockCard({
   }, []);
 
   const handleUnlocked = useCallback(
-    (paymentId: string | null) => {
+    (paymentId: string | null, flags: UnlockFlags) => {
       if (unlockedRef.current) return;
       unlockedRef.current = true;
       stopPoll();
       setAwaiting(false);
-      onUnlocked?.(paymentId);
+      cleanIqPaymentReturnUrl();
+      try {
+        window.sessionStorage.removeItem("iq_pix_pending");
+      } catch {
+        // ignore
+      }
+      onUnlocked?.(paymentId, flags);
     },
     [onUnlocked, stopPoll],
   );
 
   const isStatusUnlocked = useCallback(
-    (status: { unlocked: boolean; resultUnlocked: boolean; aiUnlocked: boolean }) =>
-      isAi ? status.aiUnlocked : status.resultUnlocked || status.unlocked,
+    (status: {
+      unlocked: boolean;
+      resultUnlocked: boolean;
+      aiUnlocked: boolean;
+    }) => {
+      if (isAi) return status.aiUnlocked;
+      // Stage-1 (result or combo): dismiss gate as soon as result is paid.
+      return status.resultUnlocked || status.unlocked;
+    },
     [isAi],
   );
 
   const pollOnce = useCallback(async () => {
     if (!sessionId || unlockedRef.current) return;
     try {
-      const status = await fetchIqUnlockStatus(sessionId, { itemType });
+      const returnParams = readIqPaymentReturnParams();
+      const pending = pendingRef.current;
+      const status = await fetchIqUnlockStatus(sessionId, {
+        itemType: checkoutItemType,
+        order_nsu:
+          returnParams?.order_nsu || pending?.order_nsu || pending?.paymentId,
+        transaction_nsu: returnParams?.transaction_nsu,
+        slug: returnParams?.slug,
+        simulated: returnParams?.simulated,
+      });
+      if (status.resultAmountLabel) setResultAmtLabel(status.resultAmountLabel);
+      if (status.aiAmountLabel) setAiAmtLabel(status.aiAmountLabel);
+      if (status.comboAmountLabel) setComboAmtLabel(status.comboAmountLabel);
       if (status.amountLabel) onAmountLabel?.(status.amountLabel);
       setCanSimApprove(Boolean(status.canSimApprove));
       if (isStatusUnlocked(status)) {
-        handleUnlocked(status.paymentId);
+        handleUnlocked(status.paymentId, {
+          resultUnlocked: status.resultUnlocked || status.unlocked,
+          aiUnlocked: status.aiUnlocked,
+        });
       }
     } catch {
       // keep polling — transient network blips
     }
-  }, [handleUnlocked, isStatusUnlocked, itemType, onAmountLabel, sessionId]);
+  }, [
+    checkoutItemType,
+    handleUnlocked,
+    isStatusUnlocked,
+    onAmountLabel,
+    sessionId,
+  ]);
 
-  const startPoll = useCallback(() => {
-    stopPoll();
-    setAwaiting(true);
-    void pollOnce();
-    pollRef.current = setInterval(() => {
+  const startPoll = useCallback(
+    (fast = true) => {
+      stopPoll();
+      setAwaiting(true);
       void pollOnce();
-    }, POLL_MS);
-  }, [pollOnce, stopPoll]);
+      let ticks = 0;
+      pollRef.current = setInterval(() => {
+        ticks += 1;
+        void pollOnce();
+        // After a few fast ticks, slow down to save requests.
+        if (fast && ticks === 8 && pollRef.current) {
+          clearInterval(pollRef.current);
+          pollRef.current = setInterval(() => {
+            void pollOnce();
+          }, POLL_MS);
+        }
+      }, fast ? POLL_FAST_MS : POLL_MS);
+    },
+    [pollOnce, stopPoll],
+  );
 
   useEffect(() => () => stopPoll(), [stopPoll]);
+
+  // Resume pending Pix + ASAP poll on focus / visibility / pageshow / return URL.
+  useEffect(() => {
+    if (!sessionId || unlockedRef.current) return;
+
+    try {
+      const raw = window.sessionStorage.getItem("iq_pix_pending");
+      if (raw) {
+        const parsed = JSON.parse(raw) as {
+          sessionId?: string;
+          paymentId?: string;
+          order_nsu?: string;
+          itemType?: IqUnlockItemType;
+        };
+        if (parsed.sessionId === sessionId) {
+          pendingRef.current = {
+            paymentId: parsed.paymentId,
+            order_nsu: parsed.order_nsu ?? parsed.paymentId,
+            itemType: parsed.itemType ?? checkoutItemType,
+          };
+          if (!pix) setAwaiting(true);
+          startPoll(true);
+        }
+      }
+    } catch {
+      // ignore
+    }
+
+    const returnParams = readIqPaymentReturnParams();
+    if (returnParams && !returnHandledRef.current) {
+      returnHandledRef.current = true;
+      if (
+        !returnParams.session_id ||
+        returnParams.session_id === sessionId
+      ) {
+        setAwaiting(true);
+        void (async () => {
+          try {
+            const status = await fetchIqUnlockStatus(sessionId, {
+              itemType: checkoutItemType,
+              order_nsu: returnParams.order_nsu,
+              transaction_nsu: returnParams.transaction_nsu,
+              slug: returnParams.slug,
+              simulated: returnParams.simulated,
+            });
+            if (isStatusUnlocked(status)) {
+              handleUnlocked(status.paymentId, {
+                resultUnlocked: status.resultUnlocked || status.unlocked,
+                aiUnlocked: status.aiUnlocked,
+              });
+              return;
+            }
+          } catch {
+            // fall through to poll
+          }
+          startPoll(true);
+        })();
+      }
+    }
+
+    const onFocusish = () => {
+      if (unlockedRef.current) return;
+      void pollOnce();
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") onFocusish();
+    };
+
+    window.addEventListener("focus", onFocusish);
+    window.addEventListener("pageshow", onFocusish);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("focus", onFocusish);
+      window.removeEventListener("pageshow", onFocusish);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount/session gate
+  }, [sessionId]);
+
+  // Keep labels in sync with props when parent updates from status.
+  useEffect(() => {
+    setResultAmtLabel(amountLabel);
+  }, [amountLabel]);
+  useEffect(() => {
+    setAiAmtLabel(aiAmountLabel);
+  }, [aiAmountLabel]);
 
   async function startPix() {
     if (loading || !sessionId) return;
@@ -113,13 +277,24 @@ export function IqUnlockCard({
     setCopied(false);
     unlockedRef.current = false;
     try {
-      const created = await createIqPixPayment(sessionId, { itemType });
+      const created = await createIqPixPayment(sessionId, {
+        itemType: checkoutItemType,
+        includeAi: checkoutItemType === "combo",
+      });
       if (created.alreadyUnlocked) {
-        handleUnlocked(created.paymentId);
+        handleUnlocked(created.paymentId, {
+          resultUnlocked: Boolean(created.resultUnlocked),
+          aiUnlocked: Boolean(created.aiUnlocked),
+        });
         return;
       }
       setPix(created);
       if (created.amountLabel) onAmountLabel?.(created.amountLabel);
+      pendingRef.current = {
+        paymentId: created.paymentId,
+        order_nsu: created.paymentId,
+        itemType: created.itemType,
+      };
       if (
         created.notice &&
         (created.simulated ||
@@ -136,14 +311,15 @@ export function IqUnlockCard({
           JSON.stringify({
             sessionId,
             paymentId: created.paymentId,
-            itemType,
+            order_nsu: created.paymentId,
+            itemType: created.itemType,
           }),
         );
       } catch {
         // ignore
       }
       setCanSimApprove(Boolean(created.canSimApprove ?? created.simulated));
-      startPoll();
+      startPoll(true);
     } catch (err) {
       setError(
         err instanceof Error
@@ -175,6 +351,8 @@ export function IqUnlockCard({
     const url = pix?.checkoutUrl;
     if (!url || !/^https?:\/\//i.test(url)) return;
     window.open(url, "_blank", "noopener,noreferrer");
+    // Aggressive poll while the user pays in another tab.
+    startPoll(true);
   }
 
   async function simApprove() {
@@ -182,12 +360,18 @@ export function IqUnlockCard({
     setSimBusy(true);
     setError(null);
     try {
+      const pending = pendingRef.current;
       const status = await fetchIqUnlockStatus(sessionId, {
         simApprove: true,
-        itemType,
+        itemType: checkoutItemType,
+        order_nsu: pending?.order_nsu ?? pending?.paymentId,
+        simulated: true,
       });
       if (isStatusUnlocked(status)) {
-        handleUnlocked(status.paymentId);
+        handleUnlocked(status.paymentId, {
+          resultUnlocked: status.resultUnlocked || status.unlocked,
+          aiUnlocked: status.aiUnlocked,
+        });
       } else {
         setError(
           status.error ||
@@ -218,6 +402,12 @@ export function IqUnlockCard({
       : null;
   const isSim = Boolean(pix?.simulated);
   const benefits = isAi ? AI_BENEFITS : RESULT_BENEFITS;
+  const payLabel = includeAi
+    ? comboAmtLabel ||
+      `${resultAmtLabel} + ${aiAmtLabel}`.replace(/\s+/g, " ")
+    : isAi
+      ? amountLabel
+      : resultAmtLabel;
 
   return (
     <motion.section
@@ -276,9 +466,19 @@ export function IqUnlockCard({
             </>
           ) : (
             <>
-              Você terminou o teste — obrigado pela dedicação. Com {amountLabel}{" "}
-              via Pix você apoia os servidores deste projeto e libera o Hall of
-              Fame, a revisão e o restante do seu diagnóstico.
+              Você terminou o teste — obrigado pela dedicação. Com{" "}
+              {includeAi ? (
+                <>
+                  {payLabel} via Pix você libera o diagnóstico completo e o
+                  assistente Gemini no mesmo pagamento.
+                </>
+              ) : (
+                <>
+                  {resultAmtLabel} via Pix você apoia os servidores deste projeto
+                  e libera o Hall of Fame, a revisão e o restante do seu
+                  diagnóstico.
+                </>
+              )}
             </>
           )}
         </p>
@@ -292,16 +492,34 @@ export function IqUnlockCard({
                 key={item}
                 className="flex gap-2 rounded-xl border border-zinc-800/80 bg-zinc-900/50 px-3 py-2"
               >
-                <span
-                  className={`mt-0.5 ${isAi ? "text-cyan-400" : "text-cyan-400"}`}
-                  aria-hidden
-                >
+                <span className="mt-0.5 text-cyan-400" aria-hidden>
                   ✓
                 </span>
                 <span>{item}</span>
               </li>
             ))}
           </ul>
+
+          {stageOffersAddon ? (
+            <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-cyan-500/25 bg-cyan-500/5 px-3 py-3 text-left transition hover:border-cyan-500/40 hover:bg-cyan-500/10">
+              <input
+                type="checkbox"
+                className="mt-1 h-4 w-4 shrink-0 rounded border-cyan-400/50 bg-zinc-950 text-cyan-400 focus:ring-cyan-400/40"
+                checked={includeAi}
+                onChange={(e) => setIncludeAi(e.target.checked)}
+              />
+              <span className="min-w-0">
+                <span className="flex flex-wrap items-center gap-2 text-sm font-medium text-cyan-100">
+                  <Sparkles className="h-3.5 w-3.5 text-cyan-300" aria-hidden />
+                  Incluir assistente IA (+{aiAmtLabel})
+                </span>
+                <span className="mt-1 block text-xs leading-relaxed text-zinc-400">
+                  Mesmo Pix: resultado ({resultAmtLabel}) + Gemini no seu
+                  perfil. Ou deixe desmarcado e pague só o resultado agora.
+                </span>
+              </span>
+            </label>
+          ) : null}
 
           {(error || null) && (
             <p
@@ -325,14 +543,18 @@ export function IqUnlockCard({
               </>
             ) : isAi ? (
               `Liberar assistente por +${amountLabel}`
+            ) : includeAi ? (
+              `Desbloquear resultado + IA por ${payLabel}`
             ) : (
-              `Desbloquear meu resultado por ${amountLabel}`
+              `Desbloquear meu resultado por ${resultAmtLabel}`
             )}
           </button>
           <p className="mt-3 text-center text-xs text-zinc-600">
             Pagamento Pix via InfinitePay. A liberação só acontece depois da
             confirmação do pagamento
-            {isAi ? " (somente em localhost/dev a simulação está disponível)." : "."}
+            {isAi
+              ? " (somente em localhost/dev a simulação está disponível)."
+              : "."}
           </p>
         </>
       ) : (

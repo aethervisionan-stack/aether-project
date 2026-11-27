@@ -2,11 +2,13 @@ import { NextResponse } from "next/server";
 import {
   infinitepayApiKey,
   infinitepayHandle,
+  iqAmountCentavosForItemType,
   iqPaymentSimulateLocal,
   iqUnlockAmountCentavos,
   isRealApiKey,
 } from "@/lib/iq-payment/config";
 import {
+  extractItemTypeFromOrderNsu,
   extractSessionIdFromOrderNsu,
   getIqUnlockByOrderNsu,
   getIqUnlockSession,
@@ -116,6 +118,11 @@ export async function POST(req: Request) {
       (await getIqUnlockSession(sessionId)) ||
       (await getIqUnlockByOrderNsu(order_nsu));
 
+    const itemTypeHint =
+      extractItemTypeFromOrderNsu(order_nsu) ??
+      localUnlock?.itemType ??
+      "result";
+
     if (localOrder?.status === "paid" || localUnlock?.status === "paid") {
       const paid = await markIqSessionPaid(sessionId, {
         order_nsu,
@@ -124,12 +131,15 @@ export async function POST(req: Request) {
         amountCentavos:
           localOrder?.amountCentavos ||
           localUnlock?.amountCentavos ||
-          iqUnlockAmountCentavos(),
+          iqAmountCentavosForItemType(itemTypeHint),
         simulated: localOrder?.simulated || localUnlock?.simulated,
+        itemType: itemTypeHint,
       });
       return NextResponse.json({
         paid: true,
         unlocked: true,
+        resultUnlocked: paid.resultUnlocked,
+        aiUnlocked: paid.aiUnlocked,
         sessionId,
         order_nsu,
         amountCentavos: paid.amountCentavos,
@@ -168,11 +178,14 @@ export async function POST(req: Request) {
         transaction_nsu: transaction_nsu ?? undefined,
         slug: slug ?? undefined,
         simulated: true,
-        amountCentavos: iqUnlockAmountCentavos(),
+        amountCentavos: iqAmountCentavosForItemType(itemTypeHint),
+        itemType: itemTypeHint,
       });
       return NextResponse.json({
         paid: true,
         unlocked: true,
+        resultUnlocked: paid.resultUnlocked,
+        aiUnlocked: paid.aiUnlocked,
         sessionId,
         order_nsu,
         simulated: true,
@@ -235,7 +248,7 @@ export async function POST(req: Request) {
         : typeof data.paid_amount === "number"
           ? data.paid_amount
           : null;
-    const expected = iqUnlockAmountCentavos();
+    const expected = iqAmountCentavosForItemType(itemTypeHint);
 
     if (paid) {
       if (amountRaw != null && amountRaw < expected) {
@@ -255,10 +268,13 @@ export async function POST(req: Request) {
         transaction_nsu,
         slug,
         amountCentavos: amountRaw ?? expected,
+        itemType: itemTypeHint,
       });
       return NextResponse.json({
         paid: true,
         unlocked: true,
+        resultUnlocked: unlocked.resultUnlocked,
+        aiUnlocked: unlocked.aiUnlocked,
         sessionId,
         order_nsu,
         amountCentavos: unlocked.amountCentavos,

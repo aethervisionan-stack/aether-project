@@ -109,6 +109,33 @@ async function main() {
   assert(await isIqSessionResultUnlocked(sid), "result still unlocked");
   assert(await isIqSessionAiUnlocked(sid), "ai paid unlocks");
 
+  // Combo checkout unlocks both flags in one payment.
+  const comboSid = createIqSessionId();
+  const comboOrder = buildIqOrderNsu(comboSid, "combo");
+  assert(extractItemTypeFromOrderNsu(comboOrder) === "combo", "combo order type");
+  assert(
+    iqAmountCentavosForItemType("combo") === amount + aiAmount,
+    "combo amount = result + ai",
+  );
+  await beginIqUnlockCheckout({
+    sessionId: comboSid,
+    itemType: "combo",
+    paymentId: `sim_${comboSid}_combo`,
+    order_nsu: comboOrder,
+    amountCentavos: amount + aiAmount,
+    simulated: true,
+  });
+  assert(!(await isIqSessionResultUnlocked(comboSid)), "combo pending locked");
+  await markIqSessionPaid(comboSid, {
+    paymentId: `sim_${comboSid}_combo_paid`,
+    order_nsu: comboOrder,
+    amountCentavos: amount + aiAmount,
+    simulated: true,
+    itemType: "combo",
+  });
+  assert(await isIqSessionResultUnlocked(comboSid), "combo unlocks result");
+  assert(await isIqSessionAiUnlocked(comboSid), "combo unlocks ai");
+
   // Localhost simulate gate
   assert(
     iqPaymentSimulateLocal("http://localhost:3010/api/payment/pix/create") ===

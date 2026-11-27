@@ -29,7 +29,8 @@ export {
   normalizeHandle,
 };
 
-export type IqUnlockItemType = "result" | "ai_upsell";
+/** Checkout item: result, AI-only upsell, or combo (result+AI in one Pix). */
+export type IqUnlockItemType = "result" | "ai_upsell" | "combo";
 
 const DEFAULT_UNLOCK_CENTAVOS = 100;
 const DEFAULT_AI_UPSELL_CENTAVOS = 100;
@@ -61,9 +62,11 @@ export function iqAiUpsellAmountCentavos(): number {
 export function iqAmountCentavosForItemType(
   itemType: IqUnlockItemType,
 ): number {
-  return itemType === "ai_upsell"
-    ? iqAiUpsellAmountCentavos()
-    : iqUnlockAmountCentavos();
+  if (itemType === "ai_upsell") return iqAiUpsellAmountCentavos();
+  if (itemType === "combo") {
+    return iqUnlockAmountCentavos() + iqAiUpsellAmountCentavos();
+  }
+  return iqUnlockAmountCentavos();
 }
 
 export function iqUnlockAmountLabel(centavos = iqUnlockAmountCentavos()): string {
@@ -76,7 +79,7 @@ export function iqUnlockAmountLabel(centavos = iqUnlockAmountCentavos()): string
 export function parseIqUnlockItemType(
   raw: unknown,
 ): IqUnlockItemType | null {
-  if (raw === "result" || raw === "ai_upsell") return raw;
+  if (raw === "result" || raw === "ai_upsell" || raw === "combo") return raw;
   return null;
 }
 
@@ -86,18 +89,52 @@ export const IQ_UNLOCK_DESCRIPTION =
 export const IQ_AI_UPSELL_DESCRIPTION =
   "Assistente Gemini especializado no seu resultado do Teste de QI";
 
+export const IQ_COMBO_DESCRIPTION =
+  "Resultado do Teste de QI + assistente Gemini (combo)";
+
 export function iqDescriptionForItemType(
   itemType: IqUnlockItemType,
 ): string {
-  return itemType === "ai_upsell"
-    ? IQ_AI_UPSELL_DESCRIPTION
-    : IQ_UNLOCK_DESCRIPTION;
+  if (itemType === "ai_upsell") return IQ_AI_UPSELL_DESCRIPTION;
+  if (itemType === "combo") return IQ_COMBO_DESCRIPTION;
+  return IQ_UNLOCK_DESCRIPTION;
 }
 
 export function iqInfinitePayTierForItemType(
   itemType: IqUnlockItemType,
 ): string {
-  return itemType === "ai_upsell" ? "iq_unlock_ai" : "iq_unlock_result";
+  if (itemType === "ai_upsell") return "iq_unlock_ai";
+  if (itemType === "combo") return "iq_unlock_combo";
+  return "iq_unlock_result";
+}
+
+/** Checkout line items for InfinitePay (combo = two priced rows). */
+export function iqCheckoutItemsForItemType(itemType: IqUnlockItemType): Array<{
+  quantity: number;
+  price: number;
+  description: string;
+}> {
+  if (itemType === "combo") {
+    return [
+      {
+        quantity: 1,
+        price: iqUnlockAmountCentavos(),
+        description: IQ_UNLOCK_DESCRIPTION,
+      },
+      {
+        quantity: 1,
+        price: iqAiUpsellAmountCentavos(),
+        description: IQ_AI_UPSELL_DESCRIPTION,
+      },
+    ];
+  }
+  return [
+    {
+      quantity: 1,
+      price: iqAmountCentavosForItemType(itemType),
+      description: iqDescriptionForItemType(itemType),
+    },
+  ];
 }
 
 /**

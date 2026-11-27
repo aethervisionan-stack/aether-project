@@ -15,7 +15,7 @@ import {
   infinitepayApiKey,
   infinitepayHandle,
   iqAmountCentavosForItemType,
-  iqDescriptionForItemType,
+  iqCheckoutItemsForItemType,
   iqInfinitePayTierForItemType,
   iqPaymentRedirectUrl,
   iqPaymentWebhookUrl,
@@ -173,18 +173,16 @@ export async function createInfinitePayPixPayment(input: {
   const redirectUrl = iqPaymentRedirectUrl(input.sessionId);
   const webhookUrl = iqPaymentWebhookUrl();
 
+  const items = iqCheckoutItemsForItemType(itemType);
+  if (input.description && items.length === 1) {
+    items[0] = { ...items[0], description: input.description };
+  }
+
   const payload: Record<string, unknown> = {
     order_nsu,
     redirect_url: redirectUrl,
     webhook_url: webhookUrl,
-    items: [
-      {
-        quantity: 1,
-        price: amountCentavos,
-        description:
-          input.description ?? iqDescriptionForItemType(itemType),
-      },
-    ],
+    items,
   };
 
   if (handle && !handle.toUpperCase().includes("COLE_AQUI")) {

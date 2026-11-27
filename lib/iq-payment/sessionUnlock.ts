@@ -119,7 +119,9 @@ export function normalizeIqUnlockRecord(
   );
   const aiUnlocked = Boolean(raw.aiUnlocked ?? false);
   const itemType: IqUnlockItemType =
-    raw.itemType === "ai_upsell" || raw.itemType === "result"
+    raw.itemType === "ai_upsell" ||
+    raw.itemType === "result" ||
+    raw.itemType === "combo"
       ? raw.itemType
       : "result";
   return {
@@ -339,9 +341,13 @@ export async function markIqSessionPaid(
   const order_nsu = extras?.order_nsu ?? paymentId ?? existing?.order_nsu;
 
   const resultUnlocked =
-    itemType === "result" ? true : Boolean(existing?.resultUnlocked);
+    itemType === "result" || itemType === "combo"
+      ? true
+      : Boolean(existing?.resultUnlocked);
   const aiUnlocked =
-    itemType === "ai_upsell" ? true : Boolean(existing?.aiUnlocked);
+    itemType === "ai_upsell" || itemType === "combo"
+      ? true
+      : Boolean(existing?.aiUnlocked);
 
   const next = normalizeIqUnlockRecord({
     sessionId,
@@ -365,19 +371,19 @@ export async function markIqSessionPaid(
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
     resultPaymentId:
-      itemType === "result"
+      itemType === "result" || itemType === "combo"
         ? paymentId
         : existing?.resultPaymentId,
     resultOrderNsu:
-      itemType === "result"
+      itemType === "result" || itemType === "combo"
         ? order_nsu
         : existing?.resultOrderNsu,
     aiPaymentId:
-      itemType === "ai_upsell"
+      itemType === "ai_upsell" || itemType === "combo"
         ? paymentId
         : existing?.aiPaymentId,
     aiOrderNsu:
-      itemType === "ai_upsell"
+      itemType === "ai_upsell" || itemType === "combo"
         ? order_nsu
         : existing?.aiOrderNsu,
   });
@@ -460,7 +466,13 @@ export function extractItemTypeFromOrderNsu(
   if (!orderNsu || typeof orderNsu !== "string") return null;
   const parts = orderNsu.split("__");
   if (parts.length >= 4 && parts[0] === "iq") {
-    if (parts[2] === "result" || parts[2] === "ai_upsell") return parts[2];
+    if (
+      parts[2] === "result" ||
+      parts[2] === "ai_upsell" ||
+      parts[2] === "combo"
+    ) {
+      return parts[2];
+    }
   }
   // Legacy orders without itemType → result unlock
   if (parts.length >= 3 && parts[0] === "iq") return "result";

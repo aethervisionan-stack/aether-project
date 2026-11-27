@@ -94,6 +94,7 @@ import {
   cleanIqPaymentReturnUrl,
   createIqSessionId,
   fetchIqUnlockStatus,
+  readIqPaymentReturnParams,
 } from "@/src/lib/iqUnlockClient";
 
 function formatTime(ms: number): string {
@@ -161,7 +162,7 @@ export function IqTestApp() {
     setHydrated(true);
     if (typeof window === "undefined") return;
     setChallengeInvite(parseChallengeInvite(window.location.search));
-    cleanIqPaymentReturnUrl();
+    // Do NOT wipe payment_return params here — IqUnlockCard / status reconcile first.
   }, []);
 
   useEffect(() => {
@@ -186,6 +187,7 @@ export function IqTestApp() {
   }, [hydrated, state.phase, state.sessionId]);
 
   // Reconcile unlock with server — localStorage flag alone never unlocks.
+  // Also re-check ASAP on tab focus / visibility (InfinitePay return / webhook lag).
   useEffect(() => {
     if (!hydrated) return;
     if (state.phase !== "results" && state.phase !== "review") return;
@@ -196,10 +198,17 @@ export function IqTestApp() {
     }
 
     let cancelled = false;
-    setUnlockChecking(true);
-    void (async () => {
+
+    const reconcile = async (opts: { showSpinner?: boolean } = {}) => {
+      if (opts.showSpinner) setUnlockChecking(true);
       try {
-        const status = await fetchIqUnlockStatus(sessionId);
+        const ret = readIqPaymentReturnParams();
+        const status = await fetchIqUnlockStatus(sessionId, {
+          order_nsu: ret?.order_nsu,
+          transaction_nsu: ret?.transaction_nsu,
+          slug: ret?.slug,
+          simulated: ret?.simulated,
+        });
         if (cancelled) return;
         if (status.resultAmountLabel) {
           setUnlockAmountLabel(status.resultAmountLabel);
@@ -212,6 +221,7 @@ export function IqTestApp() {
         setServerAiUnlocked(Boolean(status.aiUnlocked));
         if (status.resultUnlocked || status.unlocked) {
           applyServerUnlock(status.paymentId ?? status.order_nsu);
+          if (status.aiUnlocked) setServerAiUnlocked(true);
         } else {
           setServerUnlocked(false);
           // Drop stale client-only unlock claims.
@@ -221,18 +231,32 @@ export function IqTestApp() {
         }
       } catch {
         if (!cancelled) {
-          setServerUnlocked(false);
-          setServerAiUnlocked(false);
           setUnlockVerifyError(
             "Não foi possível verificar o desbloqueio no servidor. Tente de novo — sua sessão permanece salva.",
           );
         }
       } finally {
-        if (!cancelled) setUnlockChecking(false);
+        if (!cancelled && opts.showSpinner) setUnlockChecking(false);
       }
-    })();
+    };
+
+    void reconcile({ showSpinner: true });
+
+    const onFocusish = () => {
+      void reconcile({ showSpinner: false });
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") onFocusish();
+    };
+    window.addEventListener("focus", onFocusish);
+    window.addEventListener("pageshow", onFocusish);
+    document.addEventListener("visibilitychange", onVisibility);
+
     return () => {
       cancelled = true;
+      window.removeEventListener("focus", onFocusish);
+      window.removeEventListener("pageshow", onFocusish);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: gate on phase/sessionId
   }, [hydrated, state.phase, state.sessionId]);
@@ -861,10 +885,13 @@ export function IqTestApp() {
                 <IqUnlockCard
                   sessionId={state.sessionId}
                   itemType="result"
+                  offerAiAddon
                   amountLabel={unlockAmountLabel}
+                  aiAmountLabel={aiUpsellAmountLabel}
                   onAmountLabel={setUnlockAmountLabel}
-                  onUnlocked={(paymentId) => {
+                  onUnlocked={(paymentId, flags) => {
                     applyServerUnlock(paymentId);
+                    if (flags?.aiUnlocked) setServerAiUnlocked(true);
                   }}
                 />
                 {/* Public Hall of Fame while locked — names/scores only; no locked session IQ leak. */}
