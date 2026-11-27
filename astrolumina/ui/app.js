@@ -3,6 +3,7 @@ import { mountSignExplorer } from './signExplorer.js';
 import { mountCompatibilityUI } from './compatibilityUI.js';
 import { mountNatalUI } from './natalUI.js';
 import { mountDualCompatUI } from './dualCompatUI.js';
+import { mountUniverseBackground } from './universeBackground.js';
 
 function buildHeroMandala() {
   const ticks = document.getElementById('zodiac-ticks');
@@ -69,6 +70,7 @@ function setupNavSpy() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  mountUniverseBackground(document.body);
   buildHeroMandala();
   setupMobileMenu();
   setupNavSpy();
