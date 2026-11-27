@@ -181,10 +181,10 @@ export function IqTestApp() {
     })();
     const preferSessionId = ret?.session_id || urlSessionId;
     const paymentReturn = Boolean(ret);
+    // InfinitePay may strip session_id; still treat checkout return as
+    // "must restore completed quiz" so we never flash landing.
     const restored = findResumableQuizState({
       sessionId: preferSessionId,
-      // Payment return OR an explicit session_id → require a real session,
-      // never fall through to landing.
       requireCompleted: paymentReturn || Boolean(preferSessionId),
     });
 
@@ -193,7 +193,7 @@ export function IqTestApp() {
         ...restored,
         // Force results view when returning from checkout with a finished quiz.
         phase:
-          paymentReturn && restored.result
+          (paymentReturn || Boolean(preferSessionId)) && restored.result
             ? restored.phase === "review"
               ? "review"
               : "results"

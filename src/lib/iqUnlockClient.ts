@@ -248,18 +248,24 @@ export function readIqPaymentReturnParams(
 ): IqPaymentReturnParams | null {
   try {
     const params = new URLSearchParams(search);
+    // InfinitePay often replaces our redirect query with only
+    // transaction_id + receipt_url (dropping payment_return / session_id).
+    const transaction_nsu =
+      params.get("transaction_nsu") || params.get("transaction_id");
     const paymentReturn =
       params.get("payment_return") === "1" ||
       params.has("order_nsu") ||
-      params.has("transaction_nsu");
+      params.has("transaction_nsu") ||
+      params.has("transaction_id") ||
+      params.has("receipt_url");
     if (!paymentReturn) return null;
     return {
       order_nsu: params.get("order_nsu"),
-      transaction_nsu: params.get("transaction_nsu"),
+      transaction_nsu,
       slug: params.get("slug"),
       simulated:
         params.get("simulated") === "1" ||
-        Boolean(params.get("transaction_nsu")?.startsWith("SIM_")),
+        Boolean(transaction_nsu?.startsWith("SIM_")),
       session_id: params.get("session_id"),
     };
   } catch {
@@ -284,6 +290,7 @@ export function cleanIqPaymentReturnUrl(opts?: {
       "payment_return",
       "order_nsu",
       "transaction_nsu",
+      "transaction_id",
       "slug",
       "simulated",
       "capture_method",
