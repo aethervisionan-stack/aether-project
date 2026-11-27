@@ -18,15 +18,6 @@ import { TestLineQiFooter } from "@/src/components/TestLineQiLogo";
 import type { ChallengeInvite } from "@/src/lib/challengeInvite";
 import { ESCALA_HELP } from "@/src/lib/skillHelp";
 
-const RIGOR_CHIPS = [
-  { label: "30 itens" },
-  { label: "6 índices CHC" },
-  { label: "L1–L5" },
-  { label: "Escala 100/15", help: true },
-  { label: "IRT 3PL" },
-  { label: "Ranking local" },
-] as const;
-
 /** Promessas do hero alinhadas ao painel de resultados. */
 const HERO_PROMISE_PILLS = [
   {
@@ -188,19 +179,6 @@ export function IqLanding({
             ou decisões ágeis. Quiz com ranking local: estimativa clara, sem
             milagre.
           </p>
-          <ul className="flex flex-wrap gap-2">
-            {RIGOR_CHIPS.map((chip) => (
-              <li
-                key={chip.label}
-                className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1 text-[11px] font-medium tabular-nums tracking-tight text-zinc-300"
-              >
-                {chip.label}
-                {"help" in chip && chip.help ? (
-                  <SkillHelpTip label={chip.label} help={ESCALA_HELP} />
-                ) : null}
-              </li>
-            ))}
-          </ul>
           <ul className="grid max-w-xl grid-cols-1 gap-2 pt-1 sm:grid-cols-3">
             {HERO_PROMISE_PILLS.map((pill) => (
               <li

@@ -9,13 +9,14 @@ export function isSeedLeaderboardId(id: string): boolean {
 
 /**
  * Avatar sources (photographic placeholders — NOT AI-generated faces):
- * - https://i.pravatar.cc — real-photo CDN used widely for UI demos
- *   (UI Faces / similar stock portraits; `?img=N` pins a stable photo)
+ * - Rank-1 Ana: local ordinary stock portrait under /images/hof
+ *   (candid real-photo look; avoids glamorous/AI-pretty demo faces)
+ * - Others: https://i.pravatar.cc — real-photo CDN (`?img=N` pins a stable photo)
  * Some rows omit avatarUrl → ParticipantAvatar shows initials only
  * (fictional placeholder, no photo).
  */
 const AVATAR = {
-  ana: "https://i.pravatar.cc/150?img=47",
+  ana: "/images/hof/ana-beatriz.jpg",
   lucas: "https://i.pravatar.cc/150?img=12",
   camila: "https://i.pravatar.cc/150?img=5",
   pedro: "https://i.pravatar.cc/150?img=68",

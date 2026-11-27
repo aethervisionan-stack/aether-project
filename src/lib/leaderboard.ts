@@ -24,10 +24,12 @@ import {
 
 export type { LeaderboardEntry, LeaderboardFilter, LeaderboardMode };
 
-/** Accept local data URLs or future remote http(s) avatar URLs. */
+/** Accept local data URLs, same-origin paths, or remote http(s) avatar URLs. */
 function normalizeAvatarUrl(value: unknown): string | undefined {
   if (typeof value !== "string" || !value) return undefined;
   if (isDataUrlAvatar(value)) return value;
+  // Same-origin public assets (e.g. /images/hof/ana-beatriz.jpg)
+  if (/^\/[\w./\-]+$/i.test(value) && value.length < 512) return value;
   if (/^https?:\/\//i.test(value) && value.length < 2048) return value;
   return undefined;
 }
