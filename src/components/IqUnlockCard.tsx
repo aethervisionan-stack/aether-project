@@ -12,6 +12,7 @@ import {
   type IqPixCreateResult,
   type IqUnlockItemType,
 } from "@/src/lib/iqUnlockClient";
+import { redirectToCheckout } from "@/src/utils/checkoutRedirect";
 import { OnlinePresenceBadge } from "@/src/components/OnlinePresenceBadge";
 
 type UnlockFlags = {
@@ -350,9 +351,13 @@ export function IqUnlockCard({
   function openCheckout() {
     const url = pix?.checkoutUrl;
     if (!url || !/^https?:\/\//i.test(url)) return;
-    window.open(url, "_blank", "noopener,noreferrer");
-    // Aggressive poll while the user pays in another tab.
-    startPoll(true);
+    // SAME TAB — InfinitePay return must land in the tab that owns the quiz
+    // session. window.open caused return tabs to show empty landing.
+    try {
+      redirectToCheckout(url);
+    } catch {
+      window.location.assign(url);
+    }
   }
 
   async function simApprove() {

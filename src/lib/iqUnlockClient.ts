@@ -337,3 +337,63 @@ export function ensureIqSessionIdInUrl(sessionId: string | null | undefined): vo
     // ignore
   }
 }
+
+/** Parse session id embedded in InfinitePay order_nsu (iq__iq_xxx__result__ts). */
+export function extractIqSessionIdFromOrderNsu(
+  orderNsu: string | null | undefined,
+): string | null {
+  if (!orderNsu || typeof orderNsu !== "string") return null;
+  const parts = orderNsu.split("__");
+  if (parts.length >= 3 && parts[0] === "iq" && parts[1]?.startsWith("iq_")) {
+    return parts[1];
+  }
+  if (parts[0]?.startsWith("iq_")) return parts[0];
+  return null;
+}
+
+export async function persistIqQuizSnapshot(
+  sessionId: string,
+  quizSnapshot: Record<string, unknown>,
+): Promise<boolean> {
+  try {
+    const res = await fetch("/api/iq-session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionId, quizSnapshot }),
+      keepalive: true,
+    });
+    return res.ok;
+  } catch (err) {
+    console.warn("[iq-restore] snapshot persist failed", err);
+    return false;
+  }
+}
+
+export async function fetchIqQuizSnapshot(sessionId: string): Promise<{
+  quizSnapshot: Record<string, unknown> | null;
+  resultUnlocked: boolean;
+  aiUnlocked: boolean;
+} | null> {
+  try {
+    const qs = new URLSearchParams({ sessionId });
+    const res = await fetch(`/api/iq-session?${qs.toString()}`, {
+      method: "GET",
+      cache: "no-store",
+    });
+    const data = (await res.json().catch(() => ({}))) as {
+      quizSnapshot?: Record<string, unknown> | null;
+      resultUnlocked?: boolean;
+      aiUnlocked?: boolean;
+      ok?: boolean;
+    };
+    if (!res.ok) return null;
+    return {
+      quizSnapshot: data.quizSnapshot ?? null,
+      resultUnlocked: Boolean(data.resultUnlocked),
+      aiUnlocked: Boolean(data.aiUnlocked),
+    };
+  } catch (err) {
+    console.warn("[iq-restore] snapshot fetch failed", err);
+    return null;
+  }
+}

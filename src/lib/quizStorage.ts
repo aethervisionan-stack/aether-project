@@ -187,18 +187,12 @@ export function findResumableQuizState(
   if (sessionId) {
     const byId = findQuizStateBySessionId(sessionId);
     if (byId) {
-      if (
-        opts.requireCompleted &&
-        byId.phase !== "results" &&
-        byId.phase !== "review"
-      ) {
-        // Payment return with sessionId but quiz not finished — still restore
-        // whatever we have so we never dump the user on a blank landing.
-        return byId;
-      }
+      // Payment return with sessionId but quiz not finished — still restore
+      // whatever we have so we never dump the user on a blank landing.
       return byId;
     }
-    if (opts.requireCompleted) return null;
+    // Fall through: payment return may have a stale session_id while a
+    // completed quiz still sits under another key — prefer that over landing.
   }
 
   const all = listSavedQuizStates().filter(
@@ -219,6 +213,58 @@ export function findResumableQuizState(
 
   pool.sort((a, b) => quizStateActivityAt(b) - quizStateActivityAt(a));
   return pool[0] ?? null;
+}
+
+/** Validate / coerce a server quiz snapshot into persisted state. */
+export function coerceQuizSnapshot(
+  raw: Record<string, unknown> | null | undefined,
+): QuizPersistedState | null {
+  if (!raw || typeof raw !== "object") return null;
+  try {
+    const mode = raw.mode;
+    if (mode !== "figures" && mode !== "questions" && mode !== "hybrid") {
+      return null;
+    }
+    if (raw.phase !== "results" && raw.phase !== "review") return null;
+    if (!raw.result || typeof raw.result !== "object") return null;
+    const total =
+      typeof raw.totalQuestions === "number"
+        ? raw.totalQuestions
+        : QUIZ_TOTAL_QUESTIONS;
+    if (!Array.isArray(raw.answers) || raw.answers.length !== total) {
+      return null;
+    }
+    return {
+      ...(raw as unknown as QuizPersistedState),
+      version: QUIZ_STORAGE_VERSION,
+      mode,
+      phase: raw.phase,
+      totalQuestions: total,
+      sessionId:
+        typeof raw.sessionId === "string" ? raw.sessionId : null,
+      resultsUnlocked: Boolean(raw.resultsUnlocked),
+      unlockOrderNsu:
+        typeof raw.unlockOrderNsu === "string" ? raw.unlockOrderNsu : null,
+      participantName:
+        typeof raw.participantName === "string" ? raw.participantName : "",
+      participantAvatarUrl:
+        typeof raw.participantAvatarUrl === "string"
+          ? raw.participantAvatarUrl
+          : null,
+      leaderboardEntryId:
+        typeof raw.leaderboardEntryId === "string"
+          ? raw.leaderboardEntryId
+          : null,
+      optionSwitches: Array.isArray(raw.optionSwitches)
+        ? (raw.optionSwitches as number[])
+        : Array(total).fill(0),
+      timeSpentMs: Array.isArray(raw.timeSpentMs)
+        ? (raw.timeSpentMs as number[])
+        : Array(total).fill(0),
+    };
+  } catch {
+    return null;
+  }
 }
 
 export function createInitialState(

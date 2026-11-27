@@ -3,6 +3,7 @@
  * Run: npx tsx scripts/smoke-iq-session-restore.ts
  */
 import {
+  coerceQuizSnapshot,
   createInitialState,
   findQuizStateBySessionId,
   findResumableQuizState,
@@ -14,6 +15,7 @@ import {
   cleanIqPaymentReturnUrl,
   createIqSessionId,
   ensureIqSessionIdInUrl,
+  extractIqSessionIdFromOrderNsu,
   readIqPaymentReturnParams,
 } from "../src/lib/iqUnlockClient";
 import type { IqResult, QuizPersistedState } from "../src/types/quiz";
@@ -157,12 +159,15 @@ function main() {
   assert(f5?.sessionId === sid, "F5 restores newest completed");
   assert(f5?.phase !== "modeSelect", "F5 never landing");
 
-  // Explicit requireCompleted with missing id → null (caller must not invent landing wipe of storage).
+  // Unknown session_id must NOT dump to landing when a completed quiz exists.
   const missing = findResumableQuizState({
     sessionId: "iq_missing_nowhere",
     requireCompleted: true,
   });
-  assert(missing === null, "unknown sessionId + requireCompleted → null");
+  assert(
+    missing?.sessionId === sid,
+    "unknown sessionId + requireCompleted falls through to completed",
+  );
 
   // URL helpers
   const href =
@@ -216,6 +221,36 @@ function main() {
     "ensure keeps session_id",
   );
 
+  // Unknown session_id must still fall through to newest completed (not landing).
+  const fallthrough = findResumableQuizState({
+    sessionId: "iq_stale_not_in_storage",
+    requireCompleted: true,
+  });
+  assert(
+    fallthrough?.sessionId === sid,
+    "stale session_id falls through to completed quiz",
+  );
+
+  const orderSid = extractIqSessionIdFromOrderNsu(
+    `iq__${sid}__result__1795752495740`,
+  );
+  assert(orderSid === sid, "extract session from order_nsu");
+
+  const coerced = coerceQuizSnapshot({
+    ...newer,
+    sessionId: sid,
+  } as unknown as Record<string, unknown>);
+  assert(coerced?.sessionId === sid, "coerce snapshot sessionId");
+  assert(coerced?.phase === "results", "coerce snapshot phase");
+  assert(coerceQuizSnapshot({ mode: "figures" }) === null, "reject bad snap");
+
+  // InfinitePay-style return (transaction_id) still counts as payment return.
+  const ipRet = readIqPaymentReturnParams(
+    `?transaction_id=abc&receipt_url=https://recibo.infinitepay.io/abc&session_id=${encodeURIComponent(sid)}`,
+  );
+  assert(ipRet?.session_id === sid, "infinitepay transaction_id return");
+  assert(ipRet?.transaction_nsu === "abc", "maps transaction_id");
+
   console.log(
     JSON.stringify(
       {
@@ -223,6 +258,8 @@ function main() {
         sessionId: sid,
         restoredMode: paymentRestore?.mode,
         f5SessionId: f5?.sessionId,
+        fallthroughSessionId: fallthrough?.sessionId,
+        orderSid,
         urlAfterClean: window.location.search,
       },
       null,

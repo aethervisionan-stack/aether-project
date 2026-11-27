@@ -50,6 +50,7 @@ import {
 } from "@/src/lib/leaderboard";
 import {
   clearQuizState,
+  coerceQuizSnapshot,
   createInitialState,
   createModeSelectState,
   findResumableQuizState,
@@ -95,7 +96,10 @@ import {
   cleanIqPaymentReturnUrl,
   createIqSessionId,
   ensureIqSessionIdInUrl,
+  extractIqSessionIdFromOrderNsu,
+  fetchIqQuizSnapshot,
   fetchIqUnlockStatus,
+  persistIqQuizSnapshot,
   readIqPaymentReturnParams,
 } from "@/src/lib/iqUnlockClient";
 
@@ -166,52 +170,113 @@ export function IqTestApp() {
       return;
     }
 
+    let cancelled = false;
     setChallengeInvite(parseChallengeInvite(window.location.search));
 
-    // CRITICAL: never land on modeSelect after quiz+payment. Restore from
-    // URL session_id / localStorage before first paint of the shell.
+    // CRITICAL: never land on modeSelect after quiz+payment.
+    // 1) localStorage  2) server quizSnapshot (InfinitePay return tab / wipe)
+    // Stay on "Carregando" until this finishes — do NOT flash landing.
     // Do NOT wipe payment_return params here — status reconcile runs next.
-    const ret = readIqPaymentReturnParams(window.location.search);
-    const urlSessionId = (() => {
-      try {
-        return new URLSearchParams(window.location.search).get("session_id");
-      } catch {
-        return null;
+    void (async () => {
+      const ret = readIqPaymentReturnParams(window.location.search);
+      const params = new URLSearchParams(window.location.search);
+      const urlSessionId = params.get("session_id");
+      const orderSessionId = extractIqSessionIdFromOrderNsu(
+        ret?.order_nsu || params.get("order_nsu"),
+      );
+      const preferSessionId =
+        (ret?.session_id && ret.session_id.startsWith("iq_")
+          ? ret.session_id
+          : null) ||
+        (urlSessionId?.startsWith("iq_") ? urlSessionId : null) ||
+        orderSessionId;
+      const paymentReturn = Boolean(ret);
+
+      console.info("[iq-restore] hydrate start", {
+        paymentReturn,
+        preferSessionId,
+        order_nsu: ret?.order_nsu ?? params.get("order_nsu"),
+        transaction_nsu: ret?.transaction_nsu,
+        search: window.location.search,
+      });
+
+      let restored = findResumableQuizState({
+        sessionId: preferSessionId,
+        requireCompleted: paymentReturn || Boolean(preferSessionId),
+      });
+      let fromServer = false;
+      let serverAi = false;
+      let serverResult = false;
+
+      if (!restored && preferSessionId) {
+        console.info("[iq-restore] local miss — fetching server snapshot", {
+          preferSessionId,
+        });
+        const remote = await fetchIqQuizSnapshot(preferSessionId);
+        if (cancelled) return;
+        if (remote?.quizSnapshot) {
+          restored = coerceQuizSnapshot(remote.quizSnapshot);
+          fromServer = Boolean(restored);
+          serverResult = remote.resultUnlocked;
+          serverAi = remote.aiUnlocked;
+          console.info("[iq-restore] server snapshot", {
+            ok: Boolean(restored),
+            resultUnlocked: serverResult,
+            aiUnlocked: serverAi,
+          });
+        } else {
+          console.warn("[iq-restore] server snapshot missing", {
+            preferSessionId,
+          });
+        }
       }
+
+      if (cancelled) return;
+
+      if (restored) {
+        const next: QuizPersistedState = {
+          ...restored,
+          phase:
+            (paymentReturn || Boolean(preferSessionId) || fromServer) &&
+            restored.result
+              ? restored.phase === "review"
+                ? "review"
+                : "results"
+              : restored.phase,
+          sessionId:
+            restored.sessionId ||
+            (preferSessionId?.startsWith("iq_") ? preferSessionId : null) ||
+            null,
+        };
+        setState(next);
+        saveQuizState(next);
+        if (next.sessionId) ensureIqSessionIdInUrl(next.sessionId);
+        if (serverResult) {
+          setServerUnlocked(true);
+          if (serverAi) setServerAiUnlocked(true);
+        }
+        console.info("[iq-restore] restored →", {
+          phase: next.phase,
+          sessionId: next.sessionId,
+          fromServer,
+          mode: next.mode,
+        });
+      } else if (preferSessionId?.startsWith("iq_")) {
+        ensureIqSessionIdInUrl(preferSessionId);
+        console.warn(
+          "[iq-restore] payment/session present but no quiz to restore — landing",
+          { preferSessionId, paymentReturn },
+        );
+      } else {
+        console.info("[iq-restore] no resumable session — landing");
+      }
+
+      setHydrated(true);
     })();
-    const preferSessionId = ret?.session_id || urlSessionId;
-    const paymentReturn = Boolean(ret);
-    // InfinitePay may strip session_id; still treat checkout return as
-    // "must restore completed quiz" so we never flash landing.
-    const restored = findResumableQuizState({
-      sessionId: preferSessionId,
-      requireCompleted: paymentReturn || Boolean(preferSessionId),
-    });
 
-    if (restored) {
-      const next: QuizPersistedState = {
-        ...restored,
-        // Force results view when returning from checkout with a finished quiz.
-        phase:
-          (paymentReturn || Boolean(preferSessionId)) && restored.result
-            ? restored.phase === "review"
-              ? "review"
-              : "results"
-            : restored.phase,
-        sessionId:
-          restored.sessionId ||
-          (preferSessionId?.startsWith("iq_") ? preferSessionId : null) ||
-          null,
-      };
-      setState(next);
-      if (next.sessionId) ensureIqSessionIdInUrl(next.sessionId);
-    } else if (preferSessionId?.startsWith("iq_")) {
-      // Keep session_id visible even if local answers were wiped — unlock
-      // reconcile / support can still key off it; do not invent a landing wipe.
-      ensureIqSessionIdInUrl(preferSessionId);
-    }
-
-    setHydrated(true);
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -224,6 +289,23 @@ export function IqTestApp() {
       ensureIqSessionIdInUrl(state.sessionId);
     }
   }, [state, hydrated]);
+
+  // Persist quiz snapshot for InfinitePay return tabs (not every keystroke).
+  useEffect(() => {
+    if (!hydrated) return;
+    if (state.phase !== "results" && state.phase !== "review") return;
+    if (!state.sessionId || !state.result) return;
+    void persistIqQuizSnapshot(
+      state.sessionId,
+      state as unknown as Record<string, unknown>,
+    );
+  }, [
+    hydrated,
+    state.phase,
+    state.sessionId,
+    state.finishedAt,
+    state.resultsUnlocked,
+  ]);
 
   // Mint sessionId for legacy finished sessions that predate the paywall.
   useEffect(() => {

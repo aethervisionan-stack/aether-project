@@ -37,6 +37,11 @@ export type IqUnlockRecord = {
   resultOrderNsu?: string;
   aiPaymentId?: string;
   aiOrderNsu?: string;
+  /**
+   * Completed quiz client state (results) so InfinitePay return tabs /
+   * wiped localStorage can restore without dumping on landing.
+   */
+  quizSnapshot?: Record<string, unknown> | null;
 };
 
 type GlobalStore = typeof globalThis & {
@@ -124,6 +129,12 @@ export function normalizeIqUnlockRecord(
     raw.itemType === "combo"
       ? raw.itemType
       : "result";
+  const quizSnapshot =
+    raw.quizSnapshot &&
+    typeof raw.quizSnapshot === "object" &&
+    !Array.isArray(raw.quizSnapshot)
+      ? (raw.quizSnapshot as Record<string, unknown>)
+      : null;
   return {
     sessionId: raw.sessionId,
     unlocked: resultUnlocked,
@@ -148,6 +159,7 @@ export function normalizeIqUnlockRecord(
     resultOrderNsu: raw.resultOrderNsu,
     aiPaymentId: raw.aiPaymentId,
     aiOrderNsu: raw.aiOrderNsu,
+    quizSnapshot,
   };
 }
 
@@ -386,6 +398,7 @@ export async function markIqSessionPaid(
       itemType === "ai_upsell" || itemType === "combo"
         ? order_nsu
         : existing?.aiOrderNsu,
+    quizSnapshot: existing?.quizSnapshot ?? null,
   });
   await putIqUnlockSession(next);
   return next;
@@ -439,9 +452,56 @@ export async function beginIqUnlockCheckout(
     resultOrderNsu: existing?.resultOrderNsu,
     aiPaymentId: existing?.aiPaymentId,
     aiOrderNsu: existing?.aiOrderNsu,
+    quizSnapshot: existing?.quizSnapshot ?? null,
   });
   await putIqUnlockSession(next);
   return next;
+}
+
+/**
+ * Persist completed quiz client state for payment-return restore
+ * (InfinitePay often opens/returns in a tab that lost localStorage).
+ */
+export async function saveIqQuizSnapshot(
+  sessionId: string,
+  snapshot: Record<string, unknown>,
+): Promise<IqUnlockRecord> {
+  const now = Date.now();
+  const existing = await getIqUnlockSession(sessionId);
+  const next = normalizeIqUnlockRecord({
+    sessionId,
+    unlocked: Boolean(existing?.resultUnlocked),
+    resultUnlocked: Boolean(existing?.resultUnlocked),
+    aiUnlocked: Boolean(existing?.aiUnlocked),
+    itemType: existing?.itemType ?? "result",
+    paymentId: existing?.paymentId,
+    order_nsu: existing?.order_nsu,
+    amountCentavos: existing?.amountCentavos ?? 0,
+    status: existing?.status ?? "pending",
+    simulated: existing?.simulated,
+    paidAt: existing?.paidAt,
+    transaction_nsu: existing?.transaction_nsu,
+    slug: existing?.slug,
+    qrCode: existing?.qrCode,
+    qrCodeBase64: existing?.qrCodeBase64,
+    expiresAt: existing?.expiresAt,
+    createdAt: existing?.createdAt ?? now,
+    updatedAt: now,
+    resultPaymentId: existing?.resultPaymentId,
+    resultOrderNsu: existing?.resultOrderNsu,
+    aiPaymentId: existing?.aiPaymentId,
+    aiOrderNsu: existing?.aiOrderNsu,
+    quizSnapshot: snapshot,
+  });
+  await putIqUnlockSession(next);
+  return next;
+}
+
+export async function getIqQuizSnapshot(
+  sessionId: string,
+): Promise<Record<string, unknown> | null> {
+  const rec = await getIqUnlockSession(sessionId);
+  return rec?.quizSnapshot ?? null;
 }
 
 export function extractSessionIdFromOrderNsu(
