@@ -365,10 +365,12 @@ export function IqTestApp() {
         if (status.aiAmountLabel) {
           setAiUpsellAmountLabel(status.aiAmountLabel);
         }
-        setServerAiUnlocked(Boolean(status.aiUnlocked));
-        if (status.resultUnlocked || status.unlocked) {
+        const resultOk = Boolean(status.resultUnlocked || status.unlocked);
+        const aiOk = Boolean(status.aiUnlocked);
+        setServerAiUnlocked(aiOk);
+        if (resultOk) {
           applyServerUnlock(status.paymentId ?? status.order_nsu);
-          if (status.aiUnlocked) setServerAiUnlocked(true);
+          if (aiOk) setServerAiUnlocked(true);
         } else {
           setServerUnlocked(false);
           // Drop stale client-only unlock claims.
@@ -376,6 +378,13 @@ export function IqTestApp() {
             setState((prev) => ({ ...prev, resultsUnlocked: false }));
           }
         }
+        // Defer URL cleanup until the return's focus tier is satisfied
+        // (keeps order_nsu/transaction_id for AI upsell reconcile).
+        maybeCleanPaymentReturnUrl({
+          resultUnlocked: resultOk,
+          aiUnlocked: aiOk,
+          focusItem: focusItem ?? status.itemType ?? "result",
+        });
       } catch {
         if (!cancelled) {
           setUnlockVerifyError(
@@ -464,8 +473,9 @@ export function IqTestApp() {
       setUnlockVerifyError(null);
       setState((prev) => {
         const keepSessionId = prev.sessionId;
-        // Strip return noise but keep session_id for F5 restore.
-        cleanIqPaymentReturnUrl({ keepSessionId });
+        // Keep session_id for F5 — do NOT strip payment_return params here.
+        // Cleaning too early wipes AI upsell return hints while result is
+        // already unlocked. URL cleanup runs only after focus-tier unlock.
         if (keepSessionId) ensureIqSessionIdInUrl(keepSessionId);
 
         if (!prev.result) {
@@ -501,6 +511,28 @@ export function IqTestApp() {
       });
     },
     [],
+  );
+
+  /** Strip InfinitePay return query only after the focus tier is unlocked. */
+  const maybeCleanPaymentReturnUrl = useCallback(
+    (opts: {
+      resultUnlocked: boolean;
+      aiUnlocked: boolean;
+      focusItem?: string | null;
+    }) => {
+      const focus = opts.focusItem;
+      const focusDone =
+        focus === "ai_upsell"
+          ? opts.aiUnlocked
+          : focus === "combo"
+            ? opts.resultUnlocked && opts.aiUnlocked
+            : opts.resultUnlocked;
+      if (!focusDone) return;
+      const keepSessionId = state.sessionId;
+      cleanIqPaymentReturnUrl({ keepSessionId });
+      if (keepSessionId) ensureIqSessionIdInUrl(keepSessionId);
+    },
+    [state.sessionId],
   );
 
   useEffect(() => {

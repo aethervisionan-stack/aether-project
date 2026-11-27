@@ -231,6 +231,12 @@ function main() {
   assert(ret?.session_id === sid, "parse return session_id");
   assert(ret?.order_nsu === "ord_1", "parse order_nsu");
 
+  // Cleanup is deferred until focus-tier unlock on the client; helper still
+  // strips return noise when explicitly invoked after unlock.
+  assert(
+    window.location.search.includes("payment_return"),
+    "return params still present before deferred clean",
+  );
   cleanIqPaymentReturnUrl({ keepSessionId: sid });
   assert(
     window.location.search.includes(`session_id=${encodeURIComponent(sid)}`) ||
@@ -239,7 +245,7 @@ function main() {
   );
   assert(
     !window.location.search.includes("payment_return"),
-    "payment_return stripped",
+    "payment_return stripped after deferred clean",
   );
   assert(!window.location.search.includes("order_nsu"), "order_nsu stripped");
 
