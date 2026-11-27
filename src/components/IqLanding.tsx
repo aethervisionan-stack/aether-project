@@ -13,6 +13,10 @@ import { LeaderboardPanel } from "@/src/components/LeaderboardPanel";
 import { OnlinePresenceBadge } from "@/src/components/OnlinePresenceBadge";
 import { AvatarPicker } from "@/src/components/ParticipantAvatar";
 import { SkillHelpTip } from "@/src/components/SkillHelpTip";
+import {
+  TestLineQiFooter,
+  TestLineQiLogo,
+} from "@/src/components/TestLineQiLogo";
 import type { ChallengeInvite } from "@/src/lib/challengeInvite";
 import { ESCALA_HELP } from "@/src/lib/skillHelp";
 
@@ -127,12 +131,7 @@ export function IqLanding({
         aria-label="Navegação da avaliação"
         className="sticky top-3 z-30 mx-auto flex max-w-full items-center justify-between gap-3 overflow-x-auto rounded-2xl border border-white/[0.08] bg-[#0B0D14]/70 px-3 py-2.5 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] backdrop-blur-xl sm:px-4"
       >
-        <a
-          href="#iniciar"
-          className="shrink-0 font-iq-display text-sm tracking-tight text-zinc-100"
-        >
-          Aether QI
-        </a>
+        <TestLineQiLogo href="#iniciar" priority />
         <div className="flex items-center gap-1 sm:gap-2">
           {(
             [
@@ -401,6 +400,8 @@ export function IqLanding({
       <motion.div id="ranking" className="scroll-mt-24" {...fadeUp(0.22)}>
         <LeaderboardPanel refreshKey={leaderboardTick} hallOfFame />
       </motion.div>
+
+      <TestLineQiFooter />
     </motion.section>
   );
 }

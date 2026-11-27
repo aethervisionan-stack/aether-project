@@ -85,6 +85,7 @@ import {
 import { MatrixRenderer, OptionGrid } from "@/src/components/MatrixRenderer";
 import { ShareResultCard } from "@/src/components/ShareResultCard";
 import { IqUnlockCard } from "@/src/components/IqUnlockCard";
+import { TestLineQiLogo } from "@/src/components/TestLineQiLogo";
 import {
   parseChallengeInvite,
   type ChallengeInvite,
@@ -563,8 +564,9 @@ export function IqTestApp() {
 
   if (!hydrated) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center text-zinc-500">
-        Carregando avaliação…
+      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 px-4 text-zinc-500">
+        <TestLineQiLogo href={null} priority />
+        <p className="text-sm">Carregando avaliação…</p>
       </div>
     );
   }
@@ -672,7 +674,12 @@ export function IqTestApp() {
           >
             <header className="sticky top-0 z-20 -mx-4 border-b border-zinc-800/80 bg-zinc-950/90 px-4 py-3 backdrop-blur-md sm:-mx-6 sm:px-6">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-3">
+                <div className="flex min-w-0 flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
+                  <TestLineQiLogo
+                    variant="icon"
+                    href="/teste-qi"
+                    className="!h-7 !w-7 sm:!h-8 sm:!w-8"
+                  />
                   <span className="font-iq-display text-lg text-zinc-100 tabular-nums">
                     {state.currentIndex + 1}
                     <span className="text-zinc-600">/{totalQ}</span>
