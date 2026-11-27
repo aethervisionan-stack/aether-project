@@ -138,9 +138,17 @@ export function iqCheckoutItemsForItemType(itemType: IqUnlockItemType): Array<{
 }
 
 /**
- * Dev simulation only on loopback hosts (or explicit INFINITEPAY_SIMULATE=1).
- * Production / Vercel production never simulates.
- * With real InfinitePay credentials, create hits the live API unless SIMULATE=1.
+ * Local payment simulation gate (automated tests / missing creds only).
+ *
+ * Production default: OFF
+ * - VERCEL_ENV=production → never
+ * - INFINITEPAY_SIMULATE=0 → never
+ * - Real InfinitePay creds → never (unless SIMULATE=1 for local QA)
+ * - SIMULATE=1 → only on loopback request hosts
+ * - No creds → loopback only (dev convenience; never on public hosts)
+ *
+ * Automated tests: start `npm run dev` with INFINITEPAY_SIMULATE=1, then
+ * `npm run qa:iq-payment`. Do not leave SIMULATE=1 in production env.
  */
 export function iqPaymentSimulateLocal(reqUrl?: string | null): boolean {
   if (process.env.INFINITEPAY_SIMULATE === "0") return false;

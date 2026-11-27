@@ -136,25 +136,47 @@ async function main() {
   assert(await isIqSessionResultUnlocked(comboSid), "combo unlocks result");
   assert(await isIqSessionAiUnlocked(comboSid), "combo unlocks ai");
 
-  // Localhost simulate gate
-  assert(
-    iqPaymentSimulateLocal("http://localhost:3010/api/payment/pix/create") ===
-      true ||
-      process.env.INFINITEPAY_SIMULATE === "0" ||
-      Boolean(process.env.INFINITEPAY_API_KEY?.trim()) ||
-      Boolean(process.env.INFINITEPAY_HANDLE?.trim()),
-    "simulate local heuristic runs",
+  // Localhost simulate gate — production default OFF when real creds exist
+  // unless INFINITEPAY_SIMULATE=1 (tests only).
+  const localSim = iqPaymentSimulateLocal(
+    "http://localhost:3010/api/payment/pix/create",
   );
+  if (process.env.INFINITEPAY_SIMULATE === "1") {
+    assert(localSim === true, "SIMULATE=1 enables local sim");
+  } else if (
+    process.env.INFINITEPAY_SIMULATE === "0" ||
+    Boolean(process.env.INFINITEPAY_API_KEY?.trim()) ||
+    Boolean(process.env.INFINITEPAY_HANDLE?.trim())
+  ) {
+    assert(
+      localSim === false || process.env.INFINITEPAY_SIMULATE === "1",
+      "prod-default: no sim with real creds / SIMULATE=0",
+    );
+  } else {
+    assert(localSim === true, "missing creds → local sim");
+  }
   assert(
-    iqPaymentSimulateLocal("https://example.com/api/x") === false ||
-      process.env.INFINITEPAY_SIMULATE === "1",
-    "non-local not simulated unless forced",
+    iqPaymentSimulateLocal("https://example.com/api/x") === false,
+    "non-local never simulated (even if SIMULATE=1 requires isLocalRequest)",
   );
 
   // localStorage-style flag alone does not unlock a fresh id
   const other = createIqSessionId();
   assert(!(await isIqSessionUnlocked(other)), "unknown session locked");
   assert(!(await isIqSessionAiUnlocked(other)), "unknown ai locked");
+
+  // Order ↔ session binding
+  const { orderBelongsToIqSession } = await import(
+    "../lib/iq-payment/sessionUnlock"
+  );
+  assert(
+    await orderBelongsToIqSession(sid, order),
+    "own order belongs to session",
+  );
+  assert(
+    !(await orderBelongsToIqSession(sid, buildIqOrderNsu(other, "result"))),
+    "foreign order rejected",
+  );
 
   console.log(
     JSON.stringify(

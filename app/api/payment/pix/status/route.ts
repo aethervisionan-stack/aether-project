@@ -17,6 +17,7 @@ import {
   isIqSessionAiUnlocked,
   isIqSessionResultUnlocked,
   markIqSessionPaid,
+  orderBelongsToIqSession,
 } from "@/lib/iq-payment/sessionUnlock";
 import {
   getInfinitePayOrderAsync,
@@ -79,6 +80,8 @@ async function tryMarkFromStore(
   orderNsu: string | null | undefined,
 ) {
   if (!orderNsu) return false;
+  // Refuse cross-session unlock: a paid order_nsu must belong to this session.
+  if (!(await orderBelongsToIqSession(sessionId, orderNsu))) return false;
   const order = await getInfinitePayOrderAsync(orderNsu);
   if (
     !order ||
@@ -86,6 +89,8 @@ async function tryMarkFromStore(
   ) {
     return false;
   }
+  // Store row sessionId (when present) must also match.
+  if (order.sessionId && order.sessionId !== sessionId) return false;
   const paidItem =
     extractItemTypeFromOrderNsu(orderNsu) ??
     (await getIqUnlockSession(sessionId))?.itemType ??
@@ -113,13 +118,19 @@ async function reconcileReturnHints(
   opts: ResolveOpts,
 ): Promise<boolean> {
   const rec = await getIqUnlockSession(sessionId);
+  // Prefer caller hint only when it belongs to this session (anti-forge).
+  const hintedOrder =
+    opts.order_nsu && (await orderBelongsToIqSession(sessionId, opts.order_nsu))
+      ? opts.order_nsu
+      : null;
   const order_nsu =
-    opts.order_nsu ||
+    hintedOrder ||
     rec?.order_nsu ||
     rec?.resultOrderNsu ||
     rec?.aiOrderNsu ||
     null;
   if (!order_nsu) return false;
+  if (!(await orderBelongsToIqSession(sessionId, order_nsu))) return false;
 
   if (await tryMarkFromStore(sessionId, order_nsu)) return true;
   if (await tryMarkFromStore(sessionId, rec?.resultOrderNsu)) return true;
@@ -128,6 +139,9 @@ async function reconcileReturnHints(
   const transaction_nsu = opts.transaction_nsu;
   const slug = opts.slug;
   const localOrder = await getInfinitePayOrderAsync(order_nsu);
+  if (localOrder?.sessionId && localOrder.sessionId !== sessionId) {
+    return false;
+  }
   const itemType =
     extractItemTypeFromOrderNsu(order_nsu) ??
     opts.itemType ??
@@ -140,10 +154,13 @@ async function reconcileReturnHints(
 
   // Dev-only sim return: never honor SIM_/simulated hints for real checkouts
   // or non-loopback hosts (prevents forged payment_return unlocks).
+  // Also require a known local pending order (or simulate gate) — bare URL
+  // forgeries with fabricated order_nsu must not unlock.
   const orderWasSimulated =
     Boolean(localOrder?.simulated) || Boolean(rec?.simulated);
   const allowSimReturn =
     isLocalRequest(req.url) &&
+    Boolean(localOrder) &&
     (iqPaymentSimulateLocal(req.url) || orderWasSimulated);
 
   if (

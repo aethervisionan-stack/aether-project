@@ -520,6 +520,40 @@ export function extractSessionIdFromOrderNsu(
   return null;
 }
 
+/**
+ * True when `orderNsu` is safe to apply to `sessionId`.
+ * Prevents forged payment_return / status polls from unlocking a different
+ * session with someone else's paid order_nsu.
+ *
+ * Accepts: encoded session match, registry byOrder map, or the session's own
+ * pending/paid order fields (result/ai/latest).
+ */
+export async function orderBelongsToIqSession(
+  sessionId: string,
+  orderNsu: string | null | undefined,
+): Promise<boolean> {
+  if (!sessionId?.trim() || !orderNsu?.trim()) return false;
+  const sid = sessionId.trim();
+  const order = orderNsu.trim();
+
+  const encoded = extractSessionIdFromOrderNsu(order);
+  if (encoded && encoded === sid) return true;
+
+  const mapped = await getIqUnlockByOrderNsu(order);
+  if (mapped?.sessionId === sid) return true;
+
+  const rec = await getIqUnlockSession(sid);
+  if (!rec) return false;
+  return (
+    rec.order_nsu === order ||
+    rec.paymentId === order ||
+    rec.resultOrderNsu === order ||
+    rec.resultPaymentId === order ||
+    rec.aiOrderNsu === order ||
+    rec.aiPaymentId === order
+  );
+}
+
 export function extractItemTypeFromOrderNsu(
   orderNsu: string | null | undefined,
 ): IqUnlockItemType | null {

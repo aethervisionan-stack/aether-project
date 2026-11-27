@@ -5,6 +5,7 @@ import {
   iqAmountCentavosForItemType,
   iqPaymentSimulateLocal,
   iqUnlockAmountCentavos,
+  isLocalRequest,
   isRealApiKey,
 } from "@/lib/iq-payment/config";
 import {
@@ -12,8 +13,10 @@ import {
   extractSessionIdFromOrderNsu,
   getIqUnlockByOrderNsu,
   getIqUnlockSession,
-  isIqSessionUnlocked,
+  isIqSessionAiUnlocked,
+  isIqSessionResultUnlocked,
   markIqSessionPaid,
+  orderBelongsToIqSession,
 } from "@/lib/iq-payment/sessionUnlock";
 import {
   getInfinitePayOrderAsync,
@@ -82,6 +85,8 @@ export async function POST(req: Request) {
         {
           paid: false,
           unlocked: false,
+          resultUnlocked: false,
+          aiUnlocked: false,
           error: "sessionId ou order_nsu obrigatório",
           code: "BAD_SESSION",
         },
@@ -89,23 +94,41 @@ export async function POST(req: Request) {
       );
     }
 
-    // Already unlocked on server — no client flag needed.
-    if (await isIqSessionUnlocked(sessionId)) {
+    const resultUnlocked = await isIqSessionResultUnlocked(sessionId);
+    const aiUnlocked = await isIqSessionAiUnlocked(sessionId);
+    // Already fully resolved for the requested order's tier — echo flags.
+    // Do NOT re-mark with a forged itemType from a foreign order_nsu.
+    if (resultUnlocked && (!order_nsu || (await orderBelongsToIqSession(sessionId, order_nsu)))) {
       const rec = await getIqUnlockSession(sessionId);
-      return NextResponse.json({
-        paid: true,
-        unlocked: true,
-        sessionId,
-        order_nsu: rec?.order_nsu ?? order_nsu,
-        amountCentavos: rec?.amountCentavos ?? iqUnlockAmountCentavos(),
-        from: "store",
-      });
+      const itemHint = order_nsu
+        ? extractItemTypeFromOrderNsu(order_nsu)
+        : null;
+      const focusDone =
+        itemHint === "ai_upsell"
+          ? aiUnlocked
+          : itemHint === "combo"
+            ? resultUnlocked && aiUnlocked
+            : resultUnlocked;
+      if (focusDone) {
+        return NextResponse.json({
+          paid: true,
+          unlocked: resultUnlocked,
+          resultUnlocked,
+          aiUnlocked,
+          sessionId,
+          order_nsu: rec?.order_nsu ?? order_nsu,
+          amountCentavos: rec?.amountCentavos ?? iqUnlockAmountCentavos(),
+          from: "store",
+        });
+      }
     }
 
     if (!order_nsu) {
       return NextResponse.json({
         paid: false,
-        unlocked: false,
+        unlocked: resultUnlocked,
+        resultUnlocked,
+        aiUnlocked,
         pending: true,
         sessionId,
         error: "Aguardando order_nsu do checkout.",
@@ -113,17 +136,44 @@ export async function POST(req: Request) {
       });
     }
 
+    if (!(await orderBelongsToIqSession(sessionId, order_nsu))) {
+      return NextResponse.json(
+        {
+          paid: false,
+          unlocked: false,
+          resultUnlocked,
+          aiUnlocked,
+          error: "order_nsu não pertence a esta sessão.",
+          code: "ORDER_SESSION_MISMATCH",
+        },
+        { status: 403 },
+      );
+    }
+
     const localOrder = await getInfinitePayOrderAsync(order_nsu);
-    const localUnlock =
-      (await getIqUnlockSession(sessionId)) ||
-      (await getIqUnlockByOrderNsu(order_nsu));
+    if (localOrder?.sessionId && localOrder.sessionId !== sessionId) {
+      return NextResponse.json(
+        {
+          paid: false,
+          unlocked: false,
+          resultUnlocked,
+          aiUnlocked,
+          error: "order_nsu não pertence a esta sessão.",
+          code: "ORDER_SESSION_MISMATCH",
+        },
+        { status: 403 },
+      );
+    }
+    const localUnlock = await getIqUnlockSession(sessionId);
 
     const itemTypeHint =
       extractItemTypeFromOrderNsu(order_nsu) ??
       localUnlock?.itemType ??
       "result";
 
-    if (localOrder?.status === "paid" || localUnlock?.status === "paid") {
+    // Only trust a paid store row for THIS order — never upgrade tiers just
+    // because the session already has another item paid.
+    if (localOrder?.status === "paid") {
       const paid = await markIqSessionPaid(sessionId, {
         order_nsu,
         transaction_nsu: transaction_nsu ?? localOrder?.transaction_nsu,
@@ -137,7 +187,7 @@ export async function POST(req: Request) {
       });
       return NextResponse.json({
         paid: true,
-        unlocked: true,
+        unlocked: paid.resultUnlocked,
         resultUnlocked: paid.resultUnlocked,
         aiUnlocked: paid.aiUnlocked,
         sessionId,
@@ -147,28 +197,24 @@ export async function POST(req: Request) {
       });
     }
 
-    const wantsSimComplete =
+    // Dev sim complete: loopback + (simulate env gate OR known simulated order).
+    // Bare SIM_ / simulated=1 query forgeries alone never unlock.
+    const simGate = iqPaymentSimulateLocal(req.url);
+    const orderWasSimulated = Boolean(localOrder?.simulated);
+    const allowSimComplete =
       Boolean(transaction_nsu) &&
-      (iqPaymentSimulateLocal(req.url) ||
+      isLocalRequest(req.url) &&
+      Boolean(localOrder) &&
+      (simGate || orderWasSimulated);
+
+    if (
+      allowSimComplete &&
+      (simGate ||
+        orderWasSimulated ||
         body.simulated === true ||
         body.simulated === "1" ||
-        localOrder?.simulated ||
-        localUnlock?.simulated ||
-        Boolean(transaction_nsu?.startsWith("SIM_")));
-
-    if (wantsSimComplete) {
-      if (!iqPaymentSimulateLocal(req.url) && !transaction_nsu?.startsWith("SIM_")) {
-        return NextResponse.json(
-          {
-            paid: false,
-            unlocked: false,
-            error:
-              "Simulação de pagamento só é permitida em localhost (desenvolvimento).",
-            code: "SIM_FORBIDDEN",
-          },
-          { status: 403 },
-        );
-      }
+        Boolean(transaction_nsu?.startsWith("SIM_")))
+    ) {
       await markInfinitePayPaidAsync(order_nsu, {
         transaction_nsu: transaction_nsu ?? undefined,
         slug: slug ?? undefined,
@@ -183,7 +229,7 @@ export async function POST(req: Request) {
       });
       return NextResponse.json({
         paid: true,
-        unlocked: true,
+        unlocked: paid.resultUnlocked,
         resultUnlocked: paid.resultUnlocked,
         aiUnlocked: paid.aiUnlocked,
         sessionId,
@@ -191,6 +237,27 @@ export async function POST(req: Request) {
         simulated: true,
         amountCentavos: paid.amountCentavos,
       });
+    }
+
+    if (
+      Boolean(transaction_nsu) &&
+      (body.simulated === true ||
+        body.simulated === "1" ||
+        Boolean(transaction_nsu?.startsWith("SIM_"))) &&
+      !allowSimComplete
+    ) {
+      return NextResponse.json(
+        {
+          paid: false,
+          unlocked: false,
+          resultUnlocked,
+          aiUnlocked,
+          error:
+            "Simulação de pagamento só é permitida em localhost com pedido simulado (INFINITEPAY_SIMULATE=1 ou checkout sim).",
+          code: "SIM_FORBIDDEN",
+        },
+        { status: 403 },
+      );
     }
 
     // Poll with only order_nsu — wait for webhook / payment_return params.
