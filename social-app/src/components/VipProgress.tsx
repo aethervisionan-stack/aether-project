@@ -33,8 +33,14 @@ export function MaleVipBar({ user }: { user: PublicUser }) {
             {current.freeMessagesPerDay === "unlimited"
               ? "ilimitadas"
               : `base 10 + ${current.freeMessagesPerDay}`}
+            {" · "}
+            vídeo:{" "}
+            {current.videoMinutes === "unlimited"
+              ? "ilimitado"
+              : `${current.videoMinutes} min`}
           </>
         )}
+        {!current && <> · Msgs grátis/dia: base 10</>}
       </p>
     </div>
   );

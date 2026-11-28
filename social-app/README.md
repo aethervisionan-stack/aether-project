@@ -1,14 +1,16 @@
-# Chama — Aether Social (protótipo local)
+# Chama — Aether Social (protótipo web + PWA)
 
-App full-stack de interação social com créditos (R$0,40), fotos view-once, hora online remunerada, verificação facial **simulada**, Pix **simulado**, e VIP dual (12 níveis).
+App full-stack de interação social com créditos (R$0,40), fotos view-once, hora online remunerada, verificação facial **simulada**, Pix **simulado**, VIP dual (12 níveis) e **PWA básica** (manifest + service worker + ícones).
 
 Dados persistem em `data/db.json` (criado automaticamente no primeiro start).
+
+Módulos de negócio reutilizáveis (futuro nativo): `src/lib/economy.ts`, `src/lib/vip.ts`, `src/lib/store.ts`, `src/lib/types.ts`.
 
 ## Requisitos
 
 - Node.js 20+
 
-## Instalar e rodar
+## Instalar e rodar (localhost)
 
 ```bash
 cd social-app
@@ -18,7 +20,7 @@ npm run dev
 
 Abra: **http://localhost:3001**
 
-Produção local:
+Produção local (PWA/service worker mais fiel):
 
 ```bash
 cd social-app
@@ -28,6 +30,15 @@ npm start
 ```
 
 URL: **http://localhost:3001**
+
+## PWA
+
+- Manifest: `/manifest.webmanifest`
+- Service worker: `/sw.js` (cache do shell + `/offline.html`; APIs nunca em cache)
+- Ícones: `/icons/icon-192.png`, `/icons/icon-512.png`, `/icons/apple-touch-icon.png`
+- Meta: `theme-color`, `apple-mobile-web-app`, botão “Instalar app” quando o browser disparar `beforeinstallprompt`
+
+> Em `next dev` o SW registra, mas o comportamento de instalação/offline é mais confiável após `npm run build && npm start`.
 
 ## Rotas principais
 
@@ -42,36 +53,15 @@ URL: **http://localhost:3001**
 | `/creator` | Painel: saldo, Hora Online, ledger, saque Pix |
 | `/inbox` | Lista de conversas |
 
-## Fotos (view once)
+## Regras de negócio (resumo)
 
-- 3 primeiras fotos **grátis** (escopo debug: por conversa **ou** por usuário masculino)
-- A partir da 4ª: **5 créditos = R$2,00** (R$1,00 plataforma + R$1,00 criadora)
-- Card bloqueado: “Desbloquear foto — 5 créditos (R$ 2,00)”
-- Abrir → modal fullscreen com aviso de visualização única; ao fechar → `expired_viewed` (não reabre)
-- Proteções web: sem clique direito/arrastar + watermark com id/nome; nota de apps nativos (screenshot + URL assinada)
-
-## Hora Online Remunerada
-
-No painel criadora (`/creator`):
-
-- Taxa R$/hora configurável (padrão R$10)
-- Status: Offline / Em Turno Ativo / Pausado
-- Timer de horas + indicador de meta de atividade
-- Botões: +1h turno online / Simular X minutos
-- Ledger separado: Hora Online · Msgs R$0,20 · Fotos R$1,00 · Bônus VIP Feminino
-- VIP feminino: **só comissões** por padrão (msgs + fotos); toggle debug para incluir hora online
-- Saque Pix do dia: comissões + hora validada
+- Onboarding: gênero → cadastro (bloqueia &lt;18) → verificação facial simulada
+- Homem: 10 msgs grátis/dia + extras VIP; 1 crédito = R$0,40 = 1 msg paga (R$0,20 + R$0,20)
+- Fotos: 3 grátis (escopo debug: por conversa **ou** por usuário masculino); 4ª+ = 5 créditos / R$2,00 (R$1 + R$1); view-once
+- VIP masculino 1–12 por gasto acumulado; VIP feminino 1–12 por comissões (msgs + fotos); hora online só no VIP se toggle debug
+- Criadora: Hora Online Remunerada + ledger separado + saque Pix do dia
+- Debug: contas seed, VIP jump, fotos teste, taxa/hora, resumo plataforma
 
 ## Contas de debug
 
-- **Homem Comum** / **Homem VIP avançado** / **Mulher Criadora**
-- Escopo das 3 fotos grátis, enviar foto teste, resetar contador
-- Taxa horária + simular minutos online
-- Resumo ledger plataforma (msgs, fotos, hora, saques)
-- VIP 1–12 + reset do JSON
-
-## Economia (resumo)
-
-- 1 crédito = R$0,40
-- Msg paga → R$0,20 + R$0,20
-- Foto paga → 5 créditos / R$2,00 → R$1,00 + R$1,00
+- **Homem Comum** / **Homem VIP avançado** / **Mulher Criadora** (painel canto inferior direito)

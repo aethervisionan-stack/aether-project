@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#12100e" />
+    <title>Chama — offline</title>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        font-family: system-ui, sans-serif;
+        background: radial-gradient(900px 500px at 20% 0%, rgba(232, 149, 74, 0.18), transparent 55%),
+          #12100e;
+        color: #f7f1e8;
+        padding: 1.5rem;
+        text-align: center;
+      }
+      h1 {
+        font-size: 2rem;
+        margin: 0 0 0.5rem;
+        letter-spacing: -0.03em;
+      }
+      p {
+        color: #a89a8a;
+        max-width: 22rem;
+        line-height: 1.45;
+      }
+      button {
+        margin-top: 1.25rem;
+        border: 0;
+        border-radius: 999px;
+        background: #e8954a;
+        color: #1a120a;
+        font-weight: 600;
+        padding: 0.75rem 1.25rem;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Chama</h1>
+      <p>
+        Você está offline. O shell do app está em cache; reconecte para carregar
+        conversas, créditos e o painel.
+      </p>
+      <button type="button" onclick="location.href='/'">Tentar de novo</button>
+    </main>
+  </body>
+</html>

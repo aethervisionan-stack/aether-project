@@ -22,7 +22,11 @@ export function conversationIdFor(a: string, b: string) {
   return [a, b].sort().join("__");
 }
 
-/** Count photos already sent by creator → male in the free-photo scope. */
+/**
+ * Count photos already counting toward the free quota.
+ * - per_conversation: photos from this creator → male in this conversation
+ * - per_male_user: all photos received by this male (any creator)
+ */
 export function countPhotosInScope(
   db: Database,
   creatorId: string,
@@ -32,9 +36,9 @@ export function countPhotosInScope(
   const scope = db.settings?.freePhotoScope ?? "per_conversation";
   return db.messages.filter((m) => {
     if (m.kind !== "photo") return false;
-    if (m.fromUserId !== creatorId || m.toUserId !== maleId) return false;
-    if (scope === "per_conversation") return m.conversationId === conversationId;
-    return true;
+    if (m.toUserId !== maleId) return false;
+    if (scope === "per_male_user") return true;
+    return m.fromUserId === creatorId && m.conversationId === conversationId;
   }).length;
 }
 

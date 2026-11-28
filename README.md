@@ -2,9 +2,9 @@
 
 Monorepo root keeps the existing Next.js landing. This document covers the **Gemini Live** scaffold.
 
-## Chama — social prototype
+## Chama — social prototype (web + PWA)
 
-Local full-stack social app (créditos, VIP dual, verificação facial simulada):
+Local full-stack social app (créditos, VIP dual, fotos view-once, hora online, PWA básica):
 
 ```bash
 cd social-app
