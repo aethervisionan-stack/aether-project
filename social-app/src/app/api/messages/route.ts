@@ -1,15 +1,16 @@
 import { NextResponse } from "next/server";
 import { v4 as uuid } from "uuid";
 import { publicUser } from "@/lib/api";
+import {
+  MSG_CREATOR_SHARE_BRL,
+  MSG_PLATFORM_SHARE_BRL,
+  creditCreatorCommission,
+  ensureConversation,
+  serializePhotoForViewer,
+} from "@/lib/economy";
 import { getSessionUserId } from "@/lib/session";
 import { readDb, updateDb } from "@/lib/store";
-import {
-  CREATOR_SHARE_BRL,
-  FEMALE_VIP,
-  PLATFORM_SHARE_BRL,
-  freeMessagesAllowance,
-  todayKey,
-} from "@/lib/vip";
+import { freeMessagesAllowance, todayKey } from "@/lib/vip";
 
 export const runtime = "nodejs";
 
@@ -30,8 +31,13 @@ export async function GET(req: Request) {
     const cid = conversationIdFor(userId, withUserId);
     const messages = db.messages
       .filter((m) => m.conversationId === cid)
-      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-    return NextResponse.json({ conversationId: cid, messages });
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .map((m) => serializePhotoForViewer(m, userId));
+    return NextResponse.json({
+      conversationId: cid,
+      messages,
+      settings: db.settings,
+    });
   }
 
   const conversations = db.conversations
@@ -83,7 +89,6 @@ export async function POST(req: Request) {
     let platformShareBrl = 0;
     let creatorShareBrl = 0;
 
-    // Men pay when messaging women (creators). Women messaging is free in this prototype.
     if (from.gender === "homem" && to.gender === "mulher") {
       if (from.freeMessagesDate !== todayKey()) {
         from.freeMessagesDate = todayKey();
@@ -106,22 +111,13 @@ export async function POST(req: Request) {
         }
         from.credits -= 1;
         paid = true;
-        platformShareBrl = PLATFORM_SHARE_BRL;
-        creatorShareBrl = CREATOR_SHARE_BRL;
+        platformShareBrl = MSG_PLATFORM_SHARE_BRL;
+        creatorShareBrl = MSG_CREATOR_SHARE_BRL;
 
-        const prevLevel =
-          FEMALE_VIP.filter((l) => to.cumulativeEarningsBrl >= l.minEarningsBrl).pop()
-            ?.level ?? 0;
-
-        to.balanceBrl = Number((to.balanceBrl + creatorShareBrl).toFixed(2));
-        to.cumulativeEarningsBrl = Number(
-          (to.cumulativeEarningsBrl + creatorShareBrl).toFixed(2)
-        );
-
-        const newLevel =
-          FEMALE_VIP.filter((l) => to.cumulativeEarningsBrl >= l.minEarningsBrl).pop()
-            ?.level ?? 0;
-
+        creditCreatorCommission(db, to, creatorShareBrl, now, {
+          type: "creator_message",
+          description: `Mensagens pagas R$0,20 — de ${from.name}`,
+        });
         db.ledger.push({
           id: uuid(),
           userId: from.id,
@@ -133,15 +129,6 @@ export async function POST(req: Request) {
         });
         db.ledger.push({
           id: uuid(),
-          userId: to.id,
-          type: "creator_earning",
-          amountBrl: creatorShareBrl,
-          creditsDelta: 0,
-          description: `Ganho de mensagem de ${from.name}`,
-          createdAt: now,
-        });
-        db.ledger.push({
-          id: uuid(),
           userId: "platform",
           type: "platform_fee",
           amountBrl: platformShareBrl,
@@ -149,24 +136,6 @@ export async function POST(req: Request) {
           description: `Taxa plataforma — msg ${from.name} → ${to.name}`,
           createdAt: now,
         });
-
-        // Grant VIP bonus when crossing into a new female VIP level
-        if (newLevel > prevLevel) {
-          for (const lvl of FEMALE_VIP) {
-            if (lvl.level > prevLevel && lvl.level <= newLevel) {
-              to.balanceBrl = Number((to.balanceBrl + lvl.bonusBrl).toFixed(2));
-              db.ledger.push({
-                id: uuid(),
-                userId: to.id,
-                type: "vip_bonus",
-                amountBrl: lvl.bonusBrl,
-                creditsDelta: 0,
-                description: `Bônus VIP${lvl.level} — ${lvl.title} (+${lvl.bonusBrl.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })})`,
-                createdAt: now,
-              });
-            }
-          }
-        }
       }
     }
 
@@ -176,29 +145,17 @@ export async function POST(req: Request) {
       fromUserId: from.id,
       toUserId: to.id,
       text,
+      kind: "text" as const,
       createdAt: now,
       paid,
       platformShareBrl,
       creatorShareBrl,
     };
     db.messages.push(message);
-
-    let conv = db.conversations.find((c) => c.id === cid);
-    if (!conv) {
-      conv = {
-        id: cid,
-        participantIds: [from.id, to.id],
-        updatedAt: now,
-        lastMessagePreview: text.slice(0, 80),
-      };
-      db.conversations.push(conv);
-    } else {
-      conv.updatedAt = now;
-      conv.lastMessagePreview = text.slice(0, 80);
-    }
+    ensureConversation(db, from.id, to.id, text, now);
 
     return {
-      message,
+      message: serializePhotoForViewer(message, userId),
       from: publicUser(from),
       to: publicUser(to),
     };

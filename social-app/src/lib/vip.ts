@@ -137,9 +137,16 @@ export const FEMALE_VIP: FemaleVipLevel[] = [
 ];
 
 export const BASE_FREE_MESSAGES = 10;
-export const CREDIT_PRICE_BRL = 0.4;
-export const CREATOR_SHARE_BRL = 0.2;
-export const PLATFORM_SHARE_BRL = 0.2;
+export {
+  CREDIT_PRICE_BRL,
+  MSG_CREATOR_SHARE_BRL as CREATOR_SHARE_BRL,
+  MSG_PLATFORM_SHARE_BRL as PLATFORM_SHARE_BRL,
+  PHOTO_CREDITS_COST,
+  PHOTO_PRICE_BRL,
+  PHOTO_CREATOR_SHARE_BRL,
+  PHOTO_PLATFORM_SHARE_BRL,
+  FREE_PHOTOS,
+} from "./economy";
 
 export function getMaleVip(spendBrl: number) {
   let current: MaleVipLevel | null = null;

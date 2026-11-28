@@ -7,13 +7,19 @@ import { useAuth } from "@/components/AuthProvider";
 import { FemaleVipBar } from "@/components/VipProgress";
 import { api, type PublicUser } from "@/lib/client";
 import { formatBrl } from "@/lib/vip";
-import type { LedgerEntry, Withdrawal } from "@/lib/types";
+import type { LedgerEntry, ShiftStatus, Withdrawal } from "@/lib/types";
 
 type Conv = {
   id: string;
   lastMessagePreview: string;
   updatedAt: string;
   other: PublicUser | null;
+};
+
+const SHIFT_LABEL: Record<ShiftStatus, string> = {
+  offline: "Offline",
+  active: "Em Turno Ativo",
+  paused: "Pausado",
 };
 
 export default function CreatorPage() {
@@ -25,15 +31,22 @@ export default function CreatorPage() {
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [rateInput, setRateInput] = useState("10");
+  const [simMinutes, setSimMinutes] = useState("15");
+  const [activityTarget, setActivityTarget] = useState(50);
 
   async function loadExtras() {
-    const [msgs, hist] = await Promise.all([
+    const [msgs, hist, online] = await Promise.all([
       api<{ conversations: Conv[] }>("/api/messages"),
       api<{ ledger: LedgerEntry[]; withdrawals: Withdrawal[] }>("/api/withdraw"),
+      api<{ user: PublicUser; activityTarget: number }>("/api/online"),
     ]);
     setConversations(msgs.conversations);
-    setLedger(hist.ledger.slice(0, 20));
+    setLedger(hist.ledger.slice(0, 40));
     setWithdrawals(hist.withdrawals.slice(0, 10));
+    setUser(online.user);
+    setRateInput(String(online.user.hourlyRateBrl));
+    setActivityTarget(online.activityTarget);
   }
 
   useEffect(() => {
@@ -51,6 +64,7 @@ export default function CreatorPage() {
       return;
     }
     void loadExtras();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, loading, router]);
 
   async function withdraw() {
@@ -58,10 +72,9 @@ export default function CreatorPage() {
     setError("");
     setNotice("");
     try {
-      const data = await api<{
-        user: PublicUser;
-        notice: string;
-      }>("/api/withdraw", { method: "POST" });
+      const data = await api<{ user: PublicUser; notice: string }>("/api/withdraw", {
+        method: "POST",
+      });
       setUser(data.user);
       setNotice(data.notice);
       await loadExtras();
@@ -72,24 +85,58 @@ export default function CreatorPage() {
     }
   }
 
+  async function onlineAction(payload: Record<string, unknown>) {
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      const data = await api<{ user: PublicUser; notice?: string }>("/api/online", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      setUser(data.user);
+      if (data.notice) setNotice(data.notice);
+      await loadExtras();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (loading || !user) return <p className="text-muted">Carregando…</p>;
 
+  const hours = user.onlineHoursToday ?? user.onlineMinutesToday / 60;
+  const activityPct = Math.min(
+    100,
+    Math.round((user.activityScore / 100) * 100) ||
+      Math.min(100, Math.round((user.onlineMinutesToday / activityTarget) * 100))
+  );
+
+  const ledgerGroups = {
+    hour: ledger.filter((e) => e.type === "creator_online_hour"),
+    message: ledger.filter(
+      (e) => e.type === "creator_message" || e.type === "creator_earning"
+    ),
+    photo: ledger.filter((e) => e.type === "creator_photo"),
+    vip: ledger.filter((e) => e.type === "vip_bonus"),
+  };
+
   return (
-    <section className="animate-fade-up space-y-6">
+    <section className="animate-fade-up space-y-6 pb-8">
       <div>
         <h1 className="font-[family-name:var(--font-display)] text-3xl sm:text-4xl">
           Painel criadora
         </h1>
         <p className="mt-2 text-muted">
-          Cada mensagem paga rende {formatBrl(0.2)} para você (50/50 com a plataforma).
+          Comissões (msgs R$0,20 · fotos R$1,00) + Hora Online. VIP = comissões (hora só se
+          debug ligar).
         </p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="rounded-3xl border border-line bg-elevated/80 p-5">
-          <p className="text-xs uppercase tracking-[0.14em] text-muted">
-            Saldo disponível
-          </p>
+          <p className="text-xs uppercase tracking-[0.14em] text-muted">Saldo disponível</p>
           <p className="mt-2 font-[family-name:var(--font-display)] text-4xl text-accent">
             {formatBrl(user.balanceBrl)}
           </p>
@@ -104,16 +151,138 @@ export default function CreatorPage() {
         </div>
         <div className="rounded-3xl border border-line bg-elevated/80 p-5">
           <p className="text-xs uppercase tracking-[0.14em] text-muted">
-            Ganhos acumulados
+            Comissões (base VIP)
           </p>
           <p className="mt-2 font-[family-name:var(--font-display)] text-4xl">
             {formatBrl(user.cumulativeEarningsBrl)}
           </p>
-          <p className="mt-2 text-sm text-muted">Base do VIP feminino (12 níveis)</p>
+          <p className="mt-2 text-sm text-muted">
+            Hora online acumulada: {formatBrl(user.cumulativeHourPayBrl)}
+          </p>
         </div>
       </div>
 
       <FemaleVipBar user={user} />
+
+      {/* Hora Online Remunerada */}
+      <div className="rounded-3xl border border-line bg-elevated/70 p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="font-[family-name:var(--font-display)] text-xl">
+              Hora Online Remunerada
+            </h2>
+            <p className="mt-1 text-sm text-muted">Fase inicial — simulação local</p>
+          </div>
+          <span
+            className={`rounded-full px-3 py-1 text-xs font-medium ${
+              user.shiftStatus === "active"
+                ? "bg-verified/20 text-verified"
+                : user.shiftStatus === "paused"
+                  ? "bg-vip/20 text-vip"
+                  : "bg-soft text-muted"
+            }`}
+          >
+            {SHIFT_LABEL[user.shiftStatus]}
+          </span>
+        </div>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <label className="text-sm">
+            <span className="text-muted">R$/hora</span>
+            <div className="mt-1 flex gap-2">
+              <input
+                type="number"
+                min={0}
+                step={0.5}
+                value={rateInput}
+                onChange={(e) => setRateInput(e.target.value)}
+                className="w-full rounded-xl border border-line bg-bg px-3 py-2"
+              />
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() =>
+                  void onlineAction({
+                    action: "set_rate",
+                    hourlyRateBrl: Number(rateInput),
+                  })
+                }
+                className="rounded-xl border border-line px-3 text-sm"
+              >
+                OK
+              </button>
+            </div>
+          </label>
+          <div className="text-sm">
+            <p className="text-muted">Horas hoje</p>
+            <p className="mt-2 font-[family-name:var(--font-display)] text-2xl">
+              {hours.toFixed(2)} h
+            </p>
+            <p className="text-xs text-muted">{user.onlineMinutesToday} min</p>
+          </div>
+          <div className="text-sm">
+            <p className="text-muted">Meta de atividade /h</p>
+            <div className="mt-2 h-2 overflow-hidden rounded-full bg-soft">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-verified to-accent"
+                style={{ width: `${activityPct}%` }}
+              />
+            </div>
+            <p className="mt-1 text-xs text-muted">
+              {activityPct}% · alvo {activityTarget} min ativos/hora
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          {(["offline", "active", "paused"] as ShiftStatus[]).map((s) => (
+            <button
+              key={s}
+              type="button"
+              disabled={busy}
+              onClick={() => void onlineAction({ action: "set_status", status: s })}
+              className={`rounded-xl border px-3 py-2 text-sm ${
+                user.shiftStatus === s
+                  ? "border-accent bg-accent/15"
+                  : "border-line hover:border-accent/40"
+              }`}
+            >
+              {SHIFT_LABEL[s]}
+            </button>
+          ))}
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-end gap-2">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void onlineAction({ action: "add_hour" })}
+            className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-[#1a120a]"
+          >
+            +1h turno online
+          </button>
+          <input
+            type="number"
+            min={1}
+            value={simMinutes}
+            onChange={(e) => setSimMinutes(e.target.value)}
+            className="w-24 rounded-xl border border-line bg-bg px-3 py-2 text-sm"
+          />
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() =>
+              void onlineAction({
+                action: "simulate_minutes",
+                minutes: Number(simMinutes),
+              })
+            }
+            className="rounded-xl border border-line px-4 py-2 text-sm"
+          >
+            Simular X minutos
+          </button>
+        </div>
+      </div>
 
       {notice && <p className="text-sm text-verified">{notice}</p>}
       {error && <p className="text-sm text-danger">{error}</p>}
@@ -147,54 +316,50 @@ export default function CreatorPage() {
         </div>
       </div>
 
-      <div className="grid gap-6 sm:grid-cols-2">
-        <div>
-          <h2 className="font-[family-name:var(--font-display)] text-xl">
-            Histórico de ganhos
-          </h2>
-          <ul className="mt-3 max-h-64 space-y-2 overflow-y-auto text-sm">
-            {ledger
-              .filter((e) =>
-                ["creator_earning", "vip_bonus", "withdrawal"].includes(e.type)
-              )
-              .map((e) => (
-                <li
-                  key={e.id}
-                  className="rounded-xl border border-line bg-soft/40 px-3 py-2"
-                >
-                  <span
-                    className={
-                      e.amountBrl >= 0 ? "text-verified" : "text-danger"
-                    }
-                  >
-                    {formatBrl(e.amountBrl)}
-                  </span>
-                  <span className="ml-2 text-muted">{e.description}</span>
-                </li>
-              ))}
-          </ul>
+      <div>
+        <h2 className="font-[family-name:var(--font-display)] text-xl">
+          Ledger (linhas separadas)
+        </h2>
+        <div className="mt-3 grid gap-4 sm:grid-cols-2">
+          {(
+            [
+              ["Hora Online", ledgerGroups.hour],
+              ["Mensagens pagas R$0,20", ledgerGroups.message],
+              ["Fotos pagas R$1,00", ledgerGroups.photo],
+              ["Bônus VIP Feminino", ledgerGroups.vip],
+            ] as const
+          ).map(([title, rows]) => (
+            <div key={title} className="rounded-2xl border border-line bg-soft/30 p-3">
+              <p className="mb-2 text-xs uppercase tracking-wider text-muted">{title}</p>
+              <ul className="max-h-40 space-y-1 overflow-y-auto text-sm">
+                {rows.length === 0 && <li className="text-muted">—</li>}
+                {rows.map((e) => (
+                  <li key={e.id}>
+                    <span className={e.amountBrl >= 0 ? "text-verified" : "text-danger"}>
+                      {formatBrl(e.amountBrl)}
+                    </span>{" "}
+                    <span className="text-muted">{e.description}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </div>
-        <div>
-          <h2 className="font-[family-name:var(--font-display)] text-xl">
-            Saques Pix
-          </h2>
-          <ul className="mt-3 max-h-64 space-y-2 overflow-y-auto text-sm">
-            {withdrawals.map((w) => (
-              <li
-                key={w.id}
-                className="rounded-xl border border-line bg-soft/40 px-3 py-2"
-              >
-                <span className="text-accent">{formatBrl(w.amountBrl)}</span>
-                <span className="ml-2 text-muted">
-                  {new Date(w.createdAt).toLocaleString("pt-BR")} · {w.note}
-                </span>
-              </li>
-            ))}
-            {withdrawals.length === 0 && (
-              <li className="text-muted">Nenhum saque ainda.</li>
-            )}
-          </ul>
-        </div>
+      </div>
+
+      <div>
+        <h2 className="font-[family-name:var(--font-display)] text-xl">Saques Pix</h2>
+        <ul className="mt-3 max-h-48 space-y-2 overflow-y-auto text-sm">
+          {withdrawals.map((w) => (
+            <li key={w.id} className="rounded-xl border border-line bg-soft/40 px-3 py-2">
+              <span className="text-accent">{formatBrl(w.amountBrl)}</span>
+              <span className="ml-2 text-muted">
+                {new Date(w.createdAt).toLocaleString("pt-BR")} · {w.note}
+              </span>
+            </li>
+          ))}
+          {withdrawals.length === 0 && <li className="text-muted">Nenhum saque ainda.</li>}
+        </ul>
       </div>
     </section>
   );

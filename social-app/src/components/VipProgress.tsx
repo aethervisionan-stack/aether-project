@@ -46,7 +46,9 @@ export function FemaleVipBar({ user }: { user: PublicUser }) {
     <div className="rounded-2xl border border-line bg-elevated/80 p-4">
       <div className="mb-2 flex items-baseline justify-between gap-3">
         <div>
-          <p className="text-xs uppercase tracking-[0.14em] text-muted">VIP criadora</p>
+          <p className="text-xs uppercase tracking-[0.14em] text-muted">
+            VIP criadora · comissões
+          </p>
           <p className="font-[family-name:var(--font-display)] text-xl text-vip">
             {current ? `VIP${current.level} · ${current.title}` : "Sem VIP"}
           </p>

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
+import { PhotoMessageCard } from "@/components/PhotoMessageCard";
 import { api, type PublicUser } from "@/lib/client";
 import type { Message } from "@/lib/types";
 
@@ -16,6 +17,7 @@ export default function ChatPage() {
   const [text, setText] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [photoNotice, setPhotoNotice] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
 
   async function load() {
@@ -54,7 +56,6 @@ export default function ChatPage() {
       const data = await api<{
         message: Message;
         from: PublicUser;
-        needsCredits?: boolean;
       }>("/api/messages", {
         method: "POST",
         body: JSON.stringify({ toUserId: otherId, text }),
@@ -63,8 +64,30 @@ export default function ChatPage() {
       setUser(data.from);
       setText("");
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Erro ao enviar";
-      setError(msg);
+      setError(err instanceof Error ? err.message : "Erro ao enviar");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function sendPhoto() {
+    if (!user || user.gender !== "mulher") return;
+    setBusy(true);
+    setError("");
+    setPhotoNotice("");
+    try {
+      const data = await api<{ message: Message; notice: string; from: PublicUser }>(
+        "/api/photos",
+        {
+          method: "POST",
+          body: JSON.stringify({ toUserId: otherId }),
+        }
+      );
+      setMessages((m) => [...m, data.message]);
+      setUser(data.from);
+      setPhotoNotice(data.notice);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro ao enviar foto");
     } finally {
       setBusy(false);
     }
@@ -75,7 +98,7 @@ export default function ChatPage() {
   const free = user.freeMessages.remaining;
 
   return (
-    <section className="animate-fade-up flex h-[min(70vh,640px)] flex-col">
+    <section className="animate-fade-up flex h-[min(72vh,680px)] flex-col">
       <div className="mb-4 flex items-center gap-3 border-b border-line pb-3">
         <Link href={user.gender === "mulher" ? "/inbox" : "/discover"} className="text-muted">
           ←
@@ -90,8 +113,7 @@ export default function ChatPage() {
             />
             <div>
               <p className="font-medium">
-                {other.name}{" "}
-                <span className="text-xs text-verified">✓</span>
+                {other.name} <span className="text-xs text-verified">✓</span>
               </p>
               <p className="text-xs text-muted">{other.bio.slice(0, 48)}</p>
             </div>
@@ -102,28 +124,41 @@ export default function ChatPage() {
       {user.gender === "homem" && (
         <p className="mb-3 text-xs text-muted">
           Grátis hoje:{" "}
-          <span className="text-accent">
-            {free === "unlimited" ? "∞" : free}
-          </span>
+          <span className="text-accent">{free === "unlimited" ? "∞" : free}</span>
           {" · "}
-          créditos: {user.credits} · 1 crédito = R$0,40 (R$0,20 plataforma + R$0,20
-          criadora)
+          créditos: {user.credits} · msgs R$0,40 · fotos pagas 5 créditos (R$2,00)
+        </p>
+      )}
+      {user.gender === "mulher" && (
+        <p className="mb-3 text-xs text-muted">
+          Fotos: 3 grátis no escopo debug, depois 5 créditos (R$1,00 para você). View once.
         </p>
       )}
 
       <div className="flex-1 space-y-3 overflow-y-auto rounded-2xl border border-line bg-elevated/40 p-4">
         {messages.map((m) => {
           const mine = m.fromUserId === user.id;
+          if (m.kind === "photo") {
+            return (
+              <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+                <PhotoMessageCard
+                  message={m}
+                  viewer={user}
+                  onUpdate={(updated, viewerUpdate) => {
+                    setMessages((list) =>
+                      list.map((x) => (x.id === updated.id ? { ...x, ...updated } : x))
+                    );
+                    if (viewerUpdate) setUser(viewerUpdate);
+                  }}
+                />
+              </div>
+            );
+          }
           return (
-            <div
-              key={m.id}
-              className={`flex ${mine ? "justify-end" : "justify-start"}`}
-            >
+            <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
               <div
                 className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${
-                  mine
-                    ? "bg-accent/20 text-ink"
-                    : "bg-soft text-ink"
+                  mine ? "bg-accent/20 text-ink" : "bg-soft text-ink"
                 }`}
               >
                 <p>{m.text}</p>
@@ -140,24 +175,35 @@ export default function ChatPage() {
         <div ref={bottomRef} />
       </div>
 
+      {photoNotice && <p className="mt-2 text-xs text-verified">{photoNotice}</p>}
       {error && (
         <p className="mt-2 text-sm text-danger">
           {error}{" "}
           {error.toLowerCase().includes("crédito") && (
-            <Link href="/credits" className="underline text-accent">
+            <Link href="/credits" className="text-accent underline">
               Comprar créditos
             </Link>
           )}
         </p>
       )}
 
-      <form onSubmit={send} className="mt-3 flex gap-2">
+      <form onSubmit={send} className="mt-3 flex flex-wrap gap-2">
         <input
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder="Escreva uma mensagem…"
-          className="flex-1 rounded-xl border border-line bg-elevated px-3 py-2.5 outline-none focus:border-accent"
+          className="min-w-[12rem] flex-1 rounded-xl border border-line bg-elevated px-3 py-2.5 outline-none focus:border-accent"
         />
+        {user.gender === "mulher" && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void sendPhoto()}
+            className="rounded-xl border border-line bg-soft px-3 py-2 text-sm hover:border-accent/40"
+          >
+            Enviar foto
+          </button>
+        )}
         <button
           type="submit"
           disabled={busy}

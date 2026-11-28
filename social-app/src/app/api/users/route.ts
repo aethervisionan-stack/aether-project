@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { v4 as uuid } from "uuid";
 import { publicUser } from "@/lib/api";
 import { avatarDataUrl } from "@/lib/avatar";
+import { DEFAULT_SETTINGS } from "@/lib/economy";
 import { setSessionUserId } from "@/lib/session";
 import { readDb, updateDb } from "@/lib/store";
 import type { Gender, User } from "@/lib/types";
@@ -69,8 +70,16 @@ export async function POST(req: Request) {
     balanceBrl: 0,
     cumulativeSpendBrl: 0,
     cumulativeEarningsBrl: 0,
+    cumulativeHourPayBrl: 0,
     freeMessagesDate: todayKey(),
     freeMessagesUsed: 0,
+    freePhotosUsed: 0,
+    hourlyRateBrl: DEFAULT_SETTINGS.defaultHourlyRateBrl,
+    shiftStatus: "offline",
+    onlineMinutesToday: 0,
+    onlineMinutesDate: todayKey(),
+    shiftStartedAt: null,
+    activityScore: 0,
     isSeed: false,
     createdAt: new Date().toISOString(),
   };

@@ -1,14 +1,39 @@
 import { v4 as uuid } from "uuid";
 import { avatarDataUrl } from "./avatar";
-import type { Database, User } from "./types";
+import { DEFAULT_SETTINGS } from "./economy";
+import type { Database, Message, User } from "./types";
 import { todayKey } from "./vip";
 
 export { avatarDataUrl };
 
-function user(partial: Omit<User, "createdAt" | "freeMessagesDate" | "freeMessagesUsed"> & Partial<User>): User {
+function user(
+  partial: Omit<
+    User,
+    | "createdAt"
+    | "freeMessagesDate"
+    | "freeMessagesUsed"
+    | "freePhotosUsed"
+    | "cumulativeHourPayBrl"
+    | "hourlyRateBrl"
+    | "shiftStatus"
+    | "onlineMinutesToday"
+    | "onlineMinutesDate"
+    | "shiftStartedAt"
+    | "activityScore"
+  > &
+    Partial<User>
+): User {
   return {
     freeMessagesDate: todayKey(),
     freeMessagesUsed: 0,
+    freePhotosUsed: 0,
+    cumulativeHourPayBrl: 0,
+    hourlyRateBrl: DEFAULT_SETTINGS.defaultHourlyRateBrl,
+    shiftStatus: "offline",
+    onlineMinutesToday: 0,
+    onlineMinutesDate: todayKey(),
+    shiftStartedAt: null,
+    activityScore: 0,
     createdAt: new Date().toISOString(),
     ...partial,
   };
@@ -43,7 +68,7 @@ export function buildSeedDatabase(): Database {
     photoUrl: avatarDataUrl("HC", "#2A3A3F"),
     verified: true,
     bio: "Conta de teste — homem sem VIP.",
-    credits: 5,
+    credits: 25,
     balanceBrl: 0,
     cumulativeSpendBrl: 0,
     cumulativeEarningsBrl: 0,
@@ -79,6 +104,8 @@ export function buildSeedDatabase(): Database {
     balanceBrl: 48.4,
     cumulativeSpendBrl: 0,
     cumulativeEarningsBrl: 520,
+    hourlyRateBrl: 10,
+    shiftStatus: "offline",
     isSeed: true,
     isDebugPreset: true,
   });
@@ -172,7 +199,9 @@ export function buildSeedDatabase(): Database {
 
   const users: User[] = [homemComum, homemVip, mulherCriadora, ...femaleProfiles];
 
-  const convId = "seed-conv-1";
+  const convId = `${[homemComum.id, mulherCriadora.id].sort().join("__")}`;
+  const conv2 = `${[homemVip.id, femaleProfiles[0].id].sort().join("__")}`;
+
   const conversations = [
     {
       id: convId,
@@ -181,20 +210,21 @@ export function buildSeedDatabase(): Database {
       lastMessagePreview: "Oi! Bem-vindo ao protótipo 👋",
     },
     {
-      id: "seed-conv-2",
+      id: conv2,
       participantIds: [homemVip.id, femaleProfiles[0].id] as [string, string],
       updatedAt: now,
       lastMessagePreview: "E aí, tudo bem?",
     },
   ];
 
-  const messages = [
+  const messages: Message[] = [
     {
       id: uuid(),
       conversationId: convId,
       fromUserId: mulherCriadora.id,
       toUserId: homemComum.id,
       text: "Oi! Bem-vindo ao protótipo 👋 Aqui o Pix e a verificação facial são simulados.",
+      kind: "text",
       createdAt: now,
       paid: false,
       platformShareBrl: 0,
@@ -202,10 +232,11 @@ export function buildSeedDatabase(): Database {
     },
     {
       id: uuid(),
-      conversationId: "seed-conv-2",
+      conversationId: conv2,
       fromUserId: femaleProfiles[0].id,
       toUserId: homemVip.id,
       text: "E aí, tudo bem? Sou a Larissa — perfil seed verificado.",
+      kind: "text",
       createdAt: now,
       paid: false,
       platformShareBrl: 0,
@@ -252,10 +283,10 @@ export function buildSeedDatabase(): Database {
       {
         id: uuid(),
         userId: mulherCriadora.id,
-        type: "creator_earning",
+        type: "creator_message",
         amountBrl: 520,
         creditsDelta: 0,
-        description: "Ganhos acumulados seed (VIP2)",
+        description: "Ganhos acumulados seed — comissões (VIP2)",
         createdAt: now,
       },
       {
@@ -264,7 +295,7 @@ export function buildSeedDatabase(): Database {
         type: "vip_bonus",
         amountBrl: 50,
         creditsDelta: 0,
-        description: "Bônus VIP2 — Destaque na busca (+R$50)",
+        description: "Bônus VIP Feminino VIP2 — Destaque na busca (+R$50)",
         createdAt: now,
       },
       {
@@ -277,6 +308,7 @@ export function buildSeedDatabase(): Database {
         createdAt: now,
       },
     ],
+    settings: { ...DEFAULT_SETTINGS },
     initializedAt: now,
   };
 }
